@@ -7,9 +7,12 @@ version.workspace = true
 publish = false
 
 [dependencies]
+amnezia-data = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 image = { workspace = true }
+lcf = { workspace = true }
+ron = { workspace = true }
 xyz = { workspace = true }
 
 [dev-dependencies]

@@ -1,6 +1,7 @@
 //! Offline converter from the original RPG Maker 2000 project to the clean
 //! intermediate assets the game consumes.
 
+use amnezia_data::Map;
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -51,6 +52,44 @@ pub fn convert_graphics(input: &Path, output: &Path) -> Result<usize> {
             buffer.save(&out).with_context(|| format!("writing {}", out.display()))?;
             count += 1;
         }
+    }
+    Ok(count)
+}
+
+/// Convert every `MapXXXX.lmu` directly under `input` into a `map_XXXX.ron`
+/// under `output/maps/`, returning the number written.
+pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let out_dir = output.join("maps");
+    let mut count = 0;
+    for entry in std::fs::read_dir(input)? {
+        let path = entry?.path();
+        let is_lmu = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| e.eq_ignore_ascii_case("lmu"));
+        if !is_lmu {
+            continue;
+        }
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+        let number = stem.strip_prefix("Map").or_else(|| stem.strip_prefix("map")).unwrap_or(&stem);
+
+        let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+        let unit = lcf::parse_map(&bytes).with_context(|| format!("parsing {}", path.display()))?;
+        let map = Map {
+            chipset_id: unit.chipset_id,
+            width: unit.width,
+            height: unit.height,
+            lower: unit.lower_layer,
+            upper: unit.upper_layer,
+        };
+        let serialised = ron::to_string(&map).context("serialising map to RON")?;
+        std::fs::create_dir_all(&out_dir).with_context(|| format!("creating {}", out_dir.display()))?;
+        let out = out_dir.join(format!("map_{number}.ron"));
+        std::fs::write(&out, serialised).with_context(|| format!("writing {}", out.display()))?;
+        count += 1;
     }
     Ok(count)
 }

@@ -18,7 +18,8 @@ struct Args {
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let count = amnezia_convert::convert_graphics(&args.input, &args.output)?;
-    println!("converted {count} images");
+    let images = amnezia_convert::convert_graphics(&args.input, &args.output)?;
+    let maps = amnezia_convert::convert_maps(&args.input, &args.output)?;
+    println!("converted {images} images, {maps} maps");
     Ok(())
 }
