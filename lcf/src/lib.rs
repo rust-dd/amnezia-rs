@@ -240,4 +240,35 @@ mod tests {
             Err(LcfError::InvalidDimensions { width: 100_000, height: 100_000 })
         ));
     }
+
+    #[test]
+    fn skips_unknown_chunks() {
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[
+                (0x01, varint(5)),
+                (0x02, varint(2)),
+                (0x03, varint(1)),
+                (0x0B, varint(0)),
+                (0x47, layer_bytes(&[1, 2])),
+                (0x51, vec![0xDE, 0xAD, 0xBE, 0xEF]),
+                (0x48, layer_bytes(&[3, 4])),
+            ],
+        );
+        let map = parse_map(&file).unwrap();
+        assert_eq!(map.chipset_id, 5);
+        assert_eq!((map.width, map.height), (2, 1));
+        assert_eq!(map.lower_layer, vec![1, 2]);
+        assert_eq!(map.upper_layer, vec![3, 4]);
+    }
+
+    #[test]
+    fn rejects_truncated_input() {
+        let mut file = vec![10u8];
+        file.extend_from_slice(b"LcfMapUnit");
+        file.push(0x47);
+        file.extend(varint(999));
+        file.extend([0x00, 0x00]);
+        assert!(matches!(parse_map(&file), Err(LcfError::UnexpectedEof)));
+    }
 }
