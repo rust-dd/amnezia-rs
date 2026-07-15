@@ -28,6 +28,8 @@ pub enum LcfError {
     UnexpectedEof,
     #[error("{layer} layer has {got} tiles but width*height = {expected}")]
     LayerSizeMismatch { layer: &'static str, got: usize, expected: usize },
+    #[error("invalid map dimensions {width}x{height}")]
+    InvalidDimensions { width: u32, height: u32 },
 }
 
 struct Reader<'a> {
@@ -110,7 +112,9 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
         }
     }
 
-    let expected = (width * height) as usize;
+    let expected = width
+        .checked_mul(height)
+        .ok_or(LcfError::InvalidDimensions { width, height })? as usize;
     let lower_layer = decode_layer(lower, "lower", expected)?;
     let upper_layer = decode_layer(upper, "upper", expected)?;
 
@@ -206,6 +210,34 @@ mod tests {
         assert!(matches!(
             parse_map(&file),
             Err(LcfError::LayerSizeMismatch { layer: "lower", got: 1, expected: 4 })
+        ));
+    }
+
+    #[test]
+    fn decodes_multibyte_scalar_value() {
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[
+                (0x01, varint(200)),
+                (0x02, varint(2)),
+                (0x03, varint(1)),
+                (0x47, layer_bytes(&[1, 2])),
+                (0x48, layer_bytes(&[3, 4])),
+            ],
+        );
+        let map = parse_map(&file).unwrap();
+        assert_eq!(map.chipset_id, 200);
+    }
+
+    #[test]
+    fn rejects_overflowing_dimensions() {
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[(0x02, varint(100_000)), (0x03, varint(100_000))],
+        );
+        assert!(matches!(
+            parse_map(&file),
+            Err(LcfError::InvalidDimensions { width: 100_000, height: 100_000 })
         ));
     }
 }
