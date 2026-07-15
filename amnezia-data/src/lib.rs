@@ -19,3 +19,11 @@ pub struct Map {
     pub lower: Vec<u16>,
     pub upper: Vec<u16>,
 }
+
+/// A chipset entry: its 1-based id (matching a map's `chipset_id`) and the
+/// base name of its graphic under `graphics/ChipSet/`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Chipset {
+    pub id: u32,
+    pub graphic: String,
+}

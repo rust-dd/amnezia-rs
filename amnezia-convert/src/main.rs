@@ -20,6 +20,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let images = amnezia_convert::convert_graphics(&args.input, &args.output)?;
     let maps = amnezia_convert::convert_maps(&args.input, &args.output)?;
-    println!("converted {images} images, {maps} maps");
+    let chipsets = amnezia_convert::convert_chipsets(&args.input, &args.output)?;
+    println!("converted {images} images, {maps} maps, {chipsets} chipsets");
     Ok(())
 }

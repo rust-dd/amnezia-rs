@@ -1,7 +1,7 @@
 //! Offline converter from the original RPG Maker 2000 project to the clean
 //! intermediate assets the game consumes.
 
-use amnezia_data::Map;
+use amnezia_data::{Chipset, Map};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -91,5 +91,26 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
         std::fs::write(&out, serialised).with_context(|| format!("writing {}", out.display()))?;
         count += 1;
     }
+    Ok(count)
+}
+
+/// Convert the chipset table in `input/RPG_RT.ldb` into `output/chipsets.ron`
+/// (a list of `id -> graphic`), returning the number of chipsets written.
+pub fn convert_chipsets(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed = lcf::parse_chipsets(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let chipsets: Vec<Chipset> = parsed
+        .into_iter()
+        .map(|c| Chipset { id: c.id, graphic: c.name })
+        .collect();
+    let count = chipsets.len();
+    let serialised = ron::to_string(&chipsets).context("serialising chipsets to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("chipsets.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("chipsets.ron").display()))?;
     Ok(count)
 }
