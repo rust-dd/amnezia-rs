@@ -176,10 +176,13 @@ dependencies = [
 name = "amnezia-convert"
 version = "0.1.0"
 dependencies = [
+ "amnezia-data",
  "anyhow",
  "clap",
  "flate2",
  "image",
+ "lcf",
+ "ron",
  "xyz",
 ]
 
