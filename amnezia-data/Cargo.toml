@@ -1,0 +1,10 @@
+[package]
+name = "amnezia-data"
+description = "Clean intermediate data format shared by the converter and the game."
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+serde = { workspace = true }

@@ -1,0 +1,10 @@
+[package]
+name = "lcf"
+description = "Parser for RPG Maker 2000 LCF binary files (ldb/lmt/lmu); dev-time tooling."
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+thiserror = { workspace = true }

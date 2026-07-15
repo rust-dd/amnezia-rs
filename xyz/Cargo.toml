@@ -1,0 +1,11 @@
+[package]
+name = "xyz"
+description = "Decoder for the RPG Maker 2000 XYZ image format (dev-time tooling)."
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+flate2 = { workspace = true }
+thiserror = { workspace = true }

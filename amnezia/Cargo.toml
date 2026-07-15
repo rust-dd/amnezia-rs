@@ -1,0 +1,13 @@
+[package]
+name = "amnezia"
+description = "Faithful Bevy/Rust remake of MoonDragon Entertainment's Amnezia."
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+amnezia-data = { workspace = true }
+bevy = { workspace = true }
+bevy_ecs_tilemap = { workspace = true }
+ron = { workspace = true }

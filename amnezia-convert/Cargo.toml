@@ -1,0 +1,16 @@
+[package]
+name = "amnezia-convert"
+description = "Offline converter: original RPG Maker 2000 project to the clean intermediate assets."
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+publish = false
+
+[dependencies]
+anyhow = { workspace = true }
+clap = { workspace = true }
+image = { workspace = true }
+xyz = { workspace = true }
+
+[dev-dependencies]
+flate2 = { workspace = true }
