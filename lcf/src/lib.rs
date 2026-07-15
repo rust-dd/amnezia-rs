@@ -30,6 +30,8 @@ pub enum LcfError {
     LayerSizeMismatch { layer: &'static str, got: usize, expected: usize },
     #[error("invalid map dimensions {width}x{height}")]
     InvalidDimensions { width: u32, height: u32 },
+    #[error("LCF database has no chipset section (chunk 0x14)")]
+    MissingChipsets,
 }
 
 struct Reader<'a> {
@@ -121,9 +123,67 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     Ok(MapUnit { chipset_id, width, height, lower_layer, upper_layer })
 }
 
+/// A chipset entry from the database: its 1-based id and the base name of its
+/// `ChipSet/<name>` graphic.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Chipset {
+    pub id: u32,
+    pub name: String,
+}
+
+const CHIPSET_SECTION: u32 = 0x14;
+const CHIPSET_NAME: u32 = 0x02;
+
+/// Parse the chipset graphic names out of an LDB (`RPG_RT.ldb`) byte slice.
+/// Only the chipset section is read; every other database section is skipped.
+pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
+    let mut reader = Reader::new(bytes);
+    let signature_len = reader.byte()? as usize;
+    let signature = reader.take(signature_len)?;
+    if signature != b"LcfDataBase" {
+        return Err(LcfError::BadSignature { expected: "LcfDataBase" });
+    }
+
+    let mut section: Option<&[u8]> = None;
+    while !reader.is_empty() {
+        let id = reader.varint()?;
+        if id == 0 {
+            break;
+        }
+        let size = reader.varint()? as usize;
+        let data = reader.take(size)?;
+        if id == CHIPSET_SECTION {
+            section = Some(data);
+            break;
+        }
+    }
+    let section = section.ok_or(LcfError::MissingChipsets)?;
+
+    let mut reader = Reader::new(section);
+    let count = reader.varint()?;
+    let mut chipsets = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        let id = reader.varint()?;
+        let mut name = String::new();
+        loop {
+            let sub_id = reader.varint()?;
+            if sub_id == 0 {
+                break;
+            }
+            let sub_size = reader.varint()? as usize;
+            let sub_data = reader.take(sub_size)?;
+            if sub_id == CHIPSET_NAME {
+                name = String::from_utf8_lossy(sub_data).into_owned();
+            }
+        }
+        chipsets.push(Chipset { id, name });
+    }
+    Ok(chipsets)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{parse_map, LcfError};
+    use crate::{parse_map, parse_chipsets, Chipset, LcfError};
 
     fn varint(mut v: u32) -> Vec<u8> {
         let mut groups = vec![(v & 0x7F) as u8];
@@ -143,6 +203,43 @@ mod tests {
 
     fn layer_bytes(tiles: &[u16]) -> Vec<u8> {
         tiles.iter().flat_map(|t| t.to_le_bytes()).collect()
+    }
+
+    fn subchunk(id: u32, data: &[u8]) -> Vec<u8> {
+        let mut out = varint(id);
+        out.extend(varint(data.len() as u32));
+        out.extend_from_slice(data);
+        out
+    }
+
+    fn chipset_element(id: u32, subchunks: &[Vec<u8>]) -> Vec<u8> {
+        let mut out = varint(id);
+        for chunk in subchunks {
+            out.extend_from_slice(chunk);
+        }
+        out.extend(varint(0));
+        out
+    }
+
+    fn chipset_section(elements: &[Vec<u8>]) -> Vec<u8> {
+        let mut out = varint(elements.len() as u32);
+        for element in elements {
+            out.extend_from_slice(element);
+        }
+        out
+    }
+
+    fn make_ldb(chunks: &[(u32, Vec<u8>)]) -> Vec<u8> {
+        let signature = b"LcfDataBase";
+        let mut out = vec![signature.len() as u8];
+        out.extend_from_slice(signature);
+        for (id, data) in chunks {
+            out.extend(varint(*id));
+            out.extend(varint(data.len() as u32));
+            out.extend_from_slice(data);
+        }
+        out.push(0);
+        out
     }
 
     fn make_lmu(signature: &[u8], chunks: &[(u32, Vec<u8>)]) -> Vec<u8> {
@@ -270,5 +367,48 @@ mod tests {
         file.extend(varint(999));
         file.extend([0x00, 0x00]);
         assert!(matches!(parse_map(&file), Err(LcfError::UnexpectedEof)));
+    }
+
+    #[test]
+    fn parses_chipset_graphic_names() {
+        let element1 = chipset_element(1, &[subchunk(0x01, b"World"), subchunk(0x02, b"basis")]);
+        let element2 = chipset_element(2, &[subchunk(0x02, b"outline")]);
+        let ldb = make_ldb(&[(0x0B, vec![1, 2, 3]), (0x14, chipset_section(&[element1, element2]))]);
+        let chipsets = parse_chipsets(&ldb).unwrap();
+        assert_eq!(
+            chipsets,
+            vec![
+                Chipset { id: 1, name: "basis".to_string() },
+                Chipset { id: 2, name: "outline".to_string() },
+            ]
+        );
+    }
+
+    #[test]
+    fn chipset_name_defaults_to_empty_when_omitted() {
+        let element = chipset_element(5, &[]);
+        let ldb = make_ldb(&[(0x14, chipset_section(&[element]))]);
+        let chipsets = parse_chipsets(&ldb).unwrap();
+        assert_eq!(chipsets, vec![Chipset { id: 5, name: String::new() }]);
+    }
+
+    #[test]
+    fn parse_chipsets_rejects_bad_signature() {
+        let ldb = {
+            let mut out = vec![10u8];
+            out.extend_from_slice(b"LcfMapUnit");
+            out.push(0);
+            out
+        };
+        assert!(matches!(
+            parse_chipsets(&ldb),
+            Err(LcfError::BadSignature { expected: "LcfDataBase" })
+        ));
+    }
+
+    #[test]
+    fn parse_chipsets_errors_when_section_absent() {
+        let ldb = make_ldb(&[(0x0B, vec![1, 2, 3])]);
+        assert!(matches!(parse_chipsets(&ldb), Err(LcfError::MissingChipsets)));
     }
 }
