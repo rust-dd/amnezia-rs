@@ -23,7 +23,7 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (move_player, update_player_sprite, camera_follow));
+        app.add_systems(Update, (move_player, update_player_sprite, camera_follow).chain());
     }
 }
 
