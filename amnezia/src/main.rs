@@ -9,6 +9,10 @@ mod dialogue;
 mod events;
 mod font;
 mod player;
+// Consumed by the interpreter and triggers in the next tasks; the allow is
+// removed once they wire the switches/variables/active-page in.
+#[allow(dead_code)]
+mod state;
 mod teleport;
 mod tiles;
 mod world;
@@ -23,6 +27,8 @@ fn main() -> AppExit {
                 .set(ImagePlugin::default_nearest())
                 .set(AssetPlugin { file_path: ASSET_ROOT.to_string(), ..default() }),
         )
+        .init_resource::<state::Switches>()
+        .init_resource::<state::Variables>()
         .add_plugins((
             font::FontPlugin,
             world::WorldPlugin,
