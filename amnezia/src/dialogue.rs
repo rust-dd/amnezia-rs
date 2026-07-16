@@ -4,7 +4,7 @@
 use crate::events::{message_boxes, teleport_target, MessageBox};
 use crate::font::GameFont;
 use crate::player::{facing_tile, Player};
-use crate::teleport::PendingTeleport;
+use crate::teleport::{Fade, PendingTeleport};
 use crate::world::MapEvents;
 use bevy::prelude::*;
 use bevy::text::FontSource;
@@ -108,11 +108,15 @@ fn inset_node(px: f32) -> Node {
 
 fn interact(
     keys: Res<ButtonInput<KeyCode>>,
+    fade: Res<Fade>,
     map_events: Res<MapEvents>,
     mut dialogue: ResMut<Dialogue>,
     mut pending: ResMut<PendingTeleport>,
     players: Query<&Player>,
 ) {
+    if fade.busy() {
+        return;
+    }
     if !keys.just_pressed(KeyCode::Space) && !keys.just_pressed(KeyCode::Enter) {
         return;
     }

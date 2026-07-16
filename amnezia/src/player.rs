@@ -4,7 +4,7 @@
 use crate::assets::resolve_png;
 use crate::dialogue::Dialogue;
 use crate::events::touch_teleport;
-use crate::teleport::PendingTeleport;
+use crate::teleport::{Fade, PendingTeleport};
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::{MapData, MapEvents};
 use bevy::prelude::*;
@@ -67,11 +67,12 @@ fn move_player(
     keys: Res<ButtonInput<KeyCode>>,
     data: Res<MapData>,
     dialogue: Res<Dialogue>,
+    fade: Res<Fade>,
     map_events: Res<MapEvents>,
     mut pending: ResMut<PendingTeleport>,
     mut players: Query<&mut Player>,
 ) {
-    if dialogue.active {
+    if dialogue.active || fade.busy() {
         return;
     }
     let Ok(mut player) = players.single_mut() else {
