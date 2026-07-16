@@ -33,6 +33,8 @@ const SHOW_INN: u32 = 10730;
 /// (VictoryHandler, Transaction, …) don't all execute in sequence.
 const SKIP_BLOCKS: &[(u32, u32)] =
     &[(ENEMY_ENCOUNTER, 20713), (OPEN_SHOP, 20722), (SHOW_INN, 20732)];
+const LABEL: u32 = 12110;
+const JUMP_TO_LABEL: u32 = 12120;
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
 /// that never advances) can't lock up the frame. Well-formed pages never
@@ -165,6 +167,11 @@ fn run_interpreter(
             END_BRANCH => {
                 // The block terminator does nothing; flow continues past it.
                 running.ip += 1;
+            }
+            LABEL => running.ip += 1,
+            JUMP_TO_LABEL => {
+                let id = command.params.first().copied().unwrap_or(0);
+                running.ip = find_label(&running.commands, id).unwrap_or(running.ip + 1);
             }
             ENEMY_ENCOUNTER | OPEN_SHOP | SHOW_INN => {
                 let terminator = SKIP_BLOCKS
@@ -315,6 +322,12 @@ fn skip_else_body(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
     j
 }
 
+/// Index of the `Label` (12110) whose first param equals `id`, anywhere in the
+/// page (RM2000 jumps forward or back).
+fn find_label(commands: &[EventCommand], id: i32) -> Option<usize> {
+    commands.iter().position(|c| c.code == LABEL && c.params.first().copied() == Some(id))
+}
+
 /// Index just past a subsystem block's terminator: the first command at
 /// `indent` whose `code == terminator`, plus one (or the end of the list).
 fn skip_to_terminator(commands: &[EventCommand], ip: usize, indent: u32, terminator: u32) -> usize {
@@ -339,6 +352,22 @@ mod tests {
         let commands =
             vec![cmd(10710, 0), cmd(20710, 0), cmd(10210, 1), cmd(20713, 0), cmd(10110, 0)];
         assert_eq!(skip_to_terminator(&commands, 0, 0, 20713), 4);
+    }
+
+    fn cmd_params(code: u32, indent: u32, params: Vec<i32>) -> EventCommand {
+        EventCommand { code, indent, string: String::new(), params }
+    }
+
+    #[test]
+    fn jump_finds_label_forward_and_back() {
+        let commands = vec![
+            cmd_params(12110, 0, vec![1]),
+            cmd(10110, 0),
+            cmd_params(12110, 0, vec![2]),
+        ];
+        assert_eq!(find_label(&commands, 2), Some(2));
+        assert_eq!(find_label(&commands, 1), Some(0));
+        assert_eq!(find_label(&commands, 9), None);
     }
 
     #[test]
