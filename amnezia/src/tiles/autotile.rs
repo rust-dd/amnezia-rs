@@ -3,7 +3,10 @@
 //!
 //! A lower-layer chip id falls in one of the blocks below (values match
 //! EasyRPG's `BLOCK_*` constants):
-//! - `BLOCK_A`/`BLOCK_B`/`BLOCK_C` (`0..4000`): water and animated autotiles.
+//! - `BLOCK_A`/`BLOCK_B` (`0..3000`): quarter-assembled animated water; see
+//!   [`super::water`].
+//! - `BLOCK_C` (`3000..3150`): whole-cell animated tiles (waterfalls); see
+//!   [`super::water`].
 //! - `BLOCK_D` (`4000..4600`): 12 terrain/wall autotiles, 50 shapes each.
 //! - `BLOCK_E` (`5000..=5143`): 144 static single tiles.
 //!
@@ -12,8 +15,10 @@
 //! 16×16 tile is composed from four quarters. That is why the old
 //! single-representative mapping drew wall autotiles as a black void: it always
 //! sampled the shape-0 fill quarter (a wall's dark interior) and never the edge
-//! cells that carry the visible wall border.
+//! cells that carry the visible wall border. `BLOCK_A`/`BLOCK_B` water is
+//! assembled the same way from a water-specific template.
 
+use super::water;
 use super::TILE;
 
 const BLOCK_D: u16 = 4000;
@@ -41,12 +46,16 @@ pub enum LowerRender {
     Quarters([Quarter; 4]),
 }
 
-/// The chipset source for a lower-layer tile id: `BLOCK_D` autotiles resolve to
-/// four shape-assembled quarters, `BLOCK_E` to its static cell, and everything
-/// else (water/animated `BLOCK_A/B/C`) to a representative deep-water cell until
-/// water assembly lands.
+/// The chipset source for a lower-layer tile id: `BLOCK_A`/`BLOCK_B` water and
+/// `BLOCK_D` autotiles resolve to four shape-assembled quarters, `BLOCK_C` and
+/// `BLOCK_E` to a whole static cell (animation frame 0). Any id past the known
+/// blocks falls back to the deep-water cell.
 pub fn lower_render(id: u16) -> LowerRender {
-    if (BLOCK_D..BLOCK_D_END).contains(&id) {
+    if id < water::BLOCK_C {
+        LowerRender::Quarters(water::water_quarters(id, 0))
+    } else if (water::BLOCK_C..water::BLOCK_C_END).contains(&id) {
+        LowerRender::Whole { src: water::block_c_source(id, 0) }
+    } else if (BLOCK_D..BLOCK_D_END).contains(&id) {
         LowerRender::Quarters(block_d_quarters(id))
     } else if (BLOCK_E..BLOCK_E_END).contains(&id) {
         LowerRender::Whole { src: block_e_source(id) }
@@ -205,8 +214,17 @@ mod tests {
     }
 
     #[test]
-    fn water_falls_back_to_a_representative_cell() {
-        assert_eq!(lower_render(25), LowerRender::Whole { src: (0.0, 64.0) });
-        assert_eq!(lower_render(0), LowerRender::Whole { src: (0.0, 64.0) });
+    fn water_block_a_assembles_into_quarters() {
+        // Plain water (id 0) is the four 8×8 corners of the (0, 64) deep-water
+        // cell — what the old whole-cell fallback drew, now shape-assembled.
+        assert_eq!(srcs(0), [(0.0, 64.0), (8.0, 64.0), (0.0, 72.0), (8.0, 72.0)]);
+        // A shore shape pulls its top quarters from a different template row.
+        assert_eq!(srcs(3), [(0.0, 48.0), (8.0, 48.0), (0.0, 72.0), (8.0, 72.0)]);
+    }
+
+    #[test]
+    fn water_block_c_is_a_whole_cell() {
+        assert_eq!(lower_render(3000), LowerRender::Whole { src: (48.0, 64.0) });
+        assert_eq!(lower_render(3100), LowerRender::Whole { src: (80.0, 64.0) });
     }
 }

@@ -6,6 +6,7 @@
 //! passability rules.
 
 mod autotile;
+mod water;
 
 pub use autotile::{lower_render, LowerRender, Quarter, QUARTER};
 
