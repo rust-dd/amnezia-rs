@@ -4,6 +4,7 @@
 //! switches and variables. A page's commands are a flat list with a per-command
 //! `indent`; conditional branches use that indent to delimit their bodies.
 
+use crate::audio::AudioRequest;
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
 use crate::events::message_boxes;
@@ -48,6 +49,9 @@ const SHOW_CHOICE: u32 = 10140;
 const SHOW_CHOICE_OPTION: u32 = 20140;
 const SHOW_CHOICE_END: u32 = 20141;
 const MOVE_EVENT: u32 = 11330;
+const PLAY_BGM: u32 = 11510;
+const FADE_OUT_BGM: u32 = 11520;
+const PLAY_SOUND: u32 = 11550;
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
 /// that never advances) can't lock up the frame. Well-formed pages never
@@ -129,6 +133,7 @@ fn run_interpreter(
     mut pending: ResMut<PendingTeleport>,
     mut players: Query<&mut Player>,
     mut event_sprites: Query<&mut EventSprite>,
+    mut audio: MessageWriter<AudioRequest>,
 ) {
     if !running.active {
         return;
@@ -293,9 +298,21 @@ fn run_interpreter(
                 running.ip =
                     skip_to_terminator(&running.commands, running.ip, command.indent, terminator);
             }
+            PLAY_SOUND => {
+                audio.write(AudioRequest::play_sound(&command.string, &command.params));
+                running.ip += 1;
+            }
+            PLAY_BGM => {
+                audio.write(AudioRequest::play_bgm(&command.string, &command.params));
+                running.ip += 1;
+            }
+            FADE_OUT_BGM => {
+                audio.write(AudioRequest::StopBgm);
+                running.ip += 1;
+            }
             _ => {
-                // Every not-yet-supported command (movement, audio, screen
-                // effects) simply advances.
+                // Every not-yet-supported command (movement, screen effects)
+                // simply advances.
                 running.ip += 1;
             }
         }

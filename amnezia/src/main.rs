@@ -5,6 +5,7 @@
 //! legacy RPG Maker formats.
 
 mod assets;
+mod audio;
 mod choice;
 mod debug;
 mod dialogue;
@@ -41,6 +42,7 @@ fn main() -> AppExit {
             dialogue::DialoguePlugin,
             teleport::TeleportPlugin,
             interpreter::InterpreterPlugin,
+            audio::AudioPlugin,
             choice::ChoicePlugin,
             debug::DebugPlugin,
         ))
