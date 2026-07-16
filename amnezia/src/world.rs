@@ -26,8 +26,6 @@ pub struct MapScene;
 /// change onto the sprite.
 #[derive(Component)]
 pub struct EventSprite {
-    // Read by the MoveEvent target lookup in the next task.
-    #[allow(dead_code)]
     pub id: u32,
     pub dir: u32,
     pub frame: u32,

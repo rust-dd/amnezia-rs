@@ -162,7 +162,7 @@ fn interact(
         if let Some(page) = active_page(event, &switches, &variables)
             && page.trigger == 0
         {
-            running.start(page.commands.clone());
+            running.start(event.id, page.commands.clone());
             return;
         }
     }

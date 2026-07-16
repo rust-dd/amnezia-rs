@@ -110,8 +110,8 @@ fn move_player(
         // passable step onto it, or in place at a solid one (RM2000 doors/exits
         // are solid). It fires only on input, never on the interpreter's own
         // actions, so there's no re-trigger loop.
-        if let Some(page) = touch_page_at(&map_events, &switches, &variables, nx, ny) {
-            running.start(page.commands.clone());
+        if let Some((id, page)) = touch_page_at(&map_events, &switches, &variables, nx, ny) {
+            running.start(id, page.commands.clone());
         }
     }
 }
@@ -133,21 +133,24 @@ fn event_blocks_at(
     })
 }
 
-/// The active page of a player-touch event (trigger 1 or 2) on tile `(x, y)`,
-/// if any — the command list the interpreter should run on contact.
+/// The active page (with its event id) of a player-touch event (trigger 1 or 2)
+/// on tile `(x, y)`, if any — the command list the interpreter should run on
+/// contact.
 fn touch_page_at<'a>(
     map_events: &'a MapEvents,
     switches: &Switches,
     variables: &Variables,
     x: i32,
     y: i32,
-) -> Option<&'a EventPage> {
+) -> Option<(u32, &'a EventPage)> {
     map_events
         .events
         .iter()
         .filter(|e| e.x as i32 == x && e.y as i32 == y)
         .find_map(|e| {
-            active_page(e, switches, variables).filter(|p| p.trigger == 1 || p.trigger == 2)
+            active_page(e, switches, variables)
+                .filter(|p| p.trigger == 1 || p.trigger == 2)
+                .map(|p| (e.id, p))
         })
 }
 

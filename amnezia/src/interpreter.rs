@@ -7,10 +7,11 @@
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
 use crate::events::message_boxes;
+use crate::player::Player;
 use crate::state::{active_page, Switches, Variables};
 use crate::teleport::{Fade, PendingTeleport};
 use crate::text::{self, HeroName};
-use crate::world::MapEvents;
+use crate::world::{EventSprite, MapEvents};
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 use std::collections::HashMap;
@@ -43,6 +44,7 @@ const BREAK_LOOP: u32 = 12220;
 const SHOW_CHOICE: u32 = 10140;
 const SHOW_CHOICE_OPTION: u32 = 20140;
 const SHOW_CHOICE_END: u32 = 20141;
+const MOVE_EVENT: u32 = 11330;
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
 /// that never advances) can't lock up the frame. Well-formed pages never
@@ -57,6 +59,7 @@ pub struct RunningEvent {
     ip: usize,
     active: bool,
     wait: f32,
+    event_id: u32,
     choices: HashMap<u32, i32>,
 }
 
@@ -69,13 +72,14 @@ impl RunningEvent {
 
     /// Begin running `commands` from the top. Ignored if a run is already live,
     /// so one event can't interrupt another mid-sequence.
-    pub fn start(&mut self, commands: Vec<EventCommand>) {
+    pub fn start(&mut self, event_id: u32, commands: Vec<EventCommand>) {
         if self.active {
             return;
         }
         self.commands = commands;
         self.ip = 0;
         self.wait = 0.0;
+        self.event_id = event_id;
         self.choices.clear();
         self.active = true;
     }
@@ -85,6 +89,7 @@ impl RunningEvent {
         self.commands.clear();
         self.ip = 0;
         self.wait = 0.0;
+        self.event_id = 0;
         self.choices.clear();
     }
 }
@@ -112,6 +117,8 @@ fn run_interpreter(
     mut switches: ResMut<Switches>,
     mut variables: ResMut<Variables>,
     mut pending: ResMut<PendingTeleport>,
+    mut players: Query<&mut Player>,
+    mut event_sprites: Query<&mut EventSprite>,
 ) {
     if !running.active {
         return;
@@ -227,6 +234,34 @@ fn run_interpreter(
                 running.choices.remove(&command.indent);
                 running.ip += 1;
             }
+            MOVE_EVENT => {
+                let target = command.params.first().copied().unwrap_or(0);
+                let id = if target == 10005 { running.event_id as i32 } else { target };
+                for action in decode_route(&command.params) {
+                    match action {
+                        RouteAction::Face(dir) => {
+                            if target == 10001 {
+                                if let Ok(mut player) = players.single_mut() {
+                                    player.dir = dir;
+                                }
+                            } else if let Some(mut sprite) =
+                                event_sprites.iter_mut().find(|s| s.id as i32 == id)
+                            {
+                                sprite.dir = dir;
+                            }
+                        }
+                        RouteAction::ChangeGraphic(name, index) => {
+                            if let Some(mut sprite) =
+                                event_sprites.iter_mut().find(|s| s.id as i32 == id)
+                            {
+                                sprite.charset = name;
+                                sprite.index = index;
+                            }
+                        }
+                    }
+                }
+                running.ip += 1;
+            }
             ENEMY_ENCOUNTER | OPEN_SHOP | SHOW_INN => {
                 let terminator = SKIP_BLOCKS
                     .iter()
@@ -263,7 +298,7 @@ fn autorun(
         if let Some(page) = active_page(event, &switches, &variables)
             && page.trigger == 3
         {
-            running.start(page.commands.clone());
+            running.start(event.id, page.commands.clone());
             return;
         }
     }
@@ -410,6 +445,45 @@ fn skip_option_body(commands: &[EventCommand], ip: usize, indent: u32) -> usize 
     j
 }
 
+/// A decoded MoveEvent route action the interpreter applies instantly. Movement
+/// and other sub-commands are consumed for alignment but not represented.
+enum RouteAction {
+    Face(u32),
+    ChangeGraphic(String, u32),
+}
+
+/// Decode a MoveEvent's route (the ints after `[ref, freq, repeat, skip]`) into
+/// the `Face`/`ChangeGraphic` actions we apply; other sub-commands are skipped
+/// with their arguments so the int stream stays aligned.
+fn decode_route(params: &[i32]) -> Vec<RouteAction> {
+    let mut actions = Vec::new();
+    let mut i = 4;
+    while i < params.len() {
+        let sub = params[i];
+        i += 1;
+        match sub {
+            12..=15 => actions.push(RouteAction::Face((sub - 12) as u32)),
+            32 | 33 => i += 1,
+            34 => {
+                let len = params.get(i).copied().unwrap_or(0).max(0) as usize;
+                i += 1;
+                let end = (i + len).min(params.len());
+                let name: String = params[i..end].iter().map(|&b| b as u8 as char).collect();
+                i = end;
+                let frame = params.get(i).copied().unwrap_or(0).max(0) as u32;
+                i += 1;
+                actions.push(RouteAction::ChangeGraphic(name, frame));
+            }
+            35 => {
+                let len = params.get(i).copied().unwrap_or(0).max(0) as usize;
+                i += 1 + len + 3;
+            }
+            _ => {}
+        }
+    }
+    actions
+}
+
 /// Index of the `Loop` (12210) at `indent` that an `EndLoop` at `ip` closes
 /// (scanning backward); falls back to `ip` if unmatched (a one-shot loop).
 fn loop_start(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
@@ -507,6 +581,16 @@ mod tests {
         let commands =
             vec![cmd(10140, 0), cmd(20140, 0), cmd(10210, 1), cmd(20140, 0), cmd(20141, 0)];
         assert_eq!(skip_option_body(&commands, 1, 0), 3);
+    }
+
+    #[test]
+    fn decodes_change_graphic_and_face() {
+        // ref, freq, repeat, skip, then: change_graphic "Torch" frame 1, face-left (15)
+        let params = vec![10005, 8, 0, 0, 34, 5, 84, 111, 114, 99, 104, 1, 15];
+        let actions = decode_route(&params);
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(&actions[0], RouteAction::ChangeGraphic(n, 1) if n == "Torch"));
+        assert!(matches!(actions[1], RouteAction::Face(3)));
     }
 
     #[test]
