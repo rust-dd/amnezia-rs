@@ -48,6 +48,21 @@ pub fn upper_source(id: u16) -> Option<(f32, f32)> {
     Some((f32::from(col) * TILE, f32::from(row) * TILE))
 }
 
+/// Width and height of one CharSet sprite cell in pixels.
+pub const CHAR_W: f32 = 24.0;
+pub const CHAR_H: f32 = 32.0;
+
+/// Source rectangle top-left (charset pixels) for a character sprite:
+/// `char_index` selects one of the 8 blocks (4×2), `dir_row` the facing row
+/// (Up=0, Right=1, Down=2, Left=3), `frame_col` the walk frame (0/1/2).
+pub fn charset_source(char_index: u32, dir_row: u32, frame_col: u32) -> (f32, f32) {
+    let block_x = (char_index % 4) * 72;
+    let block_y = (char_index / 4) * 128;
+    let x = block_x + frame_col * 24;
+    let y = block_y + dir_row * 32;
+    (x as f32, y as f32)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -76,5 +91,15 @@ mod tests {
     #[test]
     fn upper_tile_rect() {
         assert_eq!(upper_source(10001), Some((304.0, 128.0)));
+    }
+
+    #[test]
+    fn charset_hero_down_idle() {
+        assert_eq!(charset_source(0, 2, 1), (24.0, 64.0));
+    }
+
+    #[test]
+    fn charset_block_origin_for_index_five() {
+        assert_eq!(charset_source(5, 0, 0), (72.0, 128.0));
     }
 }
