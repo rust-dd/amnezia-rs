@@ -111,7 +111,11 @@ pub fn load_map(
     }
     for (index, &id) in map.upper.iter().enumerate() {
         if let Some(source) = tiles::upper_source(id) {
-            spawn_tile(commands, &chipset, source, index as i32, width, offset, 1.0);
+            // "Above hero" upper tiles (roof/tree/tall-object tops) draw over the
+            // hero (z 4 > player z 3) so the hero walks behind them; ordinary
+            // upper tiles stay below the hero at z 1.
+            let z = if tiles::above_hero(id, &passages_up) { 4.0 } else { 1.0 };
+            spawn_tile(commands, &chipset, source, index as i32, width, offset, z);
         }
     }
     for event in &map.events {

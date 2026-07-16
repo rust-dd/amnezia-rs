@@ -85,6 +85,25 @@ fn passages_lower_index(id: u16) -> Option<usize> {
     }
 }
 
+/// The `passages_up` bit (RM2000 "above hero" / star / priority) that draws an
+/// upper-layer tile above the hero instead of at or below it.
+const ABOVE_HERO_BIT: u8 = 0x10;
+
+/// Whether an upper-layer tile is flagged "above hero" (roof tops, tree tops,
+/// tall-object tops): bit [`ABOVE_HERO_BIT`] of its `passages_up` byte. Such a
+/// tile renders above the hero so the hero walks behind it; ordinary upper tiles
+/// render at or below the hero. The empty upper tile (`id <= 10000`) and ids
+/// past the array are never above-hero. Indexes `passages_up` the same way
+/// [`passable`] and [`upper_source`] do (`id - 10000`).
+pub fn above_hero(upper_id: u16, passages_up: &[u8]) -> bool {
+    if upper_id <= 10000 {
+        return false;
+    }
+    passages_up
+        .get((upper_id - 10000) as usize)
+        .is_some_and(|byte| byte & ABOVE_HERO_BIT != 0)
+}
+
 /// Whether the hero can stand on a cell with the given lower/upper tile ids,
 /// per the active chipset's passability arrays (`passages_down` is 162 bytes,
 /// `passages_up` 144; each byte's low nibble is the 4 direction-passable bits).
@@ -101,7 +120,7 @@ pub fn passable(lower_id: u16, upper_id: u16, passages_down: &[u8], passages_up:
             .get((upper_id - 10000) as usize)
             .copied()
             .unwrap_or(0x0F);
-        if upper & 0x10 == 0 {
+        if upper & ABOVE_HERO_BIT == 0 {
             upper & 0x0F
         } else {
             (upper & 0x0F) & (lower & 0x0F)
@@ -148,6 +167,20 @@ mod tests {
     #[test]
     fn charset_block_origin_for_index_five() {
         assert_eq!(charset_source(5, 0, 0), (72.0, 128.0));
+    }
+
+    #[test]
+    fn above_hero_reads_the_0x10_bit() {
+        let mut up = vec![0x0F; 144];
+        up[5] = 0x1F; // 0x0F | 0x10: passable star tile drawn above the hero
+        up[6] = 0x0F; // ordinary passable upper tile, at/below the hero
+        up[7] = 0x10; // above-hero even with no direction bits set
+        assert!(above_hero(10005, &up));
+        assert!(!above_hero(10006, &up));
+        assert!(above_hero(10007, &up));
+        assert!(!above_hero(10000, &up)); // the empty upper tile is never above
+        assert!(!above_hero(9999, &up)); // below the upper-layer id range
+        assert!(!above_hero(10144, &up)); // index past the array defaults to not-above
     }
 
     #[test]
