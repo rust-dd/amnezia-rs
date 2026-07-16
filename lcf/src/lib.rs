@@ -94,7 +94,7 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
         return Err(LcfError::BadSignature { expected: "LcfMapUnit" });
     }
 
-    let mut chipset_id = 0;
+    let mut chipset_id = 1;
     let mut width = DEFAULT_WIDTH;
     let mut height = DEFAULT_HEIGHT;
     let mut lower: Option<&[u8]> = None;
@@ -582,6 +582,24 @@ mod tests {
         assert_eq!((map.width, map.height), (20, 15));
         assert_eq!(map.lower_layer.len(), 300);
         assert_eq!(map.upper_layer.len(), 300);
+    }
+
+    #[test]
+    fn defaults_absent_chipset_to_one() {
+        // RM2000 omits a field equal to its default; the map chipset default is
+        // 1 (chipset ids are 1-based), so an LMU with no `0x01` chunk means
+        // chipset 1 — not 0, which is no chipset at all.
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[
+                (0x02, varint(2)),
+                (0x03, varint(1)),
+                (0x47, layer_bytes(&[0, 0])),
+                (0x48, layer_bytes(&[0, 0])),
+            ],
+        );
+        let map = parse_map(&file).unwrap();
+        assert_eq!(map.chipset_id, 1);
     }
 
     #[test]
