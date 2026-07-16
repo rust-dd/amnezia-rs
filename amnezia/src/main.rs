@@ -32,6 +32,8 @@ fn main() -> AppExit {
         .insert_resource(text::HeroName(hero.name))
         .init_resource::<state::Switches>()
         .init_resource::<state::Variables>()
+        .init_resource::<state::Party>()
+        .init_resource::<state::Inventory>()
         .add_plugins((
             font::FontPlugin,
             world::WorldPlugin,

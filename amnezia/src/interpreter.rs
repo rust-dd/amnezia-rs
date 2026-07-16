@@ -8,7 +8,7 @@ use crate::choice::Choice;
 use crate::dialogue::Dialogue;
 use crate::events::message_boxes;
 use crate::player::Player;
-use crate::state::{active_page, Switches, Variables};
+use crate::state::{active_page, Inventory, Party, Switches, Variables};
 use crate::teleport::{Fade, PendingTeleport};
 use crate::text::{self, HeroName};
 use crate::world::{EventSprite, MapEvents};
@@ -30,6 +30,9 @@ const END_BRANCH: u32 = 22011;
 const ENEMY_ENCOUNTER: u32 = 10710;
 const OPEN_SHOP: u32 = 10720;
 const SHOW_INN: u32 = 10730;
+const CHANGE_GOLD: u32 = 10310;
+const CHANGE_ITEMS: u32 = 10320;
+const CHANGE_PARTY: u32 = 10330;
 
 /// Subsystem block openers not yet implemented, paired with their terminator
 /// sub-code. The whole block is skipped so its branch-selector sub-codes
@@ -121,6 +124,8 @@ fn run_interpreter(
     mut choice: ResMut<Choice>,
     mut switches: ResMut<Switches>,
     mut variables: ResMut<Variables>,
+    mut inventory: ResMut<Inventory>,
+    mut party: ResMut<Party>,
     mut pending: ResMut<PendingTeleport>,
     mut players: Query<&mut Player>,
     mut event_sprites: Query<&mut EventSprite>,
@@ -169,6 +174,18 @@ fn run_interpreter(
             }
             CONTROL_VARIABLES => {
                 apply_control_variables(&mut variables, &command.params);
+                running.ip += 1;
+            }
+            CHANGE_GOLD => {
+                apply_change_gold(&mut inventory, &command.params);
+                running.ip += 1;
+            }
+            CHANGE_ITEMS => {
+                apply_change_items(&mut inventory, &command.params);
+                running.ip += 1;
+            }
+            CHANGE_PARTY => {
+                apply_change_party(&mut party, &command.params);
                 running.ip += 1;
             }
             WAIT => {
@@ -354,6 +371,47 @@ fn apply_control_variables(variables: &mut Variables, params: &[i32]) {
             _ => current,
         };
         variables.set(id, next);
+    }
+}
+
+/// Apply a `ChangeGold` command `[op, operand_type, amount]`: op 0 adds gold,
+/// 1 removes it (constant operand, first-pass).
+fn apply_change_gold(inventory: &mut Inventory, params: &[i32]) {
+    let [op, _, amount, ..] = params else {
+        return;
+    };
+    match op {
+        0 => inventory.add_gold(*amount),
+        1 => inventory.remove_gold(*amount),
+        _ => {}
+    }
+}
+
+/// Apply a `ChangeItems` command `[op, operand_type, item_id, count_operand,
+/// count]`: op 0 adds `count` of `item_id`, 1 removes.
+fn apply_change_items(inventory: &mut Inventory, params: &[i32]) {
+    let [op, _, item_id, _, count, ..] = params else {
+        return;
+    };
+    let (item_id, count) = (*item_id as u32, (*count).max(0) as u32);
+    match op {
+        0 => inventory.add_item(item_id, count),
+        1 => inventory.remove_item(item_id, count),
+        _ => {}
+    }
+}
+
+/// Apply a `ChangePartyMembers` command `[op, operand_type, actor_id]`: op 0
+/// adds the actor to the party, 1 removes.
+fn apply_change_party(party: &mut Party, params: &[i32]) {
+    let [op, _, actor_id, ..] = params else {
+        return;
+    };
+    let actor_id = *actor_id as u32;
+    match op {
+        0 => party.add(actor_id),
+        1 => party.remove(actor_id),
+        _ => {}
     }
 }
 
@@ -596,6 +654,32 @@ mod tests {
         assert_eq!(actions.len(), 2);
         assert!(matches!(&actions[0], RouteAction::ChangeGraphic(n, 1) if n == "Torch"));
         assert!(matches!(actions[1], RouteAction::Face(3)));
+    }
+
+    #[test]
+    fn change_items_adds_and_removes() {
+        let mut inv = Inventory::default();
+        apply_change_items(&mut inv, &[0, 0, 181, 0, 2]);
+        assert_eq!(inv.count(181), 2);
+        apply_change_items(&mut inv, &[1, 0, 181, 0, 1]);
+        assert_eq!(inv.count(181), 1);
+    }
+
+    #[test]
+    fn change_gold_adds_and_removes() {
+        let mut inv = Inventory::default();
+        apply_change_gold(&mut inv, &[0, 0, 50]);
+        apply_change_gold(&mut inv, &[1, 0, 30]);
+        assert_eq!(inv.gold(), 20);
+    }
+
+    #[test]
+    fn change_party_adds_and_removes() {
+        let mut party = Party::default();
+        apply_change_party(&mut party, &[0, 0, 2]);
+        assert!(party.has(2));
+        apply_change_party(&mut party, &[1, 0, 2]);
+        assert!(!party.has(2));
     }
 
     #[test]

@@ -31,6 +31,76 @@ impl Variables {
     }
 }
 
+/// The current party roster: actor ids in join order. Starts with the hero
+/// (actor 1); `ChangePartyMembers` adds and removes members.
+#[derive(Resource)]
+pub struct Party {
+    members: Vec<u32>,
+}
+
+impl Default for Party {
+    fn default() -> Self {
+        Self { members: vec![1] }
+    }
+}
+
+impl Party {
+    pub fn add(&mut self, actor_id: u32) {
+        if !self.members.contains(&actor_id) {
+            self.members.push(actor_id);
+        }
+    }
+    pub fn remove(&mut self, actor_id: u32) {
+        self.members.retain(|&id| id != actor_id);
+    }
+}
+
+// Consumed by the item/actor condition evaluator in the next task.
+#[allow(dead_code)]
+impl Party {
+    pub fn has(&self, actor_id: u32) -> bool {
+        self.members.contains(&actor_id)
+    }
+}
+
+/// The party's inventory: item counts keyed by item id, plus gold.
+#[derive(Resource, Default)]
+pub struct Inventory {
+    items: HashMap<u32, u32>,
+    gold: i32,
+}
+
+impl Inventory {
+    pub fn add_item(&mut self, item_id: u32, count: u32) {
+        *self.items.entry(item_id).or_insert(0) += count;
+    }
+    pub fn remove_item(&mut self, item_id: u32, count: u32) {
+        if let Some(owned) = self.items.get_mut(&item_id) {
+            *owned = owned.saturating_sub(count);
+        }
+    }
+    pub fn add_gold(&mut self, amount: i32) {
+        self.gold += amount;
+    }
+    pub fn remove_gold(&mut self, amount: i32) {
+        self.gold -= amount;
+    }
+}
+
+// Consumed by the item/money condition evaluator in the next task.
+#[allow(dead_code)]
+impl Inventory {
+    pub fn count(&self, item_id: u32) -> u32 {
+        self.items.get(&item_id).copied().unwrap_or(0)
+    }
+    pub fn has(&self, item_id: u32) -> bool {
+        self.count(item_id) > 0
+    }
+    pub fn gold(&self) -> i32 {
+        self.gold
+    }
+}
+
 fn condition_holds(page: &EventPage, switches: &Switches, variables: &Variables) -> bool {
     let c = &page.condition;
     if c.flags & 0x01 != 0 && !switches.get(c.switch_a) {
@@ -92,5 +162,28 @@ mod tests {
     fn no_page_when_none_satisfied() {
         let ev = event(vec![page(EventCondition { flags: 1, switch_a: 5, ..Default::default() })]);
         assert!(active_page(&ev, &Switches::default(), &Variables::default()).is_none());
+    }
+
+    #[test]
+    fn party_starts_with_hero_and_changes() {
+        let mut party = Party::default();
+        assert!(party.has(1) && !party.has(2));
+        party.add(2);
+        party.add(2); // idempotent
+        assert!(party.has(2));
+        party.remove(2);
+        assert!(!party.has(2));
+    }
+
+    #[test]
+    fn inventory_items_and_gold() {
+        let mut inv = Inventory::default();
+        inv.add_item(181, 2);
+        assert_eq!(inv.count(181), 2);
+        inv.remove_item(181, 5); // saturates at 0
+        assert_eq!(inv.count(181), 0);
+        inv.add_gold(100);
+        inv.remove_gold(30);
+        assert_eq!(inv.gold(), 70);
     }
 }
