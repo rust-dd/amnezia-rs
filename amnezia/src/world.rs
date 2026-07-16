@@ -21,6 +21,20 @@ const DEV_START: Option<Start> = None;
 #[derive(Component)]
 pub struct MapScene;
 
+/// A rendered event NPC: its event id and current facing/frame/graphic. A
+/// running `MoveEvent` mutates this; [`update_event_sprites`] reflects the
+/// change onto the sprite.
+#[derive(Component)]
+pub struct EventSprite {
+    // Read by the MoveEvent target lookup in the next task.
+    #[allow(dead_code)]
+    pub id: u32,
+    pub dir: u32,
+    pub frame: u32,
+    pub charset: String,
+    pub index: u32,
+}
+
 /// The active map's geometry, tile layers, and passability, for movement.
 #[derive(Resource)]
 pub struct MapData {
@@ -59,7 +73,7 @@ pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup);
+        app.add_systems(Startup, setup).add_systems(Update, update_event_sprites);
     }
 }
 
@@ -186,6 +200,30 @@ fn spawn_event_npc(
             ..default()
         },
         Transform::from_xyz(world_x, world_y, 2.0),
+        EventSprite {
+            id: event.id,
+            dir: DIR_DOWN,
+            frame: 1,
+            charset: page.graphic_name.clone(),
+            index: page.graphic_index,
+        },
         MapScene,
     ));
+}
+
+/// Re-render event NPCs whose facing/frame/graphic a running `MoveEvent`
+/// changed, reflecting the new charset sub-rect (and charset image) onto the
+/// sprite.
+fn update_event_sprites(
+    asset_server: Res<AssetServer>,
+    mut sprites: Query<(&EventSprite, &mut Sprite), Changed<EventSprite>>,
+) {
+    for (event, mut sprite) in &mut sprites {
+        if event.charset.is_empty() {
+            continue;
+        }
+        sprite.image = asset_server.load(resolve_png("CharSet", &event.charset));
+        let (sx, sy) = tiles::charset_source(event.index, event.dir, event.frame);
+        sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
+    }
 }
