@@ -19,6 +19,10 @@ const DIR_RIGHT: u32 = 1;
 const DIR_DOWN: u32 = 2;
 const DIR_LEFT: u32 = 3;
 
+/// Vertical offset so the 24×32 character's feet sit on the tile it occupies
+/// (RM2000 aligns the sprite's bottom with the tile's bottom).
+const PLAYER_Y_OFFSET: f32 = (tiles::CHAR_H - tiles::TILE) / 2.0;
+
 #[derive(Component)]
 struct Player {
     tile_x: i32,
@@ -90,7 +94,7 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let player_charset = asset_server.load(format!("graphics/CharSet/{PLAYER_CHARSET}.png"));
     let (source_x, source_y) = tiles::charset_source(PLAYER_INDEX, DIR_DOWN, 1);
     let world_x = start_x as f32 * tiles::TILE - offset_x + tiles::TILE / 2.0;
-    let world_y = offset_y - start_y as f32 * tiles::TILE - tiles::TILE / 2.0;
+    let world_y = offset_y - start_y as f32 * tiles::TILE - tiles::TILE / 2.0 + PLAYER_Y_OFFSET;
     commands.spawn((
         Player { tile_x: start_x, tile_y: start_y, dir: DIR_DOWN, frame: 1 },
         Sprite {
@@ -200,7 +204,7 @@ fn update_player_sprite(
         ));
         let (world_x, world_y) = tile_center(player.tile_x, player.tile_y, &data);
         transform.translation.x = world_x;
-        transform.translation.y = world_y;
+        transform.translation.y = world_y + PLAYER_Y_OFFSET;
     }
 }
 
