@@ -8,6 +8,7 @@ mod assets;
 mod dialogue;
 mod events;
 mod font;
+mod interpreter;
 mod player;
 // Consumed by the interpreter and triggers in the next tasks; the allow is
 // removed once they wire the switches/variables/active-page in.
@@ -35,6 +36,7 @@ fn main() -> AppExit {
             player::PlayerPlugin,
             dialogue::DialoguePlugin,
             teleport::TeleportPlugin,
+            interpreter::InterpreterPlugin,
         ))
         .run()
 }

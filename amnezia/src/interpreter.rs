@@ -1,0 +1,368 @@
+//! The event interpreter: runs an active event page's RM2000 command list one
+//! step at a time. It drives the existing message box for dialogue and the
+//! existing teleport fade for map transfers, and reads/writes the game's
+//! switches and variables. A page's commands are a flat list with a per-command
+//! `indent`; conditional branches use that indent to delimit their bodies.
+
+use crate::dialogue::Dialogue;
+use crate::events::message_boxes;
+use crate::state::{Switches, Variables};
+use crate::teleport::{Fade, PendingTeleport};
+use amnezia_data::EventCommand;
+use bevy::prelude::*;
+
+// RM2000 opcodes, verified empirically against the converted map assets.
+const SHOW_MESSAGE: u32 = 10110;
+const SHOW_MESSAGE_2: u32 = 20110;
+const CHANGE_FACE: u32 = 10130;
+const CONTROL_SWITCHES: u32 = 10210;
+const CONTROL_VARIABLES: u32 = 10220;
+const TELEPORT: u32 = 10810;
+const WAIT: u32 = 11410;
+const CONDITIONAL_BRANCH: u32 = 12010;
+const ELSE_BRANCH: u32 = 22010;
+const END_BRANCH: u32 = 22011;
+
+/// A frame-local cap on executed commands, so a malformed list (e.g. a branch
+/// that never advances) can't lock up the frame. Well-formed pages never
+/// approach it — every command strictly advances the instruction pointer.
+const MAX_STEPS_PER_FRAME: usize = 10_000;
+
+/// The event currently executing: its command list, the instruction pointer,
+/// whether a run is live, and the remaining `Wait` countdown in seconds.
+#[derive(Resource, Default)]
+pub struct RunningEvent {
+    commands: Vec<EventCommand>,
+    ip: usize,
+    active: bool,
+    wait: f32,
+}
+
+// `active`/`start` are the interface the triggers (action-key, touch, autorun)
+// call in the next task; the allow is removed once those wire them in.
+#[allow(dead_code)]
+impl RunningEvent {
+    /// Whether an event is currently executing. Triggers and movement pause
+    /// while this holds.
+    pub fn active(&self) -> bool {
+        self.active
+    }
+
+    /// Begin running `commands` from the top. Ignored if a run is already live,
+    /// so one event can't interrupt another mid-sequence.
+    pub fn start(&mut self, commands: Vec<EventCommand>) {
+        if self.active {
+            return;
+        }
+        self.commands = commands;
+        self.ip = 0;
+        self.wait = 0.0;
+        self.active = true;
+    }
+
+    fn stop(&mut self) {
+        self.active = false;
+        self.commands.clear();
+        self.ip = 0;
+        self.wait = 0.0;
+    }
+}
+
+pub struct InterpreterPlugin;
+
+impl Plugin for InterpreterPlugin {
+    fn build(&self, app: &mut App) {
+        app.init_resource::<RunningEvent>().add_systems(Update, run_interpreter);
+    }
+}
+
+/// Execute the running event, one burst of commands per frame. Pauses while a
+/// message box is open, a teleport fade is running, or a `Wait` is counting
+/// down; resumes automatically once the block clears.
+#[allow(clippy::too_many_arguments)]
+fn run_interpreter(
+    time: Res<Time>,
+    fade: Res<Fade>,
+    mut running: ResMut<RunningEvent>,
+    mut dialogue: ResMut<Dialogue>,
+    mut switches: ResMut<Switches>,
+    mut variables: ResMut<Variables>,
+    mut pending: ResMut<PendingTeleport>,
+) {
+    if !running.active {
+        return;
+    }
+    if dialogue.active || fade.busy() {
+        return;
+    }
+    if running.wait > 0.0 {
+        running.wait -= time.delta_secs();
+        return;
+    }
+    for _ in 0..MAX_STEPS_PER_FRAME {
+        let Some(command) = running.commands.get(running.ip).cloned() else {
+            running.stop();
+            return;
+        };
+        match command.code {
+            SHOW_MESSAGE | SHOW_MESSAGE_2 | CHANGE_FACE => {
+                let run_len = running.commands[running.ip..]
+                    .iter()
+                    .take_while(|c| is_message(c.code))
+                    .count();
+                let boxes = message_boxes(&running.commands[running.ip..running.ip + run_len]);
+                running.ip += run_len;
+                if !boxes.is_empty() {
+                    dialogue.open(boxes);
+                    return;
+                }
+            }
+            CONTROL_SWITCHES => {
+                apply_control_switches(&mut switches, &command.params);
+                running.ip += 1;
+            }
+            CONTROL_VARIABLES => {
+                apply_control_variables(&mut variables, &command.params);
+                running.ip += 1;
+            }
+            WAIT => {
+                running.wait = command.params.first().copied().unwrap_or(0) as f32 / 10.0;
+                running.ip += 1;
+                return;
+            }
+            TELEPORT => {
+                if let [map, x, y, ..] = command.params.as_slice() {
+                    pending.0 = Some((*map as u32, *x as u32, *y as u32));
+                }
+                running.stop();
+                return;
+            }
+            CONDITIONAL_BRANCH => {
+                if branch_holds(&command.params, &switches, &variables) {
+                    running.ip += 1;
+                } else {
+                    running.ip = skip_true_body(&running.commands, running.ip, command.indent);
+                }
+            }
+            ELSE_BRANCH => {
+                running.ip = skip_else_body(&running.commands, running.ip, command.indent);
+            }
+            END_BRANCH => {
+                // The block terminator does nothing; flow continues past it.
+                running.ip += 1;
+            }
+            _ => {
+                // Every not-yet-supported command (movement, audio, screen
+                // effects) simply advances.
+                running.ip += 1;
+            }
+        }
+    }
+}
+
+fn is_message(code: u32) -> bool {
+    matches!(code, SHOW_MESSAGE | SHOW_MESSAGE_2 | CHANGE_FACE)
+}
+
+/// Apply a `ControlSwitches` command `[mode, start_id, end_id, op]` to the id
+/// range `start..=end`: op 0 turns switches ON, 1 OFF, 2 toggles. `mode` (direct
+/// range vs. variable-referenced id) is treated as a direct range for now.
+fn apply_control_switches(switches: &mut Switches, params: &[i32]) {
+    let [_, start, end, op, ..] = params else {
+        return;
+    };
+    for id in *start..=*end {
+        let id = id as u32;
+        match op {
+            0 => switches.set(id, true),
+            1 => switches.set(id, false),
+            2 => switches.set(id, !switches.get(id)),
+            _ => {}
+        }
+    }
+}
+
+/// Apply a `ControlVariables` command `[mode, start_id, end_id, op, operand_type,
+/// a, b]` to the id range `start..=end`. `op` 0 set, 1 add, 2 sub, 3 mul, 4 div,
+/// 5 mod (div/mod by zero leave the value unchanged). The operand is the
+/// constant `a` (operand_type 0) or the value of variable `a` (operand_type 1);
+/// other operand types are treated as the constant `a` for now.
+fn apply_control_variables(variables: &mut Variables, params: &[i32]) {
+    let [_, start, end, op, operand_type, a, ..] = params else {
+        return;
+    };
+    let operand = if *operand_type == 1 { variables.get(*a as u32) } else { *a };
+    for id in *start..=*end {
+        let id = id as u32;
+        let current = variables.get(id);
+        let next = match op {
+            0 => operand,
+            1 => current + operand,
+            2 => current - operand,
+            3 => current * operand,
+            4 => if operand != 0 { current / operand } else { current },
+            5 => if operand != 0 { current % operand } else { current },
+            _ => current,
+        };
+        variables.set(id, next);
+    }
+}
+
+/// Whether a `ConditionalBranch`'s condition holds. Switch (type 0) and variable
+/// (type 1) comparisons are evaluated; unsupported kinds (timer, money, item,
+/// hero, …) return `true` so their body runs rather than the event stalling.
+fn branch_holds(params: &[i32], switches: &Switches, variables: &Variables) -> bool {
+    match params.first().copied().unwrap_or(-1) {
+        0 => {
+            let id = params.get(1).copied().unwrap_or(0) as u32;
+            let want_on = params.get(2).copied().unwrap_or(0) == 0;
+            switches.get(id) == want_on
+        }
+        1 => {
+            let lhs = variables.get(params.get(1).copied().unwrap_or(0) as u32);
+            let operand = params.get(3).copied().unwrap_or(0);
+            let rhs = if params.get(2).copied().unwrap_or(0) == 1 {
+                variables.get(operand as u32)
+            } else {
+                operand
+            };
+            match params.get(4).copied().unwrap_or(0) {
+                0 => lhs == rhs,
+                1 => lhs >= rhs,
+                2 => lhs <= rhs,
+                3 => lhs > rhs,
+                4 => lhs < rhs,
+                5 => lhs != rhs,
+                _ => true,
+            }
+        }
+        _ => true,
+    }
+}
+
+/// The instruction pointer to jump to when a branch at `indent` is NOT taken:
+/// skip the true body (every command deeper than `indent`), then enter the else
+/// body if an `ELSE_BRANCH` marker follows, else land on the block terminator
+/// (which the main loop skips).
+fn skip_true_body(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
+    let mut j = ip + 1;
+    while j < commands.len() && commands[j].indent > indent {
+        j += 1;
+    }
+    if j < commands.len() && commands[j].code == ELSE_BRANCH && commands[j].indent == indent {
+        j + 1
+    } else {
+        j
+    }
+}
+
+/// The instruction pointer to jump to when the true body falls through to an
+/// `ELSE_BRANCH` at `indent`: skip the else body, landing on the block
+/// terminator (which the main loop skips).
+fn skip_else_body(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
+    let mut j = ip + 1;
+    while j < commands.len() && commands[j].indent > indent {
+        j += 1;
+    }
+    j
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cmd(code: u32, indent: u32) -> EventCommand {
+        EventCommand { code, indent, string: String::new(), params: Vec::new() }
+    }
+
+    #[test]
+    fn control_switches_on_off_toggle() {
+        let mut sw = Switches::default();
+        apply_control_switches(&mut sw, &[0, 3, 3, 0]);
+        assert!(sw.get(3));
+        apply_control_switches(&mut sw, &[0, 3, 3, 1]);
+        assert!(!sw.get(3));
+        apply_control_switches(&mut sw, &[0, 3, 3, 2]);
+        assert!(sw.get(3));
+    }
+
+    #[test]
+    fn control_switches_range() {
+        let mut sw = Switches::default();
+        apply_control_switches(&mut sw, &[0, 5, 7, 0]);
+        assert!(sw.get(5) && sw.get(6) && sw.get(7));
+    }
+
+    #[test]
+    fn control_variables_set_add_and_from_variable() {
+        let mut var = Variables::default();
+        apply_control_variables(&mut var, &[0, 1, 1, 0, 0, 10, 0]);
+        assert_eq!(var.get(1), 10);
+        apply_control_variables(&mut var, &[0, 1, 1, 1, 0, 5, 0]);
+        assert_eq!(var.get(1), 15);
+        // var 2 = value of var 1 (operand_type 1)
+        apply_control_variables(&mut var, &[0, 2, 2, 0, 1, 1, 0]);
+        assert_eq!(var.get(2), 15);
+    }
+
+    #[test]
+    fn branch_switch_on_and_off() {
+        let mut sw = Switches::default();
+        let var = Variables::default();
+        // [type 0, switch 4, state 0 => branch if ON]
+        assert!(!branch_holds(&[0, 4, 0, 0, 0, 0], &sw, &var));
+        sw.set(4, true);
+        assert!(branch_holds(&[0, 4, 0, 0, 0, 0], &sw, &var));
+        // state 1 => branch if OFF
+        assert!(!branch_holds(&[0, 4, 1, 0, 0, 0], &sw, &var));
+    }
+
+    #[test]
+    fn branch_variable_comparisons() {
+        let sw = Switches::default();
+        let mut var = Variables::default();
+        var.set(1, 6);
+        // var1 == 6
+        assert!(branch_holds(&[1, 1, 0, 6, 0, 0], &sw, &var));
+        // var1 >= 10 (false)
+        assert!(!branch_holds(&[1, 1, 0, 10, 1, 0], &sw, &var));
+        // var1 < 10 (true)
+        assert!(branch_holds(&[1, 1, 0, 10, 4, 0], &sw, &var));
+    }
+
+    #[test]
+    fn skip_true_body_with_else() {
+        // 0: branch@0  1: body@1  2: else@0  3: elsebody@1  4: end@0
+        let commands = vec![
+            cmd(CONDITIONAL_BRANCH, 0),
+            cmd(SHOW_MESSAGE, 1),
+            cmd(ELSE_BRANCH, 0),
+            cmd(SHOW_MESSAGE, 1),
+            cmd(END_BRANCH, 0),
+        ];
+        // Not taken → jump into the else body at index 3.
+        assert_eq!(skip_true_body(&commands, 0, 0), 3);
+    }
+
+    #[test]
+    fn skip_true_body_without_else() {
+        // 0: branch@0  1: body@1  2: end@0
+        let commands =
+            vec![cmd(CONDITIONAL_BRANCH, 0), cmd(SHOW_MESSAGE, 1), cmd(END_BRANCH, 0)];
+        // Not taken, no else → land on the end marker at index 2.
+        assert_eq!(skip_true_body(&commands, 0, 0), 2);
+    }
+
+    #[test]
+    fn skip_else_body_lands_on_end() {
+        let commands = vec![
+            cmd(CONDITIONAL_BRANCH, 0),
+            cmd(SHOW_MESSAGE, 1),
+            cmd(ELSE_BRANCH, 0),
+            cmd(SHOW_MESSAGE, 1),
+            cmd(END_BRANCH, 0),
+        ];
+        // From the else marker at index 2, skip the else body → end at index 4.
+        assert_eq!(skip_else_body(&commands, 2, 0), 4);
+    }
+}

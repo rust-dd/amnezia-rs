@@ -17,6 +17,16 @@ pub struct Dialogue {
     pub active: bool,
 }
 
+impl Dialogue {
+    /// Show `boxes` from the first one. Called by the event interpreter, which
+    /// then pauses until the player dismisses the last box (`active` clears).
+    pub fn open(&mut self, boxes: Vec<MessageBox>) {
+        self.boxes = boxes;
+        self.index = 0;
+        self.active = true;
+    }
+}
+
 #[derive(Component)]
 struct DialoguePanel;
 
