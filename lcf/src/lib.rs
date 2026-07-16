@@ -17,6 +17,7 @@ pub struct MapUnit {
     pub height: u32,
     pub lower_layer: Vec<u16>,
     pub upper_layer: Vec<u16>,
+    pub events: Vec<Event>,
 }
 
 /// Errors returned while parsing an LCF file.
@@ -96,6 +97,7 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     let mut height = DEFAULT_HEIGHT;
     let mut lower: Option<&[u8]> = None;
     let mut upper: Option<&[u8]> = None;
+    let mut events = Vec::new();
 
     while !reader.is_empty() {
         let id = reader.varint()?;
@@ -110,6 +112,7 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
             0x03 => height = Reader::new(data).varint()?,
             0x47 => lower = Some(data),
             0x48 => upper = Some(data),
+            0x51 => events = parse_events(data)?,
             _ => {}
         }
     }
@@ -120,7 +123,116 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     let lower_layer = decode_layer(lower, "lower", expected)?;
     let upper_layer = decode_layer(upper, "upper", expected)?;
 
-    Ok(MapUnit { chipset_id, width, height, lower_layer, upper_layer })
+    Ok(MapUnit { chipset_id, width, height, lower_layer, upper_layer, events })
+}
+
+/// A map event: its id, tile position, name, and pages.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Event {
+    pub id: u32,
+    pub x: u32,
+    pub y: u32,
+    pub name: String,
+    pub pages: Vec<EventPage>,
+}
+
+/// One page of an event: its trigger, graphic, and command list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EventPage {
+    pub trigger: u32,
+    pub graphic_name: String,
+    pub graphic_index: u32,
+    pub commands: Vec<EventCommand>,
+}
+
+/// One event command: RM2000 opcode, nesting indent, string, and int params.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EventCommand {
+    pub code: u32,
+    pub indent: u32,
+    pub string: String,
+    pub params: Vec<i32>,
+}
+
+fn decode_cp1250(bytes: &[u8]) -> String {
+    encoding_rs::WINDOWS_1250.decode(bytes).0.into_owned()
+}
+
+fn parse_events(data: &[u8]) -> Result<Vec<Event>, LcfError> {
+    let mut reader = Reader::new(data);
+    let count = reader.varint()?;
+    let mut events = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        let id = reader.varint()?;
+        let mut event = Event { id, x: 0, y: 0, name: String::new(), pages: Vec::new() };
+        loop {
+            let sub_id = reader.varint()?;
+            if sub_id == 0 {
+                break;
+            }
+            let sub_size = reader.varint()? as usize;
+            let sub_data = reader.take(sub_size)?;
+            match sub_id {
+                0x01 => event.name = decode_cp1250(sub_data),
+                0x02 => event.x = Reader::new(sub_data).varint()?,
+                0x03 => event.y = Reader::new(sub_data).varint()?,
+                0x05 => event.pages = parse_pages(sub_data)?,
+                _ => {}
+            }
+        }
+        events.push(event);
+    }
+    Ok(events)
+}
+
+fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
+    let mut reader = Reader::new(data);
+    let count = reader.varint()?;
+    let mut pages = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        let _page_id = reader.varint()?;
+        let mut page = EventPage {
+            trigger: 0,
+            graphic_name: String::new(),
+            graphic_index: 0,
+            commands: Vec::new(),
+        };
+        loop {
+            let sub_id = reader.varint()?;
+            if sub_id == 0 {
+                break;
+            }
+            let sub_size = reader.varint()? as usize;
+            let sub_data = reader.take(sub_size)?;
+            match sub_id {
+                0x15 => page.graphic_name = decode_cp1250(sub_data),
+                0x16 => page.graphic_index = Reader::new(sub_data).varint()?,
+                0x21 => page.trigger = Reader::new(sub_data).varint()?,
+                0x34 => page.commands = parse_commands(sub_data)?,
+                _ => {}
+            }
+        }
+        pages.push(page);
+    }
+    Ok(pages)
+}
+
+fn parse_commands(data: &[u8]) -> Result<Vec<EventCommand>, LcfError> {
+    let mut reader = Reader::new(data);
+    let mut commands = Vec::new();
+    while !reader.is_empty() {
+        let code = reader.varint()?;
+        let indent = reader.varint()?;
+        let string_len = reader.varint()? as usize;
+        let string = decode_cp1250(reader.take(string_len)?);
+        let param_count = reader.varint()?;
+        let mut params = Vec::with_capacity(param_count as usize);
+        for _ in 0..param_count {
+            params.push(reader.varint()? as i32);
+        }
+        commands.push(EventCommand { code, indent, string, params });
+    }
+    Ok(commands)
 }
 
 /// A chipset entry from the database: its 1-based id, the base name of its
@@ -363,7 +475,7 @@ mod tests {
                 (0x03, varint(1)),
                 (0x0B, varint(0)),
                 (0x47, layer_bytes(&[1, 2])),
-                (0x51, vec![0xDE, 0xAD, 0xBE, 0xEF]),
+                (0x63, vec![0xDE, 0xAD, 0xBE, 0xEF]),
                 (0x48, layer_bytes(&[3, 4])),
             ],
         );
@@ -442,5 +554,53 @@ mod tests {
     fn parse_chipsets_errors_when_section_absent() {
         let ldb = make_ldb(&[(0x0B, vec![1, 2, 3])]);
         assert!(matches!(parse_chipsets(&ldb), Err(LcfError::MissingChipsets)));
+    }
+
+    #[test]
+    fn parses_event_dialogue() {
+        fn cmd(code: u32, s: &[u8]) -> Vec<u8> {
+            let mut o = varint(code);
+            o.extend(varint(0));
+            o.extend(varint(s.len() as u32));
+            o.extend_from_slice(s);
+            o.extend(varint(0));
+            o
+        }
+        let mut cmds = cmd(10110, b"Hello");
+        cmds.extend(cmd(0, b""));
+        let mut page = varint(1);
+        page.extend(subchunk(0x21, &varint(0)));
+        page.extend(subchunk(0x15, b"Object1"));
+        page.extend(subchunk(0x34, &cmds));
+        page.extend(varint(0));
+        let mut pages = varint(1);
+        pages.extend_from_slice(&page);
+        let mut event = varint(7);
+        event.extend(subchunk(0x01, b"Ron"));
+        event.extend(subchunk(0x02, &varint(3)));
+        event.extend(subchunk(0x03, &varint(4)));
+        event.extend(subchunk(0x05, &pages));
+        event.extend(varint(0));
+        let mut section = varint(1);
+        section.extend_from_slice(&event);
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[
+                (0x02, varint(2)),
+                (0x03, varint(1)),
+                (0x47, layer_bytes(&[0, 0])),
+                (0x48, layer_bytes(&[0, 0])),
+                (0x51, section),
+            ],
+        );
+        let map = parse_map(&file).unwrap();
+        assert_eq!(map.events.len(), 1);
+        let event = &map.events[0];
+        assert_eq!((event.id, event.x, event.y), (7, 3, 4));
+        assert_eq!(event.name, "Ron");
+        assert_eq!(event.pages[0].trigger, 0);
+        assert_eq!(event.pages[0].graphic_name, "Object1");
+        assert_eq!(event.pages[0].commands[0].code, 10110);
+        assert_eq!(event.pages[0].commands[0].string, "Hello");
     }
 }
