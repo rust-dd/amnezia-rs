@@ -92,26 +92,32 @@ fn move_player(
     if let Some((dx, dy, dir)) = step {
         player.dir = dir;
         let (nx, ny) = (player.tile_x + dx, player.tile_y + dy);
-        if nx >= 0 && ny >= 0 && nx < data.width && ny < data.height && data.passable(nx, ny) {
+        if nx < 0 || ny < 0 || nx >= data.width || ny >= data.height {
+            return;
+        }
+        // A player-touch teleport fires on the *attempt* to step onto the tile,
+        // even when it's impassable (RM2000 doors/exits are solid) — so it must
+        // be checked before the passability gate. It only fires on input, never
+        // on the teleport's own landing, so there's no re-trigger loop.
+        if let Some(target) = touch_teleport_at(&map_events, nx, ny) {
+            pending.0 = Some(target);
+            return;
+        }
+        if data.passable(nx, ny) {
             player.tile_x = nx;
             player.tile_y = ny;
             player.frame = (player.frame + 1) % 3;
-            queue_touch_teleport(&map_events, &mut pending, nx, ny);
         }
     }
 }
 
-/// If the tile stepped onto holds a touch-triggered event that teleports, queue
-/// it. Only fires on an actual step, so a teleport landing never re-triggers.
-fn queue_touch_teleport(map_events: &MapEvents, pending: &mut PendingTeleport, x: i32, y: i32) {
-    for event in &map_events.events {
-        if event.x as i32 == x
-            && event.y as i32 == y
-            && let Some(target) = touch_teleport(event)
-        {
-            pending.0 = Some(target);
-        }
-    }
+/// The teleport a touch-triggered event on tile `(x, y)` transfers to, if any.
+fn touch_teleport_at(map_events: &MapEvents, x: i32, y: i32) -> Option<(u32, u32, u32)> {
+    map_events
+        .events
+        .iter()
+        .filter(|e| e.x as i32 == x && e.y as i32 == y)
+        .find_map(touch_teleport)
 }
 
 fn update_player_sprite(
