@@ -7,7 +7,7 @@ use crate::events::MessageBox;
 use crate::font::GameFont;
 use crate::interpreter::RunningEvent;
 use crate::player::{facing_tile, Player};
-use crate::state::{active_page, Switches, Variables};
+use crate::state::{active_page, Inventory, Party, Switches, Variables};
 use crate::teleport::Fade;
 use crate::world::MapEvents;
 use bevy::prelude::*;
@@ -129,6 +129,8 @@ fn interact(
     map_events: Res<MapEvents>,
     switches: Res<Switches>,
     variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
     mut dialogue: ResMut<Dialogue>,
     mut running: ResMut<RunningEvent>,
     players: Query<&Player>,
@@ -159,7 +161,7 @@ fn interact(
         if event.x as i32 != fx || event.y as i32 != fy {
             continue;
         }
-        if let Some(page) = active_page(event, &switches, &variables)
+        if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
             && page.trigger == 0
         {
             running.start(event.id, page.commands.clone());

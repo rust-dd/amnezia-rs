@@ -4,7 +4,7 @@
 use crate::assets::resolve_png;
 use crate::dialogue::Dialogue;
 use crate::interpreter::RunningEvent;
-use crate::state::{active_page, Switches, Variables};
+use crate::state::{active_page, Inventory, Party, Switches, Variables};
 use crate::teleport::Fade;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::{MapData, MapEvents};
@@ -73,6 +73,8 @@ fn move_player(
     map_events: Res<MapEvents>,
     switches: Res<Switches>,
     variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
     mut running: ResMut<RunningEvent>,
     mut players: Query<&mut Player>,
 ) {
@@ -99,8 +101,8 @@ fn move_player(
         if nx < 0 || ny < 0 || nx >= data.width || ny >= data.height {
             return;
         }
-        let blocked =
-            !data.passable(nx, ny) || event_blocks_at(&map_events, &switches, &variables, nx, ny);
+        let blocked = !data.passable(nx, ny)
+            || event_blocks_at(&map_events, &switches, &variables, &party, &inventory, nx, ny);
         if !blocked {
             player.tile_x = nx;
             player.tile_y = ny;
@@ -110,7 +112,9 @@ fn move_player(
         // passable step onto it, or in place at a solid one (RM2000 doors/exits
         // are solid). It fires only on input, never on the interpreter's own
         // actions, so there's no re-trigger loop.
-        if let Some((id, page)) = touch_page_at(&map_events, &switches, &variables, nx, ny) {
+        if let Some((id, page)) =
+            touch_page_at(&map_events, &switches, &variables, &party, &inventory, nx, ny)
+        {
             running.start(id, page.commands.clone());
         }
     }
@@ -119,27 +123,33 @@ fn move_player(
 /// Whether a same-layer event occupies tile `(x, y)` and blocks the player.
 /// RM2000 events with `layer == 1` are solid (graphic or not); other layers
 /// don't block. The active page (per current switches/variables) decides.
+#[allow(clippy::too_many_arguments)]
 fn event_blocks_at(
     map_events: &MapEvents,
     switches: &Switches,
     variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
     x: i32,
     y: i32,
 ) -> bool {
     map_events.events.iter().any(|e| {
         e.x as i32 == x
             && e.y as i32 == y
-            && active_page(e, switches, variables).is_some_and(|p| p.layer == 1)
+            && active_page(e, switches, variables, party, inventory).is_some_and(|p| p.layer == 1)
     })
 }
 
 /// The active page (with its event id) of a player-touch event (trigger 1 or 2)
 /// on tile `(x, y)`, if any — the command list the interpreter should run on
 /// contact.
+#[allow(clippy::too_many_arguments)]
 fn touch_page_at<'a>(
     map_events: &'a MapEvents,
     switches: &Switches,
     variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
     x: i32,
     y: i32,
 ) -> Option<(u32, &'a EventPage)> {
@@ -148,7 +158,7 @@ fn touch_page_at<'a>(
         .iter()
         .filter(|e| e.x as i32 == x && e.y as i32 == y)
         .find_map(|e| {
-            active_page(e, switches, variables)
+            active_page(e, switches, variables, party, inventory)
                 .filter(|p| p.trigger == 1 || p.trigger == 2)
                 .map(|p| (e.id, p))
         })

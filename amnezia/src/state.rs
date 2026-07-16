@@ -55,8 +55,6 @@ impl Party {
     }
 }
 
-// Consumed by the item/actor condition evaluator in the next task.
-#[allow(dead_code)]
 impl Party {
     pub fn has(&self, actor_id: u32) -> bool {
         self.members.contains(&actor_id)
@@ -87,8 +85,6 @@ impl Inventory {
     }
 }
 
-// Consumed by the item/money condition evaluator in the next task.
-#[allow(dead_code)]
 impl Inventory {
     pub fn count(&self, item_id: u32) -> u32 {
         self.items.get(&item_id).copied().unwrap_or(0)
@@ -101,7 +97,13 @@ impl Inventory {
     }
 }
 
-fn condition_holds(page: &EventPage, switches: &Switches, variables: &Variables) -> bool {
+fn condition_holds(
+    page: &EventPage,
+    switches: &Switches,
+    variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
+) -> bool {
     let c = &page.condition;
     if c.flags & 0x01 != 0 && !switches.get(c.switch_a) {
         return false;
@@ -112,17 +114,25 @@ fn condition_holds(page: &EventPage, switches: &Switches, variables: &Variables)
     if c.flags & 0x04 != 0 && variables.get(c.variable_id) < c.variable_value as i32 {
         return false;
     }
+    if c.flags & 0x08 != 0 && !inventory.has(c.item_id) {
+        return false;
+    }
+    if c.flags & 0x10 != 0 && !party.has(c.actor_id) {
+        return false;
+    }
     true
 }
 
 /// The active page: the highest-index page whose condition holds (RM2000 rule).
-/// Item/actor/timer conditions are treated as satisfied for now.
+/// Timer conditions (flag bit 5) are still treated as satisfied.
 pub fn active_page<'a>(
     event: &'a Event,
     switches: &Switches,
     variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
 ) -> Option<&'a EventPage> {
-    event.pages.iter().rev().find(|p| condition_holds(p, switches, variables))
+    event.pages.iter().rev().find(|p| condition_holds(p, switches, variables, party, inventory))
 }
 
 #[cfg(test)]
@@ -147,21 +157,46 @@ mod tests {
 
     #[test]
     fn highest_satisfied_page_wins() {
-        let mut switches = Switches::default();
-        let variables = Variables::default();
+        let mut sw = Switches::default();
+        let (var, party, inv) = (Variables::default(), Party::default(), Inventory::default());
         let ev = event(vec![
             page(EventCondition::default()),
             page(EventCondition { flags: 1, switch_a: 2, ..Default::default() }),
         ]);
-        assert_eq!(active_page(&ev, &switches, &variables).map(|p| p.condition.flags), Some(0));
-        switches.set(2, true);
-        assert_eq!(active_page(&ev, &switches, &variables).map(|p| p.condition.flags), Some(1));
+        assert_eq!(active_page(&ev, &sw, &var, &party, &inv).map(|p| p.condition.flags), Some(0));
+        sw.set(2, true);
+        assert_eq!(active_page(&ev, &sw, &var, &party, &inv).map(|p| p.condition.flags), Some(1));
     }
 
     #[test]
     fn no_page_when_none_satisfied() {
         let ev = event(vec![page(EventCondition { flags: 1, switch_a: 5, ..Default::default() })]);
-        assert!(active_page(&ev, &Switches::default(), &Variables::default()).is_none());
+        let (sw, var, party, inv) = (
+            Switches::default(),
+            Variables::default(),
+            Party::default(),
+            Inventory::default(),
+        );
+        assert!(active_page(&ev, &sw, &var, &party, &inv).is_none());
+    }
+
+    #[test]
+    fn item_and_actor_gated_pages() {
+        let (sw, var) = (Switches::default(), Variables::default());
+        let ev = event(vec![
+            page(EventCondition::default()),
+            page(EventCondition { flags: 0x08, item_id: 5, ..Default::default() }),
+            page(EventCondition { flags: 0x10, actor_id: 3, ..Default::default() }),
+        ]);
+        let (mut party, mut inv) = (Party::default(), Inventory::default());
+        let flags = |party: &Party, inv: &Inventory| {
+            active_page(&ev, &sw, &var, party, inv).map(|p| p.condition.flags)
+        };
+        assert_eq!(flags(&party, &inv), Some(0)); // no item, actor 3 absent
+        inv.add_item(5, 1);
+        assert_eq!(flags(&party, &inv), Some(0x08)); // has item 5
+        party.add(3);
+        assert_eq!(flags(&party, &inv), Some(0x10)); // actor 3 joined (higher page)
     }
 
     #[test]

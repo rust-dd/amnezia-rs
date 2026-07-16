@@ -4,7 +4,7 @@
 //! suppressed while a fade is in progress.
 
 use crate::player::Player;
-use crate::state::{Switches, Variables};
+use crate::state::{Inventory, Party, Switches, Variables};
 use crate::tiles::CHAR_Y_OFFSET;
 use crate::world::{load_map, MapData, MapEvents, MapScene};
 use bevy::prelude::*;
@@ -83,6 +83,8 @@ fn drive_fade(
     asset_server: Res<AssetServer>,
     switches: Res<Switches>,
     variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
     mut pending: ResMut<PendingTeleport>,
     mut fade: ResMut<Fade>,
     mut map_data: ResMut<MapData>,
@@ -105,8 +107,8 @@ fn drive_fade(
                 fade.alpha = 1.0;
                 if let Some((map_id, x, y)) = fade.target.take() {
                     swap_map(
-                        &mut commands, &asset_server, &switches, &variables, &mut map_data,
-                        &mut map_events, &scene, &mut players, map_id, x, y,
+                        &mut commands, &asset_server, &switches, &variables, &party, &inventory,
+                        &mut map_data, &mut map_events, &scene, &mut players, map_id, x, y,
                     );
                 }
                 fade.phase = Phase::In;
@@ -132,6 +134,8 @@ fn swap_map(
     asset_server: &AssetServer,
     switches: &Switches,
     variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
     map_data: &mut MapData,
     map_events: &mut MapEvents,
     scene: &Query<Entity, With<MapScene>>,
@@ -143,7 +147,8 @@ fn swap_map(
     for entity in scene {
         commands.entity(entity).despawn();
     }
-    let (data, events) = load_map(commands, asset_server, switches, variables, map_id);
+    let (data, events) =
+        load_map(commands, asset_server, switches, variables, party, inventory, map_id);
     let (tile_x, tile_y) = (x as i32, y as i32);
     if let Ok((mut player, mut transform)) = players.single_mut() {
         player.tile_x = tile_x;

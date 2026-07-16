@@ -5,7 +5,7 @@
 
 use crate::assets::{load_ron, resolve_png, ASSET_ROOT};
 use crate::player::spawn_player;
-use crate::state::{active_page, Switches, Variables};
+use crate::state::{active_page, Inventory, Party, Switches, Variables};
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN};
 use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::prelude::*;
@@ -81,14 +81,23 @@ fn setup(
     asset_server: Res<AssetServer>,
     switches: Res<Switches>,
     variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
 ) {
     commands.spawn(Camera2d);
     let start: Start = match DEV_START {
         Some(dev) => dev,
         None => load_ron(&format!("{ASSET_ROOT}/start.ron")),
     };
-    let (data, events) =
-        load_map(&mut commands, &asset_server, &switches, &variables, start.map_id);
+    let (data, events) = load_map(
+        &mut commands,
+        &asset_server,
+        &switches,
+        &variables,
+        &party,
+        &inventory,
+        start.map_id,
+    );
     spawn_player(&mut commands, &asset_server, (start.x as i32, start.y as i32), &data);
     commands.insert_resource(data);
     commands.insert_resource(events);
@@ -99,11 +108,14 @@ fn setup(
 /// sprite is its active page's graphic (per the current switches/variables). The
 /// caller installs the resources — as `Commands` on first load, or `ResMut`
 /// overwrite on a teleport so they take effect the same frame the hero moves.
+#[allow(clippy::too_many_arguments)]
 pub fn load_map(
     commands: &mut Commands,
     asset_server: &AssetServer,
     switches: &Switches,
     variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
     map_id: u32,
 ) -> (MapData, MapEvents) {
     let map: Map = load_ron(&format!("{ASSET_ROOT}/maps/map_{map_id:04}.ron"));
@@ -139,7 +151,7 @@ pub fn load_map(
         }
     }
     for event in &map.events {
-        spawn_event_npc(commands, asset_server, switches, variables, event, offset);
+        spawn_event_npc(commands, asset_server, switches, variables, party, inventory, event, offset);
     }
 
     let data = MapData {
@@ -215,15 +227,18 @@ fn spawn_lower_quarters(
 
 /// Spawn an NPC sprite for an event's active page graphic, if it has one. The
 /// active page is chosen per the current switches/variables at load time.
+#[allow(clippy::too_many_arguments)]
 fn spawn_event_npc(
     commands: &mut Commands,
     asset_server: &AssetServer,
     switches: &Switches,
     variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
     event: &Event,
     offset: (f32, f32),
 ) {
-    let Some(page) = active_page(event, switches, variables) else {
+    let Some(page) = active_page(event, switches, variables, party, inventory) else {
         return;
     };
     if page.graphic_name.is_empty() {

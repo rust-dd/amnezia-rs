@@ -305,10 +305,13 @@ fn run_interpreter(
 /// Start the map's autorun (trigger 3) event when nothing else is running.
 /// RM2000 replays an autorun page every frame its condition holds; a cutscene
 /// ends by flipping a switch so a non-autorun page becomes active and it stops.
+#[allow(clippy::too_many_arguments)]
 fn autorun(
     map_events: Res<MapEvents>,
     switches: Res<Switches>,
     variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
     dialogue: Res<Dialogue>,
     fade: Res<Fade>,
     mut running: ResMut<RunningEvent>,
@@ -317,7 +320,7 @@ fn autorun(
         return;
     }
     for event in &map_events.events {
-        if let Some(page) = active_page(event, &switches, &variables)
+        if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
             && page.trigger == 3
         {
             running.start(event.id, page.commands.clone());
