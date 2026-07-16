@@ -7,6 +7,7 @@
 mod assets;
 mod dialogue;
 mod events;
+mod font;
 mod player;
 mod tiles;
 mod world;
@@ -21,6 +22,11 @@ fn main() -> AppExit {
                 .set(ImagePlugin::default_nearest())
                 .set(AssetPlugin { file_path: ASSET_ROOT.to_string(), ..default() }),
         )
-        .add_plugins((world::WorldPlugin, player::PlayerPlugin, dialogue::DialoguePlugin))
+        .add_plugins((
+            font::FontPlugin,
+            world::WorldPlugin,
+            player::PlayerPlugin,
+            dialogue::DialoguePlugin,
+        ))
         .run()
 }

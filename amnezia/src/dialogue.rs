@@ -2,9 +2,11 @@
 //! player presses the action key facing an event with dialogue.
 
 use crate::events::{message_boxes, MessageBox};
+use crate::font::GameFont;
 use crate::player::{facing_tile, Player};
 use crate::world::MapEvents;
 use bevy::prelude::*;
+use bevy::text::FontSource;
 
 /// The active dialogue: the sequence of boxes and which one is showing.
 #[derive(Resource, Default)]
@@ -31,7 +33,7 @@ impl Plugin for DialoguePlugin {
 }
 
 /// Spawn the initially hidden dialogue box pinned to the bottom of the screen.
-fn spawn_ui(mut commands: Commands) {
+fn spawn_ui(mut commands: Commands, font: Res<GameFont>) {
     commands
         .spawn((
             Node {
@@ -50,7 +52,11 @@ fn spawn_ui(mut commands: Commands) {
         .with_children(|panel| {
             panel.spawn((
                 Text::new(String::new()),
-                TextFont::from_font_size(20.0),
+                TextFont {
+                    font: FontSource::Handle(font.0.clone()),
+                    font_size: FontSize::Px(20.0),
+                    ..default()
+                },
                 TextColor(Color::WHITE),
                 DialogueText,
             ));
