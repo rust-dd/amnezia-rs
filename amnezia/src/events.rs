@@ -3,7 +3,7 @@
 //! (`ShowMessage` 10110, `ShowMessage_2` 20110, `ChangeFaceGraphic` 10130);
 //! other commands are ignored for now.
 
-use amnezia_data::EventCommand;
+use amnezia_data::{Event, EventCommand};
 
 const SHOW_MESSAGE: u32 = 10110;
 const SHOW_MESSAGE_2: u32 = 20110;
@@ -20,6 +20,19 @@ pub fn teleport_target(commands: &[EventCommand]) -> Option<(u32, u32, u32)> {
             [map, x, y, ..] => Some((*map as u32, *x as u32, *y as u32)),
             _ => None,
         })
+}
+
+/// The teleport a touch-triggered page of this event transfers to, if any.
+/// Scans pages high-to-low (RM2000 highest-active-page wins); page conditions
+/// (switches) aren't evaluated yet, so a door's touch page is found even when a
+/// later message/idle page would otherwise mask it.
+pub fn touch_teleport(event: &Event) -> Option<(u32, u32, u32)> {
+    event
+        .pages
+        .iter()
+        .rev()
+        .filter(|p| p.trigger == 1 || p.trigger == 2)
+        .find_map(|p| teleport_target(&p.commands))
 }
 
 /// One message box: up to four lines of text and an optional face graphic.
@@ -92,6 +105,40 @@ mod tests {
     #[test]
     fn no_teleport_when_absent() {
         assert_eq!(teleport_target(&[cmd(10110, "hi")]), None);
+    }
+
+    fn page(trigger: u32, commands: Vec<EventCommand>) -> amnezia_data::EventPage {
+        amnezia_data::EventPage { trigger, graphic_name: String::new(), graphic_index: 0, commands }
+    }
+
+    #[test]
+    fn touch_teleport_finds_non_last_page() {
+        // A door: page 0 is action-key (no teleport), page 1 is player-touch
+        // with the teleport, page 2 (last) is an action-key message page.
+        let event = Event {
+            id: 1,
+            x: 8,
+            y: 10,
+            name: "Door".to_string(),
+            pages: vec![
+                page(0, vec![]),
+                page(1, vec![cmd_params(10810, vec![2, 13, 12])]),
+                page(0, vec![cmd(10110, "locked")]),
+            ],
+        };
+        assert_eq!(touch_teleport(&event), Some((2, 13, 12)));
+    }
+
+    #[test]
+    fn touch_teleport_ignores_action_key_only() {
+        let event = Event {
+            id: 1,
+            x: 0,
+            y: 0,
+            name: String::new(),
+            pages: vec![page(0, vec![cmd_params(10810, vec![2, 1, 1])])],
+        };
+        assert_eq!(touch_teleport(&event), None);
     }
 
     #[test]

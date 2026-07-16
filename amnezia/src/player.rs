@@ -3,7 +3,7 @@
 
 use crate::assets::resolve_png;
 use crate::dialogue::Dialogue;
-use crate::events::teleport_target;
+use crate::events::touch_teleport;
 use crate::teleport::PendingTeleport;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::{MapData, MapEvents};
@@ -105,14 +105,9 @@ fn move_player(
 /// it. Only fires on an actual step, so a teleport landing never re-triggers.
 fn queue_touch_teleport(map_events: &MapEvents, pending: &mut PendingTeleport, x: i32, y: i32) {
     for event in &map_events.events {
-        if event.x as i32 != x || event.y as i32 != y {
-            continue;
-        }
-        let Some(page) = event.pages.last() else {
-            continue;
-        };
-        if (page.trigger == 1 || page.trigger == 2)
-            && let Some(target) = teleport_target(&page.commands)
+        if event.x as i32 == x
+            && event.y as i32 == y
+            && let Some(target) = touch_teleport(event)
         {
             pending.0 = Some(target);
         }
