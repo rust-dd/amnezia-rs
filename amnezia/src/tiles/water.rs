@@ -21,6 +21,26 @@ pub const BLOCK_C: u16 = 3000;
 /// `BLOCK_C_END`.
 pub const BLOCK_C_END: u16 = 3150;
 
+/// The animation-column sequence RM2000 plays for `BLOCK_A`/`BLOCK_B` water:
+/// EasyRPG's default `animation_type == 0` folds `0,1,2,3` so the `3` step
+/// replays column `1`, giving a back-and-forth `0,1,2,1` cycle (`Draw`).
+pub const WATER_FRAMES: [u16; 4] = [0, 1, 2, 1];
+
+/// The number of `BLOCK_C` animation frames, cycled straight through as rows
+/// 4..=7; EasyRPG's `animation_step_c = (frames / 6) % 4`.
+pub const BLOCK_C_FRAMES: u16 = 4;
+
+/// Whether `id` is a quarter-assembled, column-scrolled `BLOCK_A`/`BLOCK_B`
+/// water tile (the ones [`water_quarters`] animates via its `frame`).
+pub fn is_ab_water(id: u16) -> bool {
+    id < BLOCK_C
+}
+
+/// Whether `id` is a whole-cell `BLOCK_C` animated tile ([`block_c_source`]).
+pub fn is_block_c(id: u16) -> bool {
+    (BLOCK_C..BLOCK_C_END).contains(&id)
+}
+
 /// The four quarters of an assembled `BLOCK_A`/`BLOCK_B` water tile (id in
 /// `0..3000`) at animation `frame`, following EasyRPG's `GenerateAutotileAB`.
 /// `block = id / 1000` picks the water pair (0: grass + coast, 1: snow + coast,

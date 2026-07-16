@@ -9,6 +9,9 @@ mod autotile;
 mod water;
 
 pub use autotile::{lower_render, LowerRender, Quarter, QUARTER};
+pub use water::{
+    block_c_source, is_ab_water, is_block_c, water_quarters, BLOCK_C_FRAMES, WATER_FRAMES,
+};
 
 /// Size of one tile in pixels.
 pub const TILE: f32 = 16.0;

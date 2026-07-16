@@ -72,7 +72,64 @@ pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, setup).add_systems(Update, update_event_sprites);
+        app.init_resource::<WaterAnim>()
+            .add_systems(Startup, setup)
+            .add_systems(Update, (update_event_sprites, animate_water));
+    }
+}
+
+/// Marks one 8×8 quarter of an animated `BLOCK_A`/`BLOCK_B` water tile so
+/// [`animate_water`] can re-sample its scrolling source column each frame.
+#[derive(Component)]
+struct WaterQuarter {
+    id: u16,
+    quarter: usize,
+}
+
+/// Marks a whole-cell `BLOCK_C` animated tile (waterfalls) for [`animate_water`].
+#[derive(Component)]
+struct WaterCell {
+    id: u16,
+}
+
+/// The shared water-animation clock: each timer tick advances `step`, which
+/// drives the `BLOCK_A`/`BLOCK_B` column cycle and the `BLOCK_C` row cycle.
+#[derive(Resource)]
+struct WaterAnim {
+    timer: Timer,
+    step: u32,
+}
+
+impl Default for WaterAnim {
+    fn default() -> Self {
+        // RM2000 water animates gently; ~0.4 s per step gives the classic cadence
+        // (we do not parse the chipset's `animation_speed` database field).
+        Self { timer: Timer::from_seconds(0.4, TimerMode::Repeating), step: 0 }
+    }
+}
+
+/// Advance the water clock and re-point every animated water sprite at its
+/// current frame: `BLOCK_A`/`BLOCK_B` quarters scroll one chipset column per step
+/// ([`tiles::WATER_FRAMES`]); `BLOCK_C` cells step down one animation row.
+fn animate_water(
+    time: Res<Time>,
+    mut anim: ResMut<WaterAnim>,
+    mut quarters: Query<(&WaterQuarter, &mut Sprite), Without<WaterCell>>,
+    mut cells: Query<(&WaterCell, &mut Sprite), Without<WaterQuarter>>,
+) {
+    if !anim.timer.tick(time.delta()).just_finished() {
+        return;
+    }
+    anim.step = anim.step.wrapping_add(1);
+    let ab_frame = tiles::WATER_FRAMES[(anim.step % tiles::WATER_FRAMES.len() as u32) as usize];
+    for (water, mut sprite) in &mut quarters {
+        let src = tiles::water_quarters(water.id, ab_frame)[water.quarter].src;
+        sprite.rect = Some(Rect::new(src.0, src.1, src.0 + tiles::QUARTER, src.1 + tiles::QUARTER));
+    }
+    let c_frame = (anim.step % u32::from(tiles::BLOCK_C_FRAMES)) as u16;
+    for (water, mut sprite) in &mut cells {
+        let src = tiles::block_c_source(water.id, c_frame);
+        sprite.rect = Some(Rect::new(src.0, src.1, src.0 + tiles::TILE, src.1 + tiles::TILE));
     }
 }
 
@@ -134,10 +191,13 @@ pub fn load_map(
     for (index, &id) in map.lower.iter().enumerate() {
         match tiles::lower_render(id) {
             tiles::LowerRender::Whole { src } => {
-                spawn_tile(commands, &chipset, src, index as i32, width, offset, 0.0);
+                let tile = spawn_tile(commands, &chipset, src, index as i32, width, offset, 0.0);
+                if tiles::is_block_c(id) {
+                    commands.entity(tile).insert(WaterCell { id });
+                }
             }
             tiles::LowerRender::Quarters(quarters) => {
-                spawn_lower_quarters(commands, &chipset, &quarters, index as i32, width, offset);
+                spawn_lower_quarters(commands, &chipset, &quarters, id, index as i32, width, offset);
             }
         }
     }
@@ -176,38 +236,48 @@ fn spawn_tile(
     width: i32,
     offset: (f32, f32),
     z: f32,
-) {
+) -> Entity {
     let world_x = (index % width) as f32 * tiles::TILE - offset.0 + tiles::TILE / 2.0;
     let world_y = offset.1 - (index / width) as f32 * tiles::TILE - tiles::TILE / 2.0;
-    commands.spawn((
-        Sprite {
-            image: chipset.clone(),
-            rect: Some(Rect::new(source.0, source.1, source.0 + tiles::TILE, source.1 + tiles::TILE)),
-            custom_size: Some(Vec2::splat(tiles::TILE)),
-            ..default()
-        },
-        Transform::from_xyz(world_x, world_y, z),
-        MapScene,
-    ));
+    commands
+        .spawn((
+            Sprite {
+                image: chipset.clone(),
+                rect: Some(Rect::new(
+                    source.0,
+                    source.1,
+                    source.0 + tiles::TILE,
+                    source.1 + tiles::TILE,
+                )),
+                custom_size: Some(Vec2::splat(tiles::TILE)),
+                ..default()
+            },
+            Transform::from_xyz(world_x, world_y, z),
+            MapScene,
+        ))
+        .id()
 }
 
 /// Spawn the four 8×8 quarter sprites of an assembled lower-layer autotile at
 /// map cell `index`, each drawing its own chipset sub-rect at its offset within
-/// the tile so the shape's edges and corners compose correctly.
+/// the tile so the shape's edges and corners compose correctly. Quarters of an
+/// animated `BLOCK_A`/`BLOCK_B` water tile are tagged [`WaterQuarter`] so
+/// [`animate_water`] can scroll their source column.
 fn spawn_lower_quarters(
     commands: &mut Commands,
     chipset: &Handle<Image>,
     quarters: &[tiles::Quarter; 4],
+    id: u16,
     index: i32,
     width: i32,
     offset: (f32, f32),
 ) {
     let left = (index % width) as f32 * tiles::TILE - offset.0;
     let top = offset.1 - (index / width) as f32 * tiles::TILE;
-    for q in quarters {
+    for (quarter, q) in quarters.iter().enumerate() {
         let world_x = left + q.dst.0 + tiles::QUARTER / 2.0;
         let world_y = top - q.dst.1 - tiles::QUARTER / 2.0;
-        commands.spawn((
+        let mut entity = commands.spawn((
             Sprite {
                 image: chipset.clone(),
                 rect: Some(Rect::new(
@@ -222,6 +292,9 @@ fn spawn_lower_quarters(
             Transform::from_xyz(world_x, world_y, 0.0),
             MapScene,
         ));
+        if tiles::is_ab_water(id) {
+            entity.insert(WaterQuarter { id, quarter });
+        }
     }
 }
 
