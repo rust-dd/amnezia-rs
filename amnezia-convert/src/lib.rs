@@ -94,6 +94,13 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
                         graphic_name: p.graphic_name,
                         graphic_index: p.graphic_index,
                         layer: p.layer,
+                        condition: amnezia_data::EventCondition {
+                            flags: p.condition.flags,
+                            switch_a: p.condition.switch_a,
+                            switch_b: p.condition.switch_b,
+                            variable_id: p.condition.variable_id,
+                            variable_value: p.condition.variable_value,
+                        },
                         commands: p
                             .commands
                             .into_iter()

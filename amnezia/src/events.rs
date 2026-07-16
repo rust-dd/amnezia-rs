@@ -113,6 +113,7 @@ mod tests {
             graphic_name: String::new(),
             graphic_index: 0,
             layer: 0,
+            condition: amnezia_data::EventCondition::default(),
             commands,
         }
     }

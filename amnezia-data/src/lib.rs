@@ -38,7 +38,18 @@ pub struct EventPage {
     pub graphic_name: String,
     pub graphic_index: u32,
     pub layer: u32,
+    pub condition: EventCondition,
     pub commands: Vec<EventCommand>,
+}
+
+/// A page's activation condition (see `lcf::EventCondition`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventCondition {
+    pub flags: u32,
+    pub switch_a: u32,
+    pub switch_b: u32,
+    pub variable_id: u32,
+    pub variable_value: u32,
 }
 
 /// One event command: RM2000 opcode, nesting indent, string, and int params.

@@ -198,16 +198,52 @@ pub struct Event {
     pub pages: Vec<EventPage>,
 }
 
-/// One page of an event: its trigger, graphic, layer, and command list. The
-/// layer (0 = below hero, 1 = same as hero, 2 = above hero) decides collision:
-/// a `layer == 1` page blocks the player.
+/// One page of an event: its trigger, graphic, layer, condition, and commands.
+/// The layer (0 = below hero, 1 = same as hero, 2 = above hero) decides
+/// collision: a `layer == 1` page blocks the player.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventPage {
     pub trigger: u32,
     pub graphic_name: String,
     pub graphic_index: u32,
     pub layer: u32,
+    pub condition: EventCondition,
     pub commands: Vec<EventCommand>,
+}
+
+/// A page's activation condition. `flags` bits: 0 switch_a, 1 switch_b,
+/// 2 variable, 3 item, 4 actor, 5 timer. A page is active when every enabled
+/// flag's condition holds; `flags == 0` is always active.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct EventCondition {
+    pub flags: u32,
+    pub switch_a: u32,
+    pub switch_b: u32,
+    pub variable_id: u32,
+    pub variable_value: u32,
+}
+
+fn parse_condition(data: &[u8]) -> Result<EventCondition, LcfError> {
+    let mut reader = Reader::new(data);
+    let mut condition = EventCondition::default();
+    loop {
+        let id = reader.varint()?;
+        if id == 0 {
+            break;
+        }
+        let size = reader.varint()? as usize;
+        let field = reader.take(size)?;
+        let value = Reader::new(field).varint().unwrap_or(0);
+        match id {
+            0x01 => condition.flags = value,
+            0x02 => condition.switch_a = value,
+            0x03 => condition.switch_b = value,
+            0x04 => condition.variable_id = value,
+            0x05 => condition.variable_value = value,
+            _ => {}
+        }
+    }
+    Ok(condition)
 }
 
 /// One event command: RM2000 opcode, nesting indent, string, and int params.
@@ -261,6 +297,7 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
             graphic_name: String::new(),
             graphic_index: 0,
             layer: 0,
+            condition: EventCondition::default(),
             commands: Vec::new(),
         };
         loop {
@@ -271,6 +308,7 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
             let sub_size = reader.varint()? as usize;
             let sub_data = reader.take(sub_size)?;
             match sub_id {
+                0x02 => page.condition = parse_condition(sub_data)?,
                 0x15 => page.graphic_name = decode_cp1250(sub_data),
                 0x16 => page.graphic_index = Reader::new(sub_data).varint()?,
                 0x21 => page.trigger = Reader::new(sub_data).varint()?,
@@ -615,6 +653,40 @@ mod tests {
             parse_chipsets(&ldb),
             Err(LcfError::BadSignature { expected: "LcfDataBase" })
         ));
+    }
+
+    #[test]
+    fn parses_page_condition() {
+        let cond = {
+            let mut c = subchunk(0x01, &varint(1));
+            c.extend(subchunk(0x02, &varint(2)));
+            c.push(0);
+            c
+        };
+        let mut page = varint(1);
+        page.extend(subchunk(0x02, &cond));
+        page.extend(subchunk(0x21, &varint(1)));
+        page.extend(varint(0));
+        let mut pages = varint(1);
+        pages.extend_from_slice(&page);
+        let mut event = varint(7);
+        event.extend(subchunk(0x05, &pages));
+        event.extend(varint(0));
+        let mut section = varint(1);
+        section.extend_from_slice(&event);
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[
+                (0x02, varint(2)),
+                (0x03, varint(1)),
+                (0x47, layer_bytes(&[0, 0])),
+                (0x48, layer_bytes(&[0, 0])),
+                (0x51, section),
+            ],
+        );
+        let map = parse_map(&file).unwrap();
+        let condition = &map.events[0].pages[0].condition;
+        assert_eq!((condition.flags, condition.switch_a), (1, 2));
     }
 
     #[test]
