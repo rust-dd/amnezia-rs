@@ -10,3 +10,4 @@ publish = false
 amnezia-data = { workspace = true }
 bevy = { workspace = true }
 ron = { workspace = true }
+serde = { workspace = true }

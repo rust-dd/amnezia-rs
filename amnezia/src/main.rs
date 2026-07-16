@@ -7,12 +7,20 @@ use amnezia_data::{Chipset, Map};
 use bevy::prelude::*;
 use std::path::Path;
 
-const START_MAP: &str = "assets/maps/map_0001.ron";
-const CHIPSETS: &str = "assets/chipsets.ron";
+/// Absolute path to the converted assets, resolved at compile time so the game
+/// runs regardless of the current working directory.
+const ASSET_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../assets");
 
 fn main() -> AppExit {
     App::new()
-        .add_plugins(DefaultPlugins.set(ImagePlugin::default_nearest()))
+        .add_plugins(
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .set(AssetPlugin {
+                    file_path: ASSET_ROOT.to_string(),
+                    ..default()
+                }),
+        )
         .add_systems(Startup, setup)
         .run()
 }
@@ -20,16 +28,8 @@ fn main() -> AppExit {
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
 
-    let map: Map = {
-        let text = std::fs::read_to_string(START_MAP)
-            .unwrap_or_else(|e| panic!("reading {START_MAP}: {e}"));
-        ron::from_str(&text).unwrap_or_else(|e| panic!("parsing {START_MAP}: {e}"))
-    };
-    let chipsets: Vec<Chipset> = {
-        let text =
-            std::fs::read_to_string(CHIPSETS).unwrap_or_else(|e| panic!("reading {CHIPSETS}: {e}"));
-        ron::from_str(&text).unwrap_or_else(|e| panic!("parsing {CHIPSETS}: {e}"))
-    };
+    let map: Map = load_ron(&format!("{ASSET_ROOT}/maps/map_0001.ron"));
+    let chipsets: Vec<Chipset> = load_ron(&format!("{ASSET_ROOT}/chipsets.ron"));
     let graphic = chipsets
         .iter()
         .find(|c| c.id == map.chipset_id)
@@ -89,12 +89,17 @@ fn spawn_tile(
     ));
 }
 
+fn load_ron<T: serde::de::DeserializeOwned>(path: &str) -> T {
+    let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("reading {path}: {e}"));
+    ron::from_str(&text).unwrap_or_else(|e| panic!("parsing {path}: {e}"))
+}
+
 /// Resolve a chipset graphic name to its PNG path relative to the asset root,
 /// matching the on-disk filename case-insensitively.
 fn resolve_chipset_png(graphic: &str) -> String {
-    let dir = Path::new("assets/graphics/ChipSet");
+    let dir = format!("{ASSET_ROOT}/graphics/ChipSet");
     let target = format!("{}.png", graphic.to_lowercase());
-    if let Ok(entries) = std::fs::read_dir(dir) {
+    if let Ok(entries) = std::fs::read_dir(Path::new(&dir)) {
         for entry in entries.flatten() {
             let name = entry.file_name();
             let name = name.to_string_lossy();
