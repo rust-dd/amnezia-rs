@@ -1,5 +1,7 @@
-//! World setup: loads the start map, renders its tile layers and event NPCs,
-//! spawns the player, and stores the map data + events as resources.
+//! World setup and map loading: renders a map's tile layers and event NPCs,
+//! stores its data + events as resources, and can reload for a teleport. The
+//! player entity persists across map changes; scene entities are tagged
+//! [`MapScene`] so a teleport can despawn them.
 
 use crate::assets::{load_ron, resolve_png, ASSET_ROOT};
 use crate::player::spawn_player;
@@ -7,7 +9,12 @@ use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN};
 use amnezia_data::{Chipset, Event, Map};
 use bevy::prelude::*;
 
-const START_MAP: &str = "map_0001";
+const START_MAP: u32 = 1;
+
+/// Tag for entities belonging to the current map (tiles, NPCs); despawned on a
+/// teleport. The player is deliberately untagged so it persists.
+#[derive(Component)]
+pub struct MapScene;
 
 /// The active map's geometry, tile layers, and passability, for movement.
 #[derive(Resource)]
@@ -37,7 +44,7 @@ impl MapData {
     }
 }
 
-/// The active map's events, for interaction lookups.
+/// The active map's events, for interaction and touch lookups.
 #[derive(Resource, Default)]
 pub struct MapEvents {
     pub events: Vec<Event>,
@@ -53,8 +60,19 @@ impl Plugin for WorldPlugin {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
+    let (width, height, offset) = load_map(&mut commands, &asset_server, START_MAP);
+    spawn_player(&mut commands, &asset_server, (width / 2, height / 2), offset);
+}
 
-    let map: Map = load_ron(&format!("{ASSET_ROOT}/maps/{START_MAP}.ron"));
+/// Load map `map_id` into the world: spawn its tile layers and event NPCs
+/// (tagged [`MapScene`]) and insert fresh [`MapData`]/[`MapEvents`]. Returns the
+/// map's `(width, height, world_offset)`.
+pub fn load_map(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    map_id: u32,
+) -> (i32, i32, (f32, f32)) {
+    let map: Map = load_ron(&format!("{ASSET_ROOT}/maps/map_{map_id:04}.ron"));
     let chipsets: Vec<Chipset> = load_ron(&format!("{ASSET_ROOT}/chipsets.ron"));
     let entry = chipsets.into_iter().find(|c| c.id == map.chipset_id);
     let (graphic, passages_down, passages_up) = match entry {
@@ -64,37 +82,33 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     let chipset = asset_server.load(resolve_png("ChipSet", &graphic));
 
     let width = map.width as i32;
-    let offset_x = map.width as f32 * tiles::TILE / 2.0;
-    let offset_y = map.height as f32 * tiles::TILE / 2.0;
+    let height = map.height as i32;
+    let offset = (map.width as f32 * tiles::TILE / 2.0, map.height as f32 * tiles::TILE / 2.0);
 
     for (index, &id) in map.lower.iter().enumerate() {
-        let (sx, sy) = tiles::lower_source(id);
-        spawn_tile(&mut commands, &chipset, (sx, sy), index as i32, width, (offset_x, offset_y), 0.0);
+        spawn_tile(commands, &chipset, tiles::lower_source(id), index as i32, width, offset, 0.0);
     }
     for (index, &id) in map.upper.iter().enumerate() {
-        if let Some((sx, sy)) = tiles::upper_source(id) {
-            spawn_tile(&mut commands, &chipset, (sx, sy), index as i32, width, (offset_x, offset_y), 1.0);
+        if let Some(source) = tiles::upper_source(id) {
+            spawn_tile(commands, &chipset, source, index as i32, width, offset, 1.0);
         }
     }
-
     for event in &map.events {
-        spawn_event_npc(&mut commands, &asset_server, event, (offset_x, offset_y));
+        spawn_event_npc(commands, asset_server, event, offset);
     }
-
-    let start = (width / 2, map.height as i32 / 2);
-    spawn_player(&mut commands, &asset_server, start, (offset_x, offset_y));
 
     commands.insert_resource(MapData {
         width,
-        height: map.height as i32,
-        offset_x,
-        offset_y,
+        height,
+        offset_x: offset.0,
+        offset_y: offset.1,
         lower: map.lower,
         upper: map.upper,
         passages_down,
         passages_up,
     });
     commands.insert_resource(MapEvents { events: map.events });
+    (width, height, offset)
 }
 
 fn spawn_tile(
@@ -116,6 +130,7 @@ fn spawn_tile(
             ..default()
         },
         Transform::from_xyz(world_x, world_y, z),
+        MapScene,
     ));
 }
 
@@ -144,5 +159,6 @@ fn spawn_event_npc(
             ..default()
         },
         Transform::from_xyz(world_x, world_y, 2.0),
+        MapScene,
     ));
 }

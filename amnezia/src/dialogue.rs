@@ -1,9 +1,10 @@
 //! Dialogue: the message-box UI and the interaction that opens it when the
 //! player presses the action key facing an event with dialogue.
 
-use crate::events::{message_boxes, MessageBox};
+use crate::events::{message_boxes, teleport_target, MessageBox};
 use crate::font::GameFont;
 use crate::player::{facing_tile, Player};
+use crate::teleport::PendingTeleport;
 use crate::world::MapEvents;
 use bevy::prelude::*;
 use bevy::text::FontSource;
@@ -109,6 +110,7 @@ fn interact(
     keys: Res<ButtonInput<KeyCode>>,
     map_events: Res<MapEvents>,
     mut dialogue: ResMut<Dialogue>,
+    mut pending: ResMut<PendingTeleport>,
     players: Query<&Player>,
 ) {
     if !keys.just_pressed(KeyCode::Space) && !keys.just_pressed(KeyCode::Enter) {
@@ -142,6 +144,10 @@ fn interact(
             dialogue.boxes = boxes;
             dialogue.index = 0;
             dialogue.active = true;
+            return;
+        }
+        if let Some(target) = teleport_target(&page.commands) {
+            pending.0 = Some(target);
             return;
         }
     }

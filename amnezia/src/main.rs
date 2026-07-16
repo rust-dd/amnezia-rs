@@ -9,6 +9,7 @@ mod dialogue;
 mod events;
 mod font;
 mod player;
+mod teleport;
 mod tiles;
 mod world;
 
@@ -27,6 +28,7 @@ fn main() -> AppExit {
             world::WorldPlugin,
             player::PlayerPlugin,
             dialogue::DialoguePlugin,
+            teleport::TeleportPlugin,
         ))
         .run()
 }

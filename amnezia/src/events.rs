@@ -8,6 +8,19 @@ use amnezia_data::EventCommand;
 const SHOW_MESSAGE: u32 = 10110;
 const SHOW_MESSAGE_2: u32 = 20110;
 const CHANGE_FACE: u32 = 10130;
+const TELEPORT: u32 = 10810;
+
+/// The teleport destination `(map_id, x, y)` a command list transfers to, if it
+/// contains a `Teleport` command (RM2000 code 10810, params `[map, x, y]`).
+pub fn teleport_target(commands: &[EventCommand]) -> Option<(u32, u32, u32)> {
+    commands
+        .iter()
+        .find(|c| c.code == TELEPORT)
+        .and_then(|c| match c.params.as_slice() {
+            [map, x, y, ..] => Some((*map as u32, *x as u32, *y as u32)),
+            _ => None,
+        })
+}
 
 /// One message box: up to four lines of text and an optional face graphic.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,7 +45,10 @@ pub fn message_boxes(commands: &[EventCommand]) -> Vec<MessageBox> {
                 };
             }
             SHOW_MESSAGE => {
-                boxes.push(MessageBox { face: face.clone(), lines: vec![command.string.clone()] });
+                boxes.push(MessageBox {
+                    face: face.clone(),
+                    lines: vec![command.string.clone()],
+                });
             }
             SHOW_MESSAGE_2 => {
                 if let Some(current) = boxes.last_mut() {
@@ -50,7 +66,32 @@ mod tests {
     use super::*;
 
     fn cmd(code: u32, string: &str) -> EventCommand {
-        EventCommand { code, indent: 0, string: string.to_string(), params: Vec::new() }
+        EventCommand {
+            code,
+            indent: 0,
+            string: string.to_string(),
+            params: Vec::new(),
+        }
+    }
+
+    fn cmd_params(code: u32, params: Vec<i32>) -> EventCommand {
+        EventCommand {
+            code,
+            indent: 0,
+            string: String::new(),
+            params,
+        }
+    }
+
+    #[test]
+    fn finds_teleport_target() {
+        let commands = vec![cmd(10110, "hi"), cmd_params(10810, vec![2, 13, 12])];
+        assert_eq!(teleport_target(&commands), Some((2, 13, 12)));
+    }
+
+    #[test]
+    fn no_teleport_when_absent() {
+        assert_eq!(teleport_target(&[cmd(10110, "hi")]), None);
     }
 
     #[test]
