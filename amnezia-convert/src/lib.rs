@@ -1,7 +1,7 @@
 //! Offline converter from the original RPG Maker 2000 project to the clean
 //! intermediate assets the game consumes.
 
-use amnezia_data::{Chipset, Map};
+use amnezia_data::{Chipset, Event, EventCommand, EventPage, Map};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -78,12 +78,42 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
 
         let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
         let unit = lcf::parse_map(&bytes).with_context(|| format!("parsing {}", path.display()))?;
+        let events = unit
+            .events
+            .into_iter()
+            .map(|e| Event {
+                id: e.id,
+                x: e.x,
+                y: e.y,
+                name: e.name,
+                pages: e
+                    .pages
+                    .into_iter()
+                    .map(|p| EventPage {
+                        trigger: p.trigger,
+                        graphic_name: p.graphic_name,
+                        graphic_index: p.graphic_index,
+                        commands: p
+                            .commands
+                            .into_iter()
+                            .map(|c| EventCommand {
+                                code: c.code,
+                                indent: c.indent,
+                                string: c.string,
+                                params: c.params,
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+            })
+            .collect();
         let map = Map {
             chipset_id: unit.chipset_id,
             width: unit.width,
             height: unit.height,
             lower: unit.lower_layer,
             upper: unit.upper_layer,
+            events,
         };
         let serialised = ron::to_string(&map).context("serialising map to RON")?;
         std::fs::create_dir_all(&out_dir).with_context(|| format!("creating {}", out_dir.display()))?;

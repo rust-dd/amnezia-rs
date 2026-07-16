@@ -58,6 +58,6 @@ fn converts_lmu_to_map_ron() {
     let map: Map = ron::from_str(&ron).unwrap();
     assert_eq!(
         map,
-        Map { chipset_id: 7, width: 2, height: 1, lower: vec![1, 2], upper: vec![10, 11] }
+        Map { chipset_id: 7, width: 2, height: 1, lower: vec![1, 2], upper: vec![10, 11], events: vec![] }
     );
 }

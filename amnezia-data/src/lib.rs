@@ -18,6 +18,35 @@ pub struct Map {
     pub height: u32,
     pub lower: Vec<u16>,
     pub upper: Vec<u16>,
+    pub events: Vec<Event>,
+}
+
+/// A map event: its id, tile position, name, and pages.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Event {
+    pub id: u32,
+    pub x: u32,
+    pub y: u32,
+    pub name: String,
+    pub pages: Vec<EventPage>,
+}
+
+/// One page of an event: its trigger, graphic, and command list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventPage {
+    pub trigger: u32,
+    pub graphic_name: String,
+    pub graphic_index: u32,
+    pub commands: Vec<EventCommand>,
+}
+
+/// One event command: RM2000 opcode, nesting indent, string, and int params.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EventCommand {
+    pub code: u32,
+    pub indent: u32,
+    pub string: String,
+    pub params: Vec<i32>,
 }
 
 /// A chipset entry: its 1-based id (matching a map's `chipset_id`) and the
