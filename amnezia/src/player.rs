@@ -1,12 +1,14 @@
-//! The player hero: spawning, grid movement (blocked by passability), walk
-//! animation, and camera follow.
+//! The player hero: spawning, grid movement (blocked by passability and solid
+//! events), player-touch event triggers, walk animation, and camera follow.
 
 use crate::assets::resolve_png;
 use crate::dialogue::Dialogue;
-use crate::events::touch_teleport;
-use crate::teleport::{Fade, PendingTeleport};
+use crate::interpreter::RunningEvent;
+use crate::state::{active_page, Switches, Variables};
+use crate::teleport::Fade;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::{MapData, MapEvents};
+use amnezia_data::EventPage;
 use bevy::prelude::*;
 
 const PLAYER_CHARSET: &str = "Chara1";
@@ -69,10 +71,12 @@ fn move_player(
     dialogue: Res<Dialogue>,
     fade: Res<Fade>,
     map_events: Res<MapEvents>,
-    mut pending: ResMut<PendingTeleport>,
+    switches: Res<Switches>,
+    variables: Res<Variables>,
+    mut running: ResMut<RunningEvent>,
     mut players: Query<&mut Player>,
 ) {
-    if dialogue.active || fade.busy() {
+    if dialogue.active || fade.busy() || running.active() {
         return;
     }
     let Ok(mut player) = players.single_mut() else {
@@ -95,39 +99,56 @@ fn move_player(
         if nx < 0 || ny < 0 || nx >= data.width || ny >= data.height {
             return;
         }
-        // A player-touch teleport fires on the *attempt* to step onto the tile,
-        // even when it's impassable (RM2000 doors/exits are solid) — so it must
-        // be checked before the passability gate. It only fires on input, never
-        // on the teleport's own landing, so there's no re-trigger loop.
-        if let Some(target) = touch_teleport_at(&map_events, nx, ny) {
-            pending.0 = Some(target);
-            return;
-        }
-        if data.passable(nx, ny) && !event_blocks_at(&map_events, nx, ny) {
+        let blocked =
+            !data.passable(nx, ny) || event_blocks_at(&map_events, &switches, &variables, nx, ny);
+        if !blocked {
             player.tile_x = nx;
             player.tile_y = ny;
             player.frame = (player.frame + 1) % 3;
+        }
+        // A player-touch event fires on the attempt to enter its tile — after a
+        // passable step onto it, or in place at a solid one (RM2000 doors/exits
+        // are solid). It fires only on input, never on the interpreter's own
+        // actions, so there's no re-trigger loop.
+        if let Some(page) = touch_page_at(&map_events, &switches, &variables, nx, ny) {
+            running.start(page.commands.clone());
         }
     }
 }
 
 /// Whether a same-layer event occupies tile `(x, y)` and blocks the player.
 /// RM2000 events with `layer == 1` are solid (graphic or not); other layers
-/// don't block. Uses the highest page as the active one (page conditions are
-/// evaluated once the switch system lands).
-fn event_blocks_at(map_events: &MapEvents, x: i32, y: i32) -> bool {
+/// don't block. The active page (per current switches/variables) decides.
+fn event_blocks_at(
+    map_events: &MapEvents,
+    switches: &Switches,
+    variables: &Variables,
+    x: i32,
+    y: i32,
+) -> bool {
     map_events.events.iter().any(|e| {
-        e.x as i32 == x && e.y as i32 == y && e.pages.last().is_some_and(|p| p.layer == 1)
+        e.x as i32 == x
+            && e.y as i32 == y
+            && active_page(e, switches, variables).is_some_and(|p| p.layer == 1)
     })
 }
 
-/// The teleport a touch-triggered event on tile `(x, y)` transfers to, if any.
-fn touch_teleport_at(map_events: &MapEvents, x: i32, y: i32) -> Option<(u32, u32, u32)> {
+/// The active page of a player-touch event (trigger 1 or 2) on tile `(x, y)`,
+/// if any — the command list the interpreter should run on contact.
+fn touch_page_at<'a>(
+    map_events: &'a MapEvents,
+    switches: &Switches,
+    variables: &Variables,
+    x: i32,
+    y: i32,
+) -> Option<&'a EventPage> {
     map_events
         .events
         .iter()
         .filter(|e| e.x as i32 == x && e.y as i32 == y)
-        .find_map(touch_teleport)
+        .find_map(|e| {
+            active_page(e, switches, variables).filter(|p| p.trigger == 1 || p.trigger == 2)
+        })
 }
 
 fn update_player_sprite(

@@ -6,8 +6,9 @@
 
 use crate::dialogue::Dialogue;
 use crate::events::message_boxes;
-use crate::state::{Switches, Variables};
+use crate::state::{active_page, Switches, Variables};
 use crate::teleport::{Fade, PendingTeleport};
+use crate::world::MapEvents;
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
@@ -38,9 +39,6 @@ pub struct RunningEvent {
     wait: f32,
 }
 
-// `active`/`start` are the interface the triggers (action-key, touch, autorun)
-// call in the next task; the allow is removed once those wire them in.
-#[allow(dead_code)]
 impl RunningEvent {
     /// Whether an event is currently executing. Triggers and movement pause
     /// while this holds.
@@ -72,7 +70,8 @@ pub struct InterpreterPlugin;
 
 impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<RunningEvent>().add_systems(Update, run_interpreter);
+        app.init_resource::<RunningEvent>()
+            .add_systems(Update, (autorun, run_interpreter).chain());
     }
 }
 
@@ -156,6 +155,30 @@ fn run_interpreter(
                 // effects) simply advances.
                 running.ip += 1;
             }
+        }
+    }
+}
+
+/// Start the map's autorun (trigger 3) event when nothing else is running.
+/// RM2000 replays an autorun page every frame its condition holds; a cutscene
+/// ends by flipping a switch so a non-autorun page becomes active and it stops.
+fn autorun(
+    map_events: Res<MapEvents>,
+    switches: Res<Switches>,
+    variables: Res<Variables>,
+    dialogue: Res<Dialogue>,
+    fade: Res<Fade>,
+    mut running: ResMut<RunningEvent>,
+) {
+    if running.active() || dialogue.active || fade.busy() {
+        return;
+    }
+    for event in &map_events.events {
+        if let Some(page) = active_page(event, &switches, &variables)
+            && page.trigger == 3
+        {
+            running.start(page.commands.clone());
+            return;
         }
     }
 }

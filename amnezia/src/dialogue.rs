@@ -1,10 +1,14 @@
-//! Dialogue: the message-box UI and the interaction that opens it when the
-//! player presses the action key facing an event with dialogue.
+//! Dialogue: the message-box UI, plus the action-key interaction that starts an
+//! event's interpreter run when the player presses it facing that event. The
+//! interpreter opens boxes via [`Dialogue::open`]; this module renders them and
+//! advances/closes them on the action key.
 
-use crate::events::{message_boxes, teleport_target, MessageBox};
+use crate::events::MessageBox;
 use crate::font::GameFont;
+use crate::interpreter::RunningEvent;
 use crate::player::{facing_tile, Player};
-use crate::teleport::{Fade, PendingTeleport};
+use crate::state::{active_page, Switches, Variables};
+use crate::teleport::Fade;
 use crate::world::MapEvents;
 use bevy::prelude::*;
 use bevy::text::FontSource;
@@ -116,12 +120,17 @@ fn inset_node(px: f32) -> Node {
     }
 }
 
+/// Advance an open message box on the action key, or — when idle — start the
+/// interpreter for an action-key (trigger 0) event on the tile the player faces.
+#[allow(clippy::too_many_arguments)]
 fn interact(
     keys: Res<ButtonInput<KeyCode>>,
     fade: Res<Fade>,
     map_events: Res<MapEvents>,
+    switches: Res<Switches>,
+    variables: Res<Variables>,
     mut dialogue: ResMut<Dialogue>,
-    mut pending: ResMut<PendingTeleport>,
+    mut running: ResMut<RunningEvent>,
     players: Query<&Player>,
 ) {
     if fade.busy() {
@@ -139,6 +148,9 @@ fn interact(
         }
         return;
     }
+    if running.active() {
+        return;
+    }
     let Ok(player) = players.single() else {
         return;
     };
@@ -147,21 +159,10 @@ fn interact(
         if event.x as i32 != fx || event.y as i32 != fy {
             continue;
         }
-        let Some(page) = event.pages.last() else {
-            continue;
-        };
-        if page.trigger != 0 {
-            continue;
-        }
-        let boxes = message_boxes(&page.commands);
-        if !boxes.is_empty() {
-            dialogue.boxes = boxes;
-            dialogue.index = 0;
-            dialogue.active = true;
-            return;
-        }
-        if let Some(target) = teleport_target(&page.commands) {
-            pending.0 = Some(target);
+        if let Some(page) = active_page(event, &switches, &variables)
+            && page.trigger == 0
+        {
+            running.start(page.commands.clone());
             return;
         }
     }

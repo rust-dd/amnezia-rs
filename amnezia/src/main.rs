@@ -10,9 +10,6 @@ mod events;
 mod font;
 mod interpreter;
 mod player;
-// Consumed by the interpreter and triggers in the next tasks; the allow is
-// removed once they wire the switches/variables/active-page in.
-#[allow(dead_code)]
 mod state;
 mod teleport;
 mod tiles;
