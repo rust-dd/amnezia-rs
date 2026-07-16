@@ -76,6 +76,8 @@ pub fn charset_source(char_index: u32, dir_row: u32, frame_col: u32) -> (f32, f3
 fn passages_lower_index(id: u16) -> Option<usize> {
     if id < 3000 {
         Some((id / 1000) as usize)
+    } else if (3000..3150).contains(&id) {
+        Some((id - 3000) as usize / 50 + 3)
     } else if (4000..4600).contains(&id) {
         Some((id - 4000) as usize / 50 + 6)
     } else if (5000..=5143).contains(&id) {
@@ -104,29 +106,47 @@ pub fn above_hero(upper_id: u16, passages_up: &[u8]) -> bool {
         .is_some_and(|byte| byte & ABOVE_HERO_BIT != 0)
 }
 
-/// Whether the hero can stand on a cell with the given lower/upper tile ids,
-/// per the active chipset's passability arrays (`passages_down` is 162 bytes,
-/// `passages_up` 144; each byte's low nibble is the 4 direction-passable bits).
-/// An upper-layer obstacle (e.g. a fence) blocks movement over passable ground.
-pub fn passable(lower_id: u16, upper_id: u16, passages_down: &[u8], passages_up: &[u8]) -> bool {
-    let lower = passages_lower_index(lower_id)
+/// The `passages` "wall" bit; a BLOCK_D autotile with this set is a wall whose
+/// walk-on shapes (edges/thresholds) the hero can still cross.
+const WALL_BIT: u8 = 0x20;
+
+/// Whether the hero can stand on a lower-layer tile. Mirrors EasyRPG's
+/// `Game_Map::IsPassableLowerTile`: a BLOCK_D autotile (ids 4000..4600) with the
+/// wall bit set is passable on its walk-on shapes (`(id-4000) % 50` in the
+/// edge/threshold set), regardless of direction bits; every other tile is
+/// passable when any of its four direction bits is set.
+fn lower_passable(lower_id: u16, passages_down: &[u8]) -> bool {
+    let byte = passages_lower_index(lower_id)
         .and_then(|i| passages_down.get(i))
         .copied()
         .unwrap_or(0x0F);
-    let mask = if upper_id <= 10000 {
-        lower & 0x0F
-    } else {
-        let upper = passages_up
-            .get((upper_id - 10000) as usize)
-            .copied()
-            .unwrap_or(0x0F);
-        if upper & ABOVE_HERO_BIT == 0 {
-            upper & 0x0F
-        } else {
-            (upper & 0x0F) & (lower & 0x0F)
+    if (4000..4600).contains(&lower_id) {
+        let shape = (lower_id - 4000) % 50;
+        if byte & WALL_BIT != 0 && matches!(shape, 20..=23 | 33..=37 | 42 | 43 | 45 | 46) {
+            return true;
         }
-    };
-    mask != 0
+    }
+    byte & 0x0F != 0
+}
+
+/// Whether the hero can stand on a cell with the given lower/upper tile ids, per
+/// the active chipset's passability arrays (`passages_down` 162 bytes,
+/// `passages_up` 144). The upper layer decides first: a solid upper tile blocks;
+/// a passable non-"above hero" upper tile is walkable; an "above hero" upper
+/// tile (and the empty upper tile) defers to the lower tile.
+pub fn passable(lower_id: u16, upper_id: u16, passages_down: &[u8], passages_up: &[u8]) -> bool {
+    let lower_ok = lower_passable(lower_id, passages_down);
+    if upper_id <= 10000 {
+        return lower_ok;
+    }
+    let upper = passages_up.get((upper_id - 10000) as usize).copied().unwrap_or(0x0F);
+    if upper & 0x0F == 0 {
+        return false;
+    }
+    if upper & ABOVE_HERO_BIT == 0 {
+        return true;
+    }
+    lower_ok
 }
 
 #[cfg(test)]
@@ -192,5 +212,20 @@ mod tests {
         assert!(passable(4050, 10000, &down, &up));
         assert!(!passable(40, 10000, &down, &up));
         assert!(!passable(4000, 10030, &down, &up));
+    }
+
+    #[test]
+    fn wall_autotile_walk_on_shapes_are_passable() {
+        let mut down = vec![0x0F; 162];
+        down[17] = 0x30; // BLOCK_D autotile #11: wall bit set, no direction bits
+        let up = vec![0x0F; 144];
+        // shape 0 (id 4550) is a solid wall corner — impassable
+        assert!(!passable(4550, 10000, &down, &up));
+        // shapes 20 (id 4570) and 33 (id 4583) are walk-on thresholds — passable
+        assert!(passable(4570, 10000, &down, &up));
+        assert!(passable(4583, 10000, &down, &up));
+        // without the wall bit, a shape with no direction bits stays impassable
+        down[17] = 0x00;
+        assert!(!passable(4570, 10000, &down, &up));
     }
 }
