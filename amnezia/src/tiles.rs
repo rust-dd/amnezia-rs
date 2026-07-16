@@ -8,6 +8,16 @@
 /// Size of one tile in pixels.
 pub const TILE: f32 = 16.0;
 
+/// CharSet facing rows (the `dir_row` of [`charset_source`]).
+pub const DIR_UP: u32 = 0;
+pub const DIR_RIGHT: u32 = 1;
+pub const DIR_DOWN: u32 = 2;
+pub const DIR_LEFT: u32 = 3;
+
+/// Vertical offset so a 24×32 character's feet sit on the tile it occupies
+/// (RM2000 aligns the sprite's bottom with the tile's bottom).
+pub const CHAR_Y_OFFSET: f32 = (CHAR_H - TILE) / 2.0;
+
 /// Source rectangle top-left (chipset pixels) for a lower-layer tile id.
 pub fn lower_source(id: u16) -> (f32, f32) {
     let (col, row): (u16, u16) = if id < 4000 {
