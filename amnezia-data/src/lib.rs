@@ -78,3 +78,10 @@ pub struct Start {
     pub x: u32,
     pub y: u32,
 }
+
+/// The hero's name (actor 1's default name from the original database). The
+/// game substitutes it into the `\N[k]` message control code at display time.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hero {
+    pub name: String,
+}

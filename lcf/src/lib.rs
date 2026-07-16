@@ -33,6 +33,8 @@ pub enum LcfError {
     InvalidDimensions { width: u32, height: u32 },
     #[error("LCF database has no chipset section (chunk 0x14)")]
     MissingChipsets,
+    #[error("LCF database has no actor section (chunk 0x0B)")]
+    MissingActors,
 }
 
 struct Reader<'a> {
@@ -413,9 +415,70 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
     Ok(chipsets)
 }
 
+/// An actor (playable character) entry from the database: its 1-based id and
+/// its default name. Only the name is needed by the game, to expand the
+/// `\N[k]` message control code that inserts an actor's name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Actor {
+    pub id: u32,
+    pub name: String,
+}
+
+const ACTOR_SECTION: u32 = 0x0B;
+const ACTOR_NAME: u32 = 0x01;
+
+/// Parse the actor table out of an LDB (`RPG_RT.ldb`) byte slice. The actor
+/// section (chunk `0x0B`) shares the chipset section's struct-list shape: a
+/// `[count]` followed by entries, each a 1-based id then a chunk stream whose
+/// name sub-chunk (`0x01`) is a CP1250 string. Every other section is skipped.
+pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
+    let mut reader = Reader::new(bytes);
+    let signature_len = reader.byte()? as usize;
+    let signature = reader.take(signature_len)?;
+    if signature != b"LcfDataBase" {
+        return Err(LcfError::BadSignature { expected: "LcfDataBase" });
+    }
+
+    let mut section: Option<&[u8]> = None;
+    while !reader.is_empty() {
+        let id = reader.varint()?;
+        if id == 0 {
+            break;
+        }
+        let size = reader.varint()? as usize;
+        let data = reader.take(size)?;
+        if id == ACTOR_SECTION {
+            section = Some(data);
+            break;
+        }
+    }
+    let section = section.ok_or(LcfError::MissingActors)?;
+
+    let mut reader = Reader::new(section);
+    let count = reader.varint()?;
+    let mut actors = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        let id = reader.varint()?;
+        let mut name = String::new();
+        loop {
+            let sub_id = reader.varint()?;
+            if sub_id == 0 {
+                break;
+            }
+            let sub_size = reader.varint()? as usize;
+            let sub_data = reader.take(sub_size)?;
+            if sub_id == ACTOR_NAME {
+                name = decode_cp1250(sub_data);
+            }
+        }
+        actors.push(Actor { id, name });
+    }
+    Ok(actors)
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{parse_chipsets, parse_map, parse_start, LcfError, Start};
+    use crate::{parse_actors, parse_chipsets, parse_map, parse_start, Actor, LcfError, Start};
 
     fn varint(mut v: u32) -> Vec<u8> {
         let mut groups = vec![(v & 0x7F) as u8];
@@ -710,6 +773,35 @@ mod tests {
     fn parse_chipsets_errors_when_section_absent() {
         let ldb = make_ldb(&[(0x0B, vec![1, 2, 3])]);
         assert!(matches!(parse_chipsets(&ldb), Err(LcfError::MissingChipsets)));
+    }
+
+    #[test]
+    fn parses_actor_names() {
+        // The actor section (chunk 0x0B) is the same struct-list shape as the
+        // chipset section, so the chipset element/section builders apply. The
+        // hero's name bytes are CP1250: 0x41 0x64 0xE9 0x6C -> "Adél".
+        let hero = chipset_element(1, &[subchunk(0x01, &[0x41, 0x64, 0xE9, 0x6C])]);
+        let mage = chipset_element(2, &[subchunk(0x01, b"Bob")]);
+        let ldb = make_ldb(&[(0x05, vec![9, 9]), (0x0B, chipset_section(&[hero, mage]))]);
+        let actors = parse_actors(&ldb).unwrap();
+        assert_eq!(actors.len(), 2);
+        assert_eq!(actors[0], Actor { id: 1, name: "Adél".to_string() });
+        assert_eq!(actors[1], Actor { id: 2, name: "Bob".to_string() });
+    }
+
+    #[test]
+    fn actor_name_defaults_to_empty_when_omitted() {
+        let actor = chipset_element(3, &[]);
+        let ldb = make_ldb(&[(0x0B, chipset_section(&[actor]))]);
+        let actors = parse_actors(&ldb).unwrap();
+        assert_eq!(actors[0].id, 3);
+        assert!(actors[0].name.is_empty());
+    }
+
+    #[test]
+    fn parse_actors_errors_when_section_absent() {
+        let ldb = make_ldb(&[(0x14, chipset_section(&[]))]);
+        assert!(matches!(parse_actors(&ldb), Err(LcfError::MissingActors)));
     }
 
     #[test]

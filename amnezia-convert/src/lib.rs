@@ -1,7 +1,7 @@
 //! Offline converter from the original RPG Maker 2000 project to the clean
 //! intermediate assets the game consumes.
 
-use amnezia_data::{Chipset, Event, EventCommand, EventPage, Map, Start};
+use amnezia_data::{Chipset, Event, EventCommand, EventPage, Hero, Map, Start};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -173,4 +173,27 @@ pub fn convert_chipsets(input: &Path, output: &Path) -> Result<usize> {
     std::fs::write(output.join("chipsets.ron"), serialised)
         .with_context(|| format!("writing {}", output.join("chipsets.ron").display()))?;
     Ok(count)
+}
+
+/// Convert the hero's name (actor 1's default name in `input/RPG_RT.ldb`) into
+/// `output/hero.ron`, returning the name written. The game reads it to expand
+/// the `\N[k]` message control code.
+pub fn convert_hero(input: &Path, output: &Path) -> Result<String> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let actors = lcf::parse_actors(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let name = actors
+        .into_iter()
+        .find(|a| a.id == 1)
+        .map(|a| a.name)
+        .context("database has no actor 1")?;
+    let hero = Hero { name: name.clone() };
+    let serialised = ron::to_string(&hero).context("serialising hero to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("hero.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("hero.ron").display()))?;
+    Ok(name)
 }
