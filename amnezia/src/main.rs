@@ -12,19 +12,22 @@ mod interpreter;
 mod player;
 mod state;
 mod teleport;
+mod text;
 mod tiles;
 mod world;
 
-use assets::ASSET_ROOT;
+use assets::{load_ron, ASSET_ROOT};
 use bevy::prelude::*;
 
 fn main() -> AppExit {
+    let hero: amnezia_data::Hero = load_ron(&format!("{ASSET_ROOT}/hero.ron"));
     App::new()
         .add_plugins(
             DefaultPlugins
                 .set(ImagePlugin::default_nearest())
                 .set(AssetPlugin { file_path: ASSET_ROOT.to_string(), ..default() }),
         )
+        .insert_resource(text::HeroName(hero.name))
         .init_resource::<state::Switches>()
         .init_resource::<state::Variables>()
         .add_plugins((

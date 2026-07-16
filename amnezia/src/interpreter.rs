@@ -8,6 +8,7 @@ use crate::dialogue::Dialogue;
 use crate::events::message_boxes;
 use crate::state::{active_page, Switches, Variables};
 use crate::teleport::{Fade, PendingTeleport};
+use crate::text::{self, HeroName};
 use crate::world::MapEvents;
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
@@ -82,6 +83,7 @@ impl Plugin for InterpreterPlugin {
 fn run_interpreter(
     time: Res<Time>,
     fade: Res<Fade>,
+    hero: Res<HeroName>,
     mut running: ResMut<RunningEvent>,
     mut dialogue: ResMut<Dialogue>,
     mut switches: ResMut<Switches>,
@@ -109,9 +111,14 @@ fn run_interpreter(
                     .iter()
                     .take_while(|c| is_message(c.code))
                     .count();
-                let boxes = message_boxes(&running.commands[running.ip..running.ip + run_len]);
+                let mut boxes = message_boxes(&running.commands[running.ip..running.ip + run_len]);
                 running.ip += run_len;
                 if !boxes.is_empty() {
+                    for message in &mut boxes {
+                        for line in &mut message.lines {
+                            *line = text::substitute(line, &hero.0, &variables);
+                        }
+                    }
                     dialogue.open(boxes);
                     return;
                 }
