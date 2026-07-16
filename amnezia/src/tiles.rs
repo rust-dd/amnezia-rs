@@ -22,6 +22,15 @@ pub const DIR_LEFT: u32 = 3;
 /// (RM2000 aligns the sprite's bottom with the tile's bottom).
 pub const CHAR_Y_OFFSET: f32 = (CHAR_H - TILE) / 2.0;
 
+/// Draw depth for a character (hero or event NPC) at tile row `tile_y`. RM2000
+/// y-sorts dynamic characters: one lower on screen (larger `tile_y`) draws in
+/// front. The result stays in `[2.0, 4.0)` for any map up to 199 tiles tall, so
+/// characters sit above the tile layers (z 0/1) yet below "above hero" upper
+/// tiles (z 4), which keep occluding roofs and treetops.
+pub fn character_z(tile_y: i32) -> f32 {
+    2.0 + (tile_y.clamp(0, 199) as f32) * 0.01
+}
+
 /// Source rectangle top-left for an upper-layer tile id, or `None` when the
 /// tile is empty (id 10000 or below) and must not be drawn.
 pub fn upper_source(id: u16) -> Option<(f32, f32)> {
@@ -146,6 +155,13 @@ mod tests {
     #[test]
     fn charset_hero_down_idle() {
         assert_eq!(charset_source(0, 2, 1), (24.0, 64.0));
+    }
+
+    #[test]
+    fn character_z_sorts_by_row_and_stays_below_above_hero() {
+        assert!(character_z(5) < character_z(6)); // lower on screen draws in front
+        assert!(character_z(0) >= 2.0); // above the tile layers
+        assert!(character_z(199) < 4.0); // below "above hero" upper tiles (z 4)
     }
 
     #[test]

@@ -49,7 +49,7 @@ pub fn spawn_player(
             custom_size: Some(Vec2::new(tiles::CHAR_W, tiles::CHAR_H)),
             ..default()
         },
-        Transform::from_xyz(world_x, world_y + CHAR_Y_OFFSET, 3.0),
+        Transform::from_xyz(world_x, world_y + CHAR_Y_OFFSET, tiles::character_z(start.1)),
     ));
 }
 
@@ -174,6 +174,7 @@ fn update_player_sprite(
         let (world_x, world_y) = data.tile_center(player.tile_x, player.tile_y);
         transform.translation.x = world_x;
         transform.translation.y = world_y + CHAR_Y_OFFSET;
+        transform.translation.z = tiles::character_z(player.tile_y);
     }
 }
 

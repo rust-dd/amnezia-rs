@@ -255,7 +255,7 @@ fn spawn_event_npc(
             custom_size: Some(Vec2::new(tiles::CHAR_W, tiles::CHAR_H)),
             ..default()
         },
-        Transform::from_xyz(world_x, world_y, 2.0),
+        Transform::from_xyz(world_x, world_y, tiles::character_z(event.y as i32)),
         EventSprite {
             id: event.id,
             dir: DIR_DOWN,

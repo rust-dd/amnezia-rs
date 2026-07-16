@@ -156,6 +156,7 @@ fn swap_map(
         let (world_x, world_y) = data.tile_center(tile_x, tile_y);
         transform.translation.x = world_x;
         transform.translation.y = world_y + CHAR_Y_OFFSET;
+        transform.translation.z = crate::tiles::character_z(tile_y);
     }
     *map_data = data;
     *map_events = events;
