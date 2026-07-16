@@ -9,6 +9,14 @@ use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN};
 use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::prelude::*;
 
+/// Temporary developer start override, used until the event interpreter can run
+/// the intro map's autorun cutscene. The faithful start (`start.ron`, the intro
+/// map) is a black "Black"-chipset scene that only comes alive with the
+/// cutscene, so for now we drop the hero onto an open, walkable tile in the
+/// village (map_0001) to keep the world testable. Set to `None` to use the
+/// faithful LMT start once the intro cutscene runs.
+const DEV_START: Option<Start> = Some(Start { map_id: 1, x: 20, y: 13 });
+
 /// Tag for entities belonging to the current map (tiles, NPCs); despawned on a
 /// teleport. The player is deliberately untagged so it persists.
 #[derive(Component)]
@@ -58,7 +66,10 @@ impl Plugin for WorldPlugin {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
-    let start: Start = load_ron(&format!("{ASSET_ROOT}/start.ron"));
+    let start: Start = match DEV_START {
+        Some(dev) => dev,
+        None => load_ron(&format!("{ASSET_ROOT}/start.ron")),
+    };
     let (data, events) = load_map(&mut commands, &asset_server, start.map_id);
     spawn_player(&mut commands, &asset_server, (start.x as i32, start.y as i32), &data);
     commands.insert_resource(data);
