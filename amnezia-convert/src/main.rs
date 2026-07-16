@@ -21,6 +21,7 @@ fn main() -> Result<()> {
     let images = amnezia_convert::convert_graphics(&args.input, &args.output)?;
     let maps = amnezia_convert::convert_maps(&args.input, &args.output)?;
     let chipsets = amnezia_convert::convert_chipsets(&args.input, &args.output)?;
-    println!("converted {images} images, {maps} maps, {chipsets} chipsets");
+    let start_map = amnezia_convert::convert_start(&args.input, &args.output)?;
+    println!("converted {images} images, {maps} maps, {chipsets} chipsets; start map {start_map}");
     Ok(())
 }

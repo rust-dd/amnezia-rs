@@ -59,3 +59,11 @@ pub struct Chipset {
     pub passages_down: Vec<u8>,
     pub passages_up: Vec<u8>,
 }
+
+/// The game's starting party position: which map, and the tile within it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Start {
+    pub map_id: u32,
+    pub x: u32,
+    pub y: u32,
+}

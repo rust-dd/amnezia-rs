@@ -1,7 +1,7 @@
 //! Offline converter from the original RPG Maker 2000 project to the clean
 //! intermediate assets the game consumes.
 
-use amnezia_data::{Chipset, Event, EventCommand, EventPage, Map};
+use amnezia_data::{Chipset, Event, EventCommand, EventPage, Map, Start};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -123,6 +123,23 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
         count += 1;
     }
     Ok(count)
+}
+
+/// Convert the party start in `input/RPG_RT.lmt` into `output/start.ron`,
+/// returning the starting map id.
+pub fn convert_start(input: &Path, output: &Path) -> Result<u32> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let lmt = input.join("RPG_RT.lmt");
+    let bytes = std::fs::read(&lmt).with_context(|| format!("reading {}", lmt.display()))?;
+    let parsed = lcf::parse_start(&bytes).with_context(|| format!("parsing {}", lmt.display()))?;
+    let start = Start { map_id: parsed.map_id, x: parsed.x, y: parsed.y };
+    let serialised = ron::to_string(&start).context("serialising start to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("start.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("start.ron").display()))?;
+    Ok(start.map_id)
 }
 
 /// Convert the chipset table in `input/RPG_RT.ldb` into `output/chipsets.ron`

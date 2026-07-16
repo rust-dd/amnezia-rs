@@ -6,10 +6,8 @@
 use crate::assets::{load_ron, resolve_png, ASSET_ROOT};
 use crate::player::spawn_player;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN};
-use amnezia_data::{Chipset, Event, Map};
+use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::prelude::*;
-
-const START_MAP: u32 = 1;
 
 /// Tag for entities belonging to the current map (tiles, NPCs); despawned on a
 /// teleport. The player is deliberately untagged so it persists.
@@ -60,8 +58,9 @@ impl Plugin for WorldPlugin {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
-    let (data, events) = load_map(&mut commands, &asset_server, START_MAP);
-    spawn_player(&mut commands, &asset_server, (data.width / 2, data.height / 2), &data);
+    let start: Start = load_ron(&format!("{ASSET_ROOT}/start.ron"));
+    let (data, events) = load_map(&mut commands, &asset_server, start.map_id);
+    spawn_player(&mut commands, &asset_server, (start.x as i32, start.y as i32), &data);
     commands.insert_resource(data);
     commands.insert_resource(events);
 }
