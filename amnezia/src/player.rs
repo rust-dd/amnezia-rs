@@ -29,17 +29,16 @@ impl Plugin for PlayerPlugin {
     }
 }
 
-/// Spawn the hero at `start` (tile) given the map's world offset.
+/// Spawn the hero at `start` (tile) positioned via the map's geometry.
 pub fn spawn_player(
     commands: &mut Commands,
     asset_server: &AssetServer,
     start: (i32, i32),
-    offset: (f32, f32),
+    data: &MapData,
 ) {
     let image = asset_server.load(resolve_png("CharSet", PLAYER_CHARSET));
     let (sx, sy) = tiles::charset_source(PLAYER_INDEX, DIR_DOWN, 1);
-    let world_x = start.0 as f32 * tiles::TILE - offset.0 + tiles::TILE / 2.0;
-    let world_y = offset.1 - start.1 as f32 * tiles::TILE - tiles::TILE / 2.0 + CHAR_Y_OFFSET;
+    let (world_x, world_y) = data.tile_center(start.0, start.1);
     commands.spawn((
         Player { tile_x: start.0, tile_y: start.1, dir: DIR_DOWN, frame: 1 },
         Sprite {
@@ -48,7 +47,7 @@ pub fn spawn_player(
             custom_size: Some(Vec2::new(tiles::CHAR_W, tiles::CHAR_H)),
             ..default()
         },
-        Transform::from_xyz(world_x, world_y, 3.0),
+        Transform::from_xyz(world_x, world_y + CHAR_Y_OFFSET, 3.0),
     ));
 }
 

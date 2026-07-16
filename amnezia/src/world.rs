@@ -60,18 +60,21 @@ impl Plugin for WorldPlugin {
 
 fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
     commands.spawn(Camera2d);
-    let (width, height, offset) = load_map(&mut commands, &asset_server, START_MAP);
-    spawn_player(&mut commands, &asset_server, (width / 2, height / 2), offset);
+    let (data, events) = load_map(&mut commands, &asset_server, START_MAP);
+    spawn_player(&mut commands, &asset_server, (data.width / 2, data.height / 2), &data);
+    commands.insert_resource(data);
+    commands.insert_resource(events);
 }
 
 /// Load map `map_id` into the world: spawn its tile layers and event NPCs
-/// (tagged [`MapScene`]) and insert fresh [`MapData`]/[`MapEvents`]. Returns the
-/// map's `(width, height, world_offset)`.
+/// (tagged [`MapScene`]) and return fresh [`MapData`]/[`MapEvents`]. The caller
+/// installs the resources — as `Commands` on first load, or `ResMut` overwrite
+/// on a teleport so they take effect the same frame the player is repositioned.
 pub fn load_map(
     commands: &mut Commands,
     asset_server: &AssetServer,
     map_id: u32,
-) -> (i32, i32, (f32, f32)) {
+) -> (MapData, MapEvents) {
     let map: Map = load_ron(&format!("{ASSET_ROOT}/maps/map_{map_id:04}.ron"));
     let chipsets: Vec<Chipset> = load_ron(&format!("{ASSET_ROOT}/chipsets.ron"));
     let entry = chipsets.into_iter().find(|c| c.id == map.chipset_id);
@@ -97,7 +100,7 @@ pub fn load_map(
         spawn_event_npc(commands, asset_server, event, offset);
     }
 
-    commands.insert_resource(MapData {
+    let data = MapData {
         width,
         height,
         offset_x: offset.0,
@@ -106,9 +109,8 @@ pub fn load_map(
         upper: map.upper,
         passages_down,
         passages_up,
-    });
-    commands.insert_resource(MapEvents { events: map.events });
-    (width, height, offset)
+    };
+    (data, MapEvents { events: map.events })
 }
 
 fn spawn_tile(

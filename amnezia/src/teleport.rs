@@ -3,7 +3,8 @@
 //! target tile.
 
 use crate::player::Player;
-use crate::world::{load_map, MapScene};
+use crate::tiles::CHAR_Y_OFFSET;
+use crate::world::{load_map, MapData, MapEvents, MapScene};
 use bevy::prelude::*;
 
 /// A pending teleport `(map_id, x, y)`, set by an interaction or a touch, and
@@ -19,12 +20,15 @@ impl Plugin for TeleportPlugin {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn apply_teleport(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut pending: ResMut<PendingTeleport>,
+    mut map_data: ResMut<MapData>,
+    mut map_events: ResMut<MapEvents>,
     scene: Query<Entity, With<MapScene>>,
-    mut players: Query<&mut Player>,
+    mut players: Query<(&mut Player, &mut Transform)>,
 ) {
     let Some((map_id, x, y)) = pending.0.take() else {
         return;
@@ -32,9 +36,15 @@ fn apply_teleport(
     for entity in &scene {
         commands.entity(entity).despawn();
     }
-    load_map(&mut commands, &asset_server, map_id);
-    if let Ok(mut player) = players.single_mut() {
-        player.tile_x = x as i32;
-        player.tile_y = y as i32;
+    let (data, events) = load_map(&mut commands, &asset_server, map_id);
+    let (tile_x, tile_y) = (x as i32, y as i32);
+    if let Ok((mut player, mut transform)) = players.single_mut() {
+        player.tile_x = tile_x;
+        player.tile_y = tile_y;
+        let (world_x, world_y) = data.tile_center(tile_x, tile_y);
+        transform.translation.x = world_x;
+        transform.translation.y = world_y + CHAR_Y_OFFSET;
     }
+    *map_data = data;
+    *map_events = events;
 }
