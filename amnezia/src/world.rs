@@ -120,7 +120,14 @@ pub fn load_map(
     let offset = (map.width as f32 * tiles::TILE / 2.0, map.height as f32 * tiles::TILE / 2.0);
 
     for (index, &id) in map.lower.iter().enumerate() {
-        spawn_tile(commands, &chipset, tiles::lower_source(id), index as i32, width, offset, 0.0);
+        match tiles::lower_render(id) {
+            tiles::LowerRender::Whole { src } => {
+                spawn_tile(commands, &chipset, src, index as i32, width, offset, 0.0);
+            }
+            tiles::LowerRender::Quarters(quarters) => {
+                spawn_lower_quarters(commands, &chipset, &quarters, index as i32, width, offset);
+            }
+        }
     }
     for (index, &id) in map.upper.iter().enumerate() {
         if let Some(source) = tiles::upper_source(id) {
@@ -170,6 +177,40 @@ fn spawn_tile(
         Transform::from_xyz(world_x, world_y, z),
         MapScene,
     ));
+}
+
+/// Spawn the four 8×8 quarter sprites of an assembled lower-layer autotile at
+/// map cell `index`, each drawing its own chipset sub-rect at its offset within
+/// the tile so the shape's edges and corners compose correctly.
+fn spawn_lower_quarters(
+    commands: &mut Commands,
+    chipset: &Handle<Image>,
+    quarters: &[tiles::Quarter; 4],
+    index: i32,
+    width: i32,
+    offset: (f32, f32),
+) {
+    let left = (index % width) as f32 * tiles::TILE - offset.0;
+    let top = offset.1 - (index / width) as f32 * tiles::TILE;
+    for q in quarters {
+        let world_x = left + q.dst.0 + tiles::QUARTER / 2.0;
+        let world_y = top - q.dst.1 - tiles::QUARTER / 2.0;
+        commands.spawn((
+            Sprite {
+                image: chipset.clone(),
+                rect: Some(Rect::new(
+                    q.src.0,
+                    q.src.1,
+                    q.src.0 + tiles::QUARTER,
+                    q.src.1 + tiles::QUARTER,
+                )),
+                custom_size: Some(Vec2::splat(tiles::QUARTER)),
+                ..default()
+            },
+            Transform::from_xyz(world_x, world_y, 0.0),
+            MapScene,
+        ));
+    }
 }
 
 /// Spawn an NPC sprite for an event's active page graphic, if it has one. The
