@@ -23,8 +23,10 @@ fn main() -> Result<()> {
     let chipsets = amnezia_convert::convert_chipsets(&args.input, &args.output)?;
     let start_map = amnezia_convert::convert_start(&args.input, &args.output)?;
     let hero = amnezia_convert::convert_hero(&args.input, &args.output)?;
+    let (effects, music) = amnezia_convert::convert_audio(&args.input, &args.output)?;
     println!(
-        "converted {images} images, {maps} maps, {chipsets} chipsets; start map {start_map}; hero {hero}"
+        "converted {images} images, {maps} maps, {chipsets} chipsets, {effects} sfx, {music} music; \
+         start map {start_map}; hero {hero}"
     );
     Ok(())
 }
