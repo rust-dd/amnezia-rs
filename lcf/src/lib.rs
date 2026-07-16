@@ -123,16 +123,24 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     Ok(MapUnit { chipset_id, width, height, lower_layer, upper_layer })
 }
 
-/// A chipset entry from the database: its 1-based id and the base name of its
-/// `ChipSet/<name>` graphic.
+/// A chipset entry from the database: its 1-based id, the base name of its
+/// `ChipSet/<name>` graphic, and its passability arrays (per tile-type
+/// bitfields; lower is 162 bytes, upper is 144, padded with `0x0F`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chipset {
     pub id: u32,
     pub name: String,
+    pub passages_down: Vec<u8>,
+    pub passages_up: Vec<u8>,
 }
 
 const CHIPSET_SECTION: u32 = 0x14;
 const CHIPSET_NAME: u32 = 0x02;
+const CHIPSET_PASSAGES_DOWN: u32 = 0x04;
+const CHIPSET_PASSAGES_UP: u32 = 0x05;
+const PASSAGES_DOWN_LEN: usize = 162;
+const PASSAGES_UP_LEN: usize = 144;
+const PASSAGE_DEFAULT: u8 = 0x0F;
 
 /// Parse the chipset graphic names out of an LDB (`RPG_RT.ldb`) byte slice.
 /// Only the chipset section is read; every other database section is skipped.
@@ -165,6 +173,8 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut name = String::new();
+        let mut passages_down: Vec<u8> = Vec::new();
+        let mut passages_up: Vec<u8> = Vec::new();
         loop {
             let sub_id = reader.varint()?;
             if sub_id == 0 {
@@ -172,18 +182,23 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
             }
             let sub_size = reader.varint()? as usize;
             let sub_data = reader.take(sub_size)?;
-            if sub_id == CHIPSET_NAME {
-                name = String::from_utf8_lossy(sub_data).into_owned();
+            match sub_id {
+                CHIPSET_NAME => name = String::from_utf8_lossy(sub_data).into_owned(),
+                CHIPSET_PASSAGES_DOWN => passages_down = sub_data.to_vec(),
+                CHIPSET_PASSAGES_UP => passages_up = sub_data.to_vec(),
+                _ => {}
             }
         }
-        chipsets.push(Chipset { id, name });
+        passages_down.resize(PASSAGES_DOWN_LEN, PASSAGE_DEFAULT);
+        passages_up.resize(PASSAGES_UP_LEN, PASSAGE_DEFAULT);
+        chipsets.push(Chipset { id, name, passages_down, passages_up });
     }
     Ok(chipsets)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_map, parse_chipsets, Chipset, LcfError};
+    use crate::{parse_map, parse_chipsets, LcfError};
 
     fn varint(mut v: u32) -> Vec<u8> {
         let mut groups = vec![(v & 0x7F) as u8];
@@ -375,13 +390,13 @@ mod tests {
         let element2 = chipset_element(2, &[subchunk(0x02, b"outline")]);
         let ldb = make_ldb(&[(0x0B, vec![1, 2, 3]), (0x14, chipset_section(&[element1, element2]))]);
         let chipsets = parse_chipsets(&ldb).unwrap();
-        assert_eq!(
-            chipsets,
-            vec![
-                Chipset { id: 1, name: "basis".to_string() },
-                Chipset { id: 2, name: "outline".to_string() },
-            ]
-        );
+        assert_eq!(chipsets.len(), 2);
+        assert_eq!(chipsets[0].id, 1);
+        assert_eq!(chipsets[0].name, "basis");
+        assert_eq!(chipsets[1].name, "outline");
+        assert_eq!(chipsets[0].passages_down.len(), 162);
+        assert_eq!(chipsets[0].passages_up.len(), 144);
+        assert!(chipsets[0].passages_down.iter().all(|&b| b == 0x0F));
     }
 
     #[test]
@@ -389,7 +404,24 @@ mod tests {
         let element = chipset_element(5, &[]);
         let ldb = make_ldb(&[(0x14, chipset_section(&[element]))]);
         let chipsets = parse_chipsets(&ldb).unwrap();
-        assert_eq!(chipsets, vec![Chipset { id: 5, name: String::new() }]);
+        assert_eq!(chipsets[0].id, 5);
+        assert!(chipsets[0].name.is_empty());
+        assert_eq!(chipsets[0].passages_down.len(), 162);
+    }
+
+    #[test]
+    fn captures_and_pads_passability() {
+        let element = chipset_element(
+            1,
+            &[subchunk(0x02, b"x"), subchunk(0x04, &[0x00, 0x0F]), subchunk(0x05, &[0x1F])],
+        );
+        let ldb = make_ldb(&[(0x14, chipset_section(&[element]))]);
+        let chipset = &parse_chipsets(&ldb).unwrap()[0];
+        assert_eq!(chipset.passages_down.len(), 162);
+        assert_eq!(chipset.passages_up.len(), 144);
+        assert_eq!(&chipset.passages_down[..2], &[0x00, 0x0F]);
+        assert_eq!(chipset.passages_down[2], 0x0F);
+        assert_eq!(chipset.passages_up[0], 0x1F);
     }
 
     #[test]

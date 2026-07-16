@@ -105,7 +105,12 @@ pub fn convert_chipsets(input: &Path, output: &Path) -> Result<usize> {
     let parsed = lcf::parse_chipsets(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
     let chipsets: Vec<Chipset> = parsed
         .into_iter()
-        .map(|c| Chipset { id: c.id, graphic: c.name })
+        .map(|c| Chipset {
+            id: c.id,
+            graphic: c.name,
+            passages_down: c.passages_down,
+            passages_up: c.passages_up,
+        })
         .collect();
     let count = chipsets.len();
     let serialised = ron::to_string(&chipsets).context("serialising chipsets to RON")?;

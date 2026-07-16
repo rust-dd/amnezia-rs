@@ -26,4 +26,6 @@ pub struct Map {
 pub struct Chipset {
     pub id: u32,
     pub graphic: String,
+    pub passages_down: Vec<u8>,
+    pub passages_up: Vec<u8>,
 }

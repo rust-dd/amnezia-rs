@@ -62,11 +62,15 @@ fn converts_ldb_to_chipsets_ron() {
 
     let ron = std::fs::read_to_string(output.join("chipsets.ron")).unwrap();
     let chipsets: Vec<Chipset> = ron::from_str(&ron).unwrap();
+    assert_eq!(chipsets.len(), 2);
     assert_eq!(
-        chipsets,
-        vec![
-            Chipset { id: 1, graphic: "basis".to_string() },
-            Chipset { id: 2, graphic: "outline".to_string() },
-        ]
+        chipsets[0],
+        Chipset {
+            id: 1,
+            graphic: "basis".to_string(),
+            passages_down: vec![0x0F; 162],
+            passages_up: vec![0x0F; 144],
+        }
     );
+    assert_eq!(chipsets[1].graphic, "outline");
 }
