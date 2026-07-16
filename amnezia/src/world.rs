@@ -10,13 +10,11 @@ use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN};
 use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::prelude::*;
 
-/// Temporary developer start override, used until the event interpreter can run
-/// the intro map's autorun cutscene. The faithful start (`start.ron`, the intro
-/// map) is a black "Black"-chipset scene that only comes alive with the
-/// cutscene, so for now we drop the hero onto an open, walkable tile in the
-/// village (map_0001) to keep the world testable. Set to `None` to use the
-/// faithful LMT start once the intro cutscene runs.
-const DEV_START: Option<Start> = Some(Start { map_id: 1, x: 20, y: 13 });
+/// Developer start override. `None` uses the faithful LMT start (`start.ron`,
+/// the intro map_0005), whose autorun cutscene the interpreter now runs; set it
+/// to `Some(Start { .. })` to drop the hero onto a specific map/tile for testing
+/// instead.
+const DEV_START: Option<Start> = None;
 
 /// Tag for entities belonging to the current map (tiles, NPCs); despawned on a
 /// teleport. The player is deliberately untagged so it persists.
