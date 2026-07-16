@@ -201,7 +201,7 @@ fn run_interpreter(
                 return;
             }
             CONDITIONAL_BRANCH => {
-                if branch_holds(&command.params, &switches, &variables) {
+                if branch_holds(&command.params, &switches, &variables, &party, &inventory) {
                     running.ip += 1;
                 } else {
                     running.ip = skip_true_body(&running.commands, running.ip, command.indent);
@@ -415,10 +415,18 @@ fn apply_change_party(party: &mut Party, params: &[i32]) {
     }
 }
 
-/// Whether a `ConditionalBranch`'s condition holds. Switch (type 0) and variable
-/// (type 1) comparisons are evaluated; unsupported kinds (timer, money, item,
-/// hero, …) return `true` so their body runs rather than the event stalling.
-fn branch_holds(params: &[i32], switches: &Switches, variables: &Variables) -> bool {
+/// Whether a `ConditionalBranch`'s condition holds. Switch (0), variable (1),
+/// money (3), item (4), and hero-in-party (5) are evaluated; unsupported kinds
+/// (timer, …) return `true` so their body runs rather than the event stalling.
+/// Money/item/hero use first-pass semantics (see the arms); the hero sub-check
+/// (level/equipment in `params[2..]`) is treated as just "actor in party".
+fn branch_holds(
+    params: &[i32],
+    switches: &Switches,
+    variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
+) -> bool {
     match params.first().copied().unwrap_or(-1) {
         0 => {
             let id = params.get(1).copied().unwrap_or(0) as u32;
@@ -443,6 +451,16 @@ fn branch_holds(params: &[i32], switches: &Switches, variables: &Variables) -> b
                 _ => true,
             }
         }
+        3 => {
+            let amount = params.get(1).copied().unwrap_or(0);
+            if params.get(2).copied().unwrap_or(0) == 0 {
+                inventory.gold() >= amount
+            } else {
+                inventory.gold() <= amount
+            }
+        }
+        4 => inventory.has(params.get(1).copied().unwrap_or(0) as u32),
+        5 => party.has(params.get(1).copied().unwrap_or(0) as u32),
         _ => true,
     }
 }
@@ -715,26 +733,43 @@ mod tests {
     #[test]
     fn branch_switch_on_and_off() {
         let mut sw = Switches::default();
-        let var = Variables::default();
+        let (var, party, inv) = (Variables::default(), Party::default(), Inventory::default());
         // [type 0, switch 4, state 0 => branch if ON]
-        assert!(!branch_holds(&[0, 4, 0, 0, 0, 0], &sw, &var));
+        assert!(!branch_holds(&[0, 4, 0, 0, 0, 0], &sw, &var, &party, &inv));
         sw.set(4, true);
-        assert!(branch_holds(&[0, 4, 0, 0, 0, 0], &sw, &var));
+        assert!(branch_holds(&[0, 4, 0, 0, 0, 0], &sw, &var, &party, &inv));
         // state 1 => branch if OFF
-        assert!(!branch_holds(&[0, 4, 1, 0, 0, 0], &sw, &var));
+        assert!(!branch_holds(&[0, 4, 1, 0, 0, 0], &sw, &var, &party, &inv));
     }
 
     #[test]
     fn branch_variable_comparisons() {
         let sw = Switches::default();
+        let (party, inv) = (Party::default(), Inventory::default());
         let mut var = Variables::default();
         var.set(1, 6);
-        // var1 == 6
-        assert!(branch_holds(&[1, 1, 0, 6, 0, 0], &sw, &var));
-        // var1 >= 10 (false)
-        assert!(!branch_holds(&[1, 1, 0, 10, 1, 0], &sw, &var));
-        // var1 < 10 (true)
-        assert!(branch_holds(&[1, 1, 0, 10, 4, 0], &sw, &var));
+        assert!(branch_holds(&[1, 1, 0, 6, 0, 0], &sw, &var, &party, &inv)); // == 6
+        assert!(!branch_holds(&[1, 1, 0, 10, 1, 0], &sw, &var, &party, &inv)); // >= 10 false
+        assert!(branch_holds(&[1, 1, 0, 10, 4, 0], &sw, &var, &party, &inv)); // < 10 true
+    }
+
+    #[test]
+    fn branch_money_item_hero() {
+        let (sw, var) = (Switches::default(), Variables::default());
+        let mut party = Party::default();
+        let mut inv = Inventory::default();
+        // money: gold >= 100 (false, then true)
+        assert!(!branch_holds(&[3, 100, 0, 0, 0, 0], &sw, &var, &party, &inv));
+        inv.add_gold(120);
+        assert!(branch_holds(&[3, 100, 0, 0, 0, 0], &sw, &var, &party, &inv));
+        // item: has item 129
+        assert!(!branch_holds(&[4, 129, 0, 0, 0, 0], &sw, &var, &party, &inv));
+        inv.add_item(129, 1);
+        assert!(branch_holds(&[4, 129, 0, 0, 0, 0], &sw, &var, &party, &inv));
+        // hero: actor 2 in party
+        assert!(!branch_holds(&[5, 2, 0, 0, 0, 0], &sw, &var, &party, &inv));
+        party.add(2);
+        assert!(branch_holds(&[5, 2, 0, 0, 0, 0], &sw, &var, &party, &inv));
     }
 
     #[test]
