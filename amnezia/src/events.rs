@@ -108,7 +108,13 @@ mod tests {
     }
 
     fn page(trigger: u32, commands: Vec<EventCommand>) -> amnezia_data::EventPage {
-        amnezia_data::EventPage { trigger, graphic_name: String::new(), graphic_index: 0, commands }
+        amnezia_data::EventPage {
+            trigger,
+            graphic_name: String::new(),
+            graphic_index: 0,
+            layer: 0,
+            commands,
+        }
     }
 
     #[test]

@@ -103,12 +103,22 @@ fn move_player(
             pending.0 = Some(target);
             return;
         }
-        if data.passable(nx, ny) {
+        if data.passable(nx, ny) && !event_blocks_at(&map_events, nx, ny) {
             player.tile_x = nx;
             player.tile_y = ny;
             player.frame = (player.frame + 1) % 3;
         }
     }
+}
+
+/// Whether a same-layer event occupies tile `(x, y)` and blocks the player.
+/// RM2000 events with `layer == 1` are solid (graphic or not); other layers
+/// don't block. Uses the highest page as the active one (page conditions are
+/// evaluated once the switch system lands).
+fn event_blocks_at(map_events: &MapEvents, x: i32, y: i32) -> bool {
+    map_events.events.iter().any(|e| {
+        e.x as i32 == x && e.y as i32 == y && e.pages.last().is_some_and(|p| p.layer == 1)
+    })
 }
 
 /// The teleport a touch-triggered event on tile `(x, y)` transfers to, if any.

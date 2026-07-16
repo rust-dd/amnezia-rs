@@ -136,12 +136,15 @@ pub struct Event {
     pub pages: Vec<EventPage>,
 }
 
-/// One page of an event: its trigger, graphic, and command list.
+/// One page of an event: its trigger, graphic, layer, and command list. The
+/// layer (0 = below hero, 1 = same as hero, 2 = above hero) decides collision:
+/// a `layer == 1` page blocks the player.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventPage {
     pub trigger: u32,
     pub graphic_name: String,
     pub graphic_index: u32,
+    pub layer: u32,
     pub commands: Vec<EventCommand>,
 }
 
@@ -195,6 +198,7 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
             trigger: 0,
             graphic_name: String::new(),
             graphic_index: 0,
+            layer: 0,
             commands: Vec::new(),
         };
         loop {
@@ -208,6 +212,7 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
                 0x15 => page.graphic_name = decode_cp1250(sub_data),
                 0x16 => page.graphic_index = Reader::new(sub_data).varint()?,
                 0x21 => page.trigger = Reader::new(sub_data).varint()?,
+                0x22 => page.layer = Reader::new(sub_data).varint()?,
                 0x34 => page.commands = parse_commands(sub_data)?,
                 _ => {}
             }

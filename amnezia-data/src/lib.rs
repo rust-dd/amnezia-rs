@@ -37,6 +37,7 @@ pub struct EventPage {
     pub trigger: u32,
     pub graphic_name: String,
     pub graphic_index: u32,
+    pub layer: u32,
     pub commands: Vec<EventCommand>,
 }
 
