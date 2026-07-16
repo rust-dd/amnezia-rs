@@ -35,6 +35,9 @@ const SKIP_BLOCKS: &[(u32, u32)] =
     &[(ENEMY_ENCOUNTER, 20713), (OPEN_SHOP, 20722), (SHOW_INN, 20732)];
 const LABEL: u32 = 12110;
 const JUMP_TO_LABEL: u32 = 12120;
+const LOOP: u32 = 12210;
+const END_LOOP: u32 = 22210;
+const BREAK_LOOP: u32 = 12220;
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
 /// that never advances) can't lock up the frame. Well-formed pages never
@@ -173,6 +176,9 @@ fn run_interpreter(
                 let id = command.params.first().copied().unwrap_or(0);
                 running.ip = find_label(&running.commands, id).unwrap_or(running.ip + 1);
             }
+            LOOP => running.ip += 1,
+            END_LOOP => running.ip = loop_start(&running.commands, running.ip, command.indent),
+            BREAK_LOOP => running.ip = after_loop_end(&running.commands, running.ip, command.indent),
             ENEMY_ENCOUNTER | OPEN_SHOP | SHOW_INN => {
                 let terminator = SKIP_BLOCKS
                     .iter()
@@ -328,6 +334,26 @@ fn find_label(commands: &[EventCommand], id: i32) -> Option<usize> {
     commands.iter().position(|c| c.code == LABEL && c.params.first().copied() == Some(id))
 }
 
+/// Index of the `Loop` (12210) at `indent` that an `EndLoop` at `ip` closes
+/// (scanning backward); falls back to `ip` if unmatched (a one-shot loop).
+fn loop_start(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
+    (0..ip)
+        .rev()
+        .find(|&j| commands[j].code == LOOP && commands[j].indent == indent)
+        .unwrap_or(ip)
+}
+
+/// Index just past the `EndLoop` enclosing a `BreakLoop` at `ip` (indent
+/// `break_indent`): the next `EndLoop` at a shallower indent.
+fn after_loop_end(commands: &[EventCommand], ip: usize, break_indent: u32) -> usize {
+    let mut j = ip + 1;
+    while j < commands.len() && !(commands[j].code == END_LOOP && commands[j].indent < break_indent)
+    {
+        j += 1;
+    }
+    (j + 1).min(commands.len())
+}
+
 /// Index just past a subsystem block's terminator: the first command at
 /// `indent` whose `code == terminator`, plus one (or the end of the list).
 fn skip_to_terminator(commands: &[EventCommand], ip: usize, indent: u32, terminator: u32) -> usize {
@@ -368,6 +394,21 @@ mod tests {
         assert_eq!(find_label(&commands, 2), Some(2));
         assert_eq!(find_label(&commands, 1), Some(0));
         assert_eq!(find_label(&commands, 9), None);
+    }
+
+    #[test]
+    fn end_loop_jumps_back_to_loop() {
+        // 0: Loop@0  1: Wait@1  2: EndLoop@0
+        let commands = vec![cmd(12210, 0), cmd(11410, 1), cmd(22210, 0)];
+        assert_eq!(loop_start(&commands, 2, 0), 0);
+    }
+
+    #[test]
+    fn break_loop_skips_past_end() {
+        // 0: Loop@0  1: Break@1  2: body@1  3: EndLoop@0  4: after@0
+        let commands =
+            vec![cmd(12210, 0), cmd(12220, 1), cmd(10110, 1), cmd(22210, 0), cmd(10110, 0)];
+        assert_eq!(after_loop_end(&commands, 1, 1), 4);
     }
 
     #[test]
