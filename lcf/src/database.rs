@@ -1,10 +1,17 @@
-//! Database (`RPG_RT.ldb`) parsing: the chipset, actor, and item definition
-//! tables. Every section shares the LDB struct-list shape — a `[count]` header
-//! then per entry a 1-based id followed by a chunk stream (terminated by id 0).
-//! Chunk ids follow EasyRPG/liblcf `src/generated/lcf/ldb/chunks.h`.
+//! Database (`RPG_RT.ldb`) parsing: the chipset, actor, item, monster, and
+//! troop definition tables. Every section shares the LDB struct-list shape — a
+//! `[count]` header then per entry a 1-based id followed by a chunk stream
+//! (terminated by id 0). Chunk ids follow EasyRPG/liblcf
+//! `src/generated/lcf/ldb/chunks.h`.
 
 use crate::{Reader, decode_cp1250};
 use crate::LcfError;
+
+mod monsters;
+mod troops;
+
+pub use monsters::{parse_monsters, Monster};
+pub use troops::{parse_troops, Troop, TroopMember};
 
 /// Locate one top-level LDB section (`ChunkData`) by id, returning its raw
 /// bytes. Verifies the `LcfDataBase` signature and skips every other section.
@@ -223,38 +230,8 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
 
 #[cfg(test)]
 mod tests {
-    use crate::test_util::{subchunk, varint};
+    use crate::test_util::{element, make_ldb, section, subchunk, varint};
     use crate::{parse_actors, parse_chipsets, parse_items, Item, LcfError};
-
-    fn element(id: u32, subchunks: &[Vec<u8>]) -> Vec<u8> {
-        let mut out = varint(id);
-        for chunk in subchunks {
-            out.extend_from_slice(chunk);
-        }
-        out.extend(varint(0));
-        out
-    }
-
-    fn section(elements: &[Vec<u8>]) -> Vec<u8> {
-        let mut out = varint(elements.len() as u32);
-        for e in elements {
-            out.extend_from_slice(e);
-        }
-        out
-    }
-
-    fn make_ldb(chunks: &[(u32, Vec<u8>)]) -> Vec<u8> {
-        let signature = b"LcfDataBase";
-        let mut out = vec![signature.len() as u8];
-        out.extend_from_slice(signature);
-        for (id, data) in chunks {
-            out.extend(varint(*id));
-            out.extend(varint(data.len() as u32));
-            out.extend_from_slice(data);
-        }
-        out.push(0);
-        out
-    }
 
     /// Build a `Parameters` chunk (`0x1F`) from six int16 stat curves, laid out
     /// contiguously as maxhp, maxsp, attack, defense, spirit, agility.

@@ -8,12 +8,16 @@
 //! never linked into the shipped game binary.
 //!
 //! Parsing is split by file: [`map`] handles map units and the map tree, and
-//! [`database`] handles the `RPG_RT.ldb` chipset, actor, and item tables.
+//! [`database`] handles the `RPG_RT.ldb` chipset, actor, item, monster, and
+//! troop tables.
 
 mod database;
 mod map;
 
-pub use database::{parse_actors, parse_chipsets, parse_items, Actor, Chipset, Item};
+pub use database::{
+    parse_actors, parse_chipsets, parse_items, parse_monsters, parse_troops, Actor, Chipset, Item,
+    Monster, Troop, TroopMember,
+};
 pub use map::{
     parse_map, parse_start, Event, EventCommand, EventCondition, EventPage, MapUnit, Start,
 };
@@ -35,6 +39,10 @@ pub enum LcfError {
     MissingActors,
     #[error("LCF database has no item section (chunk 0x0D)")]
     MissingItems,
+    #[error("LCF database has no enemy section (chunk 0x0E)")]
+    MissingMonsters,
+    #[error("LCF database has no troop section (chunk 0x0F)")]
+    MissingTroops,
 }
 
 /// A cursor over an LCF byte stream, shared by every parser in the crate.
@@ -107,6 +115,41 @@ pub(crate) mod test_util {
         let mut out = varint(id);
         out.extend(varint(data.len() as u32));
         out.extend_from_slice(data);
+        out
+    }
+
+    /// Build one struct-list entry: a 1-based `[id]`, its sub-chunks, then a
+    /// terminating id 0.
+    pub(crate) fn element(id: u32, subchunks: &[Vec<u8>]) -> Vec<u8> {
+        let mut out = varint(id);
+        for chunk in subchunks {
+            out.extend_from_slice(chunk);
+        }
+        out.extend(varint(0));
+        out
+    }
+
+    /// Wrap struct-list entries with their `[count]` header.
+    pub(crate) fn section(elements: &[Vec<u8>]) -> Vec<u8> {
+        let mut out = varint(elements.len() as u32);
+        for e in elements {
+            out.extend_from_slice(e);
+        }
+        out
+    }
+
+    /// Build a minimal LDB: the `LcfDataBase` signature then each top-level
+    /// `[id][size][data]` chunk and a terminating id 0.
+    pub(crate) fn make_ldb(chunks: &[(u32, Vec<u8>)]) -> Vec<u8> {
+        let signature = b"LcfDataBase";
+        let mut out = vec![signature.len() as u8];
+        out.extend_from_slice(signature);
+        for (id, data) in chunks {
+            out.extend(varint(*id));
+            out.extend(varint(data.len() as u32));
+            out.extend_from_slice(data);
+        }
+        out.push(0);
         out
     }
 }

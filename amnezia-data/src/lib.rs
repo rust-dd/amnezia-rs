@@ -114,3 +114,39 @@ pub struct ItemDef {
     pub item_type: u32,
     pub price: u32,
 }
+
+/// A monster's definition, read by the battle system: its 1-based id, name, the
+/// combat stats (`max_hp`, `max_sp`, `attack`, `defense`, `spirit`, `agility`),
+/// and the `exp`/`gold` reward for defeating it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MonsterDef {
+    pub id: u32,
+    pub name: String,
+    pub max_hp: u32,
+    pub max_sp: u32,
+    pub attack: u32,
+    pub defense: u32,
+    pub spirit: u32,
+    pub agility: u32,
+    pub exp: u32,
+    pub gold: u32,
+}
+
+/// One member of a troop: the `enemy_id` of the monster (matching a
+/// [`MonsterDef::id`]) and its `x`,`y` placement on the battle backdrop.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TroopMemberDef {
+    pub enemy_id: u32,
+    pub x: u32,
+    pub y: u32,
+}
+
+/// A troop (enemy party) definition, read by the battle system to build an
+/// encounter: its 1-based id, name, and the monsters it fields with their
+/// positions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TroopDef {
+    pub id: u32,
+    pub name: String,
+    pub members: Vec<TroopMemberDef>,
+}
