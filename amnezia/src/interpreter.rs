@@ -70,6 +70,11 @@ impl RunningEvent {
         self.active
     }
 
+    /// The running event's id for the debug HUD (`None` when idle).
+    pub fn debug_id(&self) -> Option<u32> {
+        self.active.then_some(self.event_id)
+    }
+
     /// Begin running `commands` from the top. Ignored if a run is already live,
     /// so one event can't interrupt another mid-sequence.
     pub fn start(&mut self, event_id: u32, commands: Vec<EventCommand>) {

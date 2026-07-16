@@ -6,6 +6,7 @@
 
 mod assets;
 mod choice;
+mod debug;
 mod dialogue;
 mod events;
 mod font;
@@ -39,6 +40,7 @@ fn main() -> AppExit {
             teleport::TeleportPlugin,
             interpreter::InterpreterPlugin,
             choice::ChoicePlugin,
+            debug::DebugPlugin,
         ))
         .run()
 }

@@ -36,6 +36,7 @@ pub struct EventSprite {
 /// The active map's geometry, tile layers, and passability, for movement.
 #[derive(Resource)]
 pub struct MapData {
+    pub map_id: u32,
     pub width: i32,
     pub height: i32,
     offset_x: f32,
@@ -135,6 +136,7 @@ pub fn load_map(
     }
 
     let data = MapData {
+        map_id,
         width,
         height,
         offset_x: offset.0,
