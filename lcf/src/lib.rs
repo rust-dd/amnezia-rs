@@ -223,6 +223,8 @@ pub struct EventCondition {
     pub switch_b: u32,
     pub variable_id: u32,
     pub variable_value: u32,
+    pub item_id: u32,
+    pub actor_id: u32,
 }
 
 fn parse_condition(data: &[u8]) -> Result<EventCondition, LcfError> {
@@ -242,6 +244,8 @@ fn parse_condition(data: &[u8]) -> Result<EventCondition, LcfError> {
             0x03 => condition.switch_b = value,
             0x04 => condition.variable_id = value,
             0x05 => condition.variable_value = value,
+            0x06 => condition.item_id = value,
+            0x07 => condition.actor_id = value,
             _ => {}
         }
     }
@@ -741,6 +745,8 @@ mod tests {
         let cond = {
             let mut c = subchunk(0x01, &varint(1));
             c.extend(subchunk(0x02, &varint(2)));
+            c.extend(subchunk(0x06, &varint(5)));
+            c.extend(subchunk(0x07, &varint(3)));
             c.push(0);
             c
         };
@@ -768,6 +774,7 @@ mod tests {
         let map = parse_map(&file).unwrap();
         let condition = &map.events[0].pages[0].condition;
         assert_eq!((condition.flags, condition.switch_a), (1, 2));
+        assert_eq!((condition.item_id, condition.actor_id), (5, 3));
     }
 
     #[test]

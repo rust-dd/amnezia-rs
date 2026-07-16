@@ -50,6 +50,8 @@ pub struct EventCondition {
     pub switch_b: u32,
     pub variable_id: u32,
     pub variable_value: u32,
+    pub item_id: u32,
+    pub actor_id: u32,
 }
 
 /// One event command: RM2000 opcode, nesting indent, string, and int params.

@@ -100,6 +100,8 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
                             switch_b: p.condition.switch_b,
                             variable_id: p.condition.variable_id,
                             variable_value: p.condition.variable_value,
+                            item_id: p.condition.item_id,
+                            actor_id: p.condition.actor_id,
                         },
                         commands: p
                             .commands
