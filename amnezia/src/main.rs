@@ -1,6 +1,6 @@
 //! The Amnézia game: renders a converted map with its chipset and lets the
-//! player walk the hero around it. Depends only on `amnezia-data` + Bevy; it
-//! never touches the legacy RPG Maker formats.
+//! player walk the hero around it, blocked by tile passability. Depends only on
+//! `amnezia-data` + Bevy; it never touches the legacy RPG Maker formats.
 
 mod tiles;
 
@@ -28,9 +28,15 @@ struct Player {
 }
 
 #[derive(Resource)]
-struct MapGeometry {
+struct MapData {
+    width: i32,
+    height: i32,
     offset_x: f32,
     offset_y: f32,
+    lower: Vec<u16>,
+    upper: Vec<u16>,
+    passages_down: Vec<u8>,
+    passages_up: Vec<u8>,
 }
 
 fn main() -> AppExit {
@@ -53,11 +59,11 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
 
     let map: Map = load_ron(&format!("{ASSET_ROOT}/maps/map_0001.ron"));
     let chipsets: Vec<Chipset> = load_ron(&format!("{ASSET_ROOT}/chipsets.ron"));
-    let graphic = chipsets
-        .iter()
-        .find(|c| c.id == map.chipset_id)
-        .map(|c| c.graphic.clone())
-        .unwrap_or_default();
+    let entry = chipsets.into_iter().find(|c| c.id == map.chipset_id);
+    let (graphic, passages_down, passages_up) = match entry {
+        Some(c) => (c.graphic, c.passages_down, c.passages_up),
+        None => (String::new(), vec![0x0F; 162], vec![0x0F; 144]),
+    };
     let chipset = asset_server.load(resolve_chipset_png(&graphic));
 
     let width = map.width as i32;
@@ -79,13 +85,12 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         }
     }
 
-    commands.insert_resource(MapGeometry { offset_x, offset_y });
-
     let start_x = width / 2;
     let start_y = map.height as i32 / 2;
     let player_charset = asset_server.load(format!("graphics/CharSet/{PLAYER_CHARSET}.png"));
     let (source_x, source_y) = tiles::charset_source(PLAYER_INDEX, DIR_DOWN, 1);
-    let (world_x, world_y) = tile_center(start_x, start_y, &MapGeometry { offset_x, offset_y });
+    let world_x = start_x as f32 * tiles::TILE - offset_x + tiles::TILE / 2.0;
+    let world_y = offset_y - start_y as f32 * tiles::TILE - tiles::TILE / 2.0;
     commands.spawn((
         Player { tile_x: start_x, tile_y: start_y, dir: DIR_DOWN, frame: 1 },
         Sprite {
@@ -101,11 +106,22 @@ fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         },
         Transform::from_xyz(world_x, world_y, 2.0),
     ));
+
+    commands.insert_resource(MapData {
+        width,
+        height: map.height as i32,
+        offset_x,
+        offset_y,
+        lower: map.lower,
+        upper: map.upper,
+        passages_down,
+        passages_up,
+    });
 }
 
-fn tile_center(tile_x: i32, tile_y: i32, geom: &MapGeometry) -> (f32, f32) {
-    let x = tile_x as f32 * tiles::TILE - geom.offset_x + tiles::TILE / 2.0;
-    let y = geom.offset_y - tile_y as f32 * tiles::TILE - tiles::TILE / 2.0;
+fn tile_center(tile_x: i32, tile_y: i32, data: &MapData) -> (f32, f32) {
+    let x = tile_x as f32 * tiles::TILE - data.offset_x + tiles::TILE / 2.0;
+    let y = data.offset_y - tile_y as f32 * tiles::TILE - tiles::TILE / 2.0;
     (x, y)
 }
 
@@ -141,7 +157,7 @@ fn spawn_tile(
     ));
 }
 
-fn move_player(keys: Res<ButtonInput<KeyCode>>, mut players: Query<&mut Player>) {
+fn move_player(keys: Res<ButtonInput<KeyCode>>, data: Res<MapData>, mut players: Query<&mut Player>) {
     let Ok(mut player) = players.single_mut() else {
         return;
     };
@@ -157,15 +173,21 @@ fn move_player(keys: Res<ButtonInput<KeyCode>>, mut players: Query<&mut Player>)
         None
     };
     if let Some((dx, dy, dir)) = step {
-        player.tile_x += dx;
-        player.tile_y += dy;
         player.dir = dir;
-        player.frame = (player.frame + 1) % 3;
+        let (nx, ny) = (player.tile_x + dx, player.tile_y + dy);
+        if nx >= 0 && ny >= 0 && nx < data.width && ny < data.height {
+            let idx = (ny * data.width + nx) as usize;
+            if tiles::passable(data.lower[idx], data.upper[idx], &data.passages_down, &data.passages_up) {
+                player.tile_x = nx;
+                player.tile_y = ny;
+                player.frame = (player.frame + 1) % 3;
+            }
+        }
     }
 }
 
 fn update_player_sprite(
-    geom: Res<MapGeometry>,
+    data: Res<MapData>,
     mut players: Query<(&Player, &mut Sprite, &mut Transform), Changed<Player>>,
 ) {
     for (player, mut sprite, mut transform) in &mut players {
@@ -176,7 +198,7 @@ fn update_player_sprite(
             source_x + tiles::CHAR_W,
             source_y + tiles::CHAR_H,
         ));
-        let (world_x, world_y) = tile_center(player.tile_x, player.tile_y, &geom);
+        let (world_x, world_y) = tile_center(player.tile_x, player.tile_y, &data);
         transform.translation.x = world_x;
         transform.translation.y = world_y;
     }

@@ -63,6 +63,43 @@ pub fn charset_source(char_index: u32, dir_row: u32, frame_col: u32) -> (f32, f3
     (x as f32, y as f32)
 }
 
+fn passages_lower_index(id: u16) -> Option<usize> {
+    if id < 3000 {
+        Some((id / 1000) as usize)
+    } else if (4000..4600).contains(&id) {
+        Some((id - 4000) as usize / 50 + 6)
+    } else if (5000..=5143).contains(&id) {
+        Some((id - 5000) as usize + 18)
+    } else {
+        None
+    }
+}
+
+/// Whether the hero can stand on a cell with the given lower/upper tile ids,
+/// per the active chipset's passability arrays (`passages_down` is 162 bytes,
+/// `passages_up` 144; each byte's low nibble is the 4 direction-passable bits).
+/// An upper-layer obstacle (e.g. a fence) blocks movement over passable ground.
+pub fn passable(lower_id: u16, upper_id: u16, passages_down: &[u8], passages_up: &[u8]) -> bool {
+    let lower = passages_lower_index(lower_id)
+        .and_then(|i| passages_down.get(i))
+        .copied()
+        .unwrap_or(0x0F);
+    let mask = if upper_id <= 10000 {
+        lower & 0x0F
+    } else {
+        let upper = passages_up
+            .get((upper_id - 10000) as usize)
+            .copied()
+            .unwrap_or(0x0F);
+        if upper & 0x10 == 0 {
+            upper & 0x0F
+        } else {
+            (upper & 0x0F) & (lower & 0x0F)
+        }
+    };
+    mask != 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,5 +138,16 @@ mod tests {
     #[test]
     fn charset_block_origin_for_index_five() {
         assert_eq!(charset_source(5, 0, 0), (72.0, 128.0));
+    }
+
+    #[test]
+    fn passable_grass_water_and_upper_obstacle() {
+        let mut down = vec![0x0F; 162];
+        down[0] = 0x00;
+        let mut up = vec![0x0F; 144];
+        up[30] = 0x00;
+        assert!(passable(4050, 10000, &down, &up));
+        assert!(!passable(40, 10000, &down, &up));
+        assert!(!passable(4000, 10030, &down, &up));
     }
 }
