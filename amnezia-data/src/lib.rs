@@ -87,3 +87,30 @@ pub struct Start {
 pub struct Hero {
     pub name: String,
 }
+
+/// A playable actor's definition, read by the status and equip menus: its
+/// 1-based id, name and class title, its starting and maximum level, and the
+/// HP/SP it begins with (taken from the level-parameter curve at `level`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActorDef {
+    pub id: u32,
+    pub name: String,
+    pub title: String,
+    pub level: u32,
+    pub max_level: u32,
+    pub hp: u32,
+    pub sp: u32,
+}
+
+/// An item's definition, read by the shop and item menus: its 1-based id, name,
+/// description, category (`item_type`: 0 normal, 1 weapon, 2 shield, 3 armor,
+/// 4 helmet, 5 accessory, 6 medicine, 7 book, 8 material, 9 special,
+/// 10 switch), and buy price.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ItemDef {
+    pub id: u32,
+    pub name: String,
+    pub description: String,
+    pub item_type: u32,
+    pub price: u32,
+}

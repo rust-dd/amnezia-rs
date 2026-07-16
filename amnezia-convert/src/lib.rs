@@ -1,7 +1,7 @@
 //! Offline converter from the original RPG Maker 2000 project to the clean
 //! intermediate assets the game consumes.
 
-use amnezia_data::{Chipset, Event, EventCommand, EventPage, Hero, Map, Start};
+use amnezia_data::{ActorDef, Chipset, Event, EventCommand, EventPage, Hero, ItemDef, Map, Start};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -200,16 +200,77 @@ pub fn convert_hero(input: &Path, output: &Path) -> Result<String> {
     Ok(name)
 }
 
+/// Convert the actor table in `input/RPG_RT.ldb` into `output/actors.ron` (each
+/// actor's id, name, class title, levels, and starting HP/SP), returning the
+/// number of actors written. The status and equip menus read it.
+pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed = lcf::parse_actors(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let actors: Vec<ActorDef> = parsed
+        .into_iter()
+        .map(|a| ActorDef {
+            id: a.id,
+            name: a.name,
+            title: a.title,
+            level: a.initial_level,
+            max_level: a.max_level,
+            hp: a.initial_hp,
+            sp: a.initial_sp,
+        })
+        .collect();
+    let count = actors.len();
+    let serialised = ron::to_string(&actors).context("serialising actors to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("actors.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("actors.ron").display()))?;
+    Ok(count)
+}
+
+/// Convert the item table in `input/RPG_RT.ldb` into `output/items.ron` (each
+/// item's id, name, description, category, and price), returning the number of
+/// items written. The shop and item menus read it.
+pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed = lcf::parse_items(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let items: Vec<ItemDef> = parsed
+        .into_iter()
+        .map(|i| ItemDef {
+            id: i.id,
+            name: i.name,
+            description: i.description,
+            item_type: i.item_type,
+            price: i.price,
+        })
+        .collect();
+    let count = items.len();
+    let serialised = ron::to_string(&items).context("serialising items to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("items.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("items.ron").display()))?;
+    Ok(count)
+}
+
 /// Copy the game's audio into `output/audio/`: sound effects (`Sound/*.wav`,
-/// which Bevy plays directly) and music (`Music/*.mid`, staged for a later
-/// MIDI-to-audio step). Returns `(sound_effects, music_tracks)` copied.
+/// which Bevy plays directly) and music (`Music/*`). Music is mostly `*.mid`,
+/// staged for a later MIDI-to-audio step, but a handful of ambient loops ship as
+/// `*.wav` and play directly. Returns `(sound_effects, music_tracks)` copied.
 pub fn convert_audio(input: &Path, output: &Path) -> Result<(usize, usize)> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
     }
     let audio = output.join("audio");
     let effects = copy_audio_dir(&input.join("Sound"), &audio.join("Sound"), "wav")?;
-    let music = copy_audio_dir(&input.join("Music"), &audio.join("Music"), "mid")?;
+    let music_out = audio.join("Music");
+    let music = copy_audio_dir(&input.join("Music"), &music_out, "mid")?
+        + copy_audio_dir(&input.join("Music"), &music_out, "wav")?;
     Ok((effects, music))
 }
 
