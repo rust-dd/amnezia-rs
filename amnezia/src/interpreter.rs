@@ -24,6 +24,15 @@ const WAIT: u32 = 11410;
 const CONDITIONAL_BRANCH: u32 = 12010;
 const ELSE_BRANCH: u32 = 22010;
 const END_BRANCH: u32 = 22011;
+const ENEMY_ENCOUNTER: u32 = 10710;
+const OPEN_SHOP: u32 = 10720;
+const SHOW_INN: u32 = 10730;
+
+/// Subsystem block openers not yet implemented, paired with their terminator
+/// sub-code. The whole block is skipped so its branch-selector sub-codes
+/// (VictoryHandler, Transaction, …) don't all execute in sequence.
+const SKIP_BLOCKS: &[(u32, u32)] =
+    &[(ENEMY_ENCOUNTER, 20713), (OPEN_SHOP, 20722), (SHOW_INN, 20732)];
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
 /// that never advances) can't lock up the frame. Well-formed pages never
@@ -156,6 +165,15 @@ fn run_interpreter(
             END_BRANCH => {
                 // The block terminator does nothing; flow continues past it.
                 running.ip += 1;
+            }
+            ENEMY_ENCOUNTER | OPEN_SHOP | SHOW_INN => {
+                let terminator = SKIP_BLOCKS
+                    .iter()
+                    .find(|(opener, _)| *opener == command.code)
+                    .map(|(_, terminator)| *terminator)
+                    .unwrap_or(0);
+                running.ip =
+                    skip_to_terminator(&running.commands, running.ip, command.indent, terminator);
             }
             _ => {
                 // Every not-yet-supported command (movement, audio, screen
@@ -297,12 +315,30 @@ fn skip_else_body(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
     j
 }
 
+/// Index just past a subsystem block's terminator: the first command at
+/// `indent` whose `code == terminator`, plus one (or the end of the list).
+fn skip_to_terminator(commands: &[EventCommand], ip: usize, indent: u32, terminator: u32) -> usize {
+    let mut j = ip + 1;
+    while j < commands.len() && !(commands[j].code == terminator && commands[j].indent == indent) {
+        j += 1;
+    }
+    (j + 1).min(commands.len())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn cmd(code: u32, indent: u32) -> EventCommand {
         EventCommand { code, indent, string: String::new(), params: Vec::new() }
+    }
+
+    #[test]
+    fn skips_whole_subsystem_block() {
+        // 0: EnemyEncounter@0  1: VictoryHandler@0  2: body@1  3: EndBattle@0  4: after@0
+        let commands =
+            vec![cmd(10710, 0), cmd(20710, 0), cmd(10210, 1), cmd(20713, 0), cmd(10110, 0)];
+        assert_eq!(skip_to_terminator(&commands, 0, 0, 20713), 4);
     }
 
     #[test]
