@@ -64,8 +64,8 @@ impl Fighter {
 /// battle backdrop (RM2000 320×240 pixel space).
 pub struct Foe {
     pub name: String,
+    pub battler: String,
     pub hp: i32,
-    pub max_hp: i32,
     pub stats: Stats,
     pub exp: u32,
     pub gold: u32,
@@ -163,8 +163,8 @@ impl Battle {
             .filter_map(|m| {
                 monsters.iter().find(|d| d.id == m.enemy_id).map(|d| Foe {
                     name: d.name.clone(),
+                    battler: d.battler.clone(),
                     hp: d.max_hp as i32,
-                    max_hp: d.max_hp as i32,
                     stats: Stats::from_monster(d),
                     exp: d.exp,
                     gold: d.gold,
@@ -330,6 +330,7 @@ pub(super) mod testkit {
         MonsterDef {
             id,
             name: format!("M{id}"),
+            battler: String::new(),
             max_hp: hp,
             max_sp: 0,
             attack: 20,

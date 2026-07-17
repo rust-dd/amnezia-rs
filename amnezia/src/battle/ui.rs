@@ -65,7 +65,7 @@ pub fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<A
 fn sync_enemies(
     mut commands: Commands,
     battle: Res<Battle>,
-    font: Res<GameFont>,
+    asset_server: Res<AssetServer>,
     roots: Query<Entity, With<BattleRoot>>,
     nodes: Query<Entity, With<EnemyNode>>,
     mut synced: Local<u64>,
@@ -87,13 +87,13 @@ fn sync_enemies(
                     position_type: PositionType::Absolute,
                     left: Val::Percent(foe.x as f32 / FIELD_W * 100.0),
                     top: Val::Percent(foe.y as f32 / FIELD_H * 100.0),
-                    padding: UiRect::all(Val::Px(4.0)),
                     ..default()
                 },
-                BackgroundColor(enemy_color(index, true, false)),
-                Text::new(String::new()),
-                text_font(&font, 13.0),
-                TextColor(Color::WHITE),
+                ImageNode {
+                    image: asset_server.load(resolve_png("Monster", &foe.battler)),
+                    color: enemy_tint(true, false),
+                    ..default()
+                },
                 ZIndex(1),
                 EnemyNode { index },
             ));
@@ -110,12 +110,12 @@ fn update_ui(
     inventory: Res<Inventory>,
     asset_server: Res<AssetServer>,
     mut root: Query<&mut Visibility, With<BattleRoot>>,
-    mut backdrop: Query<&mut ImageNode, With<BattleBg>>,
+    mut backdrop: Query<&mut ImageNode, (With<BattleBg>, Without<EnemyNode>)>,
     mut texts: ParamSet<(
         Query<&mut Text, With<LogText>>,
         Query<&mut Text, With<CommandText>>,
         Query<&mut Text, With<StatusText>>,
-        Query<(&EnemyNode, &mut Text, &mut BackgroundColor)>,
+        Query<(&EnemyNode, &mut ImageNode), Without<BattleBg>>,
     )>,
 ) {
     if !battle.is_changed() {
@@ -144,14 +144,9 @@ fn update_ui(
     if let Ok(mut text) = texts.p2().single_mut() {
         **text = compose_status(&battle);
     }
-    for (node, mut text, mut color) in &mut texts.p3() {
+    for (node, mut image) in &mut texts.p3() {
         if let Some(foe) = battle.enemies.get(node.index) {
-            **text = format!("{}\n{}/{}", foe.name, foe.hp.max(0), foe.max_hp);
-            *color = BackgroundColor(enemy_color(
-                node.index,
-                foe.alive(),
-                targeted(&battle, node.index),
-            ));
+            image.color = enemy_tint(foe.alive(), targeted(&battle, node.index));
         }
     }
 }
@@ -240,22 +235,17 @@ fn targeted(battle: &Battle, index: usize) -> bool {
     living.get(battle.cursor.min(living.len().saturating_sub(1))) == Some(&index)
 }
 
-/// Enemy placeholder tint: dim when dead, gold when targeted, else a per-slot hue.
-fn enemy_color(index: usize, alive: bool, targeted: bool) -> Color {
+/// The tint applied to an enemy battler sprite: faded and dark once it's dead,
+/// a warm gold glow while it's the current target, and its natural colours
+/// (white, no tint) otherwise.
+fn enemy_tint(alive: bool, targeted: bool) -> Color {
     if !alive {
-        return Color::srgba(0.1, 0.1, 0.1, 0.4);
+        return Color::srgba(0.35, 0.35, 0.35, 0.5);
     }
     if targeted {
-        return Color::srgba(0.95, 0.75, 0.2, 0.92);
+        return Color::srgb(1.0, 0.9, 0.55);
     }
-    const HUES: [(f32, f32, f32); 4] = [
-        (0.6, 0.2, 0.25),
-        (0.2, 0.35, 0.55),
-        (0.3, 0.45, 0.25),
-        (0.5, 0.3, 0.5),
-    ];
-    let (r, g, b) = HUES[index % HUES.len()];
-    Color::srgba(r, g, b, 0.85)
+    Color::WHITE
 }
 
 /// Spawn a windowskin panel (frame + tint + text) carrying text `marker`.
