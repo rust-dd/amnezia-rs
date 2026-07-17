@@ -115,6 +115,19 @@ pub struct ItemDef {
     pub price: u32,
 }
 
+/// A skill (spell/ability) definition, read by the skill menu and battle
+/// system: its 1-based id, name, description, `sp_cost` (SP spent to cast),
+/// `power` (base effect magnitude), and `hit` (base success rate, percent).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SkillDef {
+    pub id: u32,
+    pub name: String,
+    pub description: String,
+    pub sp_cost: u32,
+    pub power: u32,
+    pub hit: u32,
+}
+
 /// A monster's definition, read by the battle system: its 1-based id, name, the
 /// combat stats (`max_hp`, `max_sp`, `attack`, `defense`, `spirit`, `agility`),
 /// and the `exp`/`gold` reward for defeating it.

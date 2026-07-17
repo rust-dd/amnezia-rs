@@ -8,15 +8,15 @@
 //! never linked into the shipped game binary.
 //!
 //! Parsing is split by file: [`map`] handles map units and the map tree, and
-//! [`database`] handles the `RPG_RT.ldb` chipset, actor, item, monster, and
-//! troop tables.
+//! [`database`] handles the `RPG_RT.ldb` chipset, actor, skill, item, monster,
+//! and troop tables.
 
 mod database;
 mod map;
 
 pub use database::{
-    parse_actors, parse_chipsets, parse_items, parse_monsters, parse_troops, Actor, Chipset, Item,
-    Monster, Troop, TroopMember,
+    parse_actors, parse_chipsets, parse_items, parse_monsters, parse_skills, parse_troops, Actor,
+    Chipset, Item, Monster, Skill, Troop, TroopMember,
 };
 pub use map::{
     parse_map, parse_start, Event, EventCommand, EventCondition, EventPage, MapUnit, Start,
@@ -37,6 +37,8 @@ pub enum LcfError {
     MissingChipsets,
     #[error("LCF database has no actor section (chunk 0x0B)")]
     MissingActors,
+    #[error("LCF database has no skill section (chunk 0x0C)")]
+    MissingSkills,
     #[error("LCF database has no item section (chunk 0x0D)")]
     MissingItems,
     #[error("LCF database has no enemy section (chunk 0x0E)")]

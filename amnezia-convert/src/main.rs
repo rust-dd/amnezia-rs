@@ -23,6 +23,7 @@ fn main() -> Result<()> {
     let chipsets = amnezia_convert::convert_chipsets(&args.input, &args.output)?;
     let actors = amnezia_convert::convert_actors(&args.input, &args.output)?;
     let items = amnezia_convert::convert_items(&args.input, &args.output)?;
+    let skills = amnezia_convert::convert_skills(&args.input, &args.output)?;
     let monsters = amnezia_convert::convert_monsters(&args.input, &args.output)?;
     let troops = amnezia_convert::convert_troops(&args.input, &args.output)?;
     let start_map = amnezia_convert::convert_start(&args.input, &args.output)?;
@@ -30,8 +31,8 @@ fn main() -> Result<()> {
     let (effects, music) = amnezia_convert::convert_audio(&args.input, &args.output)?;
     println!(
         "converted {images} images, {maps} maps, {chipsets} chipsets, {actors} actors, \
-         {items} items, {monsters} monsters, {troops} troops, {effects} sfx, {music} music; \
-         start map {start_map}; hero {hero}"
+         {items} items, {skills} skills, {monsters} monsters, {troops} troops, {effects} sfx, \
+         {music} music; start map {start_map}; hero {hero}"
     );
     Ok(())
 }

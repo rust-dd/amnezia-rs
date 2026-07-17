@@ -2,8 +2,8 @@
 //! intermediate assets the game consumes.
 
 use amnezia_data::{
-    ActorDef, Chipset, Event, EventCommand, EventPage, Hero, ItemDef, Map, MonsterDef, Start,
-    TroopDef, TroopMemberDef,
+    ActorDef, Chipset, Event, EventCommand, EventPage, Hero, ItemDef, Map, MonsterDef, SkillDef,
+    Start, TroopDef, TroopMemberDef,
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -258,6 +258,35 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
     std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
     std::fs::write(output.join("items.ron"), serialised)
         .with_context(|| format!("writing {}", output.join("items.ron").display()))?;
+    Ok(count)
+}
+
+/// Convert the skill table in `input/RPG_RT.ldb` into `output/skills.ron` (each
+/// skill's id, name, description, SP cost, power, and hit rate), returning the
+/// number of skills written. The skill menu and battle system read it.
+pub fn convert_skills(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed = lcf::parse_skills(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let skills: Vec<SkillDef> = parsed
+        .into_iter()
+        .map(|s| SkillDef {
+            id: s.id,
+            name: s.name,
+            description: s.description,
+            sp_cost: s.sp_cost,
+            power: s.power,
+            hit: s.hit,
+        })
+        .collect();
+    let count = skills.len();
+    let serialised = ron::to_string(&skills).context("serialising skills to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("skills.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("skills.ron").display()))?;
     Ok(count)
 }
 
