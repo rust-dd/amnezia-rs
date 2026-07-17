@@ -8,18 +8,19 @@ use crate::appearance::SpriteChange;
 use crate::audio::AudioRequest;
 use crate::battle::{BattleActive, BattleOutcome, BattleRequest, BattleResult};
 use crate::choice::Choice;
-use crate::dialogue::Dialogue;
+use crate::dialogue::{Dialogue, MessagePosition};
 use crate::events::message_boxes;
 use crate::gameover::GameOverActive;
 use crate::inputnumber::InputNumber;
 use crate::menu::MenuOpen;
 use crate::picture::PictureCommand;
-use crate::player::Player;
-use crate::screenfx::ScreenEffect;
-use crate::shop::{ShopOpen, ShopRequest};
+use crate::player::{CameraPan, HeroTransparency, Player};
+use crate::screenfx::{ScreenEffect, Weather};
+use crate::shop::{ShopOpen, ShopOutcome, ShopRequest};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::{Fade, PendingTeleport};
 use crate::text::{self, HeroName};
+use crate::timer::GameClock;
 use crate::title::TitleActive;
 use crate::vitals::Vitals;
 use crate::world::{EventSprite, MapEvents, MoveQueue, RelocateEvent, decode_route};
@@ -70,6 +71,12 @@ pub struct SubsystemIo<'w> {
     input_number: ResMut<'w, InputNumber>,
     sprite_writer: MessageWriter<'w, SpriteChange>,
     relocate_writer: MessageWriter<'w, RelocateEvent>,
+    camera_pan: ResMut<'w, CameraPan>,
+    hero_transparency: ResMut<'w, HeroTransparency>,
+    weather: ResMut<'w, Weather>,
+    message_position: ResMut<'w, MessagePosition>,
+    game_clock: ResMut<'w, GameClock>,
+    shop_outcome: Res<'w, ShopOutcome>,
 }
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
@@ -100,6 +107,10 @@ pub struct RunningEvent {
     /// Set while an `InputNumber` box is open: holds the event paused until the
     /// player confirms, then the entered value is written to the target variable.
     input_pending: bool,
+    /// The merchant screen's result while a shop/inn block runs its handlers:
+    /// Transaction/Stay (`true`) or NoTransaction/Cancel (`false`) self-selects,
+    /// then `EndShop`/`EndInn` clears it. Mirrors `battle_outcome`.
+    shop_transacted: Option<bool>,
 }
 
 impl RunningEvent {
@@ -130,6 +141,7 @@ impl RunningEvent {
         self.battle_outcome = None;
         self.shop_pending = false;
         self.input_pending = false;
+        self.shop_transacted = None;
         self.active = true;
     }
 
@@ -145,6 +157,7 @@ impl RunningEvent {
         self.battle_outcome = None;
         self.shop_pending = false;
         self.input_pending = false;
+        self.shop_transacted = None;
     }
 
     /// Self-select an `EnemyEncounter` outcome handler: run its body (advance into
@@ -152,6 +165,17 @@ impl RunningEvent {
     /// handler or the block terminator. Mirrors the `ShowChoice` option arms.
     fn select_battle_handler(&mut self, indent: u32, want: BattleOutcome) {
         if self.battle_outcome == Some(want) {
+            self.ip += 1;
+        } else {
+            self.ip = skip_battle_handler(&self.commands, self.ip, indent);
+        }
+    }
+
+    /// Self-select a shop/inn outcome handler: run its body when the merchant
+    /// result matches `want` (Transaction/Stay = `true`, NoTransaction/Cancel =
+    /// `false`), else skip to the next handler or the block terminator.
+    fn select_shop_handler(&mut self, indent: u32, want: bool) {
+        if self.shop_transacted == Some(want) {
             self.ip += 1;
         } else {
             self.ip = skip_battle_handler(&self.commands, self.ip, indent);
@@ -236,11 +260,12 @@ fn run_interpreter(
     // empty ShowChoice skips itself. The shop transacts on the inventory directly,
     // so neither branch body runs.
     if running.shop_pending {
-        if let Some((code, indent)) = running.commands.get(running.ip).map(|c| (c.code, c.indent)) {
-            let terminator = if code == OPEN_SHOP { END_SHOP } else { END_INN };
-            running.ip = skip_to_terminator(&running.commands, running.ip, indent, terminator);
-        }
+        // The merchant screen closed: record whether a trade happened and step into
+        // the block so the Transaction/Stay (or NoTransaction/Cancel) handler arms
+        // self-select, mirroring the battle-outcome handlers.
+        running.shop_transacted = Some(subsystems.shop_outcome.transacted);
         running.shop_pending = false;
+        running.ip += 1;
     }
     // Resume after the player entered a number: store it in the target variable,
     // then step past the InputNumber command.
@@ -355,6 +380,65 @@ fn run_interpreter(
                 }
                 running.ip += 1;
             }
+            MESSAGE_OPTIONS => {
+                *subsystems.message_position = match command.params.get(1).copied().unwrap_or(2) {
+                    0 => MessagePosition::Top,
+                    1 => MessagePosition::Middle,
+                    _ => MessagePosition::Bottom,
+                };
+                running.ip += 1;
+            }
+            TIMER => {
+                match command.params.first().copied().unwrap_or(0) {
+                    0 => subsystems
+                        .game_clock
+                        .set_secs(command.params.get(2).copied().unwrap_or(0).max(0) as u32),
+                    1 => subsystems.game_clock.start(),
+                    2 => subsystems.game_clock.stop(),
+                    _ => {}
+                }
+                running.ip += 1;
+            }
+            PAN_SCREEN => {
+                // op 2 = pan by `dist` tiles in `dir`; op 3 = return; lock/unlock ignored.
+                let op = command.params.first().copied().unwrap_or(0);
+                if op == 3 {
+                    subsystems.camera_pan.target = Vec2::ZERO;
+                } else if op == 2 {
+                    let dist =
+                        command.params.get(2).copied().unwrap_or(0).max(0) as f32 * crate::tiles::TILE;
+                    let speed = command.params.get(3).copied().unwrap_or(4).max(1) as f32;
+                    let delta = match command.params.get(1).copied().unwrap_or(0) {
+                        0 => Vec2::new(0.0, dist),
+                        1 => Vec2::new(dist, 0.0),
+                        2 => Vec2::new(0.0, -dist),
+                        _ => Vec2::new(-dist, 0.0),
+                    };
+                    subsystems.camera_pan.target += delta;
+                    subsystems.camera_pan.speed = speed * crate::tiles::TILE * 2.0;
+                }
+                running.ip += 1;
+            }
+            WEATHER => {
+                *subsystems.weather = match command.params.first().copied().unwrap_or(0) {
+                    1 => Weather::Rain,
+                    2 => Weather::Snow,
+                    3 => Weather::Fog,
+                    _ => Weather::None,
+                };
+                running.ip += 1;
+            }
+            PLAYER_TRANSPARENCY => {
+                subsystems.hero_transparency.0 =
+                    u8::from(command.params.first().copied().unwrap_or(0) != 0) * 7;
+                running.ip += 1;
+            }
+            TRANSACTION | INN_STAY => running.select_shop_handler(command.indent, true),
+            NO_TRANSACTION | INN_CANCEL => running.select_shop_handler(command.indent, false),
+            END_SHOP | END_INN => {
+                running.shop_transacted = None;
+                running.ip += 1;
+            }
             WAIT => {
                 running.wait = command.params.first().copied().unwrap_or(0) as f32 / 10.0;
                 running.ip += 1;
@@ -371,7 +455,20 @@ fn run_interpreter(
                 return;
             }
             CONDITIONAL_BRANCH => {
-                if branch_holds(&command.params, &switches, &variables, &party, &inventory) {
+                // Timer conditional (type 2) compares the running clock; the rest
+                // are pure state checks in `branch_holds`.
+                let holds = if command.params.first().copied() == Some(2) {
+                    let target = command.params.get(1).copied().unwrap_or(0).max(0) as u32;
+                    let secs = subsystems.game_clock.seconds();
+                    if command.params.get(2).copied().unwrap_or(0) == 0 {
+                        secs >= target
+                    } else {
+                        secs <= target
+                    }
+                } else {
+                    branch_holds(&command.params, &switches, &variables, &party, &inventory)
+                };
+                if holds {
                     running.ip += 1;
                 } else {
                     running.ip = skip_true_body(&running.commands, running.ip, command.indent);

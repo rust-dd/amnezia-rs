@@ -26,6 +26,21 @@ pub(super) const INPUT_NUMBER: u32 = 10150;
 pub(super) const CHANGE_SPRITE: u32 = 10630;
 /// Move an event to a tile: `params = [event_ref, mode, x, y]` (mode 1 = coords from variables).
 pub(super) const CHANGE_EVENT_LOCATION: u32 = 10860;
+/// Message-box options: `params = [transparent, position(0 top/1 mid/2 bottom), …]`.
+pub(super) const MESSAGE_OPTIONS: u32 = 10120;
+/// Timer operation: `params = [op(0 set/1 start/2 stop), _, seconds, …]`.
+pub(super) const TIMER: u32 = 10230;
+/// Pan the map view: `params = [op(2 pan/3 return/0 lock/1 unlock), dir, dist, speed, _]`.
+pub(super) const PAN_SCREEN: u32 = 11060;
+/// Weather effect: `params = [type(0 none/1 rain/2 snow/3 fog), strength]`.
+pub(super) const WEATHER: u32 = 11070;
+/// Hero transparency: `params = [flag]` (1 = transparent, 0 = opaque).
+pub(super) const PLAYER_TRANSPARENCY: u32 = 11310;
+/// Shop/inn outcome handlers, self-selected like the battle handlers (param-less).
+pub(super) const TRANSACTION: u32 = 20720;
+pub(super) const NO_TRANSACTION: u32 = 20721;
+pub(super) const INN_STAY: u32 = 20730;
+pub(super) const INN_CANCEL: u32 = 20731;
 
 /// The `EnemyEncounter` block's outcome handlers and terminator: the interpreter
 /// runs the body under the handler matching the finished battle outcome, skips
