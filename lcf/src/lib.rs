@@ -15,7 +15,8 @@ mod database;
 mod map;
 
 pub use database::{
-    Actor, Attribute, Chipset, CommonEvent, Item, Monster, Skill, StatCurves, State, Troop,
+    Actor, Attribute, Chipset, CommonEvent, EnemyAction, Item, Monster, Skill, StatCurves, State,
+    Troop,
     TroopMember, parse_actors, parse_attributes, parse_chipsets, parse_common_events, parse_items,
     parse_monsters, parse_skills, parse_states, parse_troops,
 };

@@ -267,6 +267,9 @@ mod tests {
                 agility: 8,
                 exp: 10,
                 gold: 30,
+                attribute_ranks: vec![],
+                state_ranks: vec![],
+                actions: vec![],
             }],
             troops: vec![TroopDef {
                 id: DEBUG_TROOP,

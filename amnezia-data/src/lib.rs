@@ -314,6 +314,28 @@ pub struct MonsterDef {
     pub agility: u32,
     pub exp: u32,
     pub gold: u32,
+    #[serde(default)]
+    pub attribute_ranks: Vec<u8>,
+    #[serde(default)]
+    pub state_ranks: Vec<u8>,
+    #[serde(default)]
+    pub actions: Vec<EnemyActionDef>,
+}
+
+/// One entry in a monster's battle-AI list (see `lcf::EnemyAction`): the action
+/// family (`kind`/`basic`), the `skill_id`/`enemy_id` it targets, the condition
+/// gating it (`condition_type` + `condition_min`/`condition_max`), and its
+/// `priority` for tie-breaking.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnemyActionDef {
+    pub kind: u32,
+    pub basic: u32,
+    pub skill_id: u32,
+    pub enemy_id: u32,
+    pub condition_type: u32,
+    pub condition_min: u32,
+    pub condition_max: u32,
+    pub priority: u32,
 }
 
 /// One member of a troop: the `enemy_id` of the monster (matching a

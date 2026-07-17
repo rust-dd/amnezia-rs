@@ -495,6 +495,22 @@ pub fn convert_monsters(input: &Path, output: &Path) -> Result<usize> {
             agility: m.agility,
             exp: m.exp,
             gold: m.gold,
+            attribute_ranks: m.attribute_ranks,
+            state_ranks: m.state_ranks,
+            actions: m
+                .actions
+                .into_iter()
+                .map(|a| amnezia_data::EnemyActionDef {
+                    kind: a.kind,
+                    basic: a.basic,
+                    skill_id: a.skill_id,
+                    enemy_id: a.enemy_id,
+                    condition_type: a.condition_type,
+                    condition_min: a.condition_min,
+                    condition_max: a.condition_max,
+                    priority: a.priority,
+                })
+                .collect(),
         })
         .collect();
     let count = monsters.len();

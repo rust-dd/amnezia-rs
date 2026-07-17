@@ -361,6 +361,9 @@ pub(super) mod testkit {
             agility: 8,
             exp,
             gold,
+            attribute_ranks: vec![],
+            state_ranks: vec![],
+            actions: vec![],
         }
     }
 

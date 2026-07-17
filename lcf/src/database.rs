@@ -20,7 +20,7 @@ pub use actors::{Actor, StatCurves, parse_actors};
 pub use attributes::{Attribute, parse_attributes};
 pub use common_events::{CommonEvent, parse_common_events};
 pub use items::{Item, parse_items};
-pub use monsters::{Monster, parse_monsters};
+pub use monsters::{EnemyAction, Monster, parse_monsters};
 pub use skills::{Skill, parse_skills};
 pub use states::{State, parse_states};
 pub use troops::{Troop, TroopMember, parse_troops};

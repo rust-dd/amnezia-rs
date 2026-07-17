@@ -91,6 +91,9 @@ fn converts_ldb_to_monsters_ron() {
             agility: 0,
             exp: 1500,
             gold: 800,
+            attribute_ranks: vec![],
+            state_ranks: vec![],
+            actions: vec![],
         }
     );
     assert_eq!(monsters[1].name, "Slime");
