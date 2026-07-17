@@ -3,6 +3,7 @@
 //! interpreter opens boxes via [`Dialogue::open`]; this module renders them and
 //! advances/closes them on the action key.
 
+use crate::assets::resolve_png;
 use crate::events::MessageBox;
 use crate::font::GameFont;
 use crate::interpreter::RunningEvent;
@@ -36,6 +37,12 @@ struct DialoguePanel;
 
 #[derive(Component)]
 struct DialogueText;
+
+#[derive(Component)]
+struct DialogueFace;
+
+/// One RM2000 FaceSet face is 48×48 pixels, laid out in a 4×4 grid.
+const FACE_SIZE: f32 = 48.0;
 
 pub struct DialoguePlugin;
 
@@ -91,6 +98,19 @@ fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<Asset
                 },
             ));
             panel.spawn((
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(4.0),
+                    top: Val::Px(4.0),
+                    width: Val::Px(FACE_SIZE),
+                    height: Val::Px(FACE_SIZE),
+                    ..default()
+                },
+                ImageNode::default(),
+                Visibility::Hidden,
+                DialogueFace,
+            ));
+            panel.spawn((
                 Text::new(String::new()),
                 TextFont {
                     font: FontSource::Handle(font.0.clone()),
@@ -98,6 +118,7 @@ fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<Asset
                     ..default()
                 },
                 TextColor(Color::WHITE),
+                Node { ..default() },
                 DialogueText,
             ));
         });
@@ -170,10 +191,13 @@ fn interact(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn update_ui(
     dialogue: Res<Dialogue>,
-    mut panels: Query<&mut Visibility, With<DialoguePanel>>,
-    mut texts: Query<&mut Text, With<DialogueText>>,
+    asset_server: Res<AssetServer>,
+    mut panels: Query<&mut Visibility, (With<DialoguePanel>, Without<DialogueFace>)>,
+    mut texts: Query<(&mut Text, &mut Node), With<DialogueText>>,
+    mut faces: Query<(&mut ImageNode, &mut Visibility), (With<DialogueFace>, Without<DialoguePanel>)>,
 ) {
     if !dialogue.is_changed() {
         return;
@@ -182,7 +206,28 @@ fn update_ui(
     if let Ok(mut visibility) = panels.single_mut() {
         *visibility = if showing { Visibility::Visible } else { Visibility::Hidden };
     }
-    if showing && let Ok(mut text) = texts.single_mut() {
-        **text = dialogue.boxes[dialogue.index].lines.join("\n");
+    let current = if showing { dialogue.boxes.get(dialogue.index) } else { None };
+    let face = current.and_then(|b| b.face.as_ref().map(|name| (name.clone(), b.face_index)));
+    if let Ok((mut image, mut visibility)) = faces.single_mut() {
+        match &face {
+            Some((name, index)) => {
+                image.image = asset_server.load(resolve_png("FaceSet", name));
+                let (col, row) = ((index % 4) as f32, (index / 4) as f32);
+                image.rect = Some(Rect::new(
+                    col * FACE_SIZE,
+                    row * FACE_SIZE,
+                    col * FACE_SIZE + FACE_SIZE,
+                    row * FACE_SIZE + FACE_SIZE,
+                ));
+                *visibility = Visibility::Visible;
+            }
+            None => *visibility = Visibility::Hidden,
+        }
+    }
+    if let Some(box_) = current
+        && let Ok((mut text, mut node)) = texts.single_mut()
+    {
+        **text = box_.lines.join("\n");
+        node.margin.left = if face.is_some() { Val::Px(FACE_SIZE + 8.0) } else { Val::Px(0.0) };
     }
 }
