@@ -22,7 +22,7 @@ use crate::teleport::{Fade, PendingTeleport};
 use crate::text::{self, HeroName};
 use crate::title::TitleActive;
 use crate::vitals::Vitals;
-use crate::world::{EventSprite, MapEvents, MoveQueue, decode_route};
+use crate::world::{EventSprite, MapEvents, MoveQueue, RelocateEvent, decode_route};
 use amnezia_data::EventCommand;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -69,6 +69,7 @@ pub struct SubsystemIo<'w> {
     vitals: ResMut<'w, Vitals>,
     input_number: ResMut<'w, InputNumber>,
     sprite_writer: MessageWriter<'w, SpriteChange>,
+    relocate_writer: MessageWriter<'w, RelocateEvent>,
 }
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
@@ -325,6 +326,33 @@ fn run_interpreter(
                     charset: command.string.clone(),
                     index,
                 });
+                running.ip += 1;
+            }
+            CHANGE_EVENT_LOCATION => {
+                // Move an event to a tile. `params = [event_ref, mode, x, y]`;
+                // mode 1 reads the coords from variables. event_ref 10005 = this
+                // event, N = event id (10001 = hero, not relocated here).
+                let event_ref = command.params.first().copied().unwrap_or(0);
+                let mode = command.params.get(1).copied().unwrap_or(0);
+                let rx = command.params.get(2).copied().unwrap_or(0);
+                let ry = command.params.get(3).copied().unwrap_or(0);
+                let (x, y) = if mode == 1 {
+                    (variables.get(rx as u32), variables.get(ry as u32))
+                } else {
+                    (rx, ry)
+                };
+                let event_id = if event_ref == 10005 {
+                    running.event_id as i32
+                } else {
+                    event_ref
+                };
+                if event_ref != 10001 && event_id > 0 && x >= 0 && y >= 0 {
+                    subsystems.relocate_writer.write(RelocateEvent {
+                        event_id: event_id as u32,
+                        x: x as u32,
+                        y: y as u32,
+                    });
+                }
                 running.ip += 1;
             }
             WAIT => {

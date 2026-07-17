@@ -24,6 +24,8 @@ pub(super) const FULL_HEAL: u32 = 10490;
 pub(super) const INPUT_NUMBER: u32 = 10150;
 /// Reskin an actor (ChangeActorGraphic): `string` = charset, `params = [actor_id, index, transparent]`.
 pub(super) const CHANGE_SPRITE: u32 = 10630;
+/// Move an event to a tile: `params = [event_ref, mode, x, y]` (mode 1 = coords from variables).
+pub(super) const CHANGE_EVENT_LOCATION: u32 = 10860;
 
 /// The `EnemyEncounter` block's outcome handlers and terminator: the interpreter
 /// runs the body under the handler matching the finished battle outcome, skips

@@ -75,10 +75,40 @@ impl MapData {
     }
 }
 
+#[cfg(test)]
+impl MapData {
+    /// Build a bare, fully passable `MapData` of the given tile dimensions for
+    /// headless tests: offsets centered as on a real load, all tiles empty.
+    pub(crate) fn for_test(width: i32, height: i32) -> MapData {
+        MapData {
+            map_id: 0,
+            width,
+            height,
+            offset_x: width as f32 * tiles::TILE / 2.0,
+            offset_y: height as f32 * tiles::TILE / 2.0,
+            lower: vec![0; (width * height) as usize],
+            upper: vec![10000; (width * height) as usize],
+            passages_down: vec![0x0F; 162],
+            passages_up: vec![0x0F; 144],
+        }
+    }
+}
+
 /// The active map's events, for interaction and touch lookups.
 #[derive(Resource, Default)]
 pub struct MapEvents {
     pub events: Vec<Event>,
+}
+
+/// A request to teleport an event to a tile (RM2000 opcode 10860). The
+/// interpreter resolves the target id and concrete coordinates and writes one
+/// per `ChangeEventLocation`; `apply_relocate` moves both the logical
+/// [`MapEvents`] entry (collision/touch) and, if present, the [`EventSprite`].
+#[derive(Message)]
+pub struct RelocateEvent {
+    pub event_id: u32,
+    pub x: u32,
+    pub y: u32,
 }
 
 pub struct WorldPlugin;
@@ -86,12 +116,14 @@ pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WaterAnim>()
+            .add_message::<RelocateEvent>()
             .add_systems(Startup, setup)
             .add_systems(
                 Update,
                 (
                     (walk::<EventSprite>, update_event_sprites).chain(),
                     animate_water,
+                    apply_relocate,
                 ),
             );
     }
@@ -441,5 +473,88 @@ fn update_event_sprites(
         sprite.image = asset_server.load(resolve_png("CharSet", &event.charset));
         let (sx, sy) = tiles::charset_source(event.index, event.dir, event.frame);
         sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
+    }
+}
+
+/// Teleport events per each [`RelocateEvent`]: move the logical [`MapEvents`]
+/// entry (so collision/touch use the new tile) and, for a graphic-bearing event,
+/// snap its [`EventSprite`] tile and transform to the target tile center,
+/// cancelling any in-flight move by resetting its [`MoveQueue`]. A graphic-less
+/// event has no sprite, so updating only the logical position is correct.
+fn apply_relocate(
+    mut reader: MessageReader<RelocateEvent>,
+    data: Res<MapData>,
+    mut map_events: ResMut<MapEvents>,
+    mut sprites: Query<(&mut EventSprite, &mut Transform, &mut MoveQueue)>,
+) {
+    for msg in reader.read() {
+        if let Some(event) = map_events.events.iter_mut().find(|e| e.id == msg.event_id) {
+            event.x = msg.x;
+            event.y = msg.y;
+        }
+        if let Some((mut sprite, mut transform, mut queue)) =
+            sprites.iter_mut().find(|(s, _, _)| s.id == msg.event_id)
+        {
+            sprite.tile_x = msg.x as i32;
+            sprite.tile_y = msg.y as i32;
+            *queue = MoveQueue::default();
+            let (wx, wy) = data.tile_center(msg.x as i32, msg.y as i32);
+            transform.translation =
+                Vec3::new(wx, wy + CHAR_Y_OFFSET, tiles::character_z(msg.y as i32));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn relocate_moves_event_logical_and_visual() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_message::<RelocateEvent>();
+        app.add_systems(Update, apply_relocate);
+        app.insert_resource(MapData::for_test(10, 10));
+        app.insert_resource(MapEvents {
+            events: vec![Event {
+                id: 5,
+                x: 0,
+                y: 0,
+                name: String::new(),
+                pages: Vec::new(),
+            }],
+        });
+        let entity = app
+            .world_mut()
+            .spawn((
+                EventSprite {
+                    id: 5,
+                    tile_x: 0,
+                    tile_y: 0,
+                    dir: DIR_DOWN,
+                    frame: 1,
+                    charset: "C".into(),
+                    index: 0,
+                },
+                Transform::default(),
+                MoveQueue::default(),
+            ))
+            .id();
+
+        app.world_mut().write_message(RelocateEvent {
+            event_id: 5,
+            x: 3,
+            y: 4,
+        });
+        app.update();
+
+        let sprite = app.world().entity(entity).get::<EventSprite>().unwrap();
+        assert_eq!(sprite.tile_x, 3);
+        assert_eq!(sprite.tile_y, 4);
+        let events = app.world().resource::<MapEvents>();
+        let ev = events.events.iter().find(|e| e.id == 5).unwrap();
+        assert_eq!(ev.x, 3);
+        assert_eq!(ev.y, 4);
     }
 }
