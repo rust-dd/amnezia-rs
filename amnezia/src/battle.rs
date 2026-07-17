@@ -233,6 +233,7 @@ mod tests {
             monsters: vec![MonsterDef {
                 id: 1,
                 name: "Rabló".into(),
+                battler: "Cannibal".into(),
                 max_hp: 30,
                 max_sp: 0,
                 attack: 20,
