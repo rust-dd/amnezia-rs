@@ -1,0 +1,155 @@
+//! Conversion of the battle-side `RPG_RT.ldb` tables (states, attributes,
+//! monsters, troops) into their clean RON assets.
+
+use amnezia_data::{AttributeDef, MonsterDef, StateDef, TroopDef, TroopMemberDef};
+use anyhow::{Context, Result};
+use std::path::Path;
+
+/// Convert the state (status condition) table in `input/RPG_RT.ldb` into
+/// `output/states.ron` (each state's id, name, action restriction, priority, and
+/// recovery odds), returning the number of states written. The battle system
+/// reads it to apply and lift status conditions.
+pub fn convert_states(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed = lcf::parse_states(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let states: Vec<StateDef> = parsed
+        .into_iter()
+        .map(|s| StateDef {
+            id: s.id,
+            name: s.name,
+            restriction: s.restriction,
+            priority: s.priority,
+            hold_turn: s.hold_turn,
+            auto_release_prob: s.auto_release_prob,
+            release_by_damage: s.release_by_damage,
+        })
+        .collect();
+    let count = states.len();
+    let serialised = ron::to_string(&states).context("serialising states to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("states.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("states.ron").display()))?;
+    Ok(count)
+}
+
+/// Convert the attribute (element) table in `input/RPG_RT.ldb` into
+/// `output/attributes.ron` (each element's id, name, physical/magical type, and
+/// A–E resistance-rank damage percentages), returning the number of attributes
+/// written. The battle system reads it to scale elemental damage.
+pub fn convert_attributes(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed =
+        lcf::parse_attributes(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let attributes: Vec<AttributeDef> = parsed
+        .into_iter()
+        .map(|a| AttributeDef {
+            id: a.id,
+            name: a.name,
+            attribute_type: a.attribute_type,
+            a_rate: a.a_rate,
+            b_rate: a.b_rate,
+            c_rate: a.c_rate,
+            d_rate: a.d_rate,
+            e_rate: a.e_rate,
+        })
+        .collect();
+    let count = attributes.len();
+    let serialised = ron::to_string(&attributes).context("serialising attributes to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("attributes.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("attributes.ron").display()))?;
+    Ok(count)
+}
+
+/// Convert the enemy table in `input/RPG_RT.ldb` into `output/monsters.ron`
+/// (each monster's id, name, combat stats, and exp/gold reward), returning the
+/// number of monsters written. The battle system reads it.
+pub fn convert_monsters(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed =
+        lcf::parse_monsters(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let monsters: Vec<MonsterDef> = parsed
+        .into_iter()
+        .map(|m| MonsterDef {
+            id: m.id,
+            name: m.name,
+            battler: m.battler,
+            max_hp: m.max_hp,
+            max_sp: m.max_sp,
+            attack: m.attack,
+            defense: m.defense,
+            spirit: m.spirit,
+            agility: m.agility,
+            exp: m.exp,
+            gold: m.gold,
+            attribute_ranks: m.attribute_ranks,
+            state_ranks: m.state_ranks,
+            actions: m
+                .actions
+                .into_iter()
+                .map(|a| amnezia_data::EnemyActionDef {
+                    kind: a.kind,
+                    basic: a.basic,
+                    skill_id: a.skill_id,
+                    enemy_id: a.enemy_id,
+                    condition_type: a.condition_type,
+                    condition_min: a.condition_min,
+                    condition_max: a.condition_max,
+                    priority: a.priority,
+                })
+                .collect(),
+        })
+        .collect();
+    let count = monsters.len();
+    let serialised = ron::to_string(&monsters).context("serialising monsters to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("monsters.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("monsters.ron").display()))?;
+    Ok(count)
+}
+
+/// Convert the troop table in `input/RPG_RT.ldb` into `output/troops.ron` (each
+/// troop's id, name, and members with their battle positions), returning the
+/// number of troops written. The battle system reads it to build encounters.
+pub fn convert_troops(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed = lcf::parse_troops(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let troops: Vec<TroopDef> = parsed
+        .into_iter()
+        .map(|t| TroopDef {
+            id: t.id,
+            name: t.name,
+            members: t
+                .members
+                .into_iter()
+                .map(|m| TroopMemberDef {
+                    enemy_id: m.enemy_id,
+                    x: m.x,
+                    y: m.y,
+                })
+                .collect(),
+        })
+        .collect();
+    let count = troops.len();
+    let serialised = ron::to_string(&troops).context("serialising troops to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("troops.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("troops.ron").display()))?;
+    Ok(count)
+}
