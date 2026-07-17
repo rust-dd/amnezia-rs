@@ -356,3 +356,63 @@ pub struct TroopDef {
     pub name: String,
     pub members: Vec<TroopMemberDef>,
 }
+
+/// A battle-animation definition (see `lcf::Animation`), read by the battle
+/// system to overlay a sprite-sheet effect when a skill or attack resolves: its
+/// 1-based `id`, `name`, the `animation_name` `Battle`/`Battle2` graphic base
+/// name, `scope` (`0` one target, `1` the whole screen), `position` (the
+/// vertical anchor on the target: `0` head, `1` centre, `2` feet), the per-tick
+/// `frames`, and the flash / sound `timings`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnimationDef {
+    pub id: u32,
+    pub name: String,
+    pub animation_name: String,
+    pub scope: u32,
+    pub position: u32,
+    pub frames: Vec<AnimationFrameDef>,
+    pub timings: Vec<AnimationTimingDef>,
+}
+
+/// One frame of an animation (see `lcf::AnimationFrame`): the sprite-sheet
+/// `cells` drawn together for that tick of the effect.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnimationFrameDef {
+    pub cells: Vec<AnimationCellDef>,
+}
+
+/// One placed sprite-sheet tile within an animation frame (see
+/// `lcf::AnimationCell`): `cell_id` selects the tile from the animation's
+/// graphic, `x`/`y` offset it from the anchor in screen pixels, `scale` is a
+/// zoom percent (`100` = full size), the four `tone_*` channels tint it on
+/// RM2000's `0..=200` scale (`100` = neutral), and `transparency` is a
+/// `0..=100` percent (`0` = opaque).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnimationCellDef {
+    pub cell_id: u32,
+    pub x: i32,
+    pub y: i32,
+    pub scale: u32,
+    pub tone_red: i32,
+    pub tone_green: i32,
+    pub tone_blue: i32,
+    pub tone_gray: i32,
+    pub transparency: u32,
+}
+
+/// A frame-timed flash and sound effect on an animation's timeline (see
+/// `lcf::AnimationTiming`): `frame` is the 1-based frame it fires on, `se_name`
+/// the sound-effect file under `audio/Sound/` (empty = silent), `flash_scope`
+/// selects what flashes (`0` nothing, `1` the target, `2` the whole screen),
+/// `flash_red`/`flash_green`/`flash_blue` the flash colour on RM2000's `0..=31`
+/// scale, and `flash_power` its strength.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnimationTimingDef {
+    pub frame: u32,
+    pub se_name: String,
+    pub flash_scope: u32,
+    pub flash_red: u32,
+    pub flash_green: u32,
+    pub flash_blue: u32,
+    pub flash_power: u32,
+}

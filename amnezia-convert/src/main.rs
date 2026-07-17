@@ -26,6 +26,7 @@ fn main() -> Result<()> {
     let skills = amnezia_convert::convert_skills(&args.input, &args.output)?;
     let states = amnezia_convert::convert_states(&args.input, &args.output)?;
     let attributes = amnezia_convert::convert_attributes(&args.input, &args.output)?;
+    let animations = amnezia_convert::convert_animations(&args.input, &args.output)?;
     let monsters = amnezia_convert::convert_monsters(&args.input, &args.output)?;
     let troops = amnezia_convert::convert_troops(&args.input, &args.output)?;
     let common_events = amnezia_convert::convert_common_events(&args.input, &args.output)?;
@@ -35,8 +36,9 @@ fn main() -> Result<()> {
     println!(
         "converted {images} images, {maps} maps, {chipsets} chipsets, {actors} actors, \
          {items} items, {skills} skills, {states} states, {attributes} attributes, \
-         {monsters} monsters, {troops} troops, {common_events} common events, {effects} sfx, \
-         {music} music; start map {start_map}; hero {hero}"
+         {animations} animations, {monsters} monsters, {troops} troops, \
+         {common_events} common events, {effects} sfx, {music} music; start map {start_map}; \
+         hero {hero}"
     );
     Ok(())
 }
