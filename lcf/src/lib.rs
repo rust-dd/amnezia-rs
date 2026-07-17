@@ -15,10 +15,10 @@ mod database;
 mod map;
 
 pub use database::{
-    Actor, Attribute, Chipset, CommonEvent, EnemyAction, Item, Monster, Skill, StatCurves, State,
-    Troop,
-    TroopMember, parse_actors, parse_attributes, parse_chipsets, parse_common_events, parse_items,
-    parse_monsters, parse_skills, parse_states, parse_troops,
+    Actor, Animation, AnimationCell, AnimationFrame, AnimationTiming, Attribute, Chipset,
+    CommonEvent, EnemyAction, Item, Monster, Skill, StatCurves, State, Troop, TroopMember,
+    parse_actors, parse_animations, parse_attributes, parse_chipsets, parse_common_events,
+    parse_items, parse_monsters, parse_skills, parse_states, parse_troops,
 };
 pub use map::{
     Event, EventCommand, EventCondition, EventPage, MapUnit, Start, parse_map, parse_start,
@@ -55,6 +55,8 @@ pub enum LcfError {
     MissingAttributes,
     #[error("LCF database has no state section (chunk 0x12)")]
     MissingStates,
+    #[error("LCF database has no animation section (chunk 0x13)")]
+    MissingAnimations,
     #[error("LCF database has no common event section (chunk 0x19)")]
     MissingCommonEvents,
 }

@@ -8,6 +8,7 @@ use crate::LcfError;
 use crate::Reader;
 
 mod actors;
+mod animations;
 mod attributes;
 mod common_events;
 mod items;
@@ -17,6 +18,7 @@ mod states;
 mod troops;
 
 pub use actors::{Actor, StatCurves, parse_actors};
+pub use animations::{Animation, AnimationCell, AnimationFrame, AnimationTiming, parse_animations};
 pub use attributes::{Attribute, parse_attributes};
 pub use common_events::{CommonEvent, parse_common_events};
 pub use items::{Item, parse_items};
