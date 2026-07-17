@@ -179,7 +179,10 @@ fn setup(
     commands.spawn((
         Camera2d,
         Projection::Orthographic(OrthographicProjection {
-            scaling_mode: bevy::camera::ScalingMode::Fixed { width: 320.0, height: 240.0 },
+            scaling_mode: bevy::camera::ScalingMode::Fixed {
+                width: 320.0,
+                height: 240.0,
+            },
             ..OrthographicProjection::default_2d()
         }),
     ));
