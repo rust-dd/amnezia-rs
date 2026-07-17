@@ -15,8 +15,9 @@ mod database;
 mod map;
 
 pub use database::{
-    Actor, Chipset, CommonEvent, Item, Monster, Skill, Troop, TroopMember, parse_actors,
-    parse_chipsets, parse_common_events, parse_items, parse_monsters, parse_skills, parse_troops,
+    Actor, Chipset, CommonEvent, Item, Monster, Skill, StatCurves, Troop, TroopMember,
+    parse_actors, parse_chipsets, parse_common_events, parse_items, parse_monsters, parse_skills,
+    parse_troops,
 };
 pub use map::{
     Event, EventCommand, EventCondition, EventPage, MapUnit, Start, parse_map, parse_start,

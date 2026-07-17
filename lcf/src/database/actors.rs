@@ -1,0 +1,300 @@
+//! Actor (playable character) definitions from the database
+//! (`ChunkData::actors`, `0x0B`). Beyond the identity fields, each actor carries
+//! six per-level stat curves packed into one `Parameters` blob and an
+//! experience curve stored as three scalar chunks — the numbers a faithful
+//! level-up needs. Chunk ids follow liblcf `ChunkActor`.
+
+use super::find_section;
+use crate::{LcfError, Reader, decode_cp1250};
+
+/// The six per-level stat curves an actor grows along. Each vector holds one
+/// entry per level with length `max_level`; the value for level `L` sits at
+/// index `L - 1`. The order mirrors the RM2000 `Parameters` blob: max HP, max
+/// SP, attack, defense, spirit, agility. Values are clamped to non-negative.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StatCurves {
+    pub max_hp: Vec<i32>,
+    pub max_sp: Vec<i32>,
+    pub attack: Vec<i32>,
+    pub defense: Vec<i32>,
+    pub spirit: Vec<i32>,
+    pub agility: Vec<i32>,
+}
+
+/// An actor (playable character) definition: the fields the status, equip, and
+/// message screens plus the level-up system need. `name` expands the `\N[k]`
+/// message control code; `initial_hp`/`initial_sp` are the max-HP/max-SP curve
+/// values at `initial_level`. `stat_curves` holds the full per-level tables and
+/// `exp_base`/`exp_inflation`/`exp_correction` parameterise the RM2000
+/// experience curve.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Actor {
+    pub id: u32,
+    pub name: String,
+    pub title: String,
+    pub initial_level: u32,
+    pub max_level: u32,
+    pub initial_hp: u32,
+    pub initial_sp: u32,
+    pub stat_curves: StatCurves,
+    pub exp_base: u32,
+    pub exp_inflation: u32,
+    pub exp_correction: u32,
+}
+
+const ACTOR_SECTION: u32 = 0x0B;
+const ACTOR_NAME: u32 = 0x01;
+const ACTOR_TITLE: u32 = 0x02;
+const ACTOR_INITIAL_LEVEL: u32 = 0x07;
+const ACTOR_FINAL_LEVEL: u32 = 0x08;
+const ACTOR_PARAMETERS: u32 = 0x1F;
+const ACTOR_EXP_BASE: u32 = 0x29;
+const ACTOR_EXP_INFLATION: u32 = 0x2A;
+const ACTOR_EXP_CORRECTION: u32 = 0x2B;
+const ACTOR_DEFAULT_LEVEL: u32 = 1;
+const ACTOR_DEFAULT_EXP_BASE: u32 = 30;
+const ACTOR_DEFAULT_EXP_INFLATION: u32 = 30;
+const ACTOR_DEFAULT_EXP_CORRECTION: u32 = 0;
+const PARAMETER_STATS: usize = 6;
+
+/// Number of levels stored in a `Parameters` blob: six equal Int16 arrays, two
+/// bytes per level. Clamped to at least one so callers can always index level 1.
+fn curve_len(parameters: &[u8]) -> usize {
+    (parameters.len() / (PARAMETER_STATS * 2)).max(1)
+}
+
+/// Read one stat curve (`stat_index` in `0..6`) out of the `Parameters` blob
+/// into a `max_level`-long vector. The blob concatenates six equal Int16 (LE)
+/// arrays; the per-array stride comes from the blob itself, and levels past the
+/// stored curve repeat its last value. Each value is clamped to non-negative.
+fn read_curve(parameters: &[u8], stat_index: usize, max_level: u32) -> Vec<i32> {
+    let stride = parameters.len() / PARAMETER_STATS;
+    let stored = curve_len(parameters);
+    (0..max_level as usize)
+        .map(|level| {
+            let clamped = level.min(stored - 1);
+            let byte = stat_index * stride + clamped * 2;
+            parameters
+                .get(byte..byte + 2)
+                .map(|pair| i16::from_le_bytes([pair[0], pair[1]]).max(0) as i32)
+                .unwrap_or(0)
+        })
+        .collect()
+}
+
+/// Split the actor `Parameters` chunk (`0x1F`) into the six per-level stat
+/// curves — max HP, max SP, attack, defense, spirit, agility, in that order
+/// (liblcf `RawStruct<rpg::Parameters>::ReadLcf`).
+fn parse_stat_curves(parameters: &[u8], max_level: u32) -> StatCurves {
+    StatCurves {
+        max_hp: read_curve(parameters, 0, max_level),
+        max_sp: read_curve(parameters, 1, max_level),
+        attack: read_curve(parameters, 2, max_level),
+        defense: read_curve(parameters, 3, max_level),
+        spirit: read_curve(parameters, 4, max_level),
+        agility: read_curve(parameters, 5, max_level),
+    }
+}
+
+/// Parse the actor table (`ChunkData::actors` = `0x0B`) out of an LDB byte
+/// slice. Chunk ids (liblcf `ChunkActor`): name `0x01`, title `0x02`,
+/// initial_level `0x07`, final_level `0x08`, parameters `0x1F`, exp_base `0x29`,
+/// exp_inflation `0x2A`, exp_correction `0x2B`.
+pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
+    let section = find_section(bytes, ACTOR_SECTION, LcfError::MissingActors)?;
+    let mut reader = Reader::new(section);
+    let count = reader.varint()?;
+    let mut actors = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        let id = reader.varint()?;
+        let mut name = String::new();
+        let mut title = String::new();
+        let mut initial_level = ACTOR_DEFAULT_LEVEL;
+        let mut final_level: Option<u32> = None;
+        let mut parameters: &[u8] = &[];
+        let mut exp_base = ACTOR_DEFAULT_EXP_BASE;
+        let mut exp_inflation = ACTOR_DEFAULT_EXP_INFLATION;
+        let mut exp_correction = ACTOR_DEFAULT_EXP_CORRECTION;
+        loop {
+            let sub_id = reader.varint()?;
+            if sub_id == 0 {
+                break;
+            }
+            let sub_size = reader.varint()? as usize;
+            let sub_data = reader.take(sub_size)?;
+            match sub_id {
+                ACTOR_NAME => name = decode_cp1250(sub_data),
+                ACTOR_TITLE => title = decode_cp1250(sub_data),
+                ACTOR_INITIAL_LEVEL => initial_level = Reader::new(sub_data).varint()?,
+                ACTOR_FINAL_LEVEL => final_level = Some(Reader::new(sub_data).varint()?),
+                ACTOR_PARAMETERS => parameters = sub_data,
+                ACTOR_EXP_BASE => exp_base = Reader::new(sub_data).varint()?,
+                ACTOR_EXP_INFLATION => exp_inflation = Reader::new(sub_data).varint()?,
+                ACTOR_EXP_CORRECTION => exp_correction = Reader::new(sub_data).varint()?,
+                _ => {}
+            }
+        }
+        // RM2000 omits `final_level` when it equals the editor default (50),
+        // which is exactly the length of the stored parameter curve, so fall
+        // back to that.
+        let max_level = final_level
+            .filter(|&l| l > 0)
+            .unwrap_or(curve_len(parameters) as u32);
+        let stat_curves = parse_stat_curves(parameters, max_level);
+        let level_index = (initial_level.max(1) - 1).min(max_level.saturating_sub(1)) as usize;
+        let initial_hp = stat_curves.max_hp.get(level_index).copied().unwrap_or(0) as u32;
+        let initial_sp = stat_curves.max_sp.get(level_index).copied().unwrap_or(0) as u32;
+        actors.push(Actor {
+            id,
+            name,
+            title,
+            initial_level,
+            max_level,
+            initial_hp,
+            initial_sp,
+            stat_curves,
+            exp_base,
+            exp_inflation,
+            exp_correction,
+        });
+    }
+    Ok(actors)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::test_util::{element, make_ldb, section, subchunk, varint};
+    use crate::{LcfError, StatCurves, parse_actors};
+
+    /// Build a `Parameters` chunk (`0x1F`) by concatenating the six Int16 stat
+    /// curves (max HP, max SP, attack, defense, spirit, agility) as little-endian
+    /// bytes. The caller passes six curves of equal length.
+    fn parameters(curves: &[&[i16]]) -> Vec<u8> {
+        curves
+            .iter()
+            .flat_map(|curve| curve.iter())
+            .flat_map(|value| value.to_le_bytes())
+            .collect()
+    }
+
+    #[test]
+    fn parses_actor_definition_fields() {
+        // Name bytes 0x41 0x64 0xE9 0x6C are CP1250 "Adél"; title bytes
+        // 0xC9 ... 0xE1 ... decode "Énekeslány" (Tiffany's real title).
+        let params = parameters(&[&[10, 20], &[5, 8], &[0, 0], &[0, 0], &[0, 0], &[0, 0]]);
+        let hero = element(
+            1,
+            &[
+                subchunk(0x01, &[0x41, 0x64, 0xE9, 0x6C]),
+                subchunk(
+                    0x02,
+                    &[0xC9, 0x6E, 0x65, 0x6B, 0x65, 0x73, 0x6C, 0xE1, 0x6E, 0x79],
+                ),
+                subchunk(0x07, &varint(2)),
+                subchunk(0x1F, &params),
+            ],
+        );
+        let ldb = make_ldb(&[(0x05, vec![9, 9]), (0x0B, section(&[hero]))]);
+        let actors = parse_actors(&ldb).unwrap();
+        assert_eq!(actors.len(), 1);
+        let ron = &actors[0];
+        assert_eq!(ron.id, 1);
+        assert_eq!(ron.name, "Adél");
+        assert_eq!(ron.title, "Énekeslány");
+        assert_eq!(ron.initial_level, 2);
+        assert_eq!(
+            ron.max_level, 2,
+            "max level falls back to the 2-level curve length"
+        );
+        assert_eq!(ron.initial_hp, 20, "maxhp curve at level 2");
+        assert_eq!(ron.initial_sp, 8, "maxsp curve at level 2");
+        assert_eq!(ron.stat_curves.max_hp, vec![10, 20]);
+        assert_eq!(ron.stat_curves.max_sp, vec![5, 8]);
+        assert_eq!(
+            (ron.exp_base, ron.exp_inflation, ron.exp_correction),
+            (30, 30, 0),
+            "experience fields default when omitted"
+        );
+    }
+
+    #[test]
+    fn parses_stat_curves_and_experience() {
+        let params = parameters(&[
+            &[30, 40, 55],
+            &[10, 14, 20],
+            &[5, 7, 9],
+            &[4, 6, 8],
+            &[3, 5, 7],
+            &[6, 9, 12],
+        ]);
+        let hero = element(
+            1,
+            &[
+                subchunk(0x07, &varint(2)),
+                subchunk(0x1F, &params),
+                subchunk(0x29, &varint(31)),
+                subchunk(0x2A, &varint(29)),
+                subchunk(0x2B, &varint(40)),
+            ],
+        );
+        let ldb = make_ldb(&[(0x0B, section(&[hero]))]);
+        let actor = &parse_actors(&ldb).unwrap()[0];
+        assert_eq!(actor.max_level, 3, "curve length gives the max level");
+        assert_eq!(
+            actor.stat_curves,
+            StatCurves {
+                max_hp: vec![30, 40, 55],
+                max_sp: vec![10, 14, 20],
+                attack: vec![5, 7, 9],
+                defense: vec![4, 6, 8],
+                spirit: vec![3, 5, 7],
+                agility: vec![6, 9, 12],
+            }
+        );
+        assert_eq!(actor.initial_hp, 40, "maxhp curve at level 2");
+        assert_eq!(actor.initial_sp, 14, "maxsp curve at level 2");
+        assert_eq!(
+            (actor.exp_base, actor.exp_inflation, actor.exp_correction),
+            (31, 29, 40)
+        );
+    }
+
+    #[test]
+    fn actor_final_level_overrides_curve_length() {
+        let params = parameters(&[&[10, 20], &[5, 8], &[0, 0], &[0, 0], &[0, 0], &[0, 0]]);
+        let hero = element(1, &[subchunk(0x08, &varint(50)), subchunk(0x1F, &params)]);
+        let ldb = make_ldb(&[(0x0B, section(&[hero]))]);
+        let actors = parse_actors(&ldb).unwrap();
+        assert_eq!(actors[0].max_level, 50);
+        assert_eq!(actors[0].initial_level, 1, "initial level defaults to 1");
+        assert_eq!(actors[0].initial_hp, 10, "maxhp curve at default level 1");
+        assert_eq!(
+            actors[0].stat_curves.max_hp.len(),
+            50,
+            "curves are padded to max_level, repeating the last stored value"
+        );
+        assert_eq!(actors[0].stat_curves.max_hp[49], 20);
+    }
+
+    #[test]
+    fn actor_defaults_when_fields_omitted() {
+        let actor = element(3, &[]);
+        let ldb = make_ldb(&[(0x0B, section(&[actor]))]);
+        let actors = parse_actors(&ldb).unwrap();
+        let a = &actors[0];
+        assert_eq!(a.id, 3);
+        assert!(a.name.is_empty());
+        assert!(a.title.is_empty());
+        assert_eq!(a.initial_level, 1);
+        assert_eq!(a.max_level, 1);
+        assert_eq!((a.initial_hp, a.initial_sp), (0, 0));
+        assert_eq!(a.stat_curves.max_hp, vec![0]);
+        assert_eq!((a.exp_base, a.exp_inflation, a.exp_correction), (30, 30, 0));
+    }
+
+    #[test]
+    fn parse_actors_errors_when_section_absent() {
+        let ldb = make_ldb(&[(0x14, section(&[]))]);
+        assert!(matches!(parse_actors(&ldb), Err(LcfError::MissingActors)));
+    }
+}

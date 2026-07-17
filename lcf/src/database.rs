@@ -7,11 +7,13 @@
 use crate::LcfError;
 use crate::{Reader, decode_cp1250};
 
+mod actors;
 mod common_events;
 mod monsters;
 mod skills;
 mod troops;
 
+pub use actors::{Actor, StatCurves, parse_actors};
 pub use common_events::{CommonEvent, parse_common_events};
 pub use monsters::{Monster, parse_monsters};
 pub use skills::{Skill, parse_skills};
@@ -99,106 +101,6 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
     Ok(chipsets)
 }
 
-/// An actor (playable character) definition: the fields the status, equip, and
-/// message screens need. `name` expands the `\N[k]` message control code;
-/// `initial_hp`/`initial_sp` are read off the level-parameter curve at
-/// `initial_level`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Actor {
-    pub id: u32,
-    pub name: String,
-    pub title: String,
-    pub initial_level: u32,
-    pub max_level: u32,
-    pub initial_hp: u32,
-    pub initial_sp: u32,
-}
-
-const ACTOR_SECTION: u32 = 0x0B;
-const ACTOR_NAME: u32 = 0x01;
-const ACTOR_TITLE: u32 = 0x02;
-const ACTOR_INITIAL_LEVEL: u32 = 0x07;
-const ACTOR_FINAL_LEVEL: u32 = 0x08;
-const ACTOR_PARAMETERS: u32 = 0x1F;
-const ACTOR_DEFAULT_LEVEL: u32 = 1;
-const PARAMETER_STATS: usize = 6;
-
-/// Read the `initial_level`-th value (1-based) of an int16 curve stored at
-/// `stat_offset` bytes into the `Parameters` blob, clamped to non-negative.
-fn curve_value(parameters: &[u8], stat_offset: usize, level: u32, curve_len: u32) -> u32 {
-    if curve_len == 0 {
-        return 0;
-    }
-    let index = (level.max(1) - 1).min(curve_len - 1) as usize;
-    let byte = stat_offset + index * 2;
-    match parameters.get(byte..byte + 2) {
-        Some(pair) => i16::from_le_bytes([pair[0], pair[1]]).max(0) as u32,
-        None => 0,
-    }
-}
-
-/// Split the actor `Parameters` chunk (`0x1F`) into `(initial_hp, initial_sp,
-/// levels)`. The blob is six equal int16 arrays — maxhp, maxsp, attack,
-/// defense, spirit, agility (liblcf `RawStruct<rpg::Parameters>::ReadLcf`) — so
-/// each stat spans `len / 6` bytes and the max-hp/max-sp curves come first.
-fn actor_stats(parameters: &[u8], initial_level: u32) -> (u32, u32, u32) {
-    let stat_len = parameters.len() / PARAMETER_STATS;
-    let levels = (stat_len / 2) as u32;
-    let hp = curve_value(parameters, 0, initial_level, levels);
-    let sp = curve_value(parameters, stat_len, initial_level, levels);
-    (hp, sp, levels)
-}
-
-/// Parse the actor table (`ChunkData::actors` = `0x0B`) out of an LDB byte
-/// slice. Chunk ids (liblcf `ChunkActor`): name `0x01`, title `0x02`,
-/// initial_level `0x07`, final_level `0x08`, parameters `0x1F`.
-pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
-    let section = find_section(bytes, ACTOR_SECTION, LcfError::MissingActors)?;
-    let mut reader = Reader::new(section);
-    let count = reader.varint()?;
-    let mut actors = Vec::with_capacity(count as usize);
-    for _ in 0..count {
-        let id = reader.varint()?;
-        let mut name = String::new();
-        let mut title = String::new();
-        let mut initial_level = ACTOR_DEFAULT_LEVEL;
-        let mut final_level: Option<u32> = None;
-        let mut parameters: &[u8] = &[];
-        loop {
-            let sub_id = reader.varint()?;
-            if sub_id == 0 {
-                break;
-            }
-            let sub_size = reader.varint()? as usize;
-            let sub_data = reader.take(sub_size)?;
-            match sub_id {
-                ACTOR_NAME => name = decode_cp1250(sub_data),
-                ACTOR_TITLE => title = decode_cp1250(sub_data),
-                ACTOR_INITIAL_LEVEL => initial_level = Reader::new(sub_data).varint()?,
-                ACTOR_FINAL_LEVEL => final_level = Some(Reader::new(sub_data).varint()?),
-                ACTOR_PARAMETERS => parameters = sub_data,
-                _ => {}
-            }
-        }
-        let (initial_hp, initial_sp, curve_levels) = actor_stats(parameters, initial_level);
-        // RM2000 omits `final_level` when it equals the editor default, which is
-        // exactly the length of the parameter curve, so fall back to that.
-        let max_level = final_level
-            .filter(|&l| l > 0)
-            .unwrap_or(curve_levels.max(1));
-        actors.push(Actor {
-            id,
-            name,
-            title,
-            initial_level,
-            max_level,
-            initial_hp,
-            initial_sp,
-        });
-    }
-    Ok(actors)
-}
-
 /// An item definition: the fields a shop and item menu need. `item_type` is the
 /// raw RM2000 category index (0 normal, 1 weapon, 2 shield, 3 armor, 4 helmet,
 /// 5 accessory, 6 medicine, 7 book, 8 material, 9 special, 10 switch).
@@ -257,17 +159,7 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
 #[cfg(test)]
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk, varint};
-    use crate::{Item, LcfError, parse_actors, parse_chipsets, parse_items};
-
-    /// Build a `Parameters` chunk (`0x1F`) from six int16 stat curves, laid out
-    /// contiguously as maxhp, maxsp, attack, defense, spirit, agility.
-    fn parameters(curves: &[[i16; 2]; 6]) -> Vec<u8> {
-        curves
-            .iter()
-            .flatten()
-            .flat_map(|v| v.to_le_bytes())
-            .collect()
-    }
+    use crate::{Item, LcfError, parse_chipsets, parse_items};
 
     #[test]
     fn parses_chipset_graphic_names() {
@@ -339,70 +231,6 @@ mod tests {
             parse_chipsets(&ldb),
             Err(LcfError::MissingChipsets)
         ));
-    }
-
-    #[test]
-    fn parses_actor_definition_fields() {
-        // Name bytes 0x41 0x64 0xE9 0x6C are CP1250 "Adél"; title bytes
-        // 0xC9 ... 0xE1 ... decode "Énekeslány" (Tiffany's real title).
-        let params = parameters(&[[10, 20], [5, 8], [0, 0], [0, 0], [0, 0], [0, 0]]);
-        let hero = element(
-            1,
-            &[
-                subchunk(0x01, &[0x41, 0x64, 0xE9, 0x6C]),
-                subchunk(
-                    0x02,
-                    &[0xC9, 0x6E, 0x65, 0x6B, 0x65, 0x73, 0x6C, 0xE1, 0x6E, 0x79],
-                ),
-                subchunk(0x07, &varint(2)),
-                subchunk(0x1F, &params),
-            ],
-        );
-        let ldb = make_ldb(&[(0x05, vec![9, 9]), (0x0B, section(&[hero]))]);
-        let actors = parse_actors(&ldb).unwrap();
-        assert_eq!(actors.len(), 1);
-        let ron = &actors[0];
-        assert_eq!(ron.id, 1);
-        assert_eq!(ron.name, "Adél");
-        assert_eq!(ron.title, "Énekeslány");
-        assert_eq!(ron.initial_level, 2);
-        assert_eq!(
-            ron.max_level, 2,
-            "max level falls back to the 2-level curve length"
-        );
-        assert_eq!(ron.initial_hp, 20, "maxhp curve at level 2");
-        assert_eq!(ron.initial_sp, 8, "maxsp curve at level 2");
-    }
-
-    #[test]
-    fn actor_final_level_overrides_curve_length() {
-        let params = parameters(&[[10, 20], [5, 8], [0, 0], [0, 0], [0, 0], [0, 0]]);
-        let hero = element(1, &[subchunk(0x08, &varint(50)), subchunk(0x1F, &params)]);
-        let ldb = make_ldb(&[(0x0B, section(&[hero]))]);
-        let actors = parse_actors(&ldb).unwrap();
-        assert_eq!(actors[0].max_level, 50);
-        assert_eq!(actors[0].initial_level, 1, "initial level defaults to 1");
-        assert_eq!(actors[0].initial_hp, 10, "maxhp curve at default level 1");
-    }
-
-    #[test]
-    fn actor_defaults_when_fields_omitted() {
-        let actor = element(3, &[]);
-        let ldb = make_ldb(&[(0x0B, section(&[actor]))]);
-        let actors = parse_actors(&ldb).unwrap();
-        let a = &actors[0];
-        assert_eq!(a.id, 3);
-        assert!(a.name.is_empty());
-        assert!(a.title.is_empty());
-        assert_eq!(a.initial_level, 1);
-        assert_eq!(a.max_level, 1);
-        assert_eq!((a.initial_hp, a.initial_sp), (0, 0));
-    }
-
-    #[test]
-    fn parse_actors_errors_when_section_absent() {
-        let ldb = make_ldb(&[(0x14, section(&[]))]);
-        assert!(matches!(parse_actors(&ldb), Err(LcfError::MissingActors)));
     }
 
     #[test]
