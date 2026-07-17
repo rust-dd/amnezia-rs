@@ -155,9 +155,15 @@ fn update_ui(
         return;
     }
     if let Ok(mut visibility) = panels.single_mut() {
-        *visibility = if choice.active { Visibility::Visible } else { Visibility::Hidden };
+        *visibility = if choice.active {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
-    if choice.active && let Ok(mut text) = texts.single_mut() {
+    if choice.active
+        && let Ok(mut text) = texts.single_mut()
+    {
         let mut rendered = String::new();
         for (i, option) in choice.options.iter().enumerate() {
             rendered.push_str(if i == choice.cursor { "▶ " } else { "  " });

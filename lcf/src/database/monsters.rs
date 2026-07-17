@@ -3,7 +3,7 @@
 //! per-level curves actors use. Chunk ids follow liblcf `ChunkEnemy`.
 
 use super::find_section;
-use crate::{decode_cp1250, LcfError, Reader};
+use crate::{LcfError, Reader, decode_cp1250};
 
 /// A monster (enemy) definition: the battle-relevant scalar stats plus the
 /// experience and gold it yields when defeated.
@@ -84,7 +84,7 @@ pub fn parse_monsters(bytes: &[u8]) -> Result<Vec<Monster>, LcfError> {
 #[cfg(test)]
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk, varint};
-    use crate::{parse_monsters, LcfError, Monster};
+    use crate::{LcfError, Monster, parse_monsters};
 
     #[test]
     fn parses_monster_battle_stats() {
@@ -139,6 +139,9 @@ mod tests {
     #[test]
     fn parse_monsters_errors_when_section_absent() {
         let ldb = make_ldb(&[(0x14, section(&[]))]);
-        assert!(matches!(parse_monsters(&ldb), Err(LcfError::MissingMonsters)));
+        assert!(matches!(
+            parse_monsters(&ldb),
+            Err(LcfError::MissingMonsters)
+        ));
     }
 }

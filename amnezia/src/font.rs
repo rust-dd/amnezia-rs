@@ -3,7 +3,8 @@
 
 use bevy::prelude::*;
 
-const FONT_BYTES: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/DejaVuSans.ttf"));
+const FONT_BYTES: &[u8] =
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/DejaVuSans.ttf"));
 
 /// Handle to the loaded game font, shared by every text surface.
 #[derive(Resource)]

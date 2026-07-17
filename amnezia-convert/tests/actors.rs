@@ -49,7 +49,11 @@ fn make_ldb(section_id: u32, elements: &[Vec<u8>]) -> Vec<u8> {
 }
 
 fn parameters(curves: [[i16; 2]; 6]) -> Vec<u8> {
-    curves.iter().flatten().flat_map(|v| v.to_le_bytes()).collect()
+    curves
+        .iter()
+        .flatten()
+        .flat_map(|v| v.to_le_bytes())
+        .collect()
 }
 
 #[test]

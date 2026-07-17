@@ -11,7 +11,7 @@
 //! animation `frame` (0..=2) shifts the sampled column, which is a pure
 //! horizontal scroll of the source (columns stay within 0..=5).
 
-use super::{Quarter, QUARTER, TILE};
+use super::{QUARTER, Quarter, TILE};
 
 /// First id of `BLOCK_C`; ids below it are the quarter-assembled
 /// `BLOCK_A`/`BLOCK_B` water. Matches EasyRPG's `BLOCK_C` (`map_data.h`).
@@ -189,27 +189,42 @@ mod tests {
     fn plain_water_id_zero_is_the_deep_water_cell_split_in_four() {
         // a_subtile 0 is all-B: the four 8×8 corners of the (col 0, row 4) cell,
         // matching what the old whole-cell fallback drew at (0, 64).
-        assert_eq!(srcs(0, 0), [(0.0, 64.0), (8.0, 64.0), (0.0, 72.0), (8.0, 72.0)]);
+        assert_eq!(
+            srcs(0, 0),
+            [(0.0, 64.0), (8.0, 64.0), (0.0, 72.0), (8.0, 72.0)]
+        );
         let q = water_quarters(0, 0);
-        assert_eq!(q.map(|x| x.dst), [(0.0, 0.0), (8.0, 0.0), (0.0, 8.0), (8.0, 8.0)]);
+        assert_eq!(
+            q.map(|x| x.dst),
+            [(0.0, 0.0), (8.0, 0.0), (0.0, 8.0), (8.0, 8.0)]
+        );
     }
 
     #[test]
     fn grass_shore_pulls_top_from_the_a_block() {
         // id 3: top quarters from A row 3 (col 0), bottom from B coast (row 4).
-        assert_eq!(srcs(3, 0), [(0.0, 48.0), (8.0, 48.0), (0.0, 72.0), (8.0, 72.0)]);
+        assert_eq!(
+            srcs(3, 0),
+            [(0.0, 48.0), (8.0, 48.0), (0.0, 72.0), (8.0, 72.0)]
+        );
     }
 
     #[test]
     fn snow_block_one_shifts_the_a_quarters_three_columns_right() {
         // id 1003: A quarters come from the snow columns (col 3), B from col 0.
-        assert_eq!(srcs(1003, 0), [(48.0, 48.0), (56.0, 48.0), (0.0, 72.0), (8.0, 72.0)]);
+        assert_eq!(
+            srcs(1003, 0),
+            [(48.0, 48.0), (56.0, 48.0), (0.0, 72.0), (8.0, 72.0)]
+        );
     }
 
     #[test]
     fn deep_ocean_block_two_maps_b_to_rows_six_and_seven() {
         // id 2050: block 2 B edges land on the deep-ocean rows 6/7 (cols 0).
-        assert_eq!(srcs(2050, 0), [(0.0, 96.0), (8.0, 112.0), (0.0, 120.0), (8.0, 120.0)]);
+        assert_eq!(
+            srcs(2050, 0),
+            [(0.0, 96.0), (8.0, 112.0), (0.0, 120.0), (8.0, 120.0)]
+        );
     }
 
     #[test]

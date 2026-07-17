@@ -25,7 +25,7 @@ mod tiles;
 mod vitals;
 mod world;
 
-use assets::{load_ron, ASSET_ROOT};
+use assets::{ASSET_ROOT, load_ron};
 use bevy::prelude::*;
 
 fn main() -> AppExit {
@@ -34,7 +34,10 @@ fn main() -> AppExit {
         .add_plugins(
             DefaultPlugins
                 .set(ImagePlugin::default_nearest())
-                .set(AssetPlugin { file_path: ASSET_ROOT.to_string(), ..default() }),
+                .set(AssetPlugin {
+                    file_path: ASSET_ROOT.to_string(),
+                    ..default()
+                }),
         )
         .insert_resource(text::HeroName(hero.name))
         .init_resource::<state::Switches>()

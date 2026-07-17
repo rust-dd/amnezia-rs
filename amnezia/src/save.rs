@@ -106,7 +106,8 @@ fn save_or_load(
 /// Serialise `game` to pretty RON and write it to the save slot, creating the
 /// save directory as needed.
 fn write_save(game: &SaveGame) -> Result<(), String> {
-    let ron = ron::ser::to_string_pretty(game, PrettyConfig::default()).map_err(|e| e.to_string())?;
+    let ron =
+        ron::ser::to_string_pretty(game, PrettyConfig::default()).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(SAVE_DIR).map_err(|e| e.to_string())?;
     std::fs::write(SAVE_PATH, ron).map_err(|e| e.to_string())
 }

@@ -3,9 +3,9 @@
 //! the [`Battle`] model. The menu-row builders are `pub` so the UI renders the
 //! exact same lists the selection indexes into.
 
+use super::BattleOutcome;
 use super::logic::usable_skills;
 use super::model::{Battle, Command, MenuLevel, Phase};
-use super::BattleOutcome;
 use crate::gamedata::GameData;
 use crate::state::Inventory;
 use bevy::prelude::*;
@@ -14,8 +14,7 @@ use bevy::prelude::*;
 const MEDICINE: u32 = 6;
 
 /// The top-level command options, in cursor order.
-pub const COMMAND_LABELS: [&str; 5] =
-    ["Támadás", "Képesség", "Tárgy", "Védekezés", "Menekülés"];
+pub const COMMAND_LABELS: [&str; 5] = ["Támadás", "Képesség", "Tárgy", "Védekezés", "Menekülés"];
 
 /// Drive the command phase: dispatch the keyboard to the active menu level.
 pub fn command_input(
@@ -113,7 +112,11 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {
-        let back = if battle.pending_skill.is_some() { MenuLevel::Skill } else { MenuLevel::Command };
+        let back = if battle.pending_skill.is_some() {
+            MenuLevel::Skill
+        } else {
+            MenuLevel::Command
+        };
         enter(battle, back);
         return;
     }
@@ -121,7 +124,11 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     if confirm(keys) {
         let target = living[battle.cursor.min(living.len() - 1)];
         let command = match battle.pending_skill {
-            Some((power, cost)) => Command::Skill { power, cost, target },
+            Some((power, cost)) => Command::Skill {
+                power,
+                cost,
+                target,
+            },
             None => Command::Attack { target },
         };
         battle.commit(command);

@@ -32,7 +32,11 @@ pub(super) fn apply_control_variables(variables: &mut Variables, params: &[i32])
     let [_, start, end, op, operand_type, a, ..] = params else {
         return;
     };
-    let operand = if *operand_type == 1 { variables.get(*a as u32) } else { *a };
+    let operand = if *operand_type == 1 {
+        variables.get(*a as u32)
+    } else {
+        *a
+    };
     for id in *start..=*end {
         let id = id as u32;
         let current = variables.get(id);
@@ -41,8 +45,20 @@ pub(super) fn apply_control_variables(variables: &mut Variables, params: &[i32])
             1 => current + operand,
             2 => current - operand,
             3 => current * operand,
-            4 => if operand != 0 { current / operand } else { current },
-            5 => if operand != 0 { current % operand } else { current },
+            4 => {
+                if operand != 0 {
+                    current / operand
+                } else {
+                    current
+                }
+            }
+            5 => {
+                if operand != 0 {
+                    current % operand
+                } else {
+                    current
+                }
+            }
             _ => current,
         };
         variables.set(id, next);
@@ -229,11 +245,23 @@ mod tests {
         let mut party = Party::default();
         let mut inv = Inventory::default();
         // money: gold >= 100 (false, then true)
-        assert!(!branch_holds(&[3, 100, 0, 0, 0, 0], &sw, &var, &party, &inv));
+        assert!(!branch_holds(
+            &[3, 100, 0, 0, 0, 0],
+            &sw,
+            &var,
+            &party,
+            &inv
+        ));
         inv.add_gold(120);
         assert!(branch_holds(&[3, 100, 0, 0, 0, 0], &sw, &var, &party, &inv));
         // item: has item 129
-        assert!(!branch_holds(&[4, 129, 0, 0, 0, 0], &sw, &var, &party, &inv));
+        assert!(!branch_holds(
+            &[4, 129, 0, 0, 0, 0],
+            &sw,
+            &var,
+            &party,
+            &inv
+        ));
         inv.add_item(129, 1);
         assert!(branch_holds(&[4, 129, 0, 0, 0, 0], &sw, &var, &party, &inv));
         // hero: actor 2 in party

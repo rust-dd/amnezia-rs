@@ -8,9 +8,9 @@
 mod autotile;
 mod water;
 
-pub use autotile::{lower_render, LowerRender, Quarter, QUARTER};
+pub use autotile::{LowerRender, QUARTER, Quarter, lower_render};
 pub use water::{
-    block_c_source, is_ab_water, is_block_c, water_quarters, BLOCK_C_FRAMES, WATER_FRAMES,
+    BLOCK_C_FRAMES, WATER_FRAMES, block_c_source, is_ab_water, is_block_c, water_quarters,
 };
 
 /// Size of one tile in pixels.
@@ -144,7 +144,10 @@ pub fn passable(lower_id: u16, upper_id: u16, passages_down: &[u8], passages_up:
     if upper_id <= 10000 {
         return lower_ok;
     }
-    let upper = passages_up.get((upper_id - 10000) as usize).copied().unwrap_or(0x0F);
+    let upper = passages_up
+        .get((upper_id - 10000) as usize)
+        .copied()
+        .unwrap_or(0x0F);
     if upper & 0x0F == 0 {
         return false;
     }

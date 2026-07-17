@@ -126,7 +126,10 @@ mod tests {
 
     #[test]
     fn leaves_plain_text_untouched() {
-        assert_eq!(substitute("Beszélt Adéllal", "Ron", &vars(&[])), "Beszélt Adéllal");
+        assert_eq!(
+            substitute("Beszélt Adéllal", "Ron", &vars(&[])),
+            "Beszélt Adéllal"
+        );
     }
 
     #[test]

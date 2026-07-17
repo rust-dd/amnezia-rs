@@ -20,7 +20,7 @@ mod model;
 mod resolve;
 mod ui;
 
-use crate::assets::{load_ron, ASSET_ROOT};
+use crate::assets::{ASSET_ROOT, load_ron};
 use crate::gamedata::GameData;
 use crate::state::{Inventory, Party};
 use crate::vitals::Vitals;
@@ -82,7 +82,13 @@ impl Plugin for BattlePlugin {
             })
             .add_systems(
                 Update,
-                (start_on_request, debug_trigger, input::command_input, resolve_tick, outcome_input),
+                (
+                    start_on_request,
+                    debug_trigger,
+                    input::command_input,
+                    resolve_tick,
+                    outcome_input,
+                ),
             );
         ui::register(app);
     }
@@ -119,7 +125,14 @@ fn start_on_request(
         return;
     }
     let seed = seed_now() ^ (request.troop_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    *battle = Battle::build(troop, &battle_data.monsters, &actors, &vitals, BACKDROP.to_string(), seed);
+    *battle = Battle::build(
+        troop,
+        &battle_data.monsters,
+        &actors,
+        &vitals,
+        BACKDROP.to_string(),
+        seed,
+    );
     active.0 = true;
     result.0 = None;
 }
@@ -132,7 +145,9 @@ fn debug_trigger(
     mut requests: MessageWriter<BattleRequest>,
 ) {
     if !active.0 && keys.just_pressed(KeyCode::F6) {
-        requests.write(BattleRequest { troop_id: DEBUG_TROOP });
+        requests.write(BattleRequest {
+            troop_id: DEBUG_TROOP,
+        });
     }
 }
 
@@ -230,7 +245,11 @@ mod tests {
             troops: vec![TroopDef {
                 id: DEBUG_TROOP,
                 name: "Rablo".into(),
-                members: vec![TroopMemberDef { enemy_id: 1, x: 100, y: 100 }],
+                members: vec![TroopMemberDef {
+                    enemy_id: 1,
+                    x: 100,
+                    y: 100,
+                }],
             }],
         });
         app.init_resource::<Party>();
@@ -248,11 +267,18 @@ mod tests {
     fn f6_starts_a_battle_and_confirming_a_win_publishes_the_contract_out() {
         let mut app = logic_app();
         // F6 -> debug_trigger emits BattleRequest -> start_on_request builds it.
-        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::F6);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::F6);
         app.update();
-        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().clear();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .clear();
         app.update();
-        assert!(app.world().resource::<BattleActive>().0, "battle should be running");
+        assert!(
+            app.world().resource::<BattleActive>().0,
+            "battle should be running"
+        );
         {
             let battle = app.world().resource::<Battle>();
             assert!(battle.phase == Phase::Command);
@@ -260,12 +286,26 @@ mod tests {
             assert_eq!(battle.members.len(), 1);
         }
         // Force a victory, then confirm at the outcome screen.
-        app.world_mut().resource_mut::<Battle>().finish(BattleOutcome::Victory);
-        app.world_mut().resource_mut::<ButtonInput<KeyCode>>().press(KeyCode::Enter);
+        app.world_mut()
+            .resource_mut::<Battle>()
+            .finish(BattleOutcome::Victory);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Enter);
         app.update();
-        assert_eq!(app.world().resource::<BattleResult>().0, Some(BattleOutcome::Victory));
-        assert!(!app.world().resource::<BattleActive>().0, "battle should have ended");
-        assert_eq!(app.world().resource::<Inventory>().gold(), 30, "gold reward paid out");
+        assert_eq!(
+            app.world().resource::<BattleResult>().0,
+            Some(BattleOutcome::Victory)
+        );
+        assert!(
+            !app.world().resource::<BattleActive>().0,
+            "battle should have ended"
+        );
+        assert_eq!(
+            app.world().resource::<Inventory>().gold(),
+            30,
+            "gold reward paid out"
+        );
         assert!(app.world().resource::<Battle>().phase == Phase::Inactive);
     }
 }

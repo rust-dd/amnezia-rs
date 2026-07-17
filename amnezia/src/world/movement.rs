@@ -120,7 +120,11 @@ impl MoveQueue {
                 Some(RouteAction::Wait) => {
                     let (x, y) = ch.tile();
                     let center = center(data, x, y);
-                    self.active = Some(Tween { from: center, to: center, elapsed: 0.0 });
+                    self.active = Some(Tween {
+                        from: center,
+                        to: center,
+                        elapsed: 0.0,
+                    });
                 }
                 Some(RouteAction::Step { dx, dy, face }) => self.begin_step(ch, data, dx, dy, face),
                 Some(RouteAction::Forward) => {
@@ -135,14 +139,25 @@ impl MoveQueue {
     /// Commit a move to the adjacent tile: update the logical tile immediately
     /// (so y-sorting and lookups use the destination), face and advance the walk
     /// frame, and start the pixel tween from the old center to the new one.
-    fn begin_step<C: Character>(&mut self, ch: &mut C, data: &MapData, dx: i32, dy: i32, face: u32) {
+    fn begin_step<C: Character>(
+        &mut self,
+        ch: &mut C,
+        data: &MapData,
+        dx: i32,
+        dy: i32,
+        face: u32,
+    ) {
         let (x, y) = ch.tile();
         let from = center(data, x, y);
         let (nx, ny) = (x + dx, y + dy);
         ch.set_tile(nx, ny);
         ch.set_dir(face);
         ch.set_frame((ch.frame() + 1) % 3);
-        self.active = Some(Tween { from, to: center(data, nx, ny), elapsed: 0.0 });
+        self.active = Some(Tween {
+            from,
+            to: center(data, nx, ny),
+            elapsed: 0.0,
+        });
     }
 }
 
@@ -176,7 +191,11 @@ pub fn decode_route(params: &[i32]) -> Vec<RouteAction> {
         match sub {
             0..=3 => {
                 let (dx, dy) = dir_delta(sub as u32);
-                actions.push(RouteAction::Step { dx, dy, face: sub as u32 });
+                actions.push(RouteAction::Step {
+                    dx,
+                    dy,
+                    face: sub as u32,
+                });
             }
             4..=7 => {
                 let (dx, dy) = DIAGONALS[(sub - 4) as usize];
@@ -226,8 +245,11 @@ pub fn walk<C: Character + Component<Mutability = Mutable>>(
             let (sx, sy) = tiles::charset_source(ch.index(), ch.dir(), ch.frame());
             sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
             sprite.image = asset_server.load(resolve_png("CharSet", ch.charset()));
-            transform.translation =
-                Vec3::new(pos.x, pos.y + CHAR_Y_OFFSET, tiles::character_z(ch.tile().1));
+            transform.translation = Vec3::new(
+                pos.x,
+                pos.y + CHAR_Y_OFFSET,
+                tiles::character_z(ch.tile().1),
+            );
         }
     }
 }
@@ -273,8 +295,22 @@ mod tests {
         // [10005,8,0,0,3,3,12] -> move-left, move-left, face-up.
         let actions = decode_route(&[10005, 8, 0, 0, 3, 3, 12]);
         assert_eq!(actions.len(), 3);
-        assert!(matches!(actions[0], RouteAction::Step { dx: -1, dy: 0, face: 3 }));
-        assert!(matches!(actions[1], RouteAction::Step { dx: -1, dy: 0, face: 3 }));
+        assert!(matches!(
+            actions[0],
+            RouteAction::Step {
+                dx: -1,
+                dy: 0,
+                face: 3
+            }
+        ));
+        assert!(matches!(
+            actions[1],
+            RouteAction::Step {
+                dx: -1,
+                dy: 0,
+                face: 3
+            }
+        ));
         assert!(matches!(actions[2], RouteAction::Face(0)));
     }
 
@@ -298,7 +334,14 @@ mod tests {
         ];
         let a = decode_route(&params);
         assert_eq!(a.len(), 7);
-        assert!(matches!(a[0], RouteAction::Step { dx: -1, dy: 0, face: 3 }));
+        assert!(matches!(
+            a[0],
+            RouteAction::Step {
+                dx: -1,
+                dy: 0,
+                face: 3
+            }
+        ));
         assert!(matches!(a[1], RouteAction::Face(0)));
         assert!(matches!(&a[2], RouteAction::ChangeGraphic(n, 0) if n == "Poses"));
         assert!(matches!(a[3], RouteAction::Wait));
@@ -312,9 +355,23 @@ mod tests {
         // down-right (5), forward (11), switch-on (32 + 1 arg), then move-down (2).
         let a = decode_route(&[10005, 8, 0, 0, 5, 11, 32, 7, 2]);
         assert_eq!(a.len(), 3);
-        assert!(matches!(a[0], RouteAction::Step { dx: 1, dy: 1, face: 2 }));
+        assert!(matches!(
+            a[0],
+            RouteAction::Step {
+                dx: 1,
+                dy: 1,
+                face: 2
+            }
+        ));
         assert!(matches!(a[1], RouteAction::Forward));
-        assert!(matches!(a[2], RouteAction::Step { dx: 0, dy: 1, face: 2 }));
+        assert!(matches!(
+            a[2],
+            RouteAction::Step {
+                dx: 0,
+                dy: 1,
+                face: 2
+            }
+        ));
     }
 
     #[test]
@@ -381,9 +438,19 @@ mod tests {
     #[test]
     fn advance_tweens_one_tile_then_settles() {
         let data = test_map();
-        let mut ch = FakeChar { x: 2, y: 2, dir: DIR_DOWN, frame: 1, charset: "C".into() };
+        let mut ch = FakeChar {
+            x: 2,
+            y: 2,
+            dir: DIR_DOWN,
+            frame: 1,
+            charset: "C".into(),
+        };
         let mut q = MoveQueue::default();
-        q.enqueue_route([RouteAction::Step { dx: -1, dy: 0, face: 3 }]);
+        q.enqueue_route([RouteAction::Step {
+            dx: -1,
+            dy: 0,
+            face: 3,
+        }]);
         // The first tick commits the logical tile and faces the move, rendering
         // still at the old tile's center.
         let start = q.advance(&mut ch, &data, 0.0).unwrap();

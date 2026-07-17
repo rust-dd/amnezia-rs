@@ -8,14 +8,14 @@ use crate::audio::AudioRequest;
 use crate::battle::{BattleActive, BattleOutcome, BattleRequest, BattleResult};
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
-use crate::menu::MenuOpen;
-use crate::shop::{ShopOpen, ShopRequest};
 use crate::events::message_boxes;
+use crate::menu::MenuOpen;
 use crate::player::Player;
-use crate::state::{active_page, Inventory, Party, Switches, Variables};
+use crate::shop::{ShopOpen, ShopRequest};
+use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::{Fade, PendingTeleport};
 use crate::text::{self, HeroName};
-use crate::world::{decode_route, EventSprite, MapEvents, MoveQueue};
+use crate::world::{EventSprite, MapEvents, MoveQueue, decode_route};
 use amnezia_data::EventCommand;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -296,7 +296,9 @@ fn run_interpreter(
             }
             LOOP => running.ip += 1,
             END_LOOP => running.ip = loop_start(&running.commands, running.ip, command.indent),
-            BREAK_LOOP => running.ip = after_loop_end(&running.commands, running.ip, command.indent),
+            BREAK_LOOP => {
+                running.ip = after_loop_end(&running.commands, running.ip, command.indent)
+            }
             SHOW_CHOICE => {
                 if running.choices.contains_key(&command.indent) {
                     running.ip += 1;
@@ -341,7 +343,11 @@ fn run_interpreter(
                         queue.enqueue_route(steps);
                     }
                 } else {
-                    let id = if target == 10005 { running.event_id as i32 } else { target };
+                    let id = if target == 10005 {
+                        running.event_id as i32
+                    } else {
+                        target
+                    };
                     if let Some((_, mut queue)) =
                         event_movers.iter_mut().find(|(e, _)| e.id as i32 == id)
                     {
@@ -365,7 +371,9 @@ fn run_interpreter(
                     return;
                 }
             }
-            VICTORY_HANDLER => running.select_battle_handler(command.indent, BattleOutcome::Victory),
+            VICTORY_HANDLER => {
+                running.select_battle_handler(command.indent, BattleOutcome::Victory)
+            }
             ESCAPE_HANDLER => running.select_battle_handler(command.indent, BattleOutcome::Escape),
             DEFEAT_HANDLER => running.select_battle_handler(command.indent, BattleOutcome::Defeat),
             END_BATTLE => {
@@ -375,9 +383,16 @@ fn run_interpreter(
             OPEN_SHOP => {
                 // Offer `params[4..]` (item ids, negatives dropped); pause until the
                 // screen closes, then the shop-resume above skips the block.
-                let items =
-                    command.params.iter().skip(4).filter(|&&p| p >= 0).map(|&p| p as u32).collect();
-                subsystems.shop_writer.write(ShopRequest::OpenShop { items });
+                let items = command
+                    .params
+                    .iter()
+                    .skip(4)
+                    .filter(|&&p| p >= 0)
+                    .map(|&p| p as u32)
+                    .collect();
+                subsystems
+                    .shop_writer
+                    .write(ShopRequest::OpenShop { items });
                 running.shop_pending = true;
                 return;
             }
@@ -450,4 +465,3 @@ fn clear_move_wait(mut running: ResMut<RunningEvent>, movers: Query<&MoveQueue>)
         running.wait_move = false;
     }
 }
-

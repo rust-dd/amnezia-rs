@@ -6,7 +6,7 @@
 //! converted data (Hungarian monster names vs English `Monster/*.png` files with
 //! no mapping field), so enemies render as coloured, named placeholders.
 
-use super::input::{item_choices, skill_choices, COMMAND_LABELS};
+use super::input::{COMMAND_LABELS, item_choices, skill_choices};
 use super::model::{Battle, MenuLevel, Phase};
 use crate::assets::resolve_png;
 use crate::font::GameFont;
@@ -46,7 +46,12 @@ struct EnemyNode {
 pub fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<AssetServer>) {
     let system: Handle<Image> = asset_server.load("graphics/System/System.png");
     commands
-        .spawn((full_screen(), Visibility::Hidden, GlobalZIndex(118), BattleRoot))
+        .spawn((
+            full_screen(),
+            Visibility::Hidden,
+            GlobalZIndex(118),
+            BattleRoot,
+        ))
         .with_children(|root| {
             root.spawn((full_screen(), ImageNode::default(), ZIndex(0), BattleBg));
             spawn_panel(root, &system, &font, log_node(), LogText);
@@ -118,7 +123,11 @@ fn update_ui(
     }
     let active = battle.phase != Phase::Inactive;
     if let Ok(mut visibility) = root.single_mut() {
-        *visibility = if active { Visibility::Visible } else { Visibility::Hidden };
+        *visibility = if active {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
     if !active {
         return;
@@ -138,7 +147,11 @@ fn update_ui(
     for (node, mut text, mut color) in &mut texts.p3() {
         if let Some(foe) = battle.enemies.get(node.index) {
             **text = format!("{}\n{}/{}", foe.name, foe.hp.max(0), foe.max_hp);
-            *color = BackgroundColor(enemy_color(node.index, foe.alive(), targeted(&battle, node.index)));
+            *color = BackgroundColor(enemy_color(
+                node.index,
+                foe.alive(),
+                targeted(&battle, node.index),
+            ));
         }
     }
 }
@@ -158,16 +171,24 @@ fn compose_command(battle: &Battle, data: &GameData, inventory: &Inventory) -> S
     let rows: Vec<String> = match battle.menu {
         MenuLevel::Command => COMMAND_LABELS.iter().map(|s| s.to_string()).collect(),
         MenuLevel::Skill => or_empty(
-            skill_choices(data, actor.sp).into_iter().map(|(_, _, label)| label).collect(),
+            skill_choices(data, actor.sp)
+                .into_iter()
+                .map(|(_, _, label)| label)
+                .collect(),
             "(nincs képesség)",
         ),
         MenuLevel::Item => or_empty(
-            item_choices(data, inventory).into_iter().map(|(_, label)| label).collect(),
+            item_choices(data, inventory)
+                .into_iter()
+                .map(|(_, label)| label)
+                .collect(),
             "(nincs tárgy)",
         ),
-        MenuLevel::Target => {
-            battle.living_enemies().iter().map(|&i| battle.enemies[i].name.clone()).collect()
-        }
+        MenuLevel::Target => battle
+            .living_enemies()
+            .iter()
+            .map(|&i| battle.enemies[i].name.clone())
+            .collect(),
     };
     let mut out = format!("{} parancsa:\n", actor.name);
     for (i, row) in rows.iter().enumerate() {
@@ -185,7 +206,11 @@ fn compose_status(battle: &Battle) -> String {
         .iter()
         .enumerate()
         .map(|(i, f)| {
-            let mark = if battle.phase == Phase::Command && i == battle.turn { "▶ " } else { "  " };
+            let mark = if battle.phase == Phase::Command && i == battle.turn {
+                "▶ "
+            } else {
+                "  "
+            };
             let state = if f.alive() {
                 format!("HP {}/{}  SP {}/{}", f.hp.max(0), f.max_hp, f.sp, f.max_sp)
             } else {
@@ -199,7 +224,11 @@ fn compose_status(battle: &Battle) -> String {
 
 /// `rows`, or a single `fallback` row when it is empty.
 fn or_empty(rows: Vec<String>, fallback: &str) -> Vec<String> {
-    if rows.is_empty() { vec![fallback.to_string()] } else { rows }
+    if rows.is_empty() {
+        vec![fallback.to_string()]
+    } else {
+        rows
+    }
 }
 
 /// Whether the target cursor currently rests on enemy `index`.
@@ -219,8 +248,12 @@ fn enemy_color(index: usize, alive: bool, targeted: bool) -> Color {
     if targeted {
         return Color::srgba(0.95, 0.75, 0.2, 0.92);
     }
-    const HUES: [(f32, f32, f32); 4] =
-        [(0.6, 0.2, 0.25), (0.2, 0.35, 0.55), (0.3, 0.45, 0.25), (0.5, 0.3, 0.5)];
+    const HUES: [(f32, f32, f32); 4] = [
+        (0.6, 0.2, 0.25),
+        (0.2, 0.35, 0.55),
+        (0.3, 0.45, 0.25),
+        (0.5, 0.3, 0.5),
+    ];
     let (r, g, b) = HUES[index % HUES.len()];
     Color::srgba(r, g, b, 0.85)
 }
@@ -267,7 +300,11 @@ fn spawn_panel<M: Component>(
 }
 
 fn text_font(font: &GameFont, size: f32) -> TextFont {
-    TextFont { font: FontSource::Handle(font.0.clone()), font_size: FontSize::Px(size), ..default() }
+    TextFont {
+        font: FontSource::Handle(font.0.clone()),
+        font_size: FontSize::Px(size),
+        ..default()
+    }
 }
 
 fn full_screen() -> Node {
@@ -323,5 +360,6 @@ fn status_node() -> Node {
 
 /// Register the battle UI systems on the given app.
 pub fn register(app: &mut App) {
-    app.add_systems(Startup, spawn_ui).add_systems(Update, (sync_enemies, update_ui));
+    app.add_systems(Startup, spawn_ui)
+        .add_systems(Update, (sync_enemies, update_ui));
 }

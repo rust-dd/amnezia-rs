@@ -3,16 +3,16 @@
 //! player entity persists across map changes; scene entities are tagged
 //! [`MapScene`] so a teleport can despawn them.
 
-use crate::assets::{load_ron, resolve_png, ASSET_ROOT};
+use crate::assets::{ASSET_ROOT, load_ron, resolve_png};
 use crate::player::spawn_player;
-use crate::state::{active_page, Inventory, Party, Switches, Variables};
+use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN};
 use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::prelude::*;
 
 mod movement;
 
-pub use movement::{decode_route, walk, Character, MoveQueue, RouteAction};
+pub use movement::{Character, MoveQueue, RouteAction, decode_route, walk};
 
 /// Developer start override. `None` uses the faithful LMT start (`start.ron`,
 /// the intro map_0005), whose autorun cutscene the interpreter now runs; set it
@@ -66,7 +66,12 @@ impl MapData {
     /// Whether the hero can stand on tile `(x, y)`.
     pub fn passable(&self, x: i32, y: i32) -> bool {
         let idx = (y * self.width + x) as usize;
-        tiles::passable(self.lower[idx], self.upper[idx], &self.passages_down, &self.passages_up)
+        tiles::passable(
+            self.lower[idx],
+            self.upper[idx],
+            &self.passages_down,
+            &self.passages_up,
+        )
     }
 }
 
@@ -84,7 +89,10 @@ impl Plugin for WorldPlugin {
             .add_systems(Startup, setup)
             .add_systems(
                 Update,
-                ((walk::<EventSprite>, update_event_sprites).chain(), animate_water),
+                (
+                    (walk::<EventSprite>, update_event_sprites).chain(),
+                    animate_water,
+                ),
             );
     }
 }
@@ -115,7 +123,10 @@ impl Default for WaterAnim {
     fn default() -> Self {
         // RM2000 water animates gently; ~0.4 s per step gives the classic cadence
         // (we do not parse the chipset's `animation_speed` database field).
-        Self { timer: Timer::from_seconds(0.4, TimerMode::Repeating), step: 0 }
+        Self {
+            timer: Timer::from_seconds(0.4, TimerMode::Repeating),
+            step: 0,
+        }
     }
 }
 
@@ -135,12 +146,22 @@ fn animate_water(
     let ab_frame = tiles::WATER_FRAMES[(anim.step % tiles::WATER_FRAMES.len() as u32) as usize];
     for (water, mut sprite) in &mut quarters {
         let src = tiles::water_quarters(water.id, ab_frame)[water.quarter].src;
-        sprite.rect = Some(Rect::new(src.0, src.1, src.0 + tiles::QUARTER, src.1 + tiles::QUARTER));
+        sprite.rect = Some(Rect::new(
+            src.0,
+            src.1,
+            src.0 + tiles::QUARTER,
+            src.1 + tiles::QUARTER,
+        ));
     }
     let c_frame = (anim.step % u32::from(tiles::BLOCK_C_FRAMES)) as u16;
     for (water, mut sprite) in &mut cells {
         let src = tiles::block_c_source(water.id, c_frame);
-        sprite.rect = Some(Rect::new(src.0, src.1, src.0 + tiles::TILE, src.1 + tiles::TILE));
+        sprite.rect = Some(Rect::new(
+            src.0,
+            src.1,
+            src.0 + tiles::TILE,
+            src.1 + tiles::TILE,
+        ));
     }
 }
 
@@ -166,7 +187,12 @@ fn setup(
         &inventory,
         start.map_id,
     );
-    spawn_player(&mut commands, &asset_server, (start.x as i32, start.y as i32), &data);
+    spawn_player(
+        &mut commands,
+        &asset_server,
+        (start.x as i32, start.y as i32),
+        &data,
+    );
     commands.insert_resource(data);
     commands.insert_resource(events);
 }
@@ -197,13 +223,20 @@ pub fn load_map(
 
     let width = map.width as i32;
     let height = map.height as i32;
-    let offset = (map.width as f32 * tiles::TILE / 2.0, map.height as f32 * tiles::TILE / 2.0);
+    let offset = (
+        map.width as f32 * tiles::TILE / 2.0,
+        map.height as f32 * tiles::TILE / 2.0,
+    );
 
     for (index, &id) in map.lower.iter().enumerate() {
         // A star-flagged lower tile (roof/wall top/treetop painted on the ground
         // layer) draws above the hero (z 4), the same rule the upper layer uses;
         // ordinary ground stays at z 0 below everything.
-        let z = if tiles::above_hero_lower(id, &passages_down) { 4.0 } else { 0.0 };
+        let z = if tiles::above_hero_lower(id, &passages_down) {
+            4.0
+        } else {
+            0.0
+        };
         match tiles::lower_render(id) {
             tiles::LowerRender::Whole { src } => {
                 let tile = spawn_tile(commands, &chipset, src, index as i32, width, offset, z);
@@ -213,7 +246,14 @@ pub fn load_map(
             }
             tiles::LowerRender::Quarters(quarters) => {
                 spawn_lower_quarters(
-                    commands, &chipset, &quarters, id, index as i32, width, offset, z,
+                    commands,
+                    &chipset,
+                    &quarters,
+                    id,
+                    index as i32,
+                    width,
+                    offset,
+                    z,
                 );
             }
         }
@@ -223,12 +263,25 @@ pub fn load_map(
             // "Above hero" upper tiles (roof/tree/tall-object tops) draw over the
             // hero (z 4 > player z 3) so the hero walks behind them; ordinary
             // upper tiles stay below the hero at z 1.
-            let z = if tiles::above_hero(id, &passages_up) { 4.0 } else { 1.0 };
+            let z = if tiles::above_hero(id, &passages_up) {
+                4.0
+            } else {
+                1.0
+            };
             spawn_tile(commands, &chipset, source, index as i32, width, offset, z);
         }
     }
     for event in &map.events {
-        spawn_event_npc(commands, asset_server, switches, variables, party, inventory, event, offset);
+        spawn_event_npc(
+            commands,
+            asset_server,
+            switches,
+            variables,
+            party,
+            inventory,
+            event,
+            offset,
+        );
     }
 
     let data = MapData {

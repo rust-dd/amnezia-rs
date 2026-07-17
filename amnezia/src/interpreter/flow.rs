@@ -36,7 +36,9 @@ pub(super) fn skip_else_body(commands: &[EventCommand], ip: usize, indent: u32) 
 /// Index of the `Label` (12110) whose first param equals `id`, anywhere in the
 /// page (RM2000 jumps forward or back).
 pub(super) fn find_label(commands: &[EventCommand], id: i32) -> Option<usize> {
-    commands.iter().position(|c| c.code == LABEL && c.params.first().copied() == Some(id))
+    commands
+        .iter()
+        .position(|c| c.code == LABEL && c.params.first().copied() == Some(id))
 }
 
 /// The option labels of a `ShowChoice` at `ip`/`indent`: each following
@@ -125,18 +127,33 @@ mod tests {
     use super::*;
 
     fn cmd(code: u32, indent: u32) -> EventCommand {
-        EventCommand { code, indent, string: String::new(), params: Vec::new() }
+        EventCommand {
+            code,
+            indent,
+            string: String::new(),
+            params: Vec::new(),
+        }
     }
 
     fn cmd_params(code: u32, indent: u32, params: Vec<i32>) -> EventCommand {
-        EventCommand { code, indent, string: String::new(), params }
+        EventCommand {
+            code,
+            indent,
+            string: String::new(),
+            params,
+        }
     }
 
     #[test]
     fn skips_whole_subsystem_block() {
         // 0: EnemyEncounter@0  1: VictoryHandler@0  2: body@1  3: EndBattle@0  4: after@0
-        let commands =
-            vec![cmd(10710, 0), cmd(20710, 0), cmd(10210, 1), cmd(20713, 0), cmd(10110, 0)];
+        let commands = vec![
+            cmd(10710, 0),
+            cmd(20710, 0),
+            cmd(10210, 1),
+            cmd(20713, 0),
+            cmd(10110, 0),
+        ];
         assert_eq!(skip_to_terminator(&commands, 0, 0, 20713), 4);
     }
 
@@ -162,8 +179,13 @@ mod tests {
     #[test]
     fn break_loop_skips_past_end() {
         // 0: Loop@0  1: Break@1  2: body@1  3: EndLoop@0  4: after@0
-        let commands =
-            vec![cmd(12210, 0), cmd(12220, 1), cmd(10110, 1), cmd(22210, 0), cmd(10110, 0)];
+        let commands = vec![
+            cmd(12210, 0),
+            cmd(12220, 1),
+            cmd(10110, 1),
+            cmd(22210, 0),
+            cmd(10110, 0),
+        ];
         assert_eq!(after_loop_end(&commands, 1, 1), 4);
     }
 
@@ -172,9 +194,19 @@ mod tests {
         // ShowChoice@0; Option0 "Yes"@0 body@1; Option1 "No"@0 body@1; End@0
         let commands = vec![
             cmd_params(10140, 0, vec![0]),
-            EventCommand { code: 20140, indent: 0, string: "Yes".into(), params: vec![0] },
+            EventCommand {
+                code: 20140,
+                indent: 0,
+                string: "Yes".into(),
+                params: vec![0],
+            },
             cmd(10210, 1),
-            EventCommand { code: 20140, indent: 0, string: "No".into(), params: vec![1] },
+            EventCommand {
+                code: 20140,
+                indent: 0,
+                string: "No".into(),
+                params: vec![1],
+            },
             cmd(10210, 1),
             cmd(20141, 0),
         ];
@@ -184,16 +216,26 @@ mod tests {
     #[test]
     fn skip_option_body_lands_on_next_option() {
         // 0: ShowChoice@0  1: Option0@0  2: body@1  3: Option1@0  4: End@0
-        let commands =
-            vec![cmd(10140, 0), cmd(20140, 0), cmd(10210, 1), cmd(20140, 0), cmd(20141, 0)];
+        let commands = vec![
+            cmd(10140, 0),
+            cmd(20140, 0),
+            cmd(10210, 1),
+            cmd(20140, 0),
+            cmd(20141, 0),
+        ];
         assert_eq!(skip_option_body(&commands, 1, 0), 3);
     }
 
     #[test]
     fn skip_battle_handler_lands_on_next_handler() {
         // 0: EnemyEncounter@0  1: Victory@0  2: body@1  3: Escape@0  4: EndBattle@0
-        let commands =
-            vec![cmd(10710, 0), cmd(20710, 0), cmd(10210, 1), cmd(20711, 0), cmd(20713, 0)];
+        let commands = vec![
+            cmd(10710, 0),
+            cmd(20710, 0),
+            cmd(10210, 1),
+            cmd(20711, 0),
+            cmd(20713, 0),
+        ];
         // From the Victory handler, skip its body → land on the Escape handler.
         assert_eq!(skip_battle_handler(&commands, 1, 0), 3);
     }
@@ -222,8 +264,11 @@ mod tests {
     #[test]
     fn skip_true_body_without_else() {
         // 0: branch@0  1: body@1  2: end@0
-        let commands =
-            vec![cmd(CONDITIONAL_BRANCH, 0), cmd(SHOW_MESSAGE, 1), cmd(END_BRANCH, 0)];
+        let commands = vec![
+            cmd(CONDITIONAL_BRANCH, 0),
+            cmd(SHOW_MESSAGE, 1),
+            cmd(END_BRANCH, 0),
+        ];
         // Not taken, no else → land on the end marker at index 2.
         assert_eq!(skip_true_body(&commands, 0, 0), 2);
     }

@@ -7,8 +7,8 @@
 //!
 //! [`resolve`]: super::resolve
 
-use super::logic::{self, Stats};
 use super::BattleOutcome;
+use super::logic::{self, Stats};
 use crate::vitals::Vitals;
 use amnezia_data::{ActorDef, MonsterDef, TroopDef};
 use bevy::prelude::*;
@@ -83,8 +83,14 @@ impl Foe {
 /// [`Command::Attack`].
 #[derive(Clone, Copy)]
 pub enum Command {
-    Attack { target: usize },
-    Skill { power: u32, cost: u32, target: usize },
+    Attack {
+        target: usize,
+    },
+    Skill {
+        power: u32,
+        cost: u32,
+        target: usize,
+    },
     Item,
     Defend,
     Nothing,
@@ -133,7 +139,9 @@ pub struct Battle {
 /// Advance a little PCG-style LCG and return its next output. Self-contained so
 /// the crate takes on no `rand` dependency for battle variance and AI rolls.
 pub(super) fn rng_next(state: &mut u64) -> u64 {
-    *state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+    *state = state
+        .wrapping_mul(6364136223846793005)
+        .wrapping_add(1442695040888963407);
     (*state >> 33) ^ *state
 }
 
@@ -197,12 +205,19 @@ impl Battle {
 
     /// The index of the next living member still owing a command this round.
     pub fn next_chooser(&self) -> Option<usize> {
-        self.members.iter().position(|f| f.alive() && f.command.is_none())
+        self.members
+            .iter()
+            .position(|f| f.alive() && f.command.is_none())
     }
 
     /// Living enemy indices, in placement order (the target-menu order).
     pub fn living_enemies(&self) -> Vec<usize> {
-        self.enemies.iter().enumerate().filter(|(_, e)| e.alive()).map(|(i, _)| i).collect()
+        self.enemies
+            .iter()
+            .enumerate()
+            .filter(|(_, e)| e.alive())
+            .map(|(i, _)| i)
+            .collect()
     }
 
     /// Commit `command` for the member currently choosing, then move on: to the
@@ -225,8 +240,9 @@ impl Battle {
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;
-        if let Some(i) =
-            self.members[..self.turn].iter().rposition(|f| f.alive() && f.command.is_some())
+        if let Some(i) = self.members[..self.turn]
+            .iter()
+            .rposition(|f| f.alive() && f.command.is_some())
         {
             self.members[i].command = None;
             self.turn = i;
@@ -241,7 +257,11 @@ impl Battle {
         let mut actions: Vec<Action> = Vec::new();
         for (i, f) in self.members.iter().enumerate() {
             if let Some(kind) = f.command {
-                actions.push(Action { source: Source::Party(i), kind, agility: f.stats.agility });
+                actions.push(Action {
+                    source: Source::Party(i),
+                    kind,
+                    agility: f.stats.agility,
+                });
             }
         }
         for i in 0..self.enemies.len() {
@@ -259,7 +279,10 @@ impl Battle {
             }
         }
         let agilities: Vec<u32> = actions.iter().map(|a| a.agility).collect();
-        self.queue = logic::turn_order(&agilities).into_iter().map(|i| actions[i]).collect();
+        self.queue = logic::turn_order(&agilities)
+            .into_iter()
+            .map(|i| actions[i])
+            .collect();
         self.queue_at = 0;
         self.timer.reset();
         self.phase = Phase::Resolve;
@@ -292,7 +315,15 @@ pub(super) mod testkit {
     use super::*;
 
     pub fn actor(id: u32, level: u32, hp: u32, sp: u32) -> ActorDef {
-        ActorDef { id, name: format!("A{id}"), title: String::new(), level, max_level: 50, hp, sp }
+        ActorDef {
+            id,
+            name: format!("A{id}"),
+            title: String::new(),
+            level,
+            max_level: 50,
+            hp,
+            sp,
+        }
     }
 
     pub fn monster(id: u32, hp: u32, exp: u32, gold: u32) -> MonsterDef {
@@ -327,7 +358,14 @@ pub(super) mod testkit {
         let ron = actor(1, 2, 63, 37);
         let actors = vec![&ron];
         let troop = troop(&[(1, 100, 100), (1, 200, 100)]);
-        Battle::build(&troop, &monsters, &actors, &Vitals::default(), "Cave1".into(), 42)
+        Battle::build(
+            &troop,
+            &monsters,
+            &actors,
+            &Vitals::default(),
+            "Cave1".into(),
+            42,
+        )
     }
 }
 
@@ -363,8 +401,14 @@ mod tests {
         let actors = vec![&ron, &tiff];
         let monsters = vec![super::testkit::monster(1, 30, 10, 30)];
         let troop = super::testkit::troop(&[(1, 100, 100)]);
-        let mut battle =
-            Battle::build(&troop, &monsters, &actors, &Vitals::default(), "Cave1".into(), 7);
+        let mut battle = Battle::build(
+            &troop,
+            &monsters,
+            &actors,
+            &Vitals::default(),
+            "Cave1".into(),
+            7,
+        );
         battle.commit(Command::Defend); // member 0 acts, turn moves to member 1
         assert_eq!(battle.turn, 1);
         battle.undo_choice();

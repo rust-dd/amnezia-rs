@@ -19,7 +19,12 @@ pub struct Stats {
 impl Stats {
     /// Monster `m`'s stats, read directly from its definition.
     pub fn from_monster(m: &MonsterDef) -> Self {
-        Self { attack: m.attack, defense: m.defense, spirit: m.spirit, agility: m.agility }
+        Self {
+            attack: m.attack,
+            defense: m.defense,
+            spirit: m.spirit,
+            agility: m.agility,
+        }
     }
 }
 
@@ -94,14 +99,20 @@ pub fn flee_succeeds(chance: u32, roll: u32) -> bool {
 /// enemy AI uses it to choose a random living party target; `None` when every
 /// flag is false.
 pub fn select_target(alive: &[bool], roll: usize) -> Option<usize> {
-    let living: Vec<usize> =
-        alive.iter().enumerate().filter(|&(_, &a)| a).map(|(i, _)| i).collect();
+    let living: Vec<usize> = alive
+        .iter()
+        .enumerate()
+        .filter(|&(_, &a)| a)
+        .map(|(i, _)| i)
+        .collect();
     living.get(roll % living.len().max(1)).copied()
 }
 
 /// Sum the experience and gold from every defeated monster's `(exp, gold)`.
 pub fn total_rewards(rewards: &[(u32, u32)]) -> (u32, u32) {
-    rewards.iter().fold((0, 0), |(exp, gold), &(e, g)| (exp + e, gold + g))
+    rewards
+        .iter()
+        .fold((0, 0), |(exp, gold), &(e, g)| (exp + e, gold + g))
 }
 
 /// The offensive skills a caster with `sp` spirit-points can use this turn:
@@ -120,7 +131,14 @@ mod tests {
     use super::*;
 
     fn skill(id: u32, name: &str, sp_cost: u32, power: u32) -> SkillDef {
-        SkillDef { id, name: name.into(), description: String::new(), sp_cost, power, hit: 0 }
+        SkillDef {
+            id,
+            name: name.into(),
+            description: String::new(),
+            sp_cost,
+            power,
+            hit: 0,
+        }
     }
 
     #[test]
@@ -184,17 +202,25 @@ mod tests {
 
     #[test]
     fn actor_stats_grow_with_level() {
-        assert_eq!(actor_stats(2), Stats { attack: 28, defense: 16, spirit: 14, agility: 12 });
+        assert_eq!(
+            actor_stats(2),
+            Stats {
+                attack: 28,
+                defense: 16,
+                spirit: 14,
+                agility: 12
+            }
+        );
         assert!(actor_stats(10).attack > actor_stats(2).attack);
     }
 
     #[test]
     fn usable_skills_keeps_affordable_offensive_rows_only() {
         let skills = vec![
-            skill(1, "X-Csapás", 20, 50),           // affordable, offensive
-            skill(2, "Főnix", 300, 999),            // too expensive
-            skill(3, "--------", 0, 0),             // divider row
-            skill(4, "Lélekdal", 50, 0),            // zero power (non-damage)
+            skill(1, "X-Csapás", 20, 50), // affordable, offensive
+            skill(2, "Főnix", 300, 999),  // too expensive
+            skill(3, "--------", 0, 0),   // divider row
+            skill(4, "Lélekdal", 50, 0),  // zero power (non-damage)
         ];
         let usable = usable_skills(&skills, 40);
         assert_eq!(usable.len(), 1);

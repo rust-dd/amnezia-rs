@@ -3,7 +3,7 @@
 //! same shape enemies use. Chunk ids follow liblcf `ChunkSkill`.
 
 use super::find_section;
-use crate::{decode_cp1250, LcfError, Reader};
+use crate::{LcfError, Reader, decode_cp1250};
 
 /// A skill (spell/ability) definition: the fields a skill menu and the battle
 /// system need. `sp_cost` is the SP spent to cast it, `power` the base effect
@@ -68,7 +68,7 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
 #[cfg(test)]
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk, varint};
-    use crate::{parse_skills, LcfError, Skill};
+    use crate::{LcfError, Skill, parse_skills};
 
     #[test]
     fn parses_skill_battle_fields() {

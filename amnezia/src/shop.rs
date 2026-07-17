@@ -33,8 +33,16 @@ pub struct ShopOpen(pub bool);
 enum Screen {
     #[default]
     Closed,
-    Shop { items: Vec<u32>, mode: Mode, cursor: usize },
-    Inn { cost: i32, yes: bool, done: bool },
+    Shop {
+        items: Vec<u32>,
+        mode: Mode,
+        cursor: usize,
+    },
+    Inn {
+        cost: i32,
+        yes: bool,
+        done: bool,
+    },
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -57,7 +65,10 @@ impl Plugin for ShopPlugin {
             .init_resource::<ShopOpen>()
             .init_resource::<Screen>()
             .add_systems(Startup, spawn_ui)
-            .add_systems(Update, (open_requests, shop_input, debug_triggers, update_ui));
+            .add_systems(
+                Update,
+                (open_requests, shop_input, debug_triggers, update_ui),
+            );
     }
 }
 
@@ -80,10 +91,16 @@ fn open_requests(
 ) {
     for request in requests.read() {
         *screen = match request {
-            ShopRequest::OpenShop { items } => {
-                Screen::Shop { items: items.clone(), mode: Mode::Buy, cursor: 0 }
-            }
-            ShopRequest::ShowInn { cost } => Screen::Inn { cost: *cost, yes: true, done: false },
+            ShopRequest::OpenShop { items } => Screen::Shop {
+                items: items.clone(),
+                mode: Mode::Buy,
+                cursor: 0,
+            },
+            ShopRequest::ShowInn { cost } => Screen::Inn {
+                cost: *cost,
+                yes: true,
+                done: false,
+            },
         };
         open.0 = true;
     }
@@ -104,9 +121,11 @@ fn shop_input(
     let mut current = std::mem::take(&mut *screen);
     let keep = match &mut current {
         Screen::Closed => false,
-        Screen::Shop { items, mode, cursor } => {
-            shop_step(&keys, &data, &mut inventory, items, mode, cursor)
-        }
+        Screen::Shop {
+            items,
+            mode,
+            cursor,
+        } => shop_step(&keys, &data, &mut inventory, items, mode, cursor),
         Screen::Inn { cost, yes, done } => inn_step(&keys, &mut inventory, *cost, yes, done),
     };
     if keep {
@@ -130,7 +149,11 @@ fn shop_step(
         return false;
     }
     if keys.just_pressed(KeyCode::ArrowLeft) || keys.just_pressed(KeyCode::ArrowRight) {
-        *mode = if *mode == Mode::Buy { Mode::Sell } else { Mode::Buy };
+        *mode = if *mode == Mode::Buy {
+            Mode::Sell
+        } else {
+            Mode::Buy
+        };
         *cursor = 0;
     }
     let entries = shop_entries(*mode, data, inventory, items);
@@ -214,13 +237,26 @@ fn shop_entries(
     match mode {
         Mode::Buy => items
             .iter()
-            .filter_map(|&id| data.item(id).map(|i| (id, format!("{}   {}g", i.name, i.price))))
+            .filter_map(|&id| {
+                data.item(id)
+                    .map(|i| (id, format!("{}   {}g", i.name, i.price)))
+            })
             .collect(),
         Mode::Sell => data
             .items
             .iter()
             .filter(|i| inventory.count(i.id) > 0)
-            .map(|i| (i.id, format!("{}   {}g   ×{}", i.name, sell_price(i.price), inventory.count(i.id))))
+            .map(|i| {
+                (
+                    i.id,
+                    format!(
+                        "{}   {}g   ×{}",
+                        i.name,
+                        sell_price(i.price),
+                        inventory.count(i.id)
+                    ),
+                )
+            })
             .collect(),
     }
 }
@@ -229,7 +265,9 @@ fn shop_entries(
 /// interpreter emits [`ShopRequest`]. Remove once opcodes 10720/10730 are wired.
 fn debug_triggers(keys: Res<ButtonInput<KeyCode>>, mut requests: MessageWriter<ShopRequest>) {
     if keys.just_pressed(KeyCode::F7) {
-        requests.write(ShopRequest::OpenShop { items: vec![1, 2, 3, 4] });
+        requests.write(ShopRequest::OpenShop {
+            items: vec![1, 2, 3, 4],
+        });
     }
     if keys.just_pressed(KeyCode::F8) {
         requests.write(ShopRequest::ShowInn { cost: 10 });
@@ -269,7 +307,11 @@ fn update_ui(
     }
     let showing = !matches!(*screen, Screen::Closed);
     if let Ok(mut visibility) = panels.single_mut() {
-        *visibility = if showing { Visibility::Visible } else { Visibility::Hidden };
+        *visibility = if showing {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
     if showing && let Ok(mut text) = texts.single_mut() {
         **text = render(&screen, &data, &inventory);
@@ -280,7 +322,11 @@ fn update_ui(
 fn render(screen: &Screen, data: &GameData, inventory: &Inventory) -> String {
     match screen {
         Screen::Closed => String::new(),
-        Screen::Shop { items, mode, cursor } => render_shop(*mode, *cursor, data, inventory, items),
+        Screen::Shop {
+            items,
+            mode,
+            cursor,
+        } => render_shop(*mode, *cursor, data, inventory, items),
         Screen::Inn { cost, yes, done } => render_inn(*cost, *yes, *done),
     }
 }
@@ -292,7 +338,11 @@ fn render_shop(
     inventory: &Inventory,
     items: &[u32],
 ) -> String {
-    let tab = if mode == Mode::Buy { "[Buy]   Sell " } else { " Buy   [Sell]" };
+    let tab = if mode == Mode::Buy {
+        "[Buy]   Sell "
+    } else {
+        " Buy   [Sell]"
+    };
     let mut out = format!("SHOP     {tab}     Gold: {}\n\n", inventory.gold());
     let entries = shop_entries(mode, data, inventory, items);
     if entries.is_empty() {
@@ -311,7 +361,11 @@ fn render_inn(cost: i32, yes: bool, done: bool) -> String {
     if done {
         return format!("INN\n\nYou rested well. (-{cost}g)\n\n[Enter] Leave");
     }
-    let (y, n) = if yes { ("▶ Yes", "  No") } else { ("  Yes", "▶ No") };
+    let (y, n) = if yes {
+        ("▶ Yes", "  No")
+    } else {
+        ("  Yes", "▶ No")
+    };
     format!("INN\n\nRest for {cost} gold?\n\n{y}\n{n}\n\n[←/→] Choose   [Enter] OK   [Esc] Cancel")
 }
 

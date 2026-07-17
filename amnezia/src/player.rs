@@ -7,10 +7,10 @@ use crate::dialogue::Dialogue;
 use crate::interpreter::RunningEvent;
 use crate::menu::MenuOpen;
 use crate::shop::ShopOpen;
-use crate::state::{active_page, Inventory, Party, Switches, Variables};
+use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::Fade;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
-use crate::world::{walk, Character, MapData, MapEvents, MoveQueue, RouteAction};
+use crate::world::{Character, MapData, MapEvents, MoveQueue, RouteAction, walk};
 use amnezia_data::EventPage;
 use bevy::prelude::*;
 
@@ -68,7 +68,13 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (move_player, walk::<Player>, update_player_sprite, camera_follow).chain(),
+            (
+                move_player,
+                walk::<Player>,
+                update_player_sprite,
+                camera_follow,
+            )
+                .chain(),
         );
     }
 }
@@ -99,7 +105,11 @@ pub fn spawn_player(
             custom_size: Some(Vec2::new(tiles::CHAR_W, tiles::CHAR_H)),
             ..default()
         },
-        Transform::from_xyz(world_x, world_y + CHAR_Y_OFFSET, tiles::character_z(start.1)),
+        Transform::from_xyz(
+            world_x,
+            world_y + CHAR_Y_OFFSET,
+            tiles::character_z(start.1),
+        ),
     ));
 }
 
@@ -168,7 +178,15 @@ fn move_player(
         return;
     }
     let blocked = !data.passable(nx, ny)
-        || event_blocks_at(&map_events, &switches, &variables, &party, &inventory, nx, ny);
+        || event_blocks_at(
+            &map_events,
+            &switches,
+            &variables,
+            &party,
+            &inventory,
+            nx,
+            ny,
+        );
     if !blocked {
         queue.push_step(RouteAction::Step { dx, dy, face: dir });
     }
@@ -176,9 +194,15 @@ fn move_player(
     // passable step onto it, or in place at a solid one (RM2000 doors/exits are
     // solid). It fires only on input, never on the interpreter's own actions, so
     // there's no re-trigger loop.
-    if let Some((id, page)) =
-        touch_page_at(&map_events, &switches, &variables, &party, &inventory, nx, ny)
-    {
+    if let Some((id, page)) = touch_page_at(
+        &map_events,
+        &switches,
+        &variables,
+        &party,
+        &inventory,
+        nx,
+        ny,
+    ) {
         running.start(id, page.commands.clone());
     }
 }

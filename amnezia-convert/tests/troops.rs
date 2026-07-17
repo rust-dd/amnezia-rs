@@ -58,14 +58,27 @@ fn converts_ldb_to_troops_ron() {
 
     let m1 = element(
         1,
-        &[subchunk(0x01, &varint(3)), subchunk(0x02, &varint(80)), subchunk(0x03, &varint(120))],
+        &[
+            subchunk(0x01, &varint(3)),
+            subchunk(0x02, &varint(80)),
+            subchunk(0x03, &varint(120)),
+        ],
     );
-    let m2 = element(2, &[subchunk(0x01, &varint(5)), subchunk(0x02, &varint(160))]);
+    let m2 = element(
+        2,
+        &[subchunk(0x01, &varint(5)), subchunk(0x02, &varint(160))],
+    );
     let mut members = varint(2);
     members.extend_from_slice(&m1);
     members.extend_from_slice(&m2);
     // Name bytes are CP1250 "Őrök" (guards): 0xD5 = 'Ő', 0xF6 = 'ö'.
-    let troop = element(1, &[subchunk(0x01, &[0xD5, 0x72, 0xF6, 0x6B]), subchunk(0x02, &members)]);
+    let troop = element(
+        1,
+        &[
+            subchunk(0x01, &[0xD5, 0x72, 0xF6, 0x6B]),
+            subchunk(0x02, &members),
+        ],
+    );
     let ldb = make_ldb(0x0F, &[troop]);
     std::fs::write(input.join("RPG_RT.ldb"), ldb).unwrap();
 
@@ -80,8 +93,16 @@ fn converts_ldb_to_troops_ron() {
             id: 1,
             name: "Őrök".to_string(),
             members: vec![
-                TroopMemberDef { enemy_id: 3, x: 80, y: 120 },
-                TroopMemberDef { enemy_id: 5, x: 160, y: 0 },
+                TroopMemberDef {
+                    enemy_id: 3,
+                    x: 80,
+                    y: 120
+                },
+                TroopMemberDef {
+                    enemy_id: 5,
+                    x: 160,
+                    y: 0
+                },
             ],
         }
     );

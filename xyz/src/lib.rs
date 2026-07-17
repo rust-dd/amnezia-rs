@@ -51,25 +51,36 @@ pub fn decode(bytes: &[u8], transparent_index0: bool) -> Result<XyzImage, XyzErr
     let pixels = width as usize * height as usize;
     let expected = PALETTE_LEN + pixels;
     if inflated.len() < expected {
-        return Err(XyzError::PayloadTooSmall { expected, got: inflated.len() });
+        return Err(XyzError::PayloadTooSmall {
+            expected,
+            got: inflated.len(),
+        });
     }
     let (palette, indices) = inflated.split_at(PALETTE_LEN);
 
     let mut rgba = Vec::with_capacity(pixels * 4);
     for &index in &indices[..pixels] {
         let base = index as usize * 3;
-        let alpha = if transparent_index0 && index == 0 { 0 } else { 255 };
+        let alpha = if transparent_index0 && index == 0 {
+            0
+        } else {
+            255
+        };
         rgba.extend_from_slice(&[palette[base], palette[base + 1], palette[base + 2], alpha]);
     }
 
-    Ok(XyzImage { width, height, rgba })
+    Ok(XyzImage {
+        width,
+        height,
+        rgba,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use flate2::write::ZlibEncoder;
     use flate2::Compression;
+    use flate2::write::ZlibEncoder;
     use std::io::Write;
 
     fn make_xyz(width: u16, height: u16, palette: &[u8; 768], indices: &[u8]) -> Vec<u8> {
@@ -108,12 +119,18 @@ mod tests {
 
     #[test]
     fn rejects_bad_magic() {
-        assert!(matches!(decode(b"NOPE\0\0\0\0", false), Err(XyzError::BadMagic)));
+        assert!(matches!(
+            decode(b"NOPE\0\0\0\0", false),
+            Err(XyzError::BadMagic)
+        ));
     }
 
     #[test]
     fn rejects_truncated_header() {
-        assert!(matches!(decode(b"XYZ", false), Err(XyzError::TruncatedHeader)));
+        assert!(matches!(
+            decode(b"XYZ", false),
+            Err(XyzError::TruncatedHeader)
+        ));
     }
 
     #[test]
@@ -122,7 +139,10 @@ mod tests {
         let file = make_xyz(2, 1, &palette, &[]);
         assert!(matches!(
             decode(&file, false),
-            Err(XyzError::PayloadTooSmall { expected: 770, got: 768 })
+            Err(XyzError::PayloadTooSmall {
+                expected: 770,
+                got: 768
+            })
         ));
     }
 

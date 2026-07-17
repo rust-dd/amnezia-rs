@@ -9,12 +9,13 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 const GRAPHIC_CATEGORIES: &[&str] = &[
-    "Backdrop", "Battle", "CharSet", "ChipSet", "FaceSet", "GameOver", "Monster",
-    "Panorama", "Picture", "System", "Title",
+    "Backdrop", "Battle", "CharSet", "ChipSet", "FaceSet", "GameOver", "Monster", "Panorama",
+    "Picture", "System", "Title",
 ];
 
-const TRANSPARENT_CATEGORIES: &[&str] =
-    &["Battle", "CharSet", "ChipSet", "Monster", "Picture", "System"];
+const TRANSPARENT_CATEGORIES: &[&str] = &[
+    "Battle", "CharSet", "ChipSet", "Monster", "Picture", "System",
+];
 
 /// Convert every `.xyz` graphic under `input`'s category directories into a
 /// PNG under `output/graphics/<Category>/`, returning the number written.
@@ -45,14 +46,19 @@ pub fn convert_graphics(input: &Path, output: &Path) -> Result<usize> {
                 std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
             let decoded = xyz::decode(&bytes, transparent)
                 .with_context(|| format!("decoding {}", path.display()))?;
-            let buffer =
-                image::RgbaImage::from_raw(decoded.width as u32, decoded.height as u32, decoded.rgba)
-                    .context("decoded RGBA buffer has an unexpected size")?;
+            let buffer = image::RgbaImage::from_raw(
+                decoded.width as u32,
+                decoded.height as u32,
+                decoded.rgba,
+            )
+            .context("decoded RGBA buffer has an unexpected size")?;
             let stem = path.file_stem().unwrap_or_default().to_string_lossy();
             let out = out_dir.join(format!("{stem}.png"));
             std::fs::create_dir_all(&out_dir)
                 .with_context(|| format!("creating {}", out_dir.display()))?;
-            buffer.save(&out).with_context(|| format!("writing {}", out.display()))?;
+            buffer
+                .save(&out)
+                .with_context(|| format!("writing {}", out.display()))?;
             count += 1;
         }
     }
@@ -77,7 +83,10 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
             continue;
         }
         let stem = path.file_stem().unwrap_or_default().to_string_lossy();
-        let number = stem.strip_prefix("Map").or_else(|| stem.strip_prefix("map")).unwrap_or(&stem);
+        let number = stem
+            .strip_prefix("Map")
+            .or_else(|| stem.strip_prefix("map"))
+            .unwrap_or(&stem);
 
         let bytes = std::fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
         let unit = lcf::parse_map(&bytes).with_context(|| format!("parsing {}", path.display()))?;
@@ -129,7 +138,8 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
             events,
         };
         let serialised = ron::to_string(&map).context("serialising map to RON")?;
-        std::fs::create_dir_all(&out_dir).with_context(|| format!("creating {}", out_dir.display()))?;
+        std::fs::create_dir_all(&out_dir)
+            .with_context(|| format!("creating {}", out_dir.display()))?;
         let out = out_dir.join(format!("map_{number}.ron"));
         std::fs::write(&out, serialised).with_context(|| format!("writing {}", out.display()))?;
         count += 1;
@@ -146,7 +156,11 @@ pub fn convert_start(input: &Path, output: &Path) -> Result<u32> {
     let lmt = input.join("RPG_RT.lmt");
     let bytes = std::fs::read(&lmt).with_context(|| format!("reading {}", lmt.display()))?;
     let parsed = lcf::parse_start(&bytes).with_context(|| format!("parsing {}", lmt.display()))?;
-    let start = Start { map_id: parsed.map_id, x: parsed.x, y: parsed.y };
+    let start = Start {
+        map_id: parsed.map_id,
+        x: parsed.x,
+        y: parsed.y,
+    };
     let serialised = ron::to_string(&start).context("serialising start to RON")?;
     std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
     std::fs::write(output.join("start.ron"), serialised)
@@ -162,7 +176,8 @@ pub fn convert_chipsets(input: &Path, output: &Path) -> Result<usize> {
     }
     let ldb = input.join("RPG_RT.ldb");
     let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
-    let parsed = lcf::parse_chipsets(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let parsed =
+        lcf::parse_chipsets(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
     let chipsets: Vec<Chipset> = parsed
         .into_iter()
         .map(|c| Chipset {
@@ -299,7 +314,8 @@ pub fn convert_monsters(input: &Path, output: &Path) -> Result<usize> {
     }
     let ldb = input.join("RPG_RT.ldb");
     let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
-    let parsed = lcf::parse_monsters(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let parsed =
+        lcf::parse_monsters(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
     let monsters: Vec<MonsterDef> = parsed
         .into_iter()
         .map(|m| MonsterDef {
@@ -341,7 +357,11 @@ pub fn convert_troops(input: &Path, output: &Path) -> Result<usize> {
             members: t
                 .members
                 .into_iter()
-                .map(|m| TroopMemberDef { enemy_id: m.enemy_id, x: m.x, y: m.y })
+                .map(|m| TroopMemberDef {
+                    enemy_id: m.enemy_id,
+                    x: m.x,
+                    y: m.y,
+                })
                 .collect(),
         })
         .collect();
@@ -426,7 +446,8 @@ fn copy_audio_dir(dir: &Path, out: &Path, extension: &str) -> Result<usize> {
             continue;
         }
         let name = path.file_name().context("audio file has no name")?;
-        std::fs::copy(&path, out.join(name)).with_context(|| format!("copying {}", path.display()))?;
+        std::fs::copy(&path, out.join(name))
+            .with_context(|| format!("copying {}", path.display()))?;
         count += 1;
     }
     Ok(count)

@@ -91,16 +91,29 @@ fn converts_ldb_to_common_events_ron() {
 
     let text = std::fs::read_to_string(output.join("common_events.ron")).unwrap();
     let events: Vec<CommonEvent> = ron::from_str(&text).unwrap();
-    assert_eq!(events[0], CommonEvent {
-        id: 1,
-        name: "Kezdés".to_string(),
-        trigger: 1,
-        switch_id: 7,
-        commands: vec![
-            EventCommand { code: 10110, indent: 0, string: "Helló".to_string(), params: vec![] },
-            EventCommand { code: 0, indent: 0, string: String::new(), params: vec![] },
-        ],
-    });
+    assert_eq!(
+        events[0],
+        CommonEvent {
+            id: 1,
+            name: "Kezdés".to_string(),
+            trigger: 1,
+            switch_id: 7,
+            commands: vec![
+                EventCommand {
+                    code: 10110,
+                    indent: 0,
+                    string: "Helló".to_string(),
+                    params: vec![]
+                },
+                EventCommand {
+                    code: 0,
+                    indent: 0,
+                    string: String::new(),
+                    params: vec![]
+                },
+            ],
+        }
+    );
     assert_eq!(events[1].name, "Idle");
     assert_eq!(events[1].trigger, 0, "trigger defaults to call");
     assert!(events[1].commands.is_empty());

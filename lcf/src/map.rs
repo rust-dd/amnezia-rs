@@ -1,8 +1,8 @@
 //! Map-unit (`MapXXXX.lmu`) and map-tree (`RPG_RT.lmt`) parsing: the geometry,
 //! tile layers, events, and the party's starting position.
 
-use crate::{Reader, decode_cp1250};
 use crate::LcfError;
+use crate::{Reader, decode_cp1250};
 
 const DEFAULT_WIDTH: u32 = 20;
 const DEFAULT_HEIGHT: u32 = 15;
@@ -17,12 +17,23 @@ pub struct MapUnit {
     pub events: Vec<Event>,
 }
 
-fn decode_layer(data: Option<&[u8]>, layer: &'static str, expected: usize) -> Result<Vec<u16>, LcfError> {
+fn decode_layer(
+    data: Option<&[u8]>,
+    layer: &'static str,
+    expected: usize,
+) -> Result<Vec<u16>, LcfError> {
     let data = data.unwrap_or(&[]);
     if data.len() != expected * 2 {
-        return Err(LcfError::LayerSizeMismatch { layer, got: data.len() / 2, expected });
+        return Err(LcfError::LayerSizeMismatch {
+            layer,
+            got: data.len() / 2,
+            expected,
+        });
     }
-    Ok(data.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect())
+    Ok(data
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .collect())
 }
 
 /// Parse an LMU (`MapXXXX.lmu`) byte slice into a [`MapUnit`], applying
@@ -32,7 +43,9 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     let signature_len = reader.byte()? as usize;
     let signature = reader.take(signature_len)?;
     if signature != b"LcfMapUnit" {
-        return Err(LcfError::BadSignature { expected: "LcfMapUnit" });
+        return Err(LcfError::BadSignature {
+            expected: "LcfMapUnit",
+        });
     }
 
     let mut chipset_id = 1;
@@ -66,7 +79,14 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     let lower_layer = decode_layer(lower, "lower", expected)?;
     let upper_layer = decode_layer(upper, "upper", expected)?;
 
-    Ok(MapUnit { chipset_id, width, height, lower_layer, upper_layer, events })
+    Ok(MapUnit {
+        chipset_id,
+        width,
+        height,
+        lower_layer,
+        upper_layer,
+        events,
+    })
 }
 
 /// The starting party position from the map tree (`RPG_RT.lmt`).
@@ -99,7 +119,9 @@ pub fn parse_start(bytes: &[u8]) -> Result<Start, LcfError> {
     let signature_len = reader.byte()? as usize;
     let signature = reader.take(signature_len)?;
     if signature != b"LcfMapTree" {
-        return Err(LcfError::BadSignature { expected: "LcfMapTree" });
+        return Err(LcfError::BadSignature {
+            expected: "LcfMapTree",
+        });
     }
 
     let map_count = reader.varint()?;
@@ -113,7 +135,11 @@ pub fn parse_start(bytes: &[u8]) -> Result<Start, LcfError> {
     }
     let _active_node = reader.varint()?;
 
-    let mut start = Start { map_id: 0, x: 0, y: 0 };
+    let mut start = Start {
+        map_id: 0,
+        x: 0,
+        y: 0,
+    };
     loop {
         let id = reader.varint()?;
         if id == 0 {
@@ -208,7 +234,13 @@ fn parse_events(data: &[u8]) -> Result<Vec<Event>, LcfError> {
     let mut events = Vec::with_capacity(count as usize);
     for _ in 0..count {
         let id = reader.varint()?;
-        let mut event = Event { id, x: 0, y: 0, name: String::new(), pages: Vec::new() };
+        let mut event = Event {
+            id,
+            x: 0,
+            y: 0,
+            name: String::new(),
+            pages: Vec::new(),
+        };
         loop {
             let sub_id = reader.varint()?;
             if sub_id == 0 {
@@ -281,7 +313,12 @@ pub(crate) fn parse_commands(data: &[u8]) -> Result<Vec<EventCommand>, LcfError>
         for _ in 0..param_count {
             params.push(reader.varint()? as i32);
         }
-        commands.push(EventCommand { code, indent, string, params });
+        commands.push(EventCommand {
+            code,
+            indent,
+            string,
+            params,
+        });
     }
     Ok(commands)
 }
@@ -289,7 +326,7 @@ pub(crate) fn parse_commands(data: &[u8]) -> Result<Vec<EventCommand>, LcfError>
 #[cfg(test)]
 mod tests {
     use crate::test_util::{subchunk, varint};
-    use crate::{parse_map, parse_start, LcfError, Start};
+    use crate::{LcfError, Start, parse_map, parse_start};
 
     fn layer_bytes(tiles: &[u16]) -> Vec<u8> {
         tiles.iter().flat_map(|t| t.to_le_bytes()).collect()
@@ -365,7 +402,9 @@ mod tests {
         let file = make_lmu(b"LcfMapTree", &[]);
         assert!(matches!(
             parse_map(&file),
-            Err(LcfError::BadSignature { expected: "LcfMapUnit" })
+            Err(LcfError::BadSignature {
+                expected: "LcfMapUnit"
+            })
         ));
     }
 
@@ -373,11 +412,19 @@ mod tests {
     fn rejects_layer_size_mismatch() {
         let file = make_lmu(
             b"LcfMapUnit",
-            &[(0x02, varint(2)), (0x03, varint(2)), (0x47, layer_bytes(&[1]))],
+            &[
+                (0x02, varint(2)),
+                (0x03, varint(2)),
+                (0x47, layer_bytes(&[1])),
+            ],
         );
         assert!(matches!(
             parse_map(&file),
-            Err(LcfError::LayerSizeMismatch { layer: "lower", got: 1, expected: 4 })
+            Err(LcfError::LayerSizeMismatch {
+                layer: "lower",
+                got: 1,
+                expected: 4
+            })
         ));
     }
 
@@ -405,7 +452,10 @@ mod tests {
         );
         assert!(matches!(
             parse_map(&file),
-            Err(LcfError::InvalidDimensions { width: 100_000, height: 100_000 })
+            Err(LcfError::InvalidDimensions {
+                width: 100_000,
+                height: 100_000
+            })
         ));
     }
 
@@ -491,7 +541,14 @@ mod tests {
         let mut file = vec![signature.len() as u8];
         file.extend_from_slice(signature);
         file.extend_from_slice(&body);
-        assert_eq!(parse_start(&file).unwrap(), Start { map_id: 5, x: 0, y: 0 });
+        assert_eq!(
+            parse_start(&file).unwrap(),
+            Start {
+                map_id: 5,
+                x: 0,
+                y: 0
+            }
+        );
     }
 
     #[test]

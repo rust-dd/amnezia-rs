@@ -7,11 +7,11 @@ use crate::assets::resolve_png;
 use crate::battle::BattleActive;
 use crate::events::MessageBox;
 use crate::font::GameFont;
-use crate::menu::MenuOpen;
-use crate::shop::ShopOpen;
 use crate::interpreter::RunningEvent;
-use crate::player::{facing_tile, Player};
-use crate::state::{active_page, Inventory, Party, Switches, Variables};
+use crate::menu::MenuOpen;
+use crate::player::{Player, facing_tile};
+use crate::shop::ShopOpen;
+use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::Fade;
 use crate::world::MapEvents;
 use bevy::prelude::*;
@@ -203,16 +203,27 @@ fn update_ui(
     asset_server: Res<AssetServer>,
     mut panels: Query<&mut Visibility, (With<DialoguePanel>, Without<DialogueFace>)>,
     mut texts: Query<(&mut Text, &mut Node), With<DialogueText>>,
-    mut faces: Query<(&mut ImageNode, &mut Visibility), (With<DialogueFace>, Without<DialoguePanel>)>,
+    mut faces: Query<
+        (&mut ImageNode, &mut Visibility),
+        (With<DialogueFace>, Without<DialoguePanel>),
+    >,
 ) {
     if !dialogue.is_changed() {
         return;
     }
     let showing = dialogue.active && dialogue.index < dialogue.boxes.len();
     if let Ok(mut visibility) = panels.single_mut() {
-        *visibility = if showing { Visibility::Visible } else { Visibility::Hidden };
+        *visibility = if showing {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
-    let current = if showing { dialogue.boxes.get(dialogue.index) } else { None };
+    let current = if showing {
+        dialogue.boxes.get(dialogue.index)
+    } else {
+        None
+    };
     let face = current.and_then(|b| b.face.as_ref().map(|name| (name.clone(), b.face_index)));
     if let Ok((mut image, mut visibility)) = faces.single_mut() {
         match &face {
@@ -234,6 +245,10 @@ fn update_ui(
         && let Ok((mut text, mut node)) = texts.single_mut()
     {
         **text = box_.lines.join("\n");
-        node.margin.left = if face.is_some() { Val::Px(FACE_SIZE + 8.0) } else { Val::Px(0.0) };
+        node.margin.left = if face.is_some() {
+            Val::Px(FACE_SIZE + 8.0)
+        } else {
+            Val::Px(0.0)
+        };
     }
 }

@@ -121,7 +121,10 @@ impl Inventory {
     }
     /// Item `(id, count)` pairs plus gold, for a save snapshot.
     pub fn snapshot(&self) -> (Vec<(u32, u32)>, i32) {
-        (self.items.iter().map(|(&id, &count)| (id, count)).collect(), self.gold)
+        (
+            self.items.iter().map(|(&id, &count)| (id, count)).collect(),
+            self.gold,
+        )
     }
     /// Replace items and gold with a restored snapshot.
     pub fn restore(&mut self, items: Vec<(u32, u32)>, gold: i32) {
@@ -165,7 +168,11 @@ pub fn active_page<'a>(
     party: &Party,
     inventory: &Inventory,
 ) -> Option<&'a EventPage> {
-    event.pages.iter().rev().find(|p| condition_holds(p, switches, variables, party, inventory))
+    event
+        .pages
+        .iter()
+        .rev()
+        .find(|p| condition_holds(p, switches, variables, party, inventory))
 }
 
 #[cfg(test)]
@@ -185,7 +192,13 @@ mod tests {
     }
 
     fn event(pages: Vec<EventPage>) -> Event {
-        Event { id: 1, x: 0, y: 0, name: String::new(), pages }
+        Event {
+            id: 1,
+            x: 0,
+            y: 0,
+            name: String::new(),
+            pages,
+        }
     }
 
     #[test]
@@ -194,16 +207,30 @@ mod tests {
         let (var, party, inv) = (Variables::default(), Party::default(), Inventory::default());
         let ev = event(vec![
             page(EventCondition::default()),
-            page(EventCondition { flags: 1, switch_a: 2, ..Default::default() }),
+            page(EventCondition {
+                flags: 1,
+                switch_a: 2,
+                ..Default::default()
+            }),
         ]);
-        assert_eq!(active_page(&ev, &sw, &var, &party, &inv).map(|p| p.condition.flags), Some(0));
+        assert_eq!(
+            active_page(&ev, &sw, &var, &party, &inv).map(|p| p.condition.flags),
+            Some(0)
+        );
         sw.set(2, true);
-        assert_eq!(active_page(&ev, &sw, &var, &party, &inv).map(|p| p.condition.flags), Some(1));
+        assert_eq!(
+            active_page(&ev, &sw, &var, &party, &inv).map(|p| p.condition.flags),
+            Some(1)
+        );
     }
 
     #[test]
     fn no_page_when_none_satisfied() {
-        let ev = event(vec![page(EventCondition { flags: 1, switch_a: 5, ..Default::default() })]);
+        let ev = event(vec![page(EventCondition {
+            flags: 1,
+            switch_a: 5,
+            ..Default::default()
+        })]);
         let (sw, var, party, inv) = (
             Switches::default(),
             Variables::default(),
@@ -218,8 +245,16 @@ mod tests {
         let (sw, var) = (Switches::default(), Variables::default());
         let ev = event(vec![
             page(EventCondition::default()),
-            page(EventCondition { flags: 0x08, item_id: 5, ..Default::default() }),
-            page(EventCondition { flags: 0x10, actor_id: 3, ..Default::default() }),
+            page(EventCondition {
+                flags: 0x08,
+                item_id: 5,
+                ..Default::default()
+            }),
+            page(EventCondition {
+                flags: 0x10,
+                actor_id: 3,
+                ..Default::default()
+            }),
         ]);
         let (mut party, mut inv) = (Party::default(), Inventory::default());
         let flags = |party: &Party, inv: &Inventory| {

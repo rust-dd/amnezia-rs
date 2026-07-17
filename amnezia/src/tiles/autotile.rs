@@ -18,8 +18,8 @@
 //! cells that carry the visible wall border. `BLOCK_A`/`BLOCK_B` water is
 //! assembled the same way from a water-specific template.
 
-use super::water;
 use super::TILE;
+use super::water;
 
 const BLOCK_D: u16 = 4000;
 const BLOCK_D_END: u16 = 4600;
@@ -54,13 +54,19 @@ pub fn lower_render(id: u16) -> LowerRender {
     if id < water::BLOCK_C {
         LowerRender::Quarters(water::water_quarters(id, 0))
     } else if (water::BLOCK_C..water::BLOCK_C_END).contains(&id) {
-        LowerRender::Whole { src: water::block_c_source(id, 0) }
+        LowerRender::Whole {
+            src: water::block_c_source(id, 0),
+        }
     } else if (BLOCK_D..BLOCK_D_END).contains(&id) {
         LowerRender::Quarters(block_d_quarters(id))
     } else if (BLOCK_E..BLOCK_E_END).contains(&id) {
-        LowerRender::Whole { src: block_e_source(id) }
+        LowerRender::Whole {
+            src: block_e_source(id),
+        }
     } else {
-        LowerRender::Whole { src: (0.0, 4.0 * TILE) }
+        LowerRender::Whole {
+            src: (0.0, 4.0 * TILE),
+        }
     }
 }
 
@@ -102,7 +108,11 @@ fn block_d_quarters(id: u16) -> [Quarter; 4] {
 /// Top-left chipset pixel of a static `BLOCK_E` tile (ids 5000..=5143).
 fn block_e_source(id: u16) -> (f32, f32) {
     let i = id - BLOCK_E;
-    let (col, row) = if i < 96 { (12 + i % 6, i / 6) } else { (18 + (i - 96) % 6, (i - 96) / 6) };
+    let (col, row) = if i < 96 {
+        (12 + i % 6, i / 6)
+    } else {
+        (18 + (i - 96) % 6, (i - 96) / 6)
+    };
     (f32::from(col) * TILE, f32::from(row) * TILE)
 }
 
@@ -187,17 +197,41 @@ mod tests {
             _ => panic!(),
         };
         assert_eq!(dst, vec![(0.0, 0.0), (8.0, 0.0), (0.0, 8.0), (8.0, 8.0)]);
-        assert_eq!(srcs(4570), [(160.0, 208.0), (168.0, 208.0), (160.0, 216.0), (168.0, 216.0)]);
+        assert_eq!(
+            srcs(4570),
+            [
+                (160.0, 208.0),
+                (168.0, 208.0),
+                (160.0, 216.0),
+                (168.0, 216.0)
+            ]
+        );
     }
 
     #[test]
     fn wall_fill_shape_zero_is_the_dark_interior_cell() {
-        assert_eq!(srcs(4550), [(160.0, 224.0), (168.0, 224.0), (160.0, 232.0), (168.0, 232.0)]);
+        assert_eq!(
+            srcs(4550),
+            [
+                (160.0, 224.0),
+                (168.0, 224.0),
+                (160.0, 232.0),
+                (168.0, 232.0)
+            ]
+        );
     }
 
     #[test]
     fn wall_corner_shape_pulls_one_edge_quarter() {
-        assert_eq!(srcs(4551), [(176.0, 192.0), (168.0, 224.0), (160.0, 232.0), (168.0, 232.0)]);
+        assert_eq!(
+            srcs(4551),
+            [
+                (176.0, 192.0),
+                (168.0, 224.0),
+                (160.0, 232.0),
+                (168.0, 232.0)
+            ]
+        );
     }
 
     #[test]
@@ -210,16 +244,25 @@ mod tests {
     fn static_block_e_is_a_whole_cell() {
         assert_eq!(lower_render(5000), LowerRender::Whole { src: (192.0, 0.0) });
         assert_eq!(lower_render(5001), LowerRender::Whole { src: (208.0, 0.0) });
-        assert_eq!(lower_render(5015), LowerRender::Whole { src: (240.0, 32.0) });
+        assert_eq!(
+            lower_render(5015),
+            LowerRender::Whole { src: (240.0, 32.0) }
+        );
     }
 
     #[test]
     fn water_block_a_assembles_into_quarters() {
         // Plain water (id 0) is the four 8×8 corners of the (0, 64) deep-water
         // cell — what the old whole-cell fallback drew, now shape-assembled.
-        assert_eq!(srcs(0), [(0.0, 64.0), (8.0, 64.0), (0.0, 72.0), (8.0, 72.0)]);
+        assert_eq!(
+            srcs(0),
+            [(0.0, 64.0), (8.0, 64.0), (0.0, 72.0), (8.0, 72.0)]
+        );
         // A shore shape pulls its top quarters from a different template row.
-        assert_eq!(srcs(3), [(0.0, 48.0), (8.0, 48.0), (0.0, 72.0), (8.0, 72.0)]);
+        assert_eq!(
+            srcs(3),
+            [(0.0, 48.0), (8.0, 48.0), (0.0, 72.0), (8.0, 72.0)]
+        );
     }
 
     #[test]

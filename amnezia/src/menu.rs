@@ -152,7 +152,9 @@ fn menu_input(
         state.tab = (state.tab + TABS.len() - 1) % TABS.len();
         state.cursor = 0;
     }
-    let max = tab_rows(state.tab, &data, &party, &inventory).len().saturating_sub(1);
+    let max = tab_rows(state.tab, &data, &party, &inventory)
+        .len()
+        .saturating_sub(1);
     if keys.just_pressed(KeyCode::ArrowDown) {
         state.cursor = (state.cursor + 1).min(max);
     }
@@ -176,9 +178,15 @@ fn update_ui(
         return;
     }
     if let Ok(mut visibility) = panels.single_mut() {
-        *visibility = if open.0 { Visibility::Visible } else { Visibility::Hidden };
+        *visibility = if open.0 {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
     }
-    if open.0 && let Ok(mut text) = texts.single_mut() {
+    if open.0
+        && let Ok(mut text) = texts.single_mut()
+    {
         let rows = tab_rows(state.tab, &data, &party, &inventory);
         **text = compose(state.tab, state.cursor, &rows);
     }
@@ -200,7 +208,10 @@ fn party_rows(data: &GameData, party: &Party) -> Vec<String> {
         .iter()
         .map(|&id| match data.actor(id) {
             Some(a) => {
-                format!("{} — {} — Lv{}   HP {}   SP {}", a.name, a.title, a.level, a.hp, a.sp)
+                format!(
+                    "{} — {} — Lv{}   HP {}   SP {}",
+                    a.name, a.title, a.level, a.hp, a.sp
+                )
             }
             None => format!("#{id} (unknown)"),
         })
@@ -223,7 +234,10 @@ fn item_rows(data: &GameData, inventory: &Inventory) -> Vec<String> {
 }
 
 fn skill_rows(data: &GameData) -> Vec<String> {
-    data.skills.iter().map(|s| format!("{}   (SP {})", s.name, s.sp_cost)).collect()
+    data.skills
+        .iter()
+        .map(|s| format!("{}   (SP {})", s.name, s.sp_cost))
+        .collect()
 }
 
 /// Render the tab header plus the visible window of `rows` around `cursor`,
@@ -232,7 +246,13 @@ fn compose(tab: usize, cursor: usize, rows: &[String]) -> String {
     let header = TABS
         .iter()
         .enumerate()
-        .map(|(i, name)| if i == tab { format!("[{name}]") } else { format!(" {name} ") })
+        .map(|(i, name)| {
+            if i == tab {
+                format!("[{name}]")
+            } else {
+                format!(" {name} ")
+            }
+        })
         .collect::<Vec<_>>()
         .join("   ");
     let start = viewport_start(cursor, rows.len());
@@ -251,7 +271,9 @@ fn viewport_start(cursor: usize, len: usize) -> usize {
     if len <= VISIBLE_ROWS {
         0
     } else {
-        cursor.saturating_sub(VISIBLE_ROWS - 1).min(len - VISIBLE_ROWS)
+        cursor
+            .saturating_sub(VISIBLE_ROWS - 1)
+            .min(len - VISIBLE_ROWS)
     }
 }
 
@@ -292,7 +314,10 @@ mod tests {
     #[test]
     fn party_row_shows_name_title_level_and_stats() {
         let rows = party_rows(&data(), &Party::default());
-        assert_eq!(rows, vec!["Ron — Zsoldos — Lv2   HP 63   SP 37".to_string()]);
+        assert_eq!(
+            rows,
+            vec!["Ron — Zsoldos — Lv2   HP 63   SP 37".to_string()]
+        );
     }
 
     #[test]

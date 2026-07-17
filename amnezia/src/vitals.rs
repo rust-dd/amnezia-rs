@@ -15,7 +15,10 @@ impl Vitals {
     /// The actor's stored `(hp, sp)`, or its full starting values when it has not
     /// fought yet.
     pub fn get(&self, actor: &ActorDef) -> (i32, i32) {
-        self.0.get(&actor.id).copied().unwrap_or((actor.hp as i32, actor.sp as i32))
+        self.0
+            .get(&actor.id)
+            .copied()
+            .unwrap_or((actor.hp as i32, actor.sp as i32))
     }
 
     /// Store an actor's `(hp, sp)` after a battle.

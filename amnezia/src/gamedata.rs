@@ -3,7 +3,7 @@
 //! converted RON at plugin-build time (like the hero name in `main`), so every
 //! consumer sees a ready [`GameData`] resource without an `Option` guard.
 
-use crate::assets::{load_ron, ASSET_ROOT};
+use crate::assets::{ASSET_ROOT, load_ron};
 use amnezia_data::{ActorDef, ItemDef, SkillDef};
 use bevy::prelude::*;
 

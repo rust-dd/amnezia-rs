@@ -4,18 +4,18 @@
 //! (terminated by id 0). Chunk ids follow EasyRPG/liblcf
 //! `src/generated/lcf/ldb/chunks.h`.
 
-use crate::{Reader, decode_cp1250};
 use crate::LcfError;
+use crate::{Reader, decode_cp1250};
 
 mod common_events;
 mod monsters;
 mod skills;
 mod troops;
 
-pub use common_events::{parse_common_events, CommonEvent};
-pub use monsters::{parse_monsters, Monster};
-pub use skills::{parse_skills, Skill};
-pub use troops::{parse_troops, Troop, TroopMember};
+pub use common_events::{CommonEvent, parse_common_events};
+pub use monsters::{Monster, parse_monsters};
+pub use skills::{Skill, parse_skills};
+pub use troops::{Troop, TroopMember, parse_troops};
 
 /// Locate one top-level LDB section (`ChunkData`) by id, returning its raw
 /// bytes. Verifies the `LcfDataBase` signature and skips every other section.
@@ -24,7 +24,9 @@ fn find_section(bytes: &[u8], section_id: u32, missing: LcfError) -> Result<&[u8
     let signature_len = reader.byte()? as usize;
     let signature = reader.take(signature_len)?;
     if signature != b"LcfDataBase" {
-        return Err(LcfError::BadSignature { expected: "LcfDataBase" });
+        return Err(LcfError::BadSignature {
+            expected: "LcfDataBase",
+        });
     }
     while !reader.is_empty() {
         let id = reader.varint()?;
@@ -87,7 +89,12 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
         }
         passages_down.resize(PASSAGES_DOWN_LEN, PASSAGE_DEFAULT);
         passages_up.resize(PASSAGES_UP_LEN, PASSAGE_DEFAULT);
-        chipsets.push(Chipset { id, name, passages_down, passages_up });
+        chipsets.push(Chipset {
+            id,
+            name,
+            passages_down,
+            passages_up,
+        });
     }
     Ok(chipsets)
 }
@@ -176,8 +183,18 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
         let (initial_hp, initial_sp, curve_levels) = actor_stats(parameters, initial_level);
         // RM2000 omits `final_level` when it equals the editor default, which is
         // exactly the length of the parameter curve, so fall back to that.
-        let max_level = final_level.filter(|&l| l > 0).unwrap_or(curve_levels.max(1));
-        actors.push(Actor { id, name, title, initial_level, max_level, initial_hp, initial_sp });
+        let max_level = final_level
+            .filter(|&l| l > 0)
+            .unwrap_or(curve_levels.max(1));
+        actors.push(Actor {
+            id,
+            name,
+            title,
+            initial_level,
+            max_level,
+            initial_hp,
+            initial_sp,
+        });
     }
     Ok(actors)
 }
@@ -210,8 +227,13 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
     let mut items = Vec::with_capacity(count as usize);
     for _ in 0..count {
         let id = reader.varint()?;
-        let mut item =
-            Item { id, name: String::new(), description: String::new(), item_type: 0, price: 0 };
+        let mut item = Item {
+            id,
+            name: String::new(),
+            description: String::new(),
+            item_type: 0,
+            price: 0,
+        };
         loop {
             let sub_id = reader.varint()?;
             if sub_id == 0 {
@@ -235,19 +257,26 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
 #[cfg(test)]
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk, varint};
-    use crate::{parse_actors, parse_chipsets, parse_items, Item, LcfError};
+    use crate::{Item, LcfError, parse_actors, parse_chipsets, parse_items};
 
     /// Build a `Parameters` chunk (`0x1F`) from six int16 stat curves, laid out
     /// contiguously as maxhp, maxsp, attack, defense, spirit, agility.
     fn parameters(curves: &[[i16; 2]; 6]) -> Vec<u8> {
-        curves.iter().flatten().flat_map(|v| v.to_le_bytes()).collect()
+        curves
+            .iter()
+            .flatten()
+            .flat_map(|v| v.to_le_bytes())
+            .collect()
     }
 
     #[test]
     fn parses_chipset_graphic_names() {
         let element1 = element(1, &[subchunk(0x01, b"World"), subchunk(0x02, b"basis")]);
         let element2 = element(2, &[subchunk(0x02, b"outline")]);
-        let ldb = make_ldb(&[(0x0B, vec![1, 2, 3]), (0x14, section(&[element1, element2]))]);
+        let ldb = make_ldb(&[
+            (0x0B, vec![1, 2, 3]),
+            (0x14, section(&[element1, element2])),
+        ]);
         let chipsets = parse_chipsets(&ldb).unwrap();
         assert_eq!(chipsets.len(), 2);
         assert_eq!(chipsets[0].id, 1);
@@ -272,7 +301,11 @@ mod tests {
     fn captures_and_pads_passability() {
         let element = element(
             1,
-            &[subchunk(0x02, b"x"), subchunk(0x04, &[0x00, 0x0F]), subchunk(0x05, &[0x1F])],
+            &[
+                subchunk(0x02, b"x"),
+                subchunk(0x04, &[0x00, 0x0F]),
+                subchunk(0x05, &[0x1F]),
+            ],
         );
         let ldb = make_ldb(&[(0x14, section(&[element]))]);
         let chipset = &parse_chipsets(&ldb).unwrap()[0];
@@ -293,14 +326,19 @@ mod tests {
         };
         assert!(matches!(
             parse_chipsets(&ldb),
-            Err(LcfError::BadSignature { expected: "LcfDataBase" })
+            Err(LcfError::BadSignature {
+                expected: "LcfDataBase"
+            })
         ));
     }
 
     #[test]
     fn parse_chipsets_errors_when_section_absent() {
         let ldb = make_ldb(&[(0x0B, vec![1, 2, 3])]);
-        assert!(matches!(parse_chipsets(&ldb), Err(LcfError::MissingChipsets)));
+        assert!(matches!(
+            parse_chipsets(&ldb),
+            Err(LcfError::MissingChipsets)
+        ));
     }
 
     #[test]
@@ -312,7 +350,10 @@ mod tests {
             1,
             &[
                 subchunk(0x01, &[0x41, 0x64, 0xE9, 0x6C]),
-                subchunk(0x02, &[0xC9, 0x6E, 0x65, 0x6B, 0x65, 0x73, 0x6C, 0xE1, 0x6E, 0x79]),
+                subchunk(
+                    0x02,
+                    &[0xC9, 0x6E, 0x65, 0x6B, 0x65, 0x73, 0x6C, 0xE1, 0x6E, 0x79],
+                ),
                 subchunk(0x07, &varint(2)),
                 subchunk(0x1F, &params),
             ],
@@ -325,7 +366,10 @@ mod tests {
         assert_eq!(ron.name, "Adél");
         assert_eq!(ron.title, "Énekeslány");
         assert_eq!(ron.initial_level, 2);
-        assert_eq!(ron.max_level, 2, "max level falls back to the 2-level curve length");
+        assert_eq!(
+            ron.max_level, 2,
+            "max level falls back to the 2-level curve length"
+        );
         assert_eq!(ron.initial_hp, 20, "maxhp curve at level 2");
         assert_eq!(ron.initial_sp, 8, "maxsp curve at level 2");
     }
@@ -333,8 +377,7 @@ mod tests {
     #[test]
     fn actor_final_level_overrides_curve_length() {
         let params = parameters(&[[10, 20], [5, 8], [0, 0], [0, 0], [0, 0], [0, 0]]);
-        let hero =
-            element(1, &[subchunk(0x08, &varint(50)), subchunk(0x1F, &params)]);
+        let hero = element(1, &[subchunk(0x08, &varint(50)), subchunk(0x1F, &params)]);
         let ldb = make_ldb(&[(0x0B, section(&[hero]))]);
         let actors = parse_actors(&ldb).unwrap();
         assert_eq!(actors[0].max_level, 50);

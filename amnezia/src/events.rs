@@ -80,7 +80,12 @@ mod tests {
     }
 
     fn cmd_params(code: u32, string: &str, params: Vec<i32>) -> EventCommand {
-        EventCommand { code, indent: 0, string: string.to_string(), params }
+        EventCommand {
+            code,
+            indent: 0,
+            string: string.to_string(),
+            params,
+        }
     }
 
     #[test]

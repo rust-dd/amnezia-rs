@@ -15,11 +15,11 @@ mod database;
 mod map;
 
 pub use database::{
-    parse_actors, parse_chipsets, parse_common_events, parse_items, parse_monsters, parse_skills,
-    parse_troops, Actor, Chipset, CommonEvent, Item, Monster, Skill, Troop, TroopMember,
+    Actor, Chipset, CommonEvent, Item, Monster, Skill, Troop, TroopMember, parse_actors,
+    parse_chipsets, parse_common_events, parse_items, parse_monsters, parse_skills, parse_troops,
 };
 pub use map::{
-    parse_map, parse_start, Event, EventCommand, EventCondition, EventPage, MapUnit, Start,
+    Event, EventCommand, EventCondition, EventPage, MapUnit, Start, parse_map, parse_start,
 };
 
 /// Errors returned while parsing an LCF file.
@@ -30,7 +30,11 @@ pub enum LcfError {
     #[error("unexpected end of data")]
     UnexpectedEof,
     #[error("{layer} layer has {got} tiles but width*height = {expected}")]
-    LayerSizeMismatch { layer: &'static str, got: usize, expected: usize },
+    LayerSizeMismatch {
+        layer: &'static str,
+        got: usize,
+        expected: usize,
+    },
     #[error("invalid map dimensions {width}x{height}")]
     InvalidDimensions { width: u32, height: u32 },
     #[error("LCF database has no chipset section (chunk 0x14)")]
@@ -83,7 +87,10 @@ impl<'a> Reader<'a> {
 
     pub(crate) fn take(&mut self, n: usize) -> Result<&'a [u8], LcfError> {
         let end = self.pos.checked_add(n).ok_or(LcfError::UnexpectedEof)?;
-        let slice = self.data.get(self.pos..end).ok_or(LcfError::UnexpectedEof)?;
+        let slice = self
+            .data
+            .get(self.pos..end)
+            .ok_or(LcfError::UnexpectedEof)?;
         self.pos = end;
         Ok(slice)
     }

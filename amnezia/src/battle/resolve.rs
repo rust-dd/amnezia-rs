@@ -4,9 +4,9 @@
 //! flee. Extends [`Battle`] with a second `impl` block so the turn-flow half stays
 //! in [`super::model`]; the damage numbers themselves come from [`super::logic`].
 
-use super::logic;
-use super::model::{rng_next, Action, Battle, Command, Phase, Source};
 use super::BattleOutcome;
+use super::logic;
+use super::model::{Action, Battle, Command, Phase, Source, rng_next};
 
 /// Flat HP a medicine item restores in v1. `ItemDef` carries no heal magnitude,
 /// so item potency is a documented constant rather than data-driven.
@@ -42,9 +42,19 @@ impl Battle {
                 };
                 let base = logic::physical_damage(attack, self.enemies[ti].stats.defense);
                 let dmg = self.hit_enemy(ti, base);
-                format!("{} rácsap: {} -{}", self.members[pi].name, self.enemies[ti].name, dmg)
+                format!(
+                    "{} rácsap: {} -{}",
+                    self.members[pi].name, self.enemies[ti].name, dmg
+                )
             }
-            (Source::Party(pi), Command::Skill { power, cost, target }) => {
+            (
+                Source::Party(pi),
+                Command::Skill {
+                    power,
+                    cost,
+                    target,
+                },
+            ) => {
                 self.members[pi].sp = (self.members[pi].sp - cost as i32).max(0);
                 let spirit = self.members[pi].stats.spirit;
                 let Some(ti) = self.retarget_enemy(target) else {
@@ -52,7 +62,10 @@ impl Battle {
                 };
                 let base = logic::skill_damage(power, spirit, self.enemies[ti].stats.spirit);
                 let dmg = self.hit_enemy(ti, base);
-                format!("{} varázsol: {} -{}", self.members[pi].name, self.enemies[ti].name, dmg)
+                format!(
+                    "{} varázsol: {} -{}",
+                    self.members[pi].name, self.enemies[ti].name, dmg
+                )
             }
             (Source::Party(pi), Command::Item) => {
                 let f = &mut self.members[pi];
@@ -73,7 +86,10 @@ impl Battle {
                 };
                 let base = logic::physical_damage(attack, self.members[ti].stats.defense);
                 let dmg = self.hit_member(ti, base);
-                format!("{} támad: {} -{}", self.enemies[ei].name, self.members[ti].name, dmg)
+                format!(
+                    "{} támad: {} -{}",
+                    self.enemies[ei].name, self.members[ti].name, dmg
+                )
             }
             (Source::Enemy(_), _) => return,
         };
@@ -136,9 +152,18 @@ impl Battle {
 
     /// Roll a party escape against the enemies' average agility.
     pub fn attempt_flee(&mut self) -> bool {
-        let party = self.members.iter().filter(|m| m.alive()).map(|m| m.stats.agility).max();
-        let living: Vec<u32> =
-            self.enemies.iter().filter(|e| e.alive()).map(|e| e.stats.agility).collect();
+        let party = self
+            .members
+            .iter()
+            .filter(|m| m.alive())
+            .map(|m| m.stats.agility)
+            .max();
+        let living: Vec<u32> = self
+            .enemies
+            .iter()
+            .filter(|e| e.alive())
+            .map(|e| e.stats.agility)
+            .collect();
         let enemy = if living.is_empty() {
             0
         } else {

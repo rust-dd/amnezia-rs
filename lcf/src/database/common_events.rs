@@ -5,7 +5,7 @@
 
 use super::find_section;
 use crate::map::parse_commands;
-use crate::{decode_cp1250, EventCommand, LcfError, Reader};
+use crate::{EventCommand, LcfError, Reader, decode_cp1250};
 
 /// A common event (global event script): its 1-based id, name, `trigger`
 /// (0 = call, 1 = autostart, 2 = parallel), the `switch_id` gating an
@@ -37,8 +37,13 @@ pub fn parse_common_events(bytes: &[u8]) -> Result<Vec<CommonEvent>, LcfError> {
     let mut common_events = Vec::with_capacity(count as usize);
     for _ in 0..count {
         let id = reader.varint()?;
-        let mut event =
-            CommonEvent { id, name: String::new(), trigger: 0, switch_id: 0, commands: Vec::new() };
+        let mut event = CommonEvent {
+            id,
+            name: String::new(),
+            trigger: 0,
+            switch_id: 0,
+            commands: Vec::new(),
+        };
         loop {
             let sub_id = reader.varint()?;
             if sub_id == 0 {
@@ -62,7 +67,7 @@ pub fn parse_common_events(bytes: &[u8]) -> Result<Vec<CommonEvent>, LcfError> {
 #[cfg(test)]
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk, varint};
-    use crate::{parse_common_events, EventCommand, LcfError};
+    use crate::{EventCommand, LcfError, parse_common_events};
 
     /// Build one record of the flat command stream:
     /// `[code][indent][strlen][string][paramcount][params]`.
@@ -105,14 +110,22 @@ mod tests {
         assert_eq!(event.commands.len(), 3);
         assert_eq!(
             event.commands[0],
-            EventCommand { code: 10110, indent: 0, string: "Helló".to_string(), params: vec![] }
+            EventCommand {
+                code: 10110,
+                indent: 0,
+                string: "Helló".to_string(),
+                params: vec![]
+            }
         );
-        assert_eq!(event.commands[1], EventCommand {
-            code: 10,
-            indent: 1,
-            string: String::new(),
-            params: vec![1, 2],
-        });
+        assert_eq!(
+            event.commands[1],
+            EventCommand {
+                code: 10,
+                indent: 1,
+                string: String::new(),
+                params: vec![1, 2],
+            }
+        );
         assert_eq!(event.commands[2].code, 0, "trailing terminator command");
     }
 
@@ -132,6 +145,9 @@ mod tests {
     #[test]
     fn parse_common_events_errors_when_section_absent() {
         let ldb = make_ldb(&[(0x14, section(&[]))]);
-        assert!(matches!(parse_common_events(&ldb), Err(LcfError::MissingCommonEvents)));
+        assert!(matches!(
+            parse_common_events(&ldb),
+            Err(LcfError::MissingCommonEvents)
+        ));
     }
 }

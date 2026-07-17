@@ -62,5 +62,10 @@ fn converts_ldb_to_hero_ron() {
 
     let ron = std::fs::read_to_string(output.join("hero.ron")).unwrap();
     let hero: Hero = ron::from_str(&ron).unwrap();
-    assert_eq!(hero, Hero { name: "Ron".to_string() });
+    assert_eq!(
+        hero,
+        Hero {
+            name: "Ron".to_string()
+        }
+    );
 }
