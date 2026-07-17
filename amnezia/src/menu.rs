@@ -8,6 +8,7 @@
 use crate::battle::BattleActive;
 use crate::font::GameFont;
 use crate::gamedata::GameData;
+use crate::i18n;
 use crate::save::SaveRequest;
 use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party};
@@ -219,7 +220,11 @@ fn party_rows(data: &GameData, party: &Party) -> Vec<String> {
             Some(a) => {
                 format!(
                     "{} — {} — Lv{}   HP {}   SP {}",
-                    a.name, a.title, a.level, a.hp, a.sp
+                    i18n::tr(&a.name),
+                    i18n::tr(&a.title),
+                    a.level,
+                    a.hp,
+                    a.sp
                 )
             }
             None => format!("#{id} (unknown)"),
@@ -232,7 +237,7 @@ fn item_rows(data: &GameData, inventory: &Inventory) -> Vec<String> {
         .items
         .iter()
         .filter(|i| inventory.count(i.id) > 0)
-        .map(|i| format!("{} ×{}", i.name, inventory.count(i.id)))
+        .map(|i| format!("{} ×{}", i18n::tr(&i.name), inventory.count(i.id)))
         .collect();
     if rows.is_empty() {
         rows.push("(no items)".to_string());
@@ -245,7 +250,7 @@ fn item_rows(data: &GameData, inventory: &Inventory) -> Vec<String> {
 fn skill_rows(data: &GameData) -> Vec<String> {
     data.skills
         .iter()
-        .map(|s| format!("{}   (SP {})", s.name, s.sp_cost))
+        .map(|s| format!("{}   (SP {})", i18n::tr(&s.name), s.sp_cost))
         .collect()
 }
 

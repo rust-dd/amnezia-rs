@@ -11,6 +11,7 @@ use super::model::{Battle, MenuLevel, Phase};
 use crate::assets::resolve_png;
 use crate::font::GameFont;
 use crate::gamedata::GameData;
+use crate::i18n;
 use crate::state::Inventory;
 use bevy::prelude::*;
 use bevy::text::FontSource;
@@ -182,10 +183,10 @@ fn compose_command(battle: &Battle, data: &GameData, inventory: &Inventory) -> S
         MenuLevel::Target => battle
             .living_enemies()
             .iter()
-            .map(|&i| battle.enemies[i].name.clone())
+            .map(|&i| i18n::tr(&battle.enemies[i].name))
             .collect(),
     };
-    let mut out = format!("{} parancsa:\n", actor.name);
+    let mut out = format!("{} parancsa:\n", i18n::tr(&actor.name));
     for (i, row) in rows.iter().enumerate() {
         out.push_str(if i == battle.cursor { "▶ " } else { "  " });
         out.push_str(row);
@@ -211,7 +212,7 @@ fn compose_status(battle: &Battle) -> String {
             } else {
                 "kiütve".to_string()
             };
-            format!("{mark}{}  {state}", f.name)
+            format!("{mark}{}  {state}", i18n::tr(&f.name))
         })
         .collect::<Vec<_>>()
         .join("\n")

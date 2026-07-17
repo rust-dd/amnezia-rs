@@ -7,6 +7,7 @@
 
 use crate::font::GameFont;
 use crate::gamedata::GameData;
+use crate::i18n;
 use crate::state::Inventory;
 use crate::vitals::Vitals;
 use bevy::prelude::*;
@@ -245,7 +246,7 @@ fn shop_entries(
             .iter()
             .filter_map(|&id| {
                 data.item(id)
-                    .map(|i| (id, format!("{}   {}g", i.name, i.price)))
+                    .map(|i| (id, format!("{}   {}g", i18n::tr(&i.name), i.price)))
             })
             .collect(),
         Mode::Sell => data
@@ -257,7 +258,7 @@ fn shop_entries(
                     i.id,
                     format!(
                         "{}   {}g   ×{}",
-                        i.name,
+                        i18n::tr(&i.name),
                         sell_price(i.price),
                         inventory.count(i.id)
                     ),

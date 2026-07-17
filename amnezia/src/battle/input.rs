@@ -7,6 +7,7 @@ use super::BattleOutcome;
 use super::logic::usable_skills;
 use super::model::{Battle, Command, MenuLevel, Phase};
 use crate::gamedata::GameData;
+use crate::i18n;
 use crate::state::Inventory;
 use bevy::prelude::*;
 
@@ -39,7 +40,13 @@ pub fn command_input(
 pub fn skill_choices(data: &GameData, sp: i32) -> Vec<(u32, u32, String)> {
     usable_skills(&data.skills, sp)
         .into_iter()
-        .map(|s| (s.power, s.sp_cost, format!("{} (SP {})", s.name, s.sp_cost)))
+        .map(|s| {
+            (
+                s.power,
+                s.sp_cost,
+                format!("{} (SP {})", i18n::tr(&s.name), s.sp_cost),
+            )
+        })
         .collect()
 }
 
@@ -48,7 +55,12 @@ pub fn item_choices(data: &GameData, inventory: &Inventory) -> Vec<(u32, String)
     data.items
         .iter()
         .filter(|i| i.item_type == MEDICINE && inventory.count(i.id) > 0)
-        .map(|i| (i.id, format!("{} ×{}", i.name, inventory.count(i.id))))
+        .map(|i| {
+            (
+                i.id,
+                format!("{} ×{}", i18n::tr(&i.name), inventory.count(i.id)),
+            )
+        })
         .collect()
 }
 
