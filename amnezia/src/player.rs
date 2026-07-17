@@ -2,8 +2,11 @@
 //! events), player-touch event triggers, walk animation, and camera follow.
 
 use crate::assets::resolve_png;
+use crate::battle::BattleActive;
 use crate::dialogue::Dialogue;
 use crate::interpreter::RunningEvent;
+use crate::menu::MenuOpen;
+use crate::shop::ShopOpen;
 use crate::state::{active_page, Inventory, Party, Switches, Variables};
 use crate::teleport::Fade;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
@@ -122,10 +125,13 @@ fn move_player(
     variables: Res<Variables>,
     party: Res<Party>,
     inventory: Res<Inventory>,
+    menu: Res<MenuOpen>,
+    shop: Res<ShopOpen>,
+    battle: Res<BattleActive>,
     mut running: ResMut<RunningEvent>,
     mut players: Query<(&mut Player, &mut MoveQueue)>,
 ) {
-    if dialogue.active || fade.busy() || running.active() {
+    if dialogue.active || fade.busy() || running.active() || menu.0 || shop.0 || battle.0 {
         return;
     }
     let Ok((mut player, mut queue)) = players.single_mut() else {

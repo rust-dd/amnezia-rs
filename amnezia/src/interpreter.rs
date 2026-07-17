@@ -5,8 +5,11 @@
 //! `indent`; conditional branches use that indent to delimit their bodies.
 
 use crate::audio::AudioRequest;
+use crate::battle::BattleActive;
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
+use crate::menu::MenuOpen;
+use crate::shop::ShopOpen;
 use crate::events::message_boxes;
 use crate::player::Player;
 use crate::state::{active_page, Inventory, Party, Switches, Variables};
@@ -14,8 +17,24 @@ use crate::teleport::{Fade, PendingTeleport};
 use crate::text::{self, HeroName};
 use crate::world::{decode_route, EventSprite, MapEvents, MoveQueue};
 use amnezia_data::EventCommand;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use std::collections::HashMap;
+
+/// The overlays that pause the running event (menu, shop, battle). Bundled into
+/// one `SystemParam` so `run_interpreter` stays within Bevy's 16-parameter cap.
+#[derive(SystemParam)]
+pub struct Blockers<'w> {
+    menu: Res<'w, MenuOpen>,
+    shop: Res<'w, ShopOpen>,
+    battle: Res<'w, BattleActive>,
+}
+
+impl Blockers<'_> {
+    fn any(&self) -> bool {
+        self.menu.0 || self.shop.0 || self.battle.0
+    }
+}
 
 // RM2000 opcodes, verified empirically against the converted map assets.
 const SHOW_MESSAGE: u32 = 10110;
@@ -126,6 +145,7 @@ fn run_interpreter(
     time: Res<Time>,
     fade: Res<Fade>,
     hero: Res<HeroName>,
+    blockers: Blockers,
     mut running: ResMut<RunningEvent>,
     mut dialogue: ResMut<Dialogue>,
     mut choice: ResMut<Choice>,
@@ -144,7 +164,7 @@ fn run_interpreter(
     // Pause while a message box, teleport fade, choice, or pending transfer is in
     // flight; the transfer guard holds the event across the fade so it resumes on
     // the destination map (RM2000 Transfer Player continues the calling event).
-    if dialogue.active || fade.busy() || choice.active() || pending.0.is_some() {
+    if dialogue.active || fade.busy() || choice.active() || pending.0.is_some() || blockers.any() {
         return;
     }
     // Resume after the player confirmed a choice: record the pick so the
@@ -337,9 +357,12 @@ fn autorun(
     inventory: Res<Inventory>,
     dialogue: Res<Dialogue>,
     fade: Res<Fade>,
+    menu: Res<MenuOpen>,
+    shop: Res<ShopOpen>,
+    battle: Res<BattleActive>,
     mut running: ResMut<RunningEvent>,
 ) {
-    if running.active() || dialogue.active || fade.busy() {
+    if running.active() || dialogue.active || fade.busy() || menu.0 || shop.0 || battle.0 {
         return;
     }
     for event in &map_events.events {

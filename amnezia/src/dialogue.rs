@@ -4,8 +4,11 @@
 //! advances/closes them on the action key.
 
 use crate::assets::resolve_png;
+use crate::battle::BattleActive;
 use crate::events::MessageBox;
 use crate::font::GameFont;
+use crate::menu::MenuOpen;
+use crate::shop::ShopOpen;
 use crate::interpreter::RunningEvent;
 use crate::player::{facing_tile, Player};
 use crate::state::{active_page, Inventory, Party, Switches, Variables};
@@ -152,11 +155,14 @@ fn interact(
     variables: Res<Variables>,
     party: Res<Party>,
     inventory: Res<Inventory>,
+    menu: Res<MenuOpen>,
+    shop: Res<ShopOpen>,
+    battle: Res<BattleActive>,
     mut dialogue: ResMut<Dialogue>,
     mut running: ResMut<RunningEvent>,
     players: Query<&Player>,
 ) {
-    if fade.busy() {
+    if fade.busy() || menu.0 || shop.0 || battle.0 {
         return;
     }
     if !keys.just_pressed(KeyCode::Space) && !keys.just_pressed(KeyCode::Enter) {

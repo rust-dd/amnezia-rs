@@ -5,8 +5,10 @@
 //! pause guard that freezes the world while it is open (keyed on [`MenuOpen`]) is
 //! wired by the main session; this module owns the toggle and the UI.
 
+use crate::battle::BattleActive;
 use crate::font::GameFont;
 use crate::gamedata::GameData;
+use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party};
 use bevy::prelude::*;
 use bevy::text::FontSource;
@@ -117,14 +119,21 @@ fn inset_node(px: f32) -> Node {
 
 /// Toggle the menu on Escape; while open, switch tab with left/right and move
 /// the row cursor with up/down (clamped to the active tab's rows).
+#[allow(clippy::too_many_arguments)]
 fn menu_input(
     keys: Res<ButtonInput<KeyCode>>,
     data: Res<GameData>,
     party: Res<Party>,
     inventory: Res<Inventory>,
+    shop: Res<ShopOpen>,
+    battle: Res<BattleActive>,
     mut open: ResMut<MenuOpen>,
     mut state: ResMut<MenuState>,
 ) {
+    // A shop or battle owns Escape while it's up, so the menu can't open over it.
+    if !open.0 && (shop.0 || battle.0) {
+        return;
+    }
     if keys.just_pressed(KeyCode::Escape) {
         open.0 = !open.0;
         if open.0 {
