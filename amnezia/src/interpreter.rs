@@ -9,8 +9,11 @@ use crate::battle::{BattleActive, BattleOutcome, BattleRequest, BattleResult};
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
 use crate::events::message_boxes;
+use crate::gameover::GameOverActive;
 use crate::menu::MenuOpen;
+use crate::picture::PictureCommand;
 use crate::player::Player;
+use crate::screenfx::ScreenEffect;
 use crate::shop::{ShopOpen, ShopRequest};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::{Fade, PendingTeleport};
@@ -25,10 +28,12 @@ use std::collections::HashMap;
 mod commands;
 mod flow;
 mod opcodes;
+mod present;
 
 use commands::*;
 use flow::*;
 use opcodes::*;
+use present::{Present, parse_present};
 
 /// The overlays that pause the running event (title, menu, shop, battle). Bundled
 /// into one `SystemParam` so `run_interpreter` stays within Bevy's 16-parameter cap.
@@ -55,6 +60,9 @@ pub struct SubsystemIo<'w> {
     battle_result: ResMut<'w, BattleResult>,
     shop_writer: MessageWriter<'w, ShopRequest>,
     battle_writer: MessageWriter<'w, BattleRequest>,
+    screen_writer: MessageWriter<'w, ScreenEffect>,
+    picture_writer: MessageWriter<'w, PictureCommand>,
+    gameover: ResMut<'w, GameOverActive>,
 }
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
@@ -175,12 +183,21 @@ fn run_interpreter(
     }
     // Resume after a fight: consume the published outcome and drop the pause, so
     // the EnemyEncounter re-executes past the trigger and its handlers self-select.
+    // A wipe the encounter can't recover from (no DefeatHandler) ends the game.
     // Runs before the guard because `battle_pending` is part of it.
     if running.battle_pending
         && let Some(outcome) = subsystems.battle_result.0.take()
     {
-        running.battle_outcome = Some(outcome);
         running.battle_pending = false;
+        let indent = running.commands.get(running.ip).map_or(0, |c| c.indent);
+        if outcome == BattleOutcome::Defeat
+            && !has_defeat_handler(&running.commands, running.ip, indent)
+        {
+            subsystems.gameover.0 = true;
+            running.stop();
+            return;
+        }
+        running.battle_outcome = Some(outcome);
     }
     // Pause while a message box, teleport fade, choice, pending transfer, blocking
     // overlay, or an in-flight fight is live; the transfer guard holds the event
@@ -192,6 +209,7 @@ fn run_interpreter(
         || pending.0.is_some()
         || blockers.any()
         || running.battle_pending
+        || subsystems.gameover.0
     {
         return;
     }
@@ -417,9 +435,38 @@ fn run_interpreter(
                 audio.write(AudioRequest::StopBgm);
                 running.ip += 1;
             }
+            ERASE_SCREEN | SHOW_SCREEN | TINT_SCREEN | FLASH_SCREEN | SHAKE_SCREEN
+            | SHOW_PICTURE | MOVE_PICTURE | ERASE_PICTURE | GAME_OVER => {
+                // Emit the screen/picture message the presentation plugins consume,
+                // waiting (as `Wait` does) when the effect must finish before the
+                // next command; Game Over ends the run.
+                match parse_present(&command, &variables) {
+                    Some(Present::Screen(effect, wait)) => {
+                        subsystems.screen_writer.write(effect);
+                        running.ip += 1;
+                        if let Some(secs) = wait {
+                            running.wait = secs;
+                            return;
+                        }
+                    }
+                    Some(Present::Picture(picture, wait)) => {
+                        subsystems.picture_writer.write(picture);
+                        running.ip += 1;
+                        if let Some(secs) = wait {
+                            running.wait = secs;
+                            return;
+                        }
+                    }
+                    Some(Present::GameOver) => {
+                        subsystems.gameover.0 = true;
+                        running.stop();
+                        return;
+                    }
+                    None => running.ip += 1,
+                }
+            }
             _ => {
-                // Every not-yet-supported command (movement, screen effects)
-                // simply advances.
+                // Every not-yet-supported command (weather, pan, …) simply advances.
                 running.ip += 1;
             }
         }
@@ -442,9 +489,17 @@ fn autorun(
     shop: Res<ShopOpen>,
     battle: Res<BattleActive>,
     title: Res<TitleActive>,
+    gameover: Res<GameOverActive>,
     mut running: ResMut<RunningEvent>,
 ) {
-    if running.active() || dialogue.active || fade.busy() || menu.0 || shop.0 || battle.0 || title.0
+    if running.active()
+        || dialogue.active
+        || fade.busy()
+        || menu.0
+        || shop.0
+        || battle.0
+        || title.0
+        || gameover.0
     {
         return;
     }

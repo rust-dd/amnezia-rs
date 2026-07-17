@@ -13,10 +13,13 @@ mod dialogue;
 mod events;
 mod font;
 mod gamedata;
+mod gameover;
 mod interpreter;
 mod menu;
+mod picture;
 mod player;
 mod save;
+mod screenfx;
 mod shop;
 mod state;
 mod teleport;
@@ -72,6 +75,11 @@ fn main() -> AppExit {
             shop::ShopPlugin,
             battle::BattlePlugin,
             title::TitlePlugin,
+        ))
+        .add_plugins((
+            screenfx::ScreenFxPlugin,
+            picture::PicturePlugin,
+            gameover::GameOverPlugin,
         ))
         .run()
 }

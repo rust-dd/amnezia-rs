@@ -87,6 +87,23 @@ pub(super) fn skip_battle_handler(commands: &[EventCommand], ip: usize, indent: 
     j
 }
 
+/// Whether the `EnemyEncounter` block at `ip`/`indent` has a `DefeatHandler`
+/// (20712) before its `EndBattle` (20713). Its absence means a party wipe is
+/// unrecoverable — RM2000 only writes the handler when the encounter continues
+/// on defeat — so the interpreter routes such a loss to the Game Over screen.
+pub(super) fn has_defeat_handler(commands: &[EventCommand], ip: usize, indent: u32) -> bool {
+    for c in &commands[(ip + 1).min(commands.len())..] {
+        if c.indent == indent {
+            match c.code {
+                DEFEAT_HANDLER => return true,
+                END_BATTLE => return false,
+                _ => {}
+            }
+        }
+    }
+    false
+}
+
 /// Index of the `Loop` (12210) at `indent` that an `EndLoop` at `ip` closes
 /// (scanning backward); falls back to `ip` if unmatched (a one-shot loop).
 pub(super) fn loop_start(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
@@ -245,6 +262,16 @@ mod tests {
         // 0: Victory@0  1: body@1  2: EndBattle@0 — no Escape/Defeat handlers.
         let commands = vec![cmd(20710, 0), cmd(10210, 1), cmd(20713, 0)];
         assert_eq!(skip_battle_handler(&commands, 0, 0), 2);
+    }
+
+    #[test]
+    fn detects_presence_and_absence_of_a_defeat_handler() {
+        // 0: EnemyEncounter@0  1: Victory@0  2: Defeat@0  3: EndBattle@0
+        let with = vec![cmd(10710, 0), cmd(20710, 0), cmd(20712, 0), cmd(20713, 0)];
+        assert!(has_defeat_handler(&with, 0, 0));
+        // 0: EnemyEncounter@0  1: Victory@0  2: EndBattle@0 — no defeat handler.
+        let without = vec![cmd(10710, 0), cmd(20710, 0), cmd(20713, 0)];
+        assert!(!has_defeat_handler(&without, 0, 0));
     }
 
     #[test]

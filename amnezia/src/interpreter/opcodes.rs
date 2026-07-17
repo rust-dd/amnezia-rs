@@ -42,3 +42,16 @@ pub(super) const MOVE_EVENT: u32 = 11330;
 pub(super) const PLAY_BGM: u32 = 11510;
 pub(super) const FADE_OUT_BGM: u32 = 11520;
 pub(super) const PLAY_SOUND: u32 = 11550;
+
+/// The presentation commands: screen effects and on-screen pictures.
+pub(super) const ERASE_SCREEN: u32 = 11010;
+pub(super) const SHOW_SCREEN: u32 = 11020;
+pub(super) const TINT_SCREEN: u32 = 11030;
+pub(super) const FLASH_SCREEN: u32 = 11040;
+pub(super) const SHAKE_SCREEN: u32 = 11050;
+pub(super) const SHOW_PICTURE: u32 = 11110;
+pub(super) const MOVE_PICTURE: u32 = 11120;
+pub(super) const ERASE_PICTURE: u32 = 11130;
+
+/// End the game to the Game Over screen.
+pub(super) const GAME_OVER: u32 = 12420;
