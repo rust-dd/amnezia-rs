@@ -22,6 +22,8 @@ pub(super) const CHANGE_PARTY: u32 = 10330;
 pub(super) const FULL_HEAL: u32 = 10490;
 /// Prompt for a number written into a variable: `params = [digits, var_id]`.
 pub(super) const INPUT_NUMBER: u32 = 10150;
+/// Reskin an actor (ChangeActorGraphic): `string` = charset, `params = [actor_id, index, transparent]`.
+pub(super) const CHANGE_SPRITE: u32 = 10630;
 
 /// The `EnemyEncounter` block's outcome handlers and terminator: the interpreter
 /// runs the body under the handler matching the finished battle outcome, skips

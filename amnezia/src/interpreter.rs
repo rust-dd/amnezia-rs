@@ -4,6 +4,7 @@
 //! switches and variables. A page's commands are a flat list with a per-command
 //! `indent`; conditional branches use that indent to delimit their bodies.
 
+use crate::appearance::SpriteChange;
 use crate::audio::AudioRequest;
 use crate::battle::{BattleActive, BattleOutcome, BattleRequest, BattleResult};
 use crate::choice::Choice;
@@ -67,6 +68,7 @@ pub struct SubsystemIo<'w> {
     gameover: ResMut<'w, GameOverActive>,
     vitals: ResMut<'w, Vitals>,
     input_number: ResMut<'w, InputNumber>,
+    sprite_writer: MessageWriter<'w, SpriteChange>,
 }
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
@@ -312,6 +314,18 @@ fn run_interpreter(
                 subsystems.input_number.open(digits, var_id);
                 running.input_pending = true;
                 return;
+            }
+            CHANGE_SPRITE => {
+                // Reskin an actor; the appearance system retextures the hero when
+                // the target is the party lead. `string` = charset name.
+                let actor_id = command.params.first().copied().unwrap_or(0).max(0) as u32;
+                let index = command.params.get(1).copied().unwrap_or(0).max(0) as u32;
+                subsystems.sprite_writer.write(SpriteChange {
+                    actor_id,
+                    charset: command.string.clone(),
+                    index,
+                });
+                running.ip += 1;
             }
             WAIT => {
                 running.wait = command.params.first().copied().unwrap_or(0) as f32 / 10.0;
