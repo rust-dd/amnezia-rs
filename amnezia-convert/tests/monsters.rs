@@ -61,6 +61,7 @@ fn converts_ldb_to_monsters_ron() {
         1,
         &[
             subchunk(0x01, &[0x53, 0xE1, 0x72, 0x6B, 0xE1, 0x6E, 0x79]),
+            subchunk(0x02, b"Dragon1"),
             subchunk(0x04, &varint(999)),
             subchunk(0x06, &varint(180)),
             subchunk(0x0B, &varint(1500)),
