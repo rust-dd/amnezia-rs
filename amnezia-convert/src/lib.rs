@@ -1,6 +1,8 @@
 //! Offline converter from the original RPG Maker 2000 project to the clean
 //! intermediate assets the game consumes.
 
+pub mod midi;
+
 use amnezia_data::{
     ActorDef, Chipset, CommonEvent, Event, EventCommand, EventPage, Hero, ItemDef, Map, MonsterDef,
     SkillDef, Start, TroopDef, TroopMemberDef,
@@ -413,10 +415,12 @@ pub fn convert_common_events(input: &Path, output: &Path) -> Result<usize> {
     Ok(count)
 }
 
-/// Copy the game's audio into `output/audio/`: sound effects (`Sound/*.wav`,
-/// which Bevy plays directly) and music (`Music/*`). Music is mostly `*.mid`,
-/// staged for a later MIDI-to-audio step, but a handful of ambient loops ship as
-/// `*.wav` and play directly. Returns `(sound_effects, music_tracks)` copied.
+/// Copy the game's audio into `output/audio/` and synthesize its music. Sound
+/// effects (`Sound/*.wav`) and the music source files (`Music/*.mid` plus a
+/// handful of ambient `Music/*.wav` loops) are copied verbatim; then every
+/// copied `.mid` is rendered to a sibling `.ogg` (see [`midi`]) so the game has
+/// a decodable BGM track. Returns `(sound_effects, music_tracks)` copied — the
+/// count is of source files, not of the `.ogg`s synthesized from them.
 pub fn convert_audio(input: &Path, output: &Path) -> Result<(usize, usize)> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -426,6 +430,7 @@ pub fn convert_audio(input: &Path, output: &Path) -> Result<(usize, usize)> {
     let music_out = audio.join("Music");
     let music = copy_audio_dir(&input.join("Music"), &music_out, "mid")?
         + copy_audio_dir(&input.join("Music"), &music_out, "wav")?;
+    midi::synthesize_dir(&music_out);
     Ok((effects, music))
 }
 

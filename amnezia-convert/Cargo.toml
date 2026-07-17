@@ -13,6 +13,8 @@ clap = { workspace = true }
 image = { workspace = true }
 lcf = { workspace = true }
 ron = { workspace = true }
+rustysynth = { workspace = true }
+vorbis_rs = { workspace = true }
 xyz = { workspace = true }
 
 [dev-dependencies]
