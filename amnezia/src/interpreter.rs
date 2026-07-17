@@ -275,7 +275,8 @@ fn run_interpreter(
                 if !boxes.is_empty() {
                     for message in &mut boxes {
                         for line in &mut message.lines {
-                            *line = text::substitute(line, &hero.0, &variables);
+                            *line =
+                                text::substitute(&crate::i18n::tr(line), &hero.0, &variables);
                         }
                     }
                     dialogue.open(boxes);
@@ -401,7 +402,7 @@ fn run_interpreter(
                     let labels: Vec<String> =
                         choice_labels(&running.commands, running.ip, command.indent)
                             .iter()
-                            .map(|l| text::substitute(l, &hero.0, &variables))
+                            .map(|l| text::substitute(&crate::i18n::tr(l), &hero.0, &variables))
                             .collect();
                     if labels.is_empty() {
                         running.ip = skip_to_terminator(

@@ -15,6 +15,7 @@ mod events;
 mod font;
 mod gamedata;
 mod gameover;
+mod i18n;
 mod inputnumber;
 mod interpreter;
 mod menu;
@@ -87,5 +88,6 @@ fn main() -> AppExit {
         .add_plugins(inputnumber::InputNumberPlugin)
         .add_plugins(appearance::AppearancePlugin)
         .add_plugins(progression::ProgressionPlugin)
+        .add_plugins(i18n::I18nPlugin)
         .run()
 }
