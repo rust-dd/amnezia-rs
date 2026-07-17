@@ -2,8 +2,8 @@
 //! intermediate assets the game consumes.
 
 use amnezia_data::{
-    ActorDef, Chipset, Event, EventCommand, EventPage, Hero, ItemDef, Map, MonsterDef, SkillDef,
-    Start, TroopDef, TroopMemberDef,
+    ActorDef, Chipset, CommonEvent, Event, EventCommand, EventPage, Hero, ItemDef, Map, MonsterDef,
+    SkillDef, Start, TroopDef, TroopMemberDef,
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -350,6 +350,45 @@ pub fn convert_troops(input: &Path, output: &Path) -> Result<usize> {
     std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
     std::fs::write(output.join("troops.ron"), serialised)
         .with_context(|| format!("writing {}", output.join("troops.ron").display()))?;
+    Ok(count)
+}
+
+/// Convert the common-event table in `input/RPG_RT.ldb` into
+/// `output/common_events.ron` (each event's id, name, trigger, condition
+/// switch, and command list), returning the number written. The interpreter
+/// reads it to run global call/autostart/parallel event scripts.
+pub fn convert_common_events(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed =
+        lcf::parse_common_events(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let events: Vec<CommonEvent> = parsed
+        .into_iter()
+        .map(|e| CommonEvent {
+            id: e.id,
+            name: e.name,
+            trigger: e.trigger,
+            switch_id: e.switch_id,
+            commands: e
+                .commands
+                .into_iter()
+                .map(|c| EventCommand {
+                    code: c.code,
+                    indent: c.indent,
+                    string: c.string,
+                    params: c.params,
+                })
+                .collect(),
+        })
+        .collect();
+    let count = events.len();
+    let serialised = ron::to_string(&events).context("serialising common events to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("common_events.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("common_events.ron").display()))?;
     Ok(count)
 }
 

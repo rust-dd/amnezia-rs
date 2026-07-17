@@ -7,10 +7,12 @@
 use crate::{Reader, decode_cp1250};
 use crate::LcfError;
 
+mod common_events;
 mod monsters;
 mod skills;
 mod troops;
 
+pub use common_events::{parse_common_events, CommonEvent};
 pub use monsters::{parse_monsters, Monster};
 pub use skills::{parse_skills, Skill};
 pub use troops::{parse_troops, Troop, TroopMember};

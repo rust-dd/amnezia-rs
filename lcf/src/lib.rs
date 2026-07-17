@@ -15,8 +15,8 @@ mod database;
 mod map;
 
 pub use database::{
-    parse_actors, parse_chipsets, parse_items, parse_monsters, parse_skills, parse_troops, Actor,
-    Chipset, Item, Monster, Skill, Troop, TroopMember,
+    parse_actors, parse_chipsets, parse_common_events, parse_items, parse_monsters, parse_skills,
+    parse_troops, Actor, Chipset, CommonEvent, Item, Monster, Skill, Troop, TroopMember,
 };
 pub use map::{
     parse_map, parse_start, Event, EventCommand, EventCondition, EventPage, MapUnit, Start,
@@ -45,6 +45,8 @@ pub enum LcfError {
     MissingMonsters,
     #[error("LCF database has no troop section (chunk 0x0F)")]
     MissingTroops,
+    #[error("LCF database has no common event section (chunk 0x19)")]
+    MissingCommonEvents,
 }
 
 /// A cursor over an LCF byte stream, shared by every parser in the crate.

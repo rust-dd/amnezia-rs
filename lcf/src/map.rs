@@ -265,7 +265,10 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
     Ok(pages)
 }
 
-fn parse_commands(data: &[u8]) -> Result<Vec<EventCommand>, LcfError> {
+/// Parse a flat event-command stream: repeated
+/// `[code][indent][strlen][CP1250 string][paramcount][params]` records read
+/// until the buffer is exhausted. Shared by map event pages and common events.
+pub(crate) fn parse_commands(data: &[u8]) -> Result<Vec<EventCommand>, LcfError> {
     let mut reader = Reader::new(data);
     let mut commands = Vec::new();
     while !reader.is_empty() {
