@@ -16,6 +16,7 @@ mod interpreter;
 mod menu;
 mod player;
 mod save;
+mod shop;
 mod state;
 mod teleport;
 mod text;
@@ -51,6 +52,7 @@ fn main() -> AppExit {
             debug::DebugPlugin,
             gamedata::GameDataPlugin,
             menu::MenuPlugin,
+            shop::ShopPlugin,
         ))
         .run()
 }
