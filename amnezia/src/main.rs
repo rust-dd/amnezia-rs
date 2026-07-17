@@ -6,6 +6,7 @@
 
 mod assets;
 mod audio;
+mod battle;
 mod choice;
 mod debug;
 mod dialogue;
@@ -21,6 +22,7 @@ mod state;
 mod teleport;
 mod text;
 mod tiles;
+mod vitals;
 mod world;
 
 use assets::{load_ron, ASSET_ROOT};
@@ -53,6 +55,7 @@ fn main() -> AppExit {
             gamedata::GameDataPlugin,
             menu::MenuPlugin,
             shop::ShopPlugin,
+            battle::BattlePlugin,
         ))
         .run()
 }
