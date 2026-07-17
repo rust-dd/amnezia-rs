@@ -20,8 +20,32 @@ The original game data lives in proprietary RPG Maker 2000 formats: `.ldb`/`.lmt
 2. `cargo run -p amnezia-convert` converts it into `assets/`.
 3. `cargo run -p amnezia` runs the game against `assets/`.
 
+## Controls
+
+The game opens on a **title screen** — pick *Új játék* (New Game) or *Folytatás* (Continue) with the arrows and confirm.
+
+| Key | Action |
+| --- | --- |
+| **Arrow keys** | Walk (hold to keep walking); move the cursor in any menu, choice, shop or battle |
+| **Space** / **Enter** | Action: talk to people, open doors, read signs; advance a message; confirm a menu/choice/shop/battle selection |
+| **Escape** | Open/close the in-game menu; also backs out of a shop/inn |
+| **← / →** (menu open) | Switch tab: Party · Items · Skills |
+| **↑ / ↓** (menu open) | Scroll the list |
+| **S** (menu open) | Save the game |
+| **F5** / **F9** | Quick-save / quick-load (anywhere) |
+
+Menus, shops, battles and the title all **pause the world** while they are up.
+
+### Debug keys (temporary, dev-only)
+
+| Key | Action |
+| --- | --- |
+| **P** | Toggle the passability overlay (red = impassable) — the HUD shows the map id, tile and running event |
+| **F6** | Start a test battle |
+| **F7** / **F8** | Open a test shop / inn |
+
 ## Status
 
-Scaffold + Phase 1 design. See `docs/superpowers/specs/`.
+Playable end-to-end: title → New Game / Continue → explore, talk, shop, rest, fight, save & resume. Implemented: the event interpreter (messages, switches/variables, conditions, loops, choices, move routes), tile & autotile rendering (incl. animated water, above-hero occlusion), smooth movement and collision, teleport fades, face portraits, sound effects, an in-game menu, shops/inns, a turn-based battle system, save/load, and a native 320×240 viewport. See `docs/superpowers/` for the specs and plans.
 
 Amnézia is freeware by MoonDragon Entertainment; this remake is non-commercial. Original game © MoonDragon Entertainment 2001/2004.
