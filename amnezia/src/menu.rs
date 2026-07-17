@@ -325,6 +325,15 @@ mod tests {
                 sp_cost: 20,
                 power: 50,
                 hit: 0,
+                skill_type: 0,
+                scope: 0,
+                physical_rate: 0,
+                magical_rate: 3,
+                affect_hp: false,
+                affect_sp: false,
+                absorb: false,
+                attributes: vec![],
+                affected_states: vec![],
             }],
         }
     }

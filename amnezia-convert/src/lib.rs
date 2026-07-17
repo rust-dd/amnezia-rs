@@ -4,8 +4,8 @@
 pub mod midi;
 
 use amnezia_data::{
-    ActorCurves, ActorDef, Chipset, CommonEvent, Event, EventCommand, EventPage, Hero, ItemDef,
-    Map, MonsterDef, SkillDef, Start, TroopDef, TroopMemberDef,
+    ActorCurves, ActorDef, AttributeDef, Chipset, CommonEvent, Event, EventCommand, EventPage,
+    Hero, ItemDef, Map, MonsterDef, SkillDef, Start, StateDef, TroopDef, TroopMemberDef,
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -321,8 +321,10 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
 }
 
 /// Convert the skill table in `input/RPG_RT.ldb` into `output/skills.ron` (each
-/// skill's id, name, description, SP cost, power, and hit rate), returning the
-/// number of skills written. The skill menu and battle system read it.
+/// skill's id, name, description, SP cost, power, hit rate, and battle effect —
+/// target scope, type, physical/magical rates, HP/SP and absorb flags, and the
+/// element and inflicted-state id lists), returning the number of skills
+/// written. The skill menu and battle system read it.
 pub fn convert_skills(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -339,6 +341,15 @@ pub fn convert_skills(input: &Path, output: &Path) -> Result<usize> {
             sp_cost: s.sp_cost,
             power: s.power,
             hit: s.hit,
+            skill_type: s.skill_type,
+            scope: s.scope,
+            physical_rate: s.physical_rate,
+            magical_rate: s.magical_rate,
+            affect_hp: s.affect_hp,
+            affect_sp: s.affect_sp,
+            absorb: s.absorb,
+            attributes: s.attributes,
+            affected_states: s.affected_states,
         })
         .collect();
     let count = skills.len();
@@ -346,6 +357,70 @@ pub fn convert_skills(input: &Path, output: &Path) -> Result<usize> {
     std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
     std::fs::write(output.join("skills.ron"), serialised)
         .with_context(|| format!("writing {}", output.join("skills.ron").display()))?;
+    Ok(count)
+}
+
+/// Convert the state (status condition) table in `input/RPG_RT.ldb` into
+/// `output/states.ron` (each state's id, name, action restriction, priority, and
+/// recovery odds), returning the number of states written. The battle system
+/// reads it to apply and lift status conditions.
+pub fn convert_states(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed = lcf::parse_states(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let states: Vec<StateDef> = parsed
+        .into_iter()
+        .map(|s| StateDef {
+            id: s.id,
+            name: s.name,
+            restriction: s.restriction,
+            priority: s.priority,
+            hold_turn: s.hold_turn,
+            auto_release_prob: s.auto_release_prob,
+            release_by_damage: s.release_by_damage,
+        })
+        .collect();
+    let count = states.len();
+    let serialised = ron::to_string(&states).context("serialising states to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("states.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("states.ron").display()))?;
+    Ok(count)
+}
+
+/// Convert the attribute (element) table in `input/RPG_RT.ldb` into
+/// `output/attributes.ron` (each element's id, name, physical/magical type, and
+/// A–E resistance-rank damage percentages), returning the number of attributes
+/// written. The battle system reads it to scale elemental damage.
+pub fn convert_attributes(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let ldb = input.join("RPG_RT.ldb");
+    let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
+    let parsed =
+        lcf::parse_attributes(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
+    let attributes: Vec<AttributeDef> = parsed
+        .into_iter()
+        .map(|a| AttributeDef {
+            id: a.id,
+            name: a.name,
+            attribute_type: a.attribute_type,
+            a_rate: a.a_rate,
+            b_rate: a.b_rate,
+            c_rate: a.c_rate,
+            d_rate: a.d_rate,
+            e_rate: a.e_rate,
+        })
+        .collect();
+    let count = attributes.len();
+    let serialised = ron::to_string(&attributes).context("serialising attributes to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("attributes.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("attributes.ron").display()))?;
     Ok(count)
 }
 

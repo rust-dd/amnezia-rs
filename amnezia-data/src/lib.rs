@@ -152,6 +152,16 @@ pub struct ItemDef {
 /// A skill (spell/ability) definition, read by the skill menu and battle
 /// system: its 1-based id, name, description, `sp_cost` (SP spent to cast),
 /// `power` (base effect magnitude), and `hit` (base success rate, percent).
+///
+/// The remaining fields carry the RM2000 battle effect. `scope` picks its
+/// targets (`0` one enemy, `1` all enemies, `2` self, `3` one ally, `4` all
+/// allies) and `skill_type` its family (`0` normal — the only battle-relevant
+/// kind — `1` teleport, `2` escape, `3` switch). `physical_rate`/`magical_rate`
+/// (0–10) weight the caster's attack versus spirit in the damage formula.
+/// `affect_hp`/`affect_sp` mark which pool the effect changes and `absorb`
+/// whether the caster drains what it deals. `attributes` holds the 1-based
+/// element ids the damage is checked against and `affected_states` the 1-based
+/// state ids the skill inflicts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillDef {
     pub id: u32,
@@ -160,6 +170,60 @@ pub struct SkillDef {
     pub sp_cost: u32,
     pub power: u32,
     pub hit: u32,
+    #[serde(default)]
+    pub skill_type: u32,
+    #[serde(default)]
+    pub scope: u32,
+    #[serde(default)]
+    pub physical_rate: u32,
+    #[serde(default)]
+    pub magical_rate: u32,
+    #[serde(default)]
+    pub affect_hp: bool,
+    #[serde(default)]
+    pub affect_sp: bool,
+    #[serde(default)]
+    pub absorb: bool,
+    #[serde(default)]
+    pub attributes: Vec<u32>,
+    #[serde(default)]
+    pub affected_states: Vec<u32>,
+}
+
+/// A state (status condition) definition, read by the battle system: its
+/// 1-based id, name, and how it constrains and wears off a battler.
+/// `restriction` limits actions while it holds (`0` none, `1` can't act,
+/// `2` attack an enemy at random, `3` attack an ally at random) and `priority`
+/// (0–100) decides which active state's graphic and restriction dominate.
+/// Recovery is governed by `hold_turn` (minimum turns held before it can lift),
+/// `auto_release_prob` (percent chance per turn to lift afterwards), and
+/// `release_by_damage` (percent chance to lift when hit by a physical attack).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StateDef {
+    pub id: u32,
+    pub name: String,
+    pub restriction: u32,
+    pub priority: u32,
+    pub hold_turn: u32,
+    pub auto_release_prob: u32,
+    pub release_by_damage: u32,
+}
+
+/// An attribute (element) definition, read by the battle system: its 1-based
+/// id, name, whether damage carrying it is physical or magical
+/// (`attribute_type`: `0` physical/weapon, `1` magical), and the five damage
+/// percentages applied by a target's A–E resistance rank (`a_rate` most
+/// vulnerable through `e_rate` most resistant; `c_rate` is the neutral 100%).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AttributeDef {
+    pub id: u32,
+    pub name: String,
+    pub attribute_type: u32,
+    pub a_rate: u32,
+    pub b_rate: u32,
+    pub c_rate: u32,
+    pub d_rate: u32,
+    pub e_rate: u32,
 }
 
 /// A monster's definition, read by the battle system: its 1-based id, name, the

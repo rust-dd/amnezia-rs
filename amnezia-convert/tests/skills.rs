@@ -57,14 +57,22 @@ fn converts_ldb_to_skills_ron() {
     std::fs::create_dir_all(&input).unwrap();
 
     // Name bytes are CP1250 "Tűzgolyó" (fireball): 0xFB = 'ű', 0xF3 = 'ó'.
+    // A single-enemy (scope 0) magical fire attack (attribute id 5) that damages
+    // HP and inflicts Poison (state id 3).
     let fireball = element(
         1,
         &[
             subchunk(0x01, &[0x54, 0xFB, 0x7A, 0x67, 0x6F, 0x6C, 0x79, 0xF3]),
             subchunk(0x02, &[0xC9, 0x67, 0x65, 0x74, 0x69]),
+            subchunk(0x08, &varint(0)),
             subchunk(0x0B, &varint(8)),
+            subchunk(0x0C, &varint(0)),
+            subchunk(0x16, &varint(10)),
             subchunk(0x18, &varint(35)),
             subchunk(0x19, &varint(90)),
+            subchunk(0x1F, &varint(1)),
+            subchunk(0x2A, &[0, 0, 1]),
+            subchunk(0x2C, &[0, 0, 0, 0, 1]),
         ],
     );
     let heal = element(2, &[subchunk(0x01, b"Heal"), subchunk(0x0B, &varint(4))]);
@@ -85,9 +93,23 @@ fn converts_ldb_to_skills_ron() {
             sp_cost: 8,
             power: 35,
             hit: 90,
+            skill_type: 0,
+            scope: 0,
+            physical_rate: 0,
+            magical_rate: 10,
+            affect_hp: true,
+            affect_sp: false,
+            absorb: false,
+            attributes: vec![5],
+            affected_states: vec![3],
         }
     );
     assert_eq!(skills[1].name, "Heal");
     assert_eq!(skills[1].sp_cost, 4);
     assert_eq!((skills[1].power, skills[1].hit), (0, 0));
+    assert_eq!(
+        skills[1].magical_rate, 3,
+        "omitted magical_rate keeps the RM2000 default"
+    );
+    assert!(skills[1].attributes.is_empty() && skills[1].affected_states.is_empty());
 }
