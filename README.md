@@ -4,7 +4,7 @@ Faithful **Bevy/Rust remake** of *Amnézia* — MoonDragon Entertainment's Hunga
 
 ## How it works
 
-The original game data lives in proprietary RPG Maker 2000 formats: `.ldb`/`.lmt`/`.lmu` (the LCF binary format), `.xyz` images and MIDI music. A dev-time converter reads these **once** and emits a clean, engine-agnostic format (PNG + RON, and later OGG). The shipped game loads only that clean format — the legacy formats and the original files never reach the game binary. The Cargo dependency graph enforces this: the `amnezia` game crate depends only on `amnezia-data` and Bevy, never on the `lcf`/`xyz` parser crates.
+The original game data lives in proprietary RPG Maker 2000 formats: `.ldb`/`.lmt`/`.lmu` (the LCF binary format), `.xyz` images and MIDI music. A dev-time converter reads these **once** and emits a clean, engine-agnostic format (PNG, RON and OGG). The shipped game loads only that clean format — the legacy formats and the original files never reach the game binary. The Cargo dependency graph enforces this: the `amnezia` game crate depends only on `amnezia-data` and Bevy, never on the `lcf`/`xyz` parser crates.
 
 ## Crates
 
@@ -33,6 +33,7 @@ The game opens on a **title screen** — pick *Új játék* (New Game) or *Folyt
 | **↑ / ↓** (menu open) | Scroll the list |
 | **S** (menu open) | Save the game |
 | **F5** / **F9** | Quick-save / quick-load (anywhere) |
+| **F2** | Toggle the display language: Magyar / English |
 
 Menus, shops, battles and the title all **pause the world** while they are up.
 
@@ -46,6 +47,6 @@ Menus, shops, battles and the title all **pause the world** while they are up.
 
 ## Status
 
-Playable end-to-end: title → New Game / Continue → explore, talk, shop, rest, fight, save & resume. Implemented: the event interpreter (messages, switches/variables, conditions, loops, choices, move routes), tile & autotile rendering (incl. animated water, above-hero occlusion), smooth movement and collision, teleport fades, face portraits, sound effects, an in-game menu, shops/inns, a turn-based battle system, save/load, and a native 320×240 viewport. See `docs/superpowers/` for the specs and plans.
+Playable end-to-end: title → New Game / Continue → explore, talk, shop, rest, fight, level up, save & resume. Implemented: the event interpreter (messages, switches/variables, conditions, loops, choices, move routes, numeric input, actor reskins, event relocation), tile & autotile rendering (incl. animated water, above-hero occlusion), smooth movement and collision, teleport fades, face portraits, screen effects and pictures, synthesized MIDI music and sound effects, an in-game menu, shops/inns with full healing, a turn-based battle system with experience and level-up, save/load (including party HP/SP and progression), a native 320×240 viewport, and an optional English translation (F2).
 
 Amnézia is freeware by MoonDragon Entertainment; this remake is non-commercial. Original game © MoonDragon Entertainment 2001/2004.
