@@ -81,6 +81,7 @@ fn converts_ldb_to_monsters_ron() {
         MonsterDef {
             id: 1,
             name: "Sárkány".to_string(),
+            battler: "Dragon1".to_string(),
             max_hp: 999,
             max_sp: 0,
             attack: 180,

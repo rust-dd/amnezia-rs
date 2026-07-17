@@ -148,6 +148,7 @@ pub struct SkillDef {
 pub struct MonsterDef {
     pub id: u32,
     pub name: String,
+    pub battler: String,
     pub max_hp: u32,
     pub max_sp: u32,
     pub attack: u32,

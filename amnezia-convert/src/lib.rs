@@ -321,6 +321,7 @@ pub fn convert_monsters(input: &Path, output: &Path) -> Result<usize> {
         .map(|m| MonsterDef {
             id: m.id,
             name: m.name,
+            battler: m.battler,
             max_hp: m.max_hp,
             max_sp: m.max_sp,
             attack: m.attack,

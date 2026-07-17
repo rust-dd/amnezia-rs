@@ -11,6 +11,7 @@ use crate::{LcfError, Reader, decode_cp1250};
 pub struct Monster {
     pub id: u32,
     pub name: String,
+    pub battler: String,
     pub max_hp: u32,
     pub max_sp: u32,
     pub attack: u32,
@@ -23,6 +24,7 @@ pub struct Monster {
 
 const MONSTER_SECTION: u32 = 0x0E;
 const MONSTER_NAME: u32 = 0x01;
+const MONSTER_BATTLER: u32 = 0x02;
 const MONSTER_MAX_HP: u32 = 0x04;
 const MONSTER_MAX_SP: u32 = 0x05;
 const MONSTER_ATTACK: u32 = 0x06;
@@ -47,6 +49,7 @@ pub fn parse_monsters(bytes: &[u8]) -> Result<Vec<Monster>, LcfError> {
         let mut monster = Monster {
             id,
             name: String::new(),
+            battler: String::new(),
             max_hp: 0,
             max_sp: 0,
             attack: 0,
@@ -65,6 +68,7 @@ pub fn parse_monsters(bytes: &[u8]) -> Result<Vec<Monster>, LcfError> {
             let sub_data = reader.take(sub_size)?;
             match sub_id {
                 MONSTER_NAME => monster.name = decode_cp1250(sub_data),
+                MONSTER_BATTLER => monster.battler = decode_cp1250(sub_data),
                 MONSTER_MAX_HP => monster.max_hp = Reader::new(sub_data).varint()?,
                 MONSTER_MAX_SP => monster.max_sp = Reader::new(sub_data).varint()?,
                 MONSTER_ATTACK => monster.attack = Reader::new(sub_data).varint()?,
@@ -93,6 +97,7 @@ mod tests {
             1,
             &[
                 subchunk(0x01, &[0x53, 0xE1, 0x72, 0x6B, 0xE1, 0x6E, 0x79]),
+                subchunk(0x02, b"Dragon1"),
                 subchunk(0x04, &varint(999)),
                 subchunk(0x05, &varint(120)),
                 subchunk(0x06, &varint(180)),
@@ -111,6 +116,7 @@ mod tests {
             Monster {
                 id: 1,
                 name: "Sárkány".to_string(),
+                battler: "Dragon1".to_string(),
                 max_hp: 999,
                 max_sp: 120,
                 attack: 180,
