@@ -5,7 +5,7 @@
 
 use super::model::Command;
 use amnezia_data::{
-    ActorCurves, ActorDef, AttributeDef, EnemyActionDef, ItemDef, MonsterDef, SkillDef,
+    ActorCurves, ActorDef, AttributeDef, EnemyActionDef, ItemDef, MonsterDef, SkillDef, StateDef,
 };
 
 /// A combatant's four battle stats. Enemies read them straight from their
@@ -251,17 +251,97 @@ pub fn state_infliction_chance(rank: u8) -> u32 {
     }
 }
 
-/// Add `state_id` to an active-state list if it is not already present, so
-/// infliction stays idempotent (RM2000 never stacks the same state twice).
-pub fn inflict(states: &mut Vec<u32>, state_id: u32) {
-    if !states.contains(&state_id) {
-        states.push(state_id);
+/// The status id (RM2000 state 1) that marks a KO'd combatant. It is exempt from
+/// turn- and damage-based recovery: whether a combatant is down is governed by HP
+/// and [`super::model::Fighter::alive`], not by a wear-off roll.
+pub const DEATH_STATE: u32 = 1;
+
+/// Whether `state_id` is active in `states` (a `(state_id, turns_held)` list).
+pub fn has_state(states: &[(u32, u32)], state_id: u32) -> bool {
+    states.iter().any(|&(id, _)| id == state_id)
+}
+
+/// Add `state_id` to an active-state list (held for `0` turns) if it is not
+/// already present, so infliction stays idempotent (RM2000 never stacks a state).
+pub fn inflict(states: &mut Vec<(u32, u32)>, state_id: u32) {
+    if !has_state(states, state_id) {
+        states.push((state_id, 0));
     }
 }
 
 /// Remove `state_id` from an active-state list — a cure or a wear-off.
-pub fn cure(states: &mut Vec<u32>, state_id: u32) {
-    states.retain(|&s| s != state_id);
+pub fn cure(states: &mut Vec<(u32, u32)>, state_id: u32) {
+    states.retain(|&(id, _)| id != state_id);
+}
+
+/// The highest `restriction` among the combatant's active `states` — `0` none,
+/// `1` can't act, `2` attack-enemy (berserk), `3` attack-ally (confusion) — or `0`
+/// when it bears no restricting state. The worst restriction governs how the actor
+/// is forced to behave this round; ids absent from `defs` contribute nothing.
+pub fn worst_restriction(states: &[(u32, u32)], defs: &[StateDef]) -> u32 {
+    states
+        .iter()
+        .filter_map(|&(id, _)| defs.iter().find(|d| d.id == id).map(|d| d.restriction))
+        .max()
+        .unwrap_or(0)
+}
+
+/// Advance every active state's held-turn count and roll its automatic wear-off:
+/// once a state has been held at least `hold_turn` rounds it lifts on a `roll() <
+/// auto_release_prob` (percent) draw. The death state ([`DEATH_STATE`]) never wears
+/// off. `roll` yields a fresh `0..100` value, consulted only for a state eligible
+/// to lift. Returns the ids that lifted, for the caller to log. Run once per
+/// combatant at the top of each round.
+pub fn tick_recovery(
+    states: &mut Vec<(u32, u32)>,
+    defs: &[StateDef],
+    mut roll: impl FnMut() -> u32,
+) -> Vec<u32> {
+    let mut lifted = Vec::new();
+    states.retain_mut(|(id, turns)| {
+        if *id == DEATH_STATE {
+            return true;
+        }
+        *turns = turns.saturating_add(1);
+        let Some(def) = defs.iter().find(|d| d.id == *id) else {
+            return true;
+        };
+        if *turns >= def.hold_turn && roll() < def.auto_release_prob {
+            lifted.push(*id);
+            false
+        } else {
+            true
+        }
+    });
+    lifted
+}
+
+/// Roll each active state's damage wear-off after its bearer is struck: a state
+/// lifts on a `roll() < release_by_damage` (percent) draw. The death state
+/// ([`DEATH_STATE`]) never wears off, and a state that cannot be shaken by damage
+/// (`release_by_damage == 0`) is left untouched with no roll spent. `roll` yields a
+/// fresh `0..100` value per eligible state. Returns the ids that lifted, to log.
+pub fn release_on_damage(
+    states: &mut Vec<(u32, u32)>,
+    defs: &[StateDef],
+    mut roll: impl FnMut() -> u32,
+) -> Vec<u32> {
+    let mut lifted = Vec::new();
+    states.retain_mut(|(id, _)| {
+        if *id == DEATH_STATE {
+            return true;
+        }
+        let Some(def) = defs.iter().find(|d| d.id == *id) else {
+            return true;
+        };
+        if def.release_by_damage > 0 && roll() < def.release_by_damage {
+            lifted.push(*id);
+            false
+        } else {
+            true
+        }
+    });
+    lifted
 }
 
 /// The party level the enemy AI assumes: battle state tracks no per-member
@@ -595,17 +675,77 @@ mod tests {
         assert_eq!(state_infliction_chance(9), 0); // past E clamps to E
     }
 
+    fn state(id: u32, restriction: u32, hold_turn: u32, auto: u32, by_damage: u32) -> StateDef {
+        StateDef {
+            id,
+            name: format!("S{id}"),
+            restriction,
+            priority: 0,
+            hold_turn,
+            auto_release_prob: auto,
+            release_by_damage: by_damage,
+        }
+    }
+
     #[test]
     fn inflict_is_idempotent_and_cure_removes() {
         let mut states = vec![];
         inflict(&mut states, 3);
         inflict(&mut states, 3); // no duplicate
         inflict(&mut states, 5);
-        assert_eq!(states, vec![3, 5]);
+        assert_eq!(states, vec![(3, 0), (5, 0)]);
+        assert!(has_state(&states, 3) && !has_state(&states, 9));
         cure(&mut states, 3);
-        assert_eq!(states, vec![5]);
+        assert_eq!(states, vec![(5, 0)]);
         cure(&mut states, 99); // absent -> no-op
-        assert_eq!(states, vec![5]);
+        assert_eq!(states, vec![(5, 0)]);
+    }
+
+    #[test]
+    fn worst_restriction_takes_the_max_across_active_states() {
+        let defs = vec![
+            state(1, 1, 0, 0, 0), // can't act
+            state(2, 3, 0, 0, 0), // confusion
+            state(3, 2, 0, 0, 0), // berserk
+        ];
+        assert_eq!(worst_restriction(&[(1, 0), (3, 0)], &defs), 2); // 1 and 2 -> 2
+        assert_eq!(worst_restriction(&[(1, 0), (2, 0), (3, 0)], &defs), 3); // + confusion
+        assert_eq!(worst_restriction(&[], &defs), 0); // none active
+        assert_eq!(worst_restriction(&[(99, 0)], &defs), 0); // id absent from defs
+    }
+
+    #[test]
+    fn tick_recovery_wears_off_after_hold_and_spares_the_death_state() {
+        // Death (id 1) never lifts; state 2 lifts at once (hold 0, 100%).
+        let defs = vec![state(1, 0, 0, 100, 0), state(2, 0, 0, 100, 0)];
+        let mut states = vec![(1, 0), (2, 0)];
+        assert_eq!(tick_recovery(&mut states, &defs, || 0), vec![2]);
+        assert_eq!(states, vec![(1, 0)]); // KO endures, its turn untouched
+
+        // hold_turn gates the roll: a 2-turn hold survives round 1, lifts on round 2.
+        let held = vec![state(5, 0, 2, 100, 0)];
+        let mut s = vec![(5, 0)];
+        assert!(tick_recovery(&mut s, &held, || 0).is_empty());
+        assert_eq!(s, vec![(5, 1)]);
+        assert_eq!(tick_recovery(&mut s, &held, || 0), vec![5]);
+        assert!(s.is_empty());
+    }
+
+    #[test]
+    fn release_on_damage_lifts_by_chance_and_spares_the_death_state() {
+        // state 4 shakes off on any hit (100%); death (1) never; state 5 (0%) never.
+        let defs = vec![
+            state(1, 0, 0, 0, 100),
+            state(4, 0, 0, 0, 100),
+            state(5, 0, 0, 0, 0),
+        ];
+        let mut states = vec![(1, 0), (4, 0), (5, 0)];
+        assert_eq!(release_on_damage(&mut states, &defs, || 0), vec![4]);
+        assert_eq!(states, vec![(1, 0), (5, 0)]);
+        // A roll at or above the percent keeps the state (100 !< 100).
+        let mut s = vec![(4, 0)];
+        assert!(release_on_damage(&mut s, &defs, || 100).is_empty());
+        assert_eq!(s, vec![(4, 0)]);
     }
 
     fn action(

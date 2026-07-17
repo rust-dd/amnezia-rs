@@ -62,8 +62,9 @@ pub struct Fighter {
     pub weapon_hit: u32,
     pub weapon_crit: u32,
     pub weapon_element: Option<u32>,
-    /// The status-effect ids currently afflicting this fighter.
-    pub states: Vec<u32>,
+    /// This fighter's active status effects as `(state_id, turns_held)` pairs; the
+    /// turn count drives [`logic::tick_recovery`]'s hold-then-wear-off schedule.
+    pub states: Vec<(u32, u32)>,
 }
 
 impl Fighter {
@@ -91,8 +92,9 @@ pub struct Foe {
     /// This foe's per-state affliction ranks, copied from its `MonsterDef`, for
     /// the status-infliction chance.
     pub state_ranks: Vec<u8>,
-    /// The status-effect ids currently afflicting this foe.
-    pub states: Vec<u32>,
+    /// This foe's active status effects as `(state_id, turns_held)` pairs; the
+    /// turn count drives [`logic::tick_recovery`]'s hold-then-wear-off schedule.
+    pub states: Vec<(u32, u32)>,
     /// This foe's RM2000 battle-AI action list, consulted each round to choose
     /// its command (cast a skill, defend, or attack on turn/HP conditions).
     pub actions: Vec<EnemyActionDef>,
@@ -306,21 +308,27 @@ impl Battle {
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;
-        match self.next_chooser() {
-            Some(i) => self.turn = i,
-            None => self.begin_resolve(),
-        }
+        self.skip_restricted_choosers();
     }
 
     /// Step back to the previous living chooser, clearing its order (RM2000 back).
+    /// Auto-committed restricted members (asleep/berserk/confused) can't be
+    /// re-ordered, so the step skips over them to the last freely-chosen member.
     pub fn undo_choice(&mut self) {
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;
-        if let Some(i) = self.members[..self.turn]
+        let target = self.members[..self.turn]
             .iter()
-            .rposition(|f| f.alive() && f.command.is_some())
-        {
+            .enumerate()
+            .rev()
+            .find(|(_, f)| {
+                f.alive()
+                    && f.command.is_some()
+                    && logic::worst_restriction(&f.states, &self.states) == 0
+            })
+            .map(|(i, _)| i);
+        if let Some(i) = target {
             self.members[i].command = None;
             self.turn = i;
         }
@@ -329,7 +337,7 @@ impl Battle {
     /// Build the agility-ordered turn queue from every member's committed command
     /// plus each living enemy's AI-chosen action (`resolve::enemy_action`), and
     /// start resolving.
-    fn begin_resolve(&mut self) {
+    pub(super) fn begin_resolve(&mut self) {
         let alive: Vec<bool> = self.members.iter().map(|f| f.alive()).collect();
         let mut actions: Vec<Action> = Vec::new();
         for (i, f) in self.members.iter().enumerate() {
@@ -356,20 +364,23 @@ impl Battle {
         self.phase = Phase::Resolve;
     }
 
-    /// Open a fresh command round: bump the round and clear each order and defence.
+    /// Open a fresh command round: bump the round, clear each order and defence,
+    /// wear off timed states, then hand the round to the first member who may
+    /// freely choose (auto-ordering and skipping any restricted members).
     pub fn new_round(&mut self) {
         self.round += 1;
         for f in &mut self.members {
             f.command = None;
             f.defending = false;
         }
+        self.run_recovery();
         self.queue.clear();
         self.queue_at = 0;
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;
-        self.turn = self.next_chooser().unwrap_or(0);
         self.phase = Phase::Command;
+        self.skip_restricted_choosers();
     }
 
     /// The last [`LOG_TAIL`] log lines, for the log window.
@@ -595,5 +606,62 @@ mod tests {
         assert_eq!(foe.attribute_rank(3), 4); // E
         assert_eq!(foe.attribute_rank(4), 2); // past the truncated vector -> C
         assert_eq!(foe.attribute_rank(0), 2); // non-elemental id -> C
+    }
+
+    fn state_def(id: u32, restriction: u32, auto_release_prob: u32) -> StateDef {
+        StateDef {
+            id,
+            name: format!("S{id}"),
+            restriction,
+            priority: 0,
+            hold_turn: 0,
+            auto_release_prob,
+            release_by_damage: 0,
+        }
+    }
+
+    fn build_2v1(seed: u64) -> Battle {
+        let ron = testkit::actor(1, 2, 63, 37);
+        let tiff = testkit::actor(2, 3, 38, 75);
+        let actors = vec![&ron, &tiff];
+        let monsters = vec![testkit::monster(1, 30, 10, 30)];
+        let troop = testkit::troop(&[(1, 100, 100)]);
+        Battle::build(
+            &troop,
+            &monsters,
+            &actors,
+            &[],
+            &[],
+            &[],
+            &[],
+            &Vitals::default(),
+            &Progression::default(),
+            "Cave1".into(),
+            seed,
+        )
+    }
+
+    #[test]
+    fn a_cant_act_member_is_auto_skipped_in_the_command_flow() {
+        let mut battle = build_2v1(7);
+        // Afflict member 1 with a can't-act (restriction 1) state.
+        battle.states = vec![state_def(7, 1, 0)];
+        battle.members[1].states = vec![(7, 0)];
+        // Member 0 chooses; the flow must auto-order the sleeping member 1 and
+        // enter resolution rather than stop for its input.
+        battle.commit(Command::Defend);
+        assert!(matches!(battle.members[1].command, Some(Command::Nothing)));
+        assert!(battle.phase == Phase::Resolve);
+    }
+
+    #[test]
+    fn new_round_wears_off_a_timed_state_but_never_the_death_state() {
+        let mut battle = build_1v2();
+        // Death (id 1) is exempt; state 2 lifts at once (hold 0, 100% release).
+        battle.states = vec![state_def(1, 0, 100), state_def(2, 0, 100)];
+        battle.members[0].states = vec![(1, 0), (2, 0)];
+        battle.new_round();
+        assert!(logic::has_state(&battle.members[0].states, 1)); // KO status endures
+        assert!(!logic::has_state(&battle.members[0].states, 2)); // timed state worn off
     }
 }
