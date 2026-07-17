@@ -243,6 +243,8 @@ fn update_player_sprite(
 }
 
 fn camera_follow(
+    data: Res<MapData>,
+    windows: Query<&Window>,
     players: Query<&Transform, With<Player>>,
     mut cameras: Query<&mut Transform, (With<Camera2d>, Without<Player>)>,
 ) {
@@ -252,6 +254,39 @@ fn camera_follow(
     let Ok(mut camera) = cameras.single_mut() else {
         return;
     };
-    camera.translation.x = player.translation.x;
-    camera.translation.y = player.translation.y;
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let half_map_w = data.width as f32 * tiles::TILE / 2.0;
+    let half_map_h = data.height as f32 * tiles::TILE / 2.0;
+    camera.translation.x = clamp_to_map(player.translation.x, half_map_w, window.width() / 2.0);
+    camera.translation.y = clamp_to_map(player.translation.y, half_map_h, window.height() / 2.0);
+}
+
+/// Follow `target` but keep the camera inside the map: never scroll past the
+/// edge (which would reveal the empty area beyond the map). When the map is
+/// smaller than the viewport on an axis, it is centered (returns 0). The map is
+/// centered on the origin, so its extent on each axis is `±half_map`.
+fn clamp_to_map(target: f32, half_map: f32, half_view: f32) -> f32 {
+    if half_view >= half_map {
+        0.0
+    } else {
+        target.clamp(-half_map + half_view, half_map - half_view)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clamp_to_map;
+
+    #[test]
+    fn camera_clamps_to_map_edges() {
+        // map half-extent 320, viewport half 160: the camera stops at ±160
+        assert_eq!(clamp_to_map(1000.0, 320.0, 160.0), 160.0);
+        assert_eq!(clamp_to_map(-1000.0, 320.0, 160.0), -160.0);
+        // well inside the map: follows the target exactly
+        assert_eq!(clamp_to_map(50.0, 320.0, 160.0), 50.0);
+        // map narrower than the viewport: centered, no gray edge
+        assert_eq!(clamp_to_map(1000.0, 100.0, 160.0), 0.0);
+    }
 }
