@@ -236,6 +236,31 @@ pub fn usable_skills(skills: &[SkillDef], sp: i32) -> Vec<&SkillDef> {
         .collect()
 }
 
+/// The percent chance (`0..=100`) a status effect lands, from the target's A–E
+/// affliction rank for that state (0=A … 4=E): rank A always lands, E never.
+pub fn state_infliction_chance(rank: u8) -> u32 {
+    match rank {
+        0 => 100,
+        1 => 80,
+        2 => 60,
+        3 => 40,
+        _ => 0,
+    }
+}
+
+/// Add `state_id` to an active-state list if it is not already present, so
+/// infliction stays idempotent (RM2000 never stacks the same state twice).
+pub fn inflict(states: &mut Vec<u32>, state_id: u32) {
+    if !states.contains(&state_id) {
+        states.push(state_id);
+    }
+}
+
+/// Remove `state_id` from an active-state list — a cure or a wear-off.
+pub fn cure(states: &mut Vec<u32>, state_id: u32) {
+    states.retain(|&s| s != state_id);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -477,5 +502,28 @@ mod tests {
         assert_eq!(elemental_damage(100, 42, &ranks, &attrs), 100); // unknown id -> unchanged
         // An id past the truncated rank vector reads neutral C (100%).
         assert_eq!(elemental_damage(80, 6, &[0], &attrs), 80);
+    }
+
+    #[test]
+    fn state_infliction_chance_maps_ranks_a_through_e() {
+        assert_eq!(state_infliction_chance(0), 100); // A always lands
+        assert_eq!(state_infliction_chance(1), 80);
+        assert_eq!(state_infliction_chance(2), 60);
+        assert_eq!(state_infliction_chance(3), 40);
+        assert_eq!(state_infliction_chance(4), 0); // E never lands
+        assert_eq!(state_infliction_chance(9), 0); // past E clamps to E
+    }
+
+    #[test]
+    fn inflict_is_idempotent_and_cure_removes() {
+        let mut states = vec![];
+        inflict(&mut states, 3);
+        inflict(&mut states, 3); // no duplicate
+        inflict(&mut states, 5);
+        assert_eq!(states, vec![3, 5]);
+        cure(&mut states, 3);
+        assert_eq!(states, vec![5]);
+        cure(&mut states, 99); // absent -> no-op
+        assert_eq!(states, vec![5]);
     }
 }

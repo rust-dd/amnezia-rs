@@ -35,14 +35,14 @@ pub fn command_input(
     }
 }
 
-/// The affordable offensive skills as `(power, sp_cost, label)` for the caster
+/// The affordable offensive skills as `(skill_id, sp_cost, label)` for the caster
 /// with `sp` points — the single source both the menu and the UI read.
 pub fn skill_choices(data: &GameData, sp: i32) -> Vec<(u32, u32, String)> {
     usable_skills(&data.skills, sp)
         .into_iter()
         .map(|s| {
             (
-                s.power,
+                s.id,
                 s.sp_cost,
                 format!("{} (SP {})", i18n::tr(&s.name), s.sp_cost),
             )
@@ -91,9 +91,9 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
     let choices = skill_choices(data, sp);
     move_cursor(keys, &mut battle.cursor, choices.len());
     if confirm(keys)
-        && let Some(&(power, cost, _)) = choices.get(battle.cursor)
+        && let Some(&(skill_id, _, _)) = choices.get(battle.cursor)
     {
-        open_target(battle, Some((power, cost)));
+        open_target(battle, Some(skill_id));
     }
 }
 
@@ -136,19 +136,15 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     if confirm(keys) {
         let target = living[battle.cursor.min(living.len() - 1)];
         let command = match battle.pending_skill {
-            Some((power, cost)) => Command::Skill {
-                power,
-                cost,
-                target,
-            },
+            Some(skill_id) => Command::Skill { skill_id, target },
             None => Command::Attack { target },
         };
         battle.commit(command);
     }
 }
 
-/// Enter the target menu for an attack (`None`) or a chosen `(power, cost)` skill.
-fn open_target(battle: &mut Battle, skill: Option<(u32, u32)>) {
+/// Enter the target menu for an attack (`None`) or a chosen skill (its id).
+fn open_target(battle: &mut Battle, skill: Option<u32>) {
     if battle.living_enemies().is_empty() {
         return;
     }

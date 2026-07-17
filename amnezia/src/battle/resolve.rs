@@ -7,6 +7,7 @@
 use super::BattleOutcome;
 use super::logic;
 use super::model::{Action, Battle, Command, Phase, Source, rng_next};
+use amnezia_data::SkillDef;
 
 /// Flat HP a medicine item restores in v1. `ItemDef` carries no heal magnitude,
 /// so item potency is a documented constant rather than data-driven.
@@ -57,30 +58,11 @@ impl Battle {
                     Strike::Hit { dmg, crit: false } => format!("{member} rácsap: {enemy} -{dmg}"),
                 }
             }
-            (
-                Source::Party(pi),
-                Command::Skill {
-                    power,
-                    cost,
-                    target,
-                },
-            ) => {
-                self.members[pi].sp = (self.members[pi].sp - cost as i32).max(0);
-                let spirit = self.members[pi].stats.spirit;
-                let Some(ti) = self.retarget_enemy(target) else {
-                    return;
-                };
-                // TODO: scale by the skill's element. `Command::Skill` carries only
-                // power/cost/target, so the element id and its `AttributeDef` are
-                // unavailable here; wiring `logic::elemental_damage` in needs the
-                // element-carrying Command (a later slice — Command and input.rs are
-                // off-limits now), so a skill stays non-elemental until then.
-                let base = logic::skill_damage(power, spirit, self.enemies[ti].stats.spirit);
-                let dmg = self.hit_enemy(ti, base);
-                format!(
-                    "{} varázsol: {} -{}",
-                    self.members[pi].name, self.enemies[ti].name, dmg
-                )
+            (Source::Party(pi), Command::Skill { skill_id, target }) => {
+                match self.cast_skill(pi, skill_id, target) {
+                    Some(line) => line,
+                    None => return,
+                }
             }
             (Source::Party(pi), Command::Item) => {
                 let f = &mut self.members[pi];
@@ -157,6 +139,122 @@ impl Battle {
         }
         self.members[ti].hp -= dmg;
         dmg
+    }
+
+    /// Resolve member `pi`'s cast of skill `skill_id` at `target`: deduct SP, then
+    /// apply the scoped effect — an elemental attack that may inflict states
+    /// (enemy scope 0/1), or a heal that may cure them (ally scope 2/3/4). Returns
+    /// the joined log line(s), or `None` for an unknown skill id (no effect).
+    fn cast_skill(&mut self, pi: usize, skill_id: u32, target: usize) -> Option<String> {
+        let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
+        self.members[pi].sp = (self.members[pi].sp - skill.sp_cost as i32).max(0);
+        let mut lines: Vec<String> = Vec::new();
+        match skill.scope {
+            1 => {
+                for ti in self.living_enemies() {
+                    lines.extend(self.skill_hit_enemy(pi, ti, &skill));
+                }
+            }
+            2 => lines.extend(self.skill_heal_ally(pi, pi, &skill)),
+            3 => {
+                if self.members.get(target).is_some_and(|m| m.alive()) {
+                    lines.extend(self.skill_heal_ally(pi, target, &skill));
+                }
+            }
+            4 => {
+                for ti in 0..self.members.len() {
+                    if self.members[ti].alive() {
+                        lines.extend(self.skill_heal_ally(pi, ti, &skill));
+                    }
+                }
+            }
+            _ => {
+                if let Some(ti) = self.retarget_enemy(target) {
+                    lines.extend(self.skill_hit_enemy(pi, ti, &skill));
+                }
+            }
+        }
+        let caster = self.members[pi].name.clone();
+        Some(if lines.is_empty() {
+            format!("{caster} varázsol")
+        } else {
+            lines.join("\n")
+        })
+    }
+
+    /// Land `skill` from caster `pi` on enemy `ti`: elemental damage against the
+    /// foe's resistance ranks (SP drains find no pool on a foe), an optional
+    /// life-absorb for the caster, and a status-infliction roll per affected
+    /// state, weighted by the foe's affliction rank.
+    fn skill_hit_enemy(&mut self, pi: usize, ti: usize, skill: &SkillDef) -> Vec<String> {
+        let caster = self.members[pi].name.clone();
+        let target = self.enemies[ti].name.clone();
+        let base = logic::skill_damage(
+            skill.power,
+            self.members[pi].stats.spirit,
+            self.enemies[ti].stats.spirit,
+        );
+        let element = skill.attributes.first().copied().unwrap_or(0);
+        let base = logic::elemental_damage(
+            base,
+            element,
+            &self.enemies[ti].attribute_ranks,
+            &self.attributes,
+        );
+        // Foes carry no SP pool, so an SP-draining skill finds nothing to take.
+        let dealt = if skill.affect_sp {
+            0
+        } else {
+            self.hit_enemy(ti, base)
+        };
+        if skill.absorb && dealt > 0 {
+            let f = &mut self.members[pi];
+            f.hp = (f.hp + dealt).min(f.max_hp);
+        }
+        let mut lines = vec![format!("{caster} varázsol: {target} -{dealt}")];
+        for &sid in &skill.affected_states {
+            let rank = sid
+                .checked_sub(1)
+                .and_then(|i| self.enemies[ti].state_ranks.get(i as usize).copied())
+                .unwrap_or(2);
+            if ((rng_next(&mut self.rng) % 100) as u32) < logic::state_infliction_chance(rank) {
+                logic::inflict(&mut self.enemies[ti].states, sid);
+                if let Some(state) = self.states.iter().find(|s| s.id == sid) {
+                    lines.push(format!("{target} státusz: {}", state.name));
+                }
+            }
+        }
+        lines
+    }
+
+    /// Heal ally `ti` for caster `pi`'s `skill`: restore SP or HP (clamped to the
+    /// maximum), then cure each of the skill's affected states from that ally.
+    fn skill_heal_ally(&mut self, pi: usize, ti: usize, skill: &SkillDef) -> Vec<String> {
+        let caster = self.members[pi].name.clone();
+        let target = self.members[ti].name.clone();
+        let base = logic::skill_damage(
+            skill.power,
+            self.members[pi].stats.spirit,
+            self.members[ti].stats.spirit,
+        );
+        let roll = (rng_next(&mut self.rng) % 21) as u32;
+        let amt = logic::with_variance(base, roll).max(0);
+        let f = &mut self.members[ti];
+        if skill.affect_sp {
+            f.sp = (f.sp + amt).min(f.max_sp);
+        } else {
+            f.hp = (f.hp + amt).min(f.max_hp);
+        }
+        let mut lines = vec![format!("{caster} varázsol: {target} +{amt}")];
+        for &sid in &skill.affected_states {
+            if self.members[ti].states.contains(&sid) {
+                logic::cure(&mut self.members[ti].states, sid);
+                if let Some(state) = self.states.iter().find(|s| s.id == sid) {
+                    lines.push(format!("{target} gyógyul: {}", state.name));
+                }
+            }
+        }
+        lines
     }
 
     /// Keep `target` if that enemy still lives, else pick another living enemy.
@@ -254,6 +352,47 @@ mod tests {
             c_rate: 100,
             d_rate: 50,
             e_rate: 0, // rank E: immune, no damage
+        }
+    }
+
+    /// A single-enemy (scope 0) damage skill carrying `attributes` (elements) and
+    /// `states` (statuses it may inflict).
+    fn damage_skill(id: u32, power: u32, attributes: Vec<u32>, states: Vec<u32>) -> SkillDef {
+        SkillDef {
+            id,
+            name: "S".into(),
+            description: String::new(),
+            sp_cost: 3,
+            power,
+            hit: 0,
+            skill_type: 0,
+            scope: 0,
+            physical_rate: 0,
+            magical_rate: 3,
+            affect_hp: true,
+            affect_sp: false,
+            absorb: false,
+            attributes,
+            affected_states: states,
+        }
+    }
+
+    /// A single-ally (scope 3) HP heal.
+    fn heal_skill(id: u32, power: u32) -> SkillDef {
+        let mut s = damage_skill(id, power, vec![], vec![]);
+        s.scope = 3;
+        s
+    }
+
+    fn poison_state(id: u32) -> amnezia_data::StateDef {
+        amnezia_data::StateDef {
+            id,
+            name: "Méreg".into(),
+            restriction: 0,
+            priority: 50,
+            hold_turn: 0,
+            auto_release_prob: 0,
+            release_by_damage: 0,
         }
     }
 
@@ -381,5 +520,50 @@ mod tests {
         assert!(battle.phase == Phase::Outcome);
         assert_eq!(battle.reward_gold, 60);
         assert!(battle.log_tail().contains("Győzelem"));
+    }
+
+    #[test]
+    fn a_fire_skill_amplifies_against_a_weak_foe() {
+        let mut battle = build_1v2();
+        battle.attributes = vec![fire_attr()]; // element id 5
+        battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 0]; // attr 5 -> rank A (weak)
+        battle.skills = vec![damage_skill(1, 50, vec![5], vec![])];
+        let plain = logic::skill_damage(
+            50,
+            battle.members[0].stats.spirit,
+            battle.enemies[0].stats.spirit,
+        );
+        let before = battle.enemies[0].hp;
+        battle.commit(Command::Skill {
+            skill_id: 1,
+            target: 0,
+        });
+        while battle.resolve_next() {}
+        let dealt = before - battle.enemies[0].hp;
+        assert!(
+            dealt > plain,
+            "fire against a weak (A) foe should beat the plain base ({dealt} <= {plain})"
+        );
+    }
+
+    #[test]
+    fn an_ally_heal_raises_a_wounded_ally_clamped_to_max() {
+        let mut battle = build_1v2();
+        battle.skills = vec![heal_skill(2, 40)]; // scope 3, power 40
+        let max = battle.members[0].max_hp;
+        battle.members[0].hp = max - 3; // wounded, within one heal of full
+        battle.cast_skill(0, 2, 0);
+        assert_eq!(battle.members[0].hp, max); // healed past the deficit, clamped to max
+    }
+
+    #[test]
+    fn a_damage_skill_inflicts_its_state_on_a_forced_hit_roll() {
+        let mut battle = build_1v2();
+        battle.states = vec![poison_state(3)];
+        battle.enemies[0].hp = 200; // survive the blow so the status lands on a live foe
+        battle.enemies[0].state_ranks = vec![2, 2, 0]; // state 3 -> rank A (100% infliction)
+        battle.skills = vec![damage_skill(1, 20, vec![], vec![3])];
+        battle.cast_skill(0, 1, 0);
+        assert!(battle.enemies[0].states.contains(&3));
     }
 }

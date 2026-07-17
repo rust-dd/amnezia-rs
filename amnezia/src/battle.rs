@@ -142,6 +142,7 @@ fn start_on_request(
         &data.items,
         &battle_data.attributes,
         &battle_data.states,
+        &data.skills,
         &vitals,
         &progression,
         BACKDROP.to_string(),

@@ -11,7 +11,7 @@ use super::BattleOutcome;
 use super::logic::{self, Stats};
 use crate::progression::Progression;
 use crate::vitals::Vitals;
-use amnezia_data::{ActorDef, AttributeDef, ItemDef, MonsterDef, StateDef, TroopDef};
+use amnezia_data::{ActorDef, AttributeDef, ItemDef, MonsterDef, SkillDef, StateDef, TroopDef};
 use bevy::prelude::*;
 
 /// Seconds between two resolved actions, so the log and damage read at a human
@@ -60,6 +60,8 @@ pub struct Fighter {
     pub weapon_hit: u32,
     pub weapon_crit: u32,
     pub weapon_element: Option<u32>,
+    /// The status-effect ids currently afflicting this fighter.
+    pub states: Vec<u32>,
 }
 
 impl Fighter {
@@ -83,9 +85,10 @@ pub struct Foe {
     /// `MonsterDef`. The vector is truncated, so ids past its end read neutral C.
     pub attribute_ranks: Vec<u8>,
     /// This foe's per-state affliction ranks, copied from its `MonsterDef`, for
-    /// the status-infliction chance that lands separately.
-    #[allow(dead_code)]
+    /// the status-infliction chance.
     pub state_ranks: Vec<u8>,
+    /// The status-effect ids currently afflicting this foe.
+    pub states: Vec<u32>,
 }
 
 impl Foe {
@@ -109,14 +112,8 @@ impl Foe {
 /// [`Command::Attack`].
 #[derive(Clone, Copy)]
 pub enum Command {
-    Attack {
-        target: usize,
-    },
-    Skill {
-        power: u32,
-        cost: u32,
-        target: usize,
-    },
+    Attack { target: usize },
+    Skill { skill_id: u32, target: usize },
     Item,
     Defend,
     Nothing,
@@ -147,13 +144,16 @@ pub struct Battle {
     pub enemies: Vec<Foe>,
     /// The attribute (element) table, consulted by the elemental damage step.
     pub(super) attributes: Vec<AttributeDef>,
-    /// The state (status) table, for the status resolution that lands separately.
-    #[allow(dead_code)]
+    /// The state (status) table, consulted to name an inflicted or cured state.
     pub(super) states: Vec<StateDef>,
+    /// The skill table, looked up by id on a cast for its element, inflicted
+    /// states, and heal-vs-damage scope.
+    pub(super) skills: Vec<SkillDef>,
     pub turn: usize,
     pub menu: MenuLevel,
     pub cursor: usize,
-    pub pending_skill: Option<(u32, u32)>,
+    /// The chosen skill's id while its target is being picked.
+    pub pending_skill: Option<u32>,
     pub queue: Vec<Action>,
     pub queue_at: usize,
     pub timer: Timer,
@@ -188,6 +188,7 @@ impl Battle {
         items: &[ItemDef],
         attributes: &[AttributeDef],
         states: &[StateDef],
+        skills: &[SkillDef],
         vitals: &Vitals,
         progression: &Progression,
         background: String,
@@ -208,6 +209,7 @@ impl Battle {
                     y: m.y,
                     attribute_ranks: d.attribute_ranks.clone(),
                     state_ranks: d.state_ranks.clone(),
+                    states: Vec::new(),
                 })
             })
             .collect();
@@ -246,6 +248,7 @@ impl Battle {
                     weapon_hit: weapon.map_or(0, |w| w.hit),
                     weapon_crit: weapon.map_or(0, |w| w.crit),
                     weapon_element: weapon.and_then(|w| w.attribute_defense.first().copied()),
+                    states: Vec::new(),
                 }
             })
             .collect();
@@ -256,6 +259,7 @@ impl Battle {
             enemies,
             attributes: attributes.to_vec(),
             states: states.to_vec(),
+            skills: skills.to_vec(),
             timer: Timer::from_seconds(RESOLVE_STEP_SECS, TimerMode::Repeating),
             log: vec![format!("{} rátok támad!", troop.name)],
             rng: seed | 1,
@@ -470,6 +474,7 @@ pub(super) mod testkit {
             &[],
             &[],
             &[],
+            &[],
             &Vitals::default(),
             &Progression::default(),
             "Cave1".into(),
@@ -517,6 +522,7 @@ mod tests {
             &[],
             &[],
             &[],
+            &[],
             &Vitals::default(),
             &Progression::default(),
             "Cave1".into(),
@@ -559,6 +565,7 @@ mod tests {
             &monsters,
             &actors,
             &items,
+            &[],
             &[],
             &[],
             &Vitals::default(),
