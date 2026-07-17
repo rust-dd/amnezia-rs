@@ -38,6 +38,17 @@ fn main() -> AppExit {
                 .set(AssetPlugin {
                     file_path: ASSET_ROOT.to_string(),
                     ..default()
+                })
+                .set(WindowPlugin {
+                    // 3× the 320×240 RM2000 viewport, 4:3, so the fixed camera
+                    // scales pixel-perfect with no distortion or gray margin.
+                    primary_window: Some(Window {
+                        resolution: bevy::window::WindowResolution::new(960, 720),
+                        resizable: false,
+                        title: "Amnézia".to_string(),
+                        ..default()
+                    }),
+                    ..default()
                 }),
         )
         .insert_resource(text::HeroName(hero.name))

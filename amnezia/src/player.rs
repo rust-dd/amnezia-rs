@@ -275,25 +275,27 @@ fn update_player_sprite(
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn camera_follow(
     data: Res<MapData>,
-    windows: Query<&Window>,
     players: Query<&Transform, With<Player>>,
-    mut cameras: Query<&mut Transform, (With<Camera2d>, Without<Player>)>,
+    mut cameras: Query<(&mut Transform, &Projection), (With<Camera2d>, Without<Player>)>,
 ) {
     let Ok(player) = players.single() else {
         return;
     };
-    let Ok(mut camera) = cameras.single_mut() else {
+    let Ok((mut camera, projection)) = cameras.single_mut() else {
         return;
     };
-    let Ok(window) = windows.single() else {
+    // The world-space viewport is the fixed 320×240 (not the window pixels), so
+    // the clamp stops the camera at the map edge for that view, not the window.
+    let Projection::Orthographic(view) = projection else {
         return;
     };
     let half_map_w = data.width as f32 * tiles::TILE / 2.0;
     let half_map_h = data.height as f32 * tiles::TILE / 2.0;
-    camera.translation.x = clamp_to_map(player.translation.x, half_map_w, window.width() / 2.0);
-    camera.translation.y = clamp_to_map(player.translation.y, half_map_h, window.height() / 2.0);
+    camera.translation.x = clamp_to_map(player.translation.x, half_map_w, view.area.width() / 2.0);
+    camera.translation.y = clamp_to_map(player.translation.y, half_map_h, view.area.height() / 2.0);
 }
 
 /// Follow `target` but keep the camera inside the map: never scroll past the

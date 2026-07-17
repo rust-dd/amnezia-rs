@@ -173,7 +173,16 @@ fn setup(
     party: Res<Party>,
     inventory: Res<Inventory>,
 ) {
-    commands.spawn(Camera2d);
+    // A fixed 320×240 world viewport — RM2000's native screen. Maps larger than
+    // this scroll; the whole view scales to fill the (4:3) window, so tiles are
+    // pixel-perfect and no gray margin shows around a small map.
+    commands.spawn((
+        Camera2d,
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: bevy::camera::ScalingMode::Fixed { width: 320.0, height: 240.0 },
+            ..OrthographicProjection::default_2d()
+        }),
+    ));
     let start: Start = match DEV_START {
         Some(dev) => dev,
         None => load_ron(&format!("{ASSET_ROOT}/start.ron")),
