@@ -25,6 +25,12 @@ impl Vitals {
     pub fn set(&mut self, actor_id: u32, hp: i32, sp: i32) {
         self.0.insert(actor_id, (hp, sp));
     }
+
+    /// Restore every party member to full HP/SP by dropping all stored damage,
+    /// so each actor's `get()` returns its full ActorDef values again.
+    pub fn heal_all(&mut self) {
+        self.0.clear();
+    }
 }
 
 #[cfg(test)]
@@ -49,5 +55,14 @@ mod tests {
         assert_eq!(vitals.get(&actor()), (63, 37));
         vitals.set(1, 20, 5);
         assert_eq!(vitals.get(&actor()), (20, 5));
+    }
+
+    #[test]
+    fn heal_all_restores_full_values() {
+        let mut vitals = Vitals::default();
+        vitals.set(1, 20, 5);
+        vitals.heal_all();
+        let actor = actor();
+        assert_eq!(vitals.get(&actor), (actor.hp as i32, actor.sp as i32));
     }
 }

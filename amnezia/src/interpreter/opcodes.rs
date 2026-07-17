@@ -18,6 +18,10 @@ pub(super) const SHOW_INN: u32 = 10730;
 pub(super) const CHANGE_GOLD: u32 = 10310;
 pub(super) const CHANGE_ITEMS: u32 = 10320;
 pub(super) const CHANGE_PARTY: u32 = 10330;
+/// Fully restore the party's HP/SP (`params[0] == 0` targets the whole party).
+pub(super) const FULL_HEAL: u32 = 10490;
+/// Prompt for a number written into a variable: `params = [digits, var_id]`.
+pub(super) const INPUT_NUMBER: u32 = 10150;
 
 /// The `EnemyEncounter` block's outcome handlers and terminator: the interpreter
 /// runs the body under the handler matching the finished battle outcome, skips

@@ -14,6 +14,7 @@ mod events;
 mod font;
 mod gamedata;
 mod gameover;
+mod inputnumber;
 mod interpreter;
 mod menu;
 mod picture;
@@ -81,5 +82,6 @@ fn main() -> AppExit {
             picture::PicturePlugin,
             gameover::GameOverPlugin,
         ))
+        .add_plugins(inputnumber::InputNumberPlugin)
         .run()
 }

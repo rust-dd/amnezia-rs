@@ -10,6 +10,7 @@ use crate::choice::Choice;
 use crate::dialogue::Dialogue;
 use crate::events::message_boxes;
 use crate::gameover::GameOverActive;
+use crate::inputnumber::InputNumber;
 use crate::menu::MenuOpen;
 use crate::picture::PictureCommand;
 use crate::player::Player;
@@ -19,6 +20,7 @@ use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::{Fade, PendingTeleport};
 use crate::text::{self, HeroName};
 use crate::title::TitleActive;
+use crate::vitals::Vitals;
 use crate::world::{EventSprite, MapEvents, MoveQueue, decode_route};
 use amnezia_data::EventCommand;
 use bevy::ecs::system::SystemParam;
@@ -63,6 +65,8 @@ pub struct SubsystemIo<'w> {
     screen_writer: MessageWriter<'w, ScreenEffect>,
     picture_writer: MessageWriter<'w, PictureCommand>,
     gameover: ResMut<'w, GameOverActive>,
+    vitals: ResMut<'w, Vitals>,
+    input_number: ResMut<'w, InputNumber>,
 }
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
@@ -90,6 +94,9 @@ pub struct RunningEvent {
     /// Set while a shop/inn screen is open: holds the event paused until
     /// [`ShopOpen`] clears, then the block is skipped to its terminator.
     shop_pending: bool,
+    /// Set while an `InputNumber` box is open: holds the event paused until the
+    /// player confirms, then the entered value is written to the target variable.
+    input_pending: bool,
 }
 
 impl RunningEvent {
@@ -119,6 +126,7 @@ impl RunningEvent {
         self.battle_pending = false;
         self.battle_outcome = None;
         self.shop_pending = false;
+        self.input_pending = false;
         self.active = true;
     }
 
@@ -133,6 +141,7 @@ impl RunningEvent {
         self.battle_pending = false;
         self.battle_outcome = None;
         self.shop_pending = false;
+        self.input_pending = false;
     }
 
     /// Self-select an `EnemyEncounter` outcome handler: run its body (advance into
@@ -210,6 +219,7 @@ fn run_interpreter(
         || blockers.any()
         || running.battle_pending
         || subsystems.gameover.0
+        || subsystems.input_number.active()
     {
         return;
     }
@@ -228,6 +238,15 @@ fn run_interpreter(
             running.ip = skip_to_terminator(&running.commands, running.ip, indent, terminator);
         }
         running.shop_pending = false;
+    }
+    // Resume after the player entered a number: store it in the target variable,
+    // then step past the InputNumber command.
+    if running.input_pending {
+        if let Some(value) = subsystems.input_number.result.take() {
+            variables.set(subsystems.input_number.var_id, value as i32);
+        }
+        running.input_pending = false;
+        running.ip += 1;
     }
     if running.wait > 0.0 {
         running.wait -= time.delta_secs();
@@ -279,6 +298,20 @@ fn run_interpreter(
             CHANGE_PARTY => {
                 apply_change_party(&mut party, &command.params);
                 running.ip += 1;
+            }
+            FULL_HEAL => {
+                // Restore the whole party (observed `params` is always `[0, 0]`).
+                subsystems.vitals.heal_all();
+                running.ip += 1;
+            }
+            INPUT_NUMBER => {
+                // Open the numeric entry and pause; the resume above stores the
+                // result and advances once the player confirms.
+                let digits = command.params.first().copied().unwrap_or(0).max(0) as u32;
+                let var_id = command.params.get(1).copied().unwrap_or(0) as u32;
+                subsystems.input_number.open(digits, var_id);
+                running.input_pending = true;
+                return;
             }
             WAIT => {
                 running.wait = command.params.first().copied().unwrap_or(0) as f32 / 10.0;

@@ -8,6 +8,7 @@
 use crate::font::GameFont;
 use crate::gamedata::GameData;
 use crate::state::Inventory;
+use crate::vitals::Vitals;
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
@@ -112,6 +113,7 @@ fn shop_input(
     keys: Res<ButtonInput<KeyCode>>,
     data: Res<GameData>,
     mut inventory: ResMut<Inventory>,
+    mut vitals: ResMut<Vitals>,
     mut screen: ResMut<Screen>,
     mut open: ResMut<ShopOpen>,
 ) {
@@ -126,7 +128,9 @@ fn shop_input(
             mode,
             cursor,
         } => shop_step(&keys, &data, &mut inventory, items, mode, cursor),
-        Screen::Inn { cost, yes, done } => inn_step(&keys, &mut inventory, *cost, yes, done),
+        Screen::Inn { cost, yes, done } => {
+            inn_step(&keys, &mut inventory, &mut vitals, *cost, yes, done)
+        }
     };
     if keep {
         *screen = current;
@@ -172,11 +176,12 @@ fn shop_step(
 }
 
 /// Handle one keypress on the inn's Yes/No prompt. Returns `false` when the
-/// player leaves; on a confirmed Yes it deducts the cost and shows the rest
-/// message (staying open until dismissed).
+/// player leaves; on a confirmed Yes it deducts the cost, fully heals the party,
+/// and shows the rest message (staying open until dismissed).
 fn inn_step(
     keys: &ButtonInput<KeyCode>,
     inventory: &mut Inventory,
+    vitals: &mut Vitals,
     cost: i32,
     yes: &mut bool,
     done: &mut bool,
@@ -199,6 +204,7 @@ fn inn_step(
             return false;
         }
         inventory.remove_gold(cost.max(0));
+        vitals.heal_all();
         *done = true;
     }
     true
