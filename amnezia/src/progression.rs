@@ -122,7 +122,10 @@ mod tests {
         let mut p = Progression::default();
         assert_eq!(p.level(&d), 1);
         p.add(&d, exp_for_level(3, &d));
-        assert!(p.level(&d) >= 3, "reaching level-3 exp should be at least level 3");
+        assert!(
+            p.level(&d) >= 3,
+            "reaching level-3 exp should be at least level 3"
+        );
     }
 
     #[test]

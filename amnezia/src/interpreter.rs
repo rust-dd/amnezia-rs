@@ -275,8 +275,7 @@ fn run_interpreter(
                 if !boxes.is_empty() {
                     for message in &mut boxes {
                         for line in &mut message.lines {
-                            *line =
-                                text::substitute(&crate::i18n::tr(line), &hero.0, &variables);
+                            *line = text::substitute(&crate::i18n::tr(line), &hero.0, &variables);
                         }
                     }
                     dialogue.open(boxes);
