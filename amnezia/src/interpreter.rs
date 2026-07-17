@@ -5,11 +5,11 @@
 //! `indent`; conditional branches use that indent to delimit their bodies.
 
 use crate::audio::AudioRequest;
-use crate::battle::BattleActive;
+use crate::battle::{BattleActive, BattleOutcome, BattleRequest, BattleResult};
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
 use crate::menu::MenuOpen;
-use crate::shop::ShopOpen;
+use crate::shop::{ShopOpen, ShopRequest};
 use crate::events::message_boxes;
 use crate::player::Player;
 use crate::state::{active_page, Inventory, Party, Switches, Variables};
@@ -36,6 +36,17 @@ impl Blockers<'_> {
     }
 }
 
+/// The interpreter's channel to the shop and battle subsystems: the writers that
+/// open each screen and the finished-battle result it consumes to pick a handler
+/// branch. Bundled into one `SystemParam` so `run_interpreter` stays within
+/// Bevy's 16-parameter cap.
+#[derive(SystemParam)]
+pub struct SubsystemIo<'w> {
+    battle_result: ResMut<'w, BattleResult>,
+    shop_writer: MessageWriter<'w, ShopRequest>,
+    battle_writer: MessageWriter<'w, BattleRequest>,
+}
+
 // RM2000 opcodes, verified empirically against the converted map assets.
 const SHOW_MESSAGE: u32 = 10110;
 const SHOW_MESSAGE_2: u32 = 20110;
@@ -54,11 +65,17 @@ const CHANGE_GOLD: u32 = 10310;
 const CHANGE_ITEMS: u32 = 10320;
 const CHANGE_PARTY: u32 = 10330;
 
-/// Subsystem block openers not yet implemented, paired with their terminator
-/// sub-code. The whole block is skipped so its branch-selector sub-codes
-/// (VictoryHandler, Transaction, …) don't all execute in sequence.
-const SKIP_BLOCKS: &[(u32, u32)] =
-    &[(ENEMY_ENCOUNTER, 20713), (OPEN_SHOP, 20722), (SHOW_INN, 20732)];
+/// The `EnemyEncounter` block's outcome handlers and terminator: the interpreter
+/// runs the body under the handler matching the finished [`BattleOutcome`], the
+/// rest are skipped, and `EndBattle` closes the block.
+const VICTORY_HANDLER: u32 = 20710;
+const ESCAPE_HANDLER: u32 = 20711;
+const DEFEAT_HANDLER: u32 = 20712;
+const END_BATTLE: u32 = 20713;
+/// The merchant blocks' terminators, past which the interpreter resumes once the
+/// shop or inn screen closes.
+const END_SHOP: u32 = 20722;
+const END_INN: u32 = 20732;
 const LABEL: u32 = 12110;
 const JUMP_TO_LABEL: u32 = 12120;
 const LOOP: u32 = 12210;
@@ -88,6 +105,15 @@ pub struct RunningEvent {
     wait_move: bool,
     event_id: u32,
     choices: HashMap<u32, i32>,
+    /// Set while a `BattleRequest` is in flight: holds the event paused across the
+    /// fight until [`BattleResult`] is published, then consumed into `battle_outcome`.
+    battle_pending: bool,
+    /// The finished fight's outcome while an `EnemyEncounter` block runs its
+    /// handlers; the matching Victory/Escape/Defeat body executes, `EndBattle` clears it.
+    battle_outcome: Option<BattleOutcome>,
+    /// Set while a shop/inn screen is open: holds the event paused until
+    /// [`ShopOpen`] clears, then the block is skipped to its terminator.
+    shop_pending: bool,
 }
 
 impl RunningEvent {
@@ -114,6 +140,9 @@ impl RunningEvent {
         self.wait_move = false;
         self.event_id = event_id;
         self.choices.clear();
+        self.battle_pending = false;
+        self.battle_outcome = None;
+        self.shop_pending = false;
         self.active = true;
     }
 
@@ -125,6 +154,20 @@ impl RunningEvent {
         self.wait_move = false;
         self.event_id = 0;
         self.choices.clear();
+        self.battle_pending = false;
+        self.battle_outcome = None;
+        self.shop_pending = false;
+    }
+
+    /// Self-select an `EnemyEncounter` outcome handler: run its body (advance into
+    /// it) when the finished battle's outcome is `want`, otherwise skip to the next
+    /// handler or the block terminator. Mirrors the `ShowChoice` option arms.
+    fn select_battle_handler(&mut self, indent: u32, want: BattleOutcome) {
+        if self.battle_outcome == Some(want) {
+            self.ip += 1;
+        } else {
+            self.ip = skip_battle_handler(&self.commands, self.ip, indent);
+        }
     }
 }
 
@@ -157,20 +200,48 @@ fn run_interpreter(
     mut hero_queue: Query<&mut MoveQueue, With<Player>>,
     mut event_movers: Query<(&EventSprite, &mut MoveQueue), Without<Player>>,
     mut audio: MessageWriter<AudioRequest>,
+    mut subsystems: SubsystemIo,
 ) {
     if !running.active {
         return;
     }
-    // Pause while a message box, teleport fade, choice, or pending transfer is in
-    // flight; the transfer guard holds the event across the fade so it resumes on
-    // the destination map (RM2000 Transfer Player continues the calling event).
-    if dialogue.active || fade.busy() || choice.active() || pending.0.is_some() || blockers.any() {
+    // Resume after a fight: consume the published outcome and drop the pause, so
+    // the EnemyEncounter re-executes past the trigger and its handlers self-select.
+    // Runs before the guard because `battle_pending` is part of it.
+    if running.battle_pending
+        && let Some(outcome) = subsystems.battle_result.0.take()
+    {
+        running.battle_outcome = Some(outcome);
+        running.battle_pending = false;
+    }
+    // Pause while a message box, teleport fade, choice, pending transfer, blocking
+    // overlay, or an in-flight fight is live; the transfer guard holds the event
+    // across the fade so it resumes on the destination map (RM2000 Transfer Player
+    // continues the calling event).
+    if dialogue.active
+        || fade.busy()
+        || choice.active()
+        || pending.0.is_some()
+        || blockers.any()
+        || running.battle_pending
+    {
         return;
     }
     // Resume after the player confirmed a choice: record the pick so the
     // ShowChoice re-executes past the menu and the options self-select.
     if let Some(result) = choice.result.take() {
         running.choices.insert(choice.indent, result);
+    }
+    // Resume after a merchant screen closes (past the guard means `ShopOpen` is
+    // clear): skip the whole shop/inn block to its terminator, mirroring how an
+    // empty ShowChoice skips itself. The shop transacts on the inventory directly,
+    // so neither branch body runs.
+    if running.shop_pending {
+        if let Some((code, indent)) = running.commands.get(running.ip).map(|c| (c.code, c.indent)) {
+            let terminator = if code == OPEN_SHOP { END_SHOP } else { END_INN };
+            running.ip = skip_to_terminator(&running.commands, running.ip, indent, terminator);
+        }
+        running.shop_pending = false;
     }
     if running.wait > 0.0 {
         running.wait -= time.delta_secs();
@@ -315,14 +386,41 @@ fn run_interpreter(
                 running.ip += 1;
                 return;
             }
-            ENEMY_ENCOUNTER | OPEN_SHOP | SHOW_INN => {
-                let terminator = SKIP_BLOCKS
-                    .iter()
-                    .find(|(opener, _)| *opener == command.code)
-                    .map(|(_, terminator)| *terminator)
-                    .unwrap_or(0);
-                running.ip =
-                    skip_to_terminator(&running.commands, running.ip, command.indent, terminator);
+            ENEMY_ENCOUNTER => {
+                // Resumed (outcome in hand): fall into the handlers. Fresh: start
+                // the fight and pause (via `battle_pending`) until it publishes a
+                // result; `params[1]` is the troop id (`params[0]` is always 0).
+                if running.battle_outcome.is_some() {
+                    running.ip += 1;
+                } else {
+                    let troop_id = command.params.get(1).copied().unwrap_or(0) as u32;
+                    subsystems.battle_writer.write(BattleRequest { troop_id });
+                    running.battle_pending = true;
+                    return;
+                }
+            }
+            VICTORY_HANDLER => running.select_battle_handler(command.indent, BattleOutcome::Victory),
+            ESCAPE_HANDLER => running.select_battle_handler(command.indent, BattleOutcome::Escape),
+            DEFEAT_HANDLER => running.select_battle_handler(command.indent, BattleOutcome::Defeat),
+            END_BATTLE => {
+                running.battle_outcome = None;
+                running.ip += 1;
+            }
+            OPEN_SHOP => {
+                // Offer `params[4..]` (item ids, negatives dropped); pause until the
+                // screen closes, then the shop-resume above skips the block.
+                let items =
+                    command.params.iter().skip(4).filter(|&&p| p >= 0).map(|&p| p as u32).collect();
+                subsystems.shop_writer.write(ShopRequest::OpenShop { items });
+                running.shop_pending = true;
+                return;
+            }
+            SHOW_INN => {
+                // Charge `params[1]` gold to rest; pause as for the shop.
+                let cost = command.params.get(1).copied().unwrap_or(0);
+                subsystems.shop_writer.write(ShopRequest::ShowInn { cost });
+                running.shop_pending = true;
+                return;
             }
             PLAY_SOUND => {
                 audio.write(AudioRequest::play_sound(&command.string, &command.params));
@@ -575,6 +673,24 @@ fn skip_option_body(commands: &[EventCommand], ip: usize, indent: u32) -> usize 
     j
 }
 
+/// Index of the next `EnemyEncounter` outcome handler or `EndBattle` at `indent` —
+/// where execution resumes after skipping a non-selected handler's body. Mirrors
+/// [`skip_option_body`], tolerating a handler being absent (an escape/defeat
+/// branch the map author omitted) by landing on whichever marker comes next.
+fn skip_battle_handler(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
+    let mut j = ip + 1;
+    while j < commands.len()
+        && !(commands[j].indent == indent
+            && matches!(
+                commands[j].code,
+                VICTORY_HANDLER | ESCAPE_HANDLER | DEFEAT_HANDLER | END_BATTLE
+            ))
+    {
+        j += 1;
+    }
+    j
+}
+
 /// Release the `MoveEvent` pause once every moved character's queue has drained,
 /// letting [`run_interpreter`] advance past the move on the next frame.
 fn clear_move_wait(mut running: ResMut<RunningEvent>, movers: Query<&MoveQueue>) {
@@ -680,6 +796,22 @@ mod tests {
         let commands =
             vec![cmd(10140, 0), cmd(20140, 0), cmd(10210, 1), cmd(20140, 0), cmd(20141, 0)];
         assert_eq!(skip_option_body(&commands, 1, 0), 3);
+    }
+
+    #[test]
+    fn skip_battle_handler_lands_on_next_handler() {
+        // 0: EnemyEncounter@0  1: Victory@0  2: body@1  3: Escape@0  4: EndBattle@0
+        let commands =
+            vec![cmd(10710, 0), cmd(20710, 0), cmd(10210, 1), cmd(20711, 0), cmd(20713, 0)];
+        // From the Victory handler, skip its body → land on the Escape handler.
+        assert_eq!(skip_battle_handler(&commands, 1, 0), 3);
+    }
+
+    #[test]
+    fn skip_battle_handler_skips_absent_handler_to_end() {
+        // 0: Victory@0  1: body@1  2: EndBattle@0 — no Escape/Defeat handlers.
+        let commands = vec![cmd(20710, 0), cmd(10210, 1), cmd(20713, 0)];
+        assert_eq!(skip_battle_handler(&commands, 0, 0), 2);
     }
 
     #[test]
