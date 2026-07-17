@@ -11,7 +11,9 @@ use super::BattleOutcome;
 use super::logic::{self, Stats};
 use crate::progression::Progression;
 use crate::vitals::Vitals;
-use amnezia_data::{ActorDef, AttributeDef, ItemDef, MonsterDef, SkillDef, StateDef, TroopDef};
+use amnezia_data::{
+    ActorDef, AttributeDef, EnemyActionDef, ItemDef, MonsterDef, SkillDef, StateDef, TroopDef,
+};
 use bevy::prelude::*;
 
 /// Seconds between two resolved actions, so the log and damage read at a human
@@ -76,6 +78,8 @@ pub struct Foe {
     pub name: String,
     pub battler: String,
     pub hp: i32,
+    /// This foe's starting (maximum) HP, kept so HP-percent AI conditions resolve.
+    pub max_hp: i32,
     pub stats: Stats,
     pub exp: u32,
     pub gold: u32,
@@ -89,6 +93,9 @@ pub struct Foe {
     pub state_ranks: Vec<u8>,
     /// The status-effect ids currently afflicting this foe.
     pub states: Vec<u32>,
+    /// This foe's RM2000 battle-AI action list, consulted each round to choose
+    /// its command (cast a skill, defend, or attack on turn/HP conditions).
+    pub actions: Vec<EnemyActionDef>,
 }
 
 impl Foe {
@@ -149,6 +156,8 @@ pub struct Battle {
     /// The skill table, looked up by id on a cast for its element, inflicted
     /// states, and heal-vs-damage scope.
     pub(super) skills: Vec<SkillDef>,
+    /// The current battle round, counting from `1`, gating turn-numbered AI.
+    pub round: u32,
     pub turn: usize,
     pub menu: MenuLevel,
     pub cursor: usize,
@@ -202,6 +211,7 @@ impl Battle {
                     name: d.name.clone(),
                     battler: d.battler.clone(),
                     hp: d.max_hp as i32,
+                    max_hp: d.max_hp as i32,
                     stats: Stats::from_monster(d),
                     exp: d.exp,
                     gold: d.gold,
@@ -210,6 +220,7 @@ impl Battle {
                     attribute_ranks: d.attribute_ranks.clone(),
                     state_ranks: d.state_ranks.clone(),
                     states: Vec::new(),
+                    actions: d.actions.clone(),
                 })
             })
             .collect();
@@ -264,6 +275,7 @@ impl Battle {
             log: vec![format!("{} rátok támad!", troop.name)],
             rng: seed | 1,
             generation: seed | 1,
+            round: 1,
             ..default()
         }
     }
@@ -315,8 +327,8 @@ impl Battle {
     }
 
     /// Build the agility-ordered turn queue from every member's committed command
-    /// plus one attack per living enemy (random living target), and start
-    /// resolving.
+    /// plus each living enemy's AI-chosen action (`resolve::enemy_action`), and
+    /// start resolving.
     fn begin_resolve(&mut self) {
         let alive: Vec<bool> = self.members.iter().map(|f| f.alive()).collect();
         let mut actions: Vec<Action> = Vec::new();
@@ -330,17 +342,8 @@ impl Battle {
             }
         }
         for i in 0..self.enemies.len() {
-            if !self.enemies[i].alive() {
-                continue;
-            }
-            let roll = rng_next(&mut self.rng) as usize;
-            if let Some(target) = logic::select_target(&alive, roll) {
-                let agility = self.enemies[i].stats.agility;
-                actions.push(Action {
-                    source: Source::Enemy(i),
-                    kind: Command::Attack { target },
-                    agility,
-                });
+            if let Some(action) = self.enemy_action(i, &alive) {
+                actions.push(action);
             }
         }
         let agilities: Vec<u32> = actions.iter().map(|a| a.agility).collect();
@@ -353,8 +356,9 @@ impl Battle {
         self.phase = Phase::Resolve;
     }
 
-    /// Open a fresh command round: clear every living member's order and defence.
+    /// Open a fresh command round: bump the round and clear each order and defence.
     pub fn new_round(&mut self) {
+        self.round += 1;
         for f in &mut self.members {
             f.command = None;
             f.defending = false;

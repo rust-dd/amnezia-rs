@@ -88,6 +88,12 @@ impl Battle {
                     self.enemies[ei].name, self.members[ti].name, dmg
                 )
             }
+            (Source::Enemy(ei), Command::Skill { skill_id, target }) => {
+                match self.enemy_cast(ei, skill_id, target) {
+                    Some(line) => line,
+                    None => return,
+                }
+            }
             (Source::Enemy(_), _) => return,
         };
         self.log.push(line);
@@ -255,6 +261,57 @@ impl Battle {
             }
         }
         lines
+    }
+
+    /// Choose living enemy `i`'s action for the coming round from its AI list: a
+    /// random living party target, this foe's and the party's HP percentages, and
+    /// the round number feed [`logic::choose_enemy_action`], whose result
+    /// [`logic::enemy_command`] maps to a [`Command`] (a basic attack when nothing
+    /// is eligible). `None` when the enemy is down or no member is left to target.
+    pub(super) fn enemy_action(&mut self, i: usize, alive: &[bool]) -> Option<Action> {
+        if !self.enemies[i].alive() {
+            return None;
+        }
+        let target = logic::select_target(alive, rng_next(&mut self.rng) as usize)?;
+        let party_hp: i32 = self.members.iter().map(|f| f.hp.max(0)).sum();
+        let party_max: i32 = self.members.iter().map(|f| f.max_hp).sum();
+        let enemy_hp_pct = logic::hp_percent(self.enemies[i].hp, self.enemies[i].max_hp);
+        let party_hp_pct = logic::hp_percent(party_hp, party_max);
+        let chosen = logic::choose_enemy_action(
+            &self.enemies[i].actions,
+            enemy_hp_pct,
+            party_hp_pct,
+            logic::AI_PARTY_LEVEL,
+            self.round,
+            rng_next(&mut self.rng),
+        );
+        Some(Action {
+            source: Source::Enemy(i),
+            kind: logic::enemy_command(chosen.as_ref(), target),
+            agility: self.enemies[i].stats.agility,
+        })
+    }
+
+    /// Resolve enemy `ei`'s cast of `skill_id` at member `target`: an ally-scope
+    /// skill (scope 2/3/4) heals the caster itself (a foe keeps no ally list),
+    /// clamped to its max HP; any other scope damages the member (halved while it
+    /// defends, like a physical hit). `None` for an unknown skill id.
+    fn enemy_cast(&mut self, ei: usize, skill_id: u32, target: usize) -> Option<String> {
+        let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
+        let spirit = self.enemies[ei].stats.spirit;
+        let name = self.enemies[ei].name.clone();
+        if matches!(skill.scope, 2..=4) {
+            let base = logic::skill_damage(skill.power, spirit, 0);
+            let roll = (rng_next(&mut self.rng) % 21) as u32;
+            let amt = logic::with_variance(base, roll).max(0);
+            let e = &mut self.enemies[ei];
+            e.hp = (e.hp + amt).min(e.max_hp);
+            return Some(format!("{name} varázsol: {name} +{amt}"));
+        }
+        let ti = self.retarget_member(target)?;
+        let base = logic::skill_damage(skill.power, spirit, self.members[ti].stats.spirit);
+        let dmg = self.hit_member(ti, base);
+        Some(format!("{name} varázsol: {} -{dmg}", self.members[ti].name))
     }
 
     /// Keep `target` if that enemy still lives, else pick another living enemy.
@@ -565,5 +622,24 @@ mod tests {
         battle.skills = vec![damage_skill(1, 20, vec![], vec![3])];
         battle.cast_skill(0, 1, 0);
         assert!(battle.enemies[0].states.contains(&3));
+    }
+
+    #[test]
+    fn an_enemy_skill_cast_wounds_the_targeted_member() {
+        let mut battle = build_1v2();
+        battle.skills = vec![damage_skill(1, 30, vec![], vec![])]; // scope 0 -> hits a member
+        let before = battle.members[0].hp;
+        let line = battle.enemy_cast(0, 1, 0).unwrap();
+        assert!(battle.members[0].hp < before);
+        assert!(line.contains("varázsol"));
+    }
+
+    #[test]
+    fn an_enemy_ally_scope_skill_heals_the_caster_clamped_to_max() {
+        let mut battle = build_1v2();
+        battle.skills = vec![heal_skill(2, 40)]; // scope 3 -> caster heals itself
+        battle.enemies[0].hp = battle.enemies[0].max_hp - 5; // wounded, within one heal of full
+        battle.enemy_cast(0, 2, 0);
+        assert_eq!(battle.enemies[0].hp, battle.enemies[0].max_hp);
     }
 }

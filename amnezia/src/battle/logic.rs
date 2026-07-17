@@ -3,7 +3,10 @@
 //! filter. Kept free of Bevy and of the live battle state so every rule is
 //! unit-testable in isolation; the battle systems are thin wrappers over these.
 
-use amnezia_data::{ActorCurves, ActorDef, AttributeDef, ItemDef, MonsterDef, SkillDef};
+use super::model::Command;
+use amnezia_data::{
+    ActorCurves, ActorDef, AttributeDef, EnemyActionDef, ItemDef, MonsterDef, SkillDef,
+};
 
 /// A combatant's four battle stats. Enemies read them straight from their
 /// [`MonsterDef`]; party members, whose `ActorDef` carries only a level, get
@@ -259,6 +262,84 @@ pub fn inflict(states: &mut Vec<u32>, state_id: u32) {
 /// Remove `state_id` from an active-state list — a cure or a wear-off.
 pub fn cure(states: &mut Vec<u32>, state_id: u32) {
     states.retain(|&s| s != state_id);
+}
+
+/// The party level the enemy AI assumes: battle state tracks no per-member
+/// level, so party-level conditions (`condition_type == 5`) test against this
+/// conservative floor rather than a real average — a documented approximation.
+pub const AI_PARTY_LEVEL: u32 = 1;
+
+/// The integer percentage (`0..=100`, saturating) `current` is of `max`, used to
+/// gate the HP-conditioned enemy-AI actions. A non-positive `max` yields `0`, and
+/// a negative `current` (an overkilled combatant) clamps to `0`.
+pub fn hp_percent(current: i32, max: i32) -> u32 {
+    if max <= 0 {
+        return 0;
+    }
+    (current.max(0) as i64 * 100 / max as i64) as u32
+}
+
+/// Pick an enemy's action this turn from its RM2000 AI list, honouring each
+/// entry's condition gate. Eligibility by `condition_type`:
+/// - `0` always — always eligible.
+/// - `2` turn — from `condition_min` on, every `condition_max` rounds:
+///   `round >= condition_min && (round - condition_min) % condition_max.max(1) == 0`.
+/// - `3` monster-hp% — `enemy_hp_pct` within `[condition_min, condition_max]`.
+/// - `4` party-hp% — `party_hp_pct` within `[condition_min, condition_max]`.
+/// - `5` party level — `party_level >= condition_min`.
+///
+/// `1` switch and `6` party-exhausted are treated as never holding: there is no
+/// in-battle switch access, and the pure inputs carry no per-member SP to detect
+/// an exhausted (0-SP) member. Among the eligible actions the highest `priority`
+/// wins; ties are broken by `roll`. Returns `None` when nothing is eligible (the
+/// caller then falls back to a basic attack), so an empty or fully-gated list
+/// still yields a fight.
+pub fn choose_enemy_action(
+    actions: &[EnemyActionDef],
+    enemy_hp_pct: u32,
+    party_hp_pct: u32,
+    party_level: u32,
+    round: u32,
+    roll: u64,
+) -> Option<EnemyActionDef> {
+    let eligible: Vec<&EnemyActionDef> = actions
+        .iter()
+        .filter(|a| match a.condition_type {
+            0 => true,
+            2 => {
+                round >= a.condition_min
+                    && (round - a.condition_min).is_multiple_of(a.condition_max.max(1))
+            }
+            3 => (a.condition_min..=a.condition_max).contains(&enemy_hp_pct),
+            4 => (a.condition_min..=a.condition_max).contains(&party_hp_pct),
+            5 => party_level >= a.condition_min,
+            _ => false,
+        })
+        .collect();
+    let best = eligible.iter().map(|a| a.priority).max()?;
+    let top: Vec<&EnemyActionDef> = eligible
+        .into_iter()
+        .filter(|a| a.priority == best)
+        .collect();
+    top.get(roll as usize % top.len()).copied().cloned()
+}
+
+/// Map a chosen enemy `action` to a battle [`Command`] against `target` (a living
+/// party member). A skill action (`kind == 1`) casts its `skill_id`; a basic
+/// action defends (`2`), does nothing (observe/charge/wait — `3`/`4`/`7`), or
+/// attacks (`0`/`1`, plus any unmodelled action — self-destruct, escape, or a
+/// transform — which falls back to a plain attack). `None` (nothing eligible)
+/// also attacks, so an enemy always acts.
+pub fn enemy_command(action: Option<&EnemyActionDef>, target: usize) -> Command {
+    match action {
+        Some(a) if a.kind == 1 => Command::Skill {
+            skill_id: a.skill_id,
+            target,
+        },
+        Some(a) if a.basic == 2 => Command::Defend,
+        Some(a) if matches!(a.basic, 3 | 4 | 7) => Command::Nothing,
+        _ => Command::Attack { target },
+    }
 }
 
 #[cfg(test)]
@@ -525,5 +606,82 @@ mod tests {
         assert_eq!(states, vec![5]);
         cure(&mut states, 99); // absent -> no-op
         assert_eq!(states, vec![5]);
+    }
+
+    fn action(
+        kind: u32,
+        basic: u32,
+        skill_id: u32,
+        condition_type: u32,
+        condition_min: u32,
+        condition_max: u32,
+        priority: u32,
+    ) -> EnemyActionDef {
+        EnemyActionDef {
+            kind,
+            basic,
+            skill_id,
+            enemy_id: 0,
+            condition_type,
+            condition_min,
+            condition_max,
+            priority,
+        }
+    }
+
+    #[test]
+    fn choose_enemy_action_gates_conditions_breaks_priority_and_empties_to_none() {
+        // Empty and fully-gated lists yield None (caller falls back to attack).
+        assert!(choose_enemy_action(&[], 100, 100, 1, 1, 0).is_none());
+
+        // Turn (type 2, min 2, interval 2) fires on rounds 2, 4, ... not 1, 3.
+        let turn = [action(0, 0, 0, 2, 2, 2, 10)];
+        assert!(choose_enemy_action(&turn, 100, 100, 1, 1, 0).is_none());
+        assert!(choose_enemy_action(&turn, 100, 100, 1, 2, 0).is_some());
+        assert!(choose_enemy_action(&turn, 100, 100, 1, 3, 0).is_none());
+        assert!(choose_enemy_action(&turn, 100, 100, 1, 4, 0).is_some());
+
+        // Monster-HP% (type 3, [0, 30]) only fires while the enemy is low.
+        let hp = [action(1, 0, 7, 3, 0, 30, 5)];
+        assert!(choose_enemy_action(&hp, 100, 100, 1, 1, 0).is_none());
+        let low = choose_enemy_action(&hp, 20, 100, 1, 1, 0).unwrap();
+        assert_eq!((low.kind, low.skill_id), (1, 7));
+
+        // Highest priority wins over an always-eligible basic attack.
+        let mix = [action(0, 0, 0, 0, 0, 0, 1), action(1, 0, 9, 0, 0, 0, 8)];
+        assert_eq!(
+            choose_enemy_action(&mix, 100, 100, 1, 1, 0)
+                .unwrap()
+                .skill_id,
+            9
+        );
+    }
+
+    #[test]
+    fn enemy_command_maps_each_action_family() {
+        assert!(matches!(
+            enemy_command(Some(&action(1, 0, 4, 0, 0, 0, 0)), 2),
+            Command::Skill {
+                skill_id: 4,
+                target: 2
+            }
+        ));
+        assert!(matches!(
+            enemy_command(Some(&action(0, 2, 0, 0, 0, 0, 0)), 0),
+            Command::Defend
+        ));
+        assert!(matches!(
+            enemy_command(Some(&action(0, 3, 0, 0, 0, 0, 0)), 0),
+            Command::Nothing
+        ));
+        // A plain basic attack, and the None fallback, both attack.
+        assert!(matches!(
+            enemy_command(Some(&action(0, 0, 0, 0, 0, 0, 0)), 1),
+            Command::Attack { target: 1 }
+        ));
+        assert!(matches!(
+            enemy_command(None, 3),
+            Command::Attack { target: 3 }
+        ));
     }
 }
