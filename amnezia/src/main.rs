@@ -11,7 +11,9 @@ mod debug;
 mod dialogue;
 mod events;
 mod font;
+mod gamedata;
 mod interpreter;
+mod menu;
 mod player;
 mod save;
 mod state;
@@ -47,6 +49,8 @@ fn main() -> AppExit {
             choice::ChoicePlugin,
             save::SavePlugin,
             debug::DebugPlugin,
+            gamedata::GameDataPlugin,
+            menu::MenuPlugin,
         ))
         .run()
 }
