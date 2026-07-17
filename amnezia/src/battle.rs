@@ -20,7 +20,7 @@ mod model;
 mod resolve;
 mod ui;
 
-use crate::assets::{ASSET_ROOT, load_ron};
+use crate::assets::{asset_root, load_ron};
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
@@ -78,8 +78,8 @@ impl Plugin for BattlePlugin {
             .init_resource::<Battle>()
             .init_resource::<Vitals>()
             .insert_resource(BattleData {
-                monsters: load_ron(&format!("{ASSET_ROOT}/monsters.ron")),
-                troops: load_ron(&format!("{ASSET_ROOT}/troops.ron")),
+                monsters: load_ron(&format!("{}/monsters.ron", asset_root())),
+                troops: load_ron(&format!("{}/troops.ron", asset_root())),
             })
             .add_systems(
                 Update,

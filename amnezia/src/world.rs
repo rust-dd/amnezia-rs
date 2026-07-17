@@ -3,7 +3,7 @@
 //! player entity persists across map changes; scene entities are tagged
 //! [`MapScene`] so a teleport can despawn them.
 
-use crate::assets::{ASSET_ROOT, load_ron, resolve_png};
+use crate::assets::{asset_root, load_ron, resolve_png};
 use crate::player::spawn_player;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN};
@@ -220,7 +220,7 @@ fn setup(
     ));
     let start: Start = match DEV_START {
         Some(dev) => dev,
-        None => load_ron(&format!("{ASSET_ROOT}/start.ron")),
+        None => load_ron(&format!("{}/start.ron", asset_root())),
     };
     let (data, events) = load_map(
         &mut commands,
@@ -256,8 +256,8 @@ pub fn load_map(
     inventory: &Inventory,
     map_id: u32,
 ) -> (MapData, MapEvents) {
-    let map: Map = load_ron(&format!("{ASSET_ROOT}/maps/map_{map_id:04}.ron"));
-    let chipsets: Vec<Chipset> = load_ron(&format!("{ASSET_ROOT}/chipsets.ron"));
+    let map: Map = load_ron(&format!("{}/maps/map_{map_id:04}.ron", asset_root()));
+    let chipsets: Vec<Chipset> = load_ron(&format!("{}/chipsets.ron", asset_root()));
     let entry = chipsets.into_iter().find(|c| c.id == map.chipset_id);
     let (graphic, passages_down, passages_up) = match entry {
         Some(c) => (c.graphic, c.passages_down, c.passages_up),

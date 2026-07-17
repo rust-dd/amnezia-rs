@@ -20,6 +20,10 @@ The original game data lives in proprietary RPG Maker 2000 formats: `.ldb`/`.lmt
 2. `cargo run -p amnezia-convert` converts it into `assets/`.
 3. `cargo run -p amnezia` runs the game against `assets/`.
 
+### Packaging (macOS)
+
+`bash scripts/bundle-mac.sh` builds the release binary and assembles a self-contained, double-clickable `target/Amnézia.app` with the converted assets bundled inside `Contents/Resources/assets` (dev-only `.mid` intermediates excluded). Release builds resolve their asset root relative to the executable, so the packaged app runs from anywhere without the dev tree.
+
 ## Controls
 
 The game opens on a **title screen** — pick *Új játék* (New Game) or *Folytatás* (Continue) with the arrows and confirm.

@@ -9,7 +9,7 @@
 //! resource through every UI system (and the interpreter, already at Bevy's
 //! parameter cap, stays untouched).
 
-use crate::assets::ASSET_ROOT;
+use crate::assets::asset_root;
 use bevy::prelude::*;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -56,7 +56,7 @@ impl Plugin for I18nPlugin {
 /// Load `i18n/en.ron` into the global table, staying empty (Hungarian-only) on
 /// any error so a missing or malformed table never blocks startup.
 fn load_table() {
-    let path = format!("{ASSET_ROOT}/i18n/en.ron");
+    let path = format!("{}/i18n/en.ron", asset_root());
     let table = std::fs::read_to_string(&path)
         .ok()
         .and_then(|text| ron::from_str::<HashMap<String, String>>(&text).ok())

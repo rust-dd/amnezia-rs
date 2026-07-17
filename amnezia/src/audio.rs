@@ -10,7 +10,7 @@
 //! converted `.ogg` or an ambient `.wav` exists under `audio/Music/`; a
 //! MIDI-only track is skipped without an error or per-frame logging.
 
-use crate::assets::ASSET_ROOT;
+use crate::assets::asset_root;
 use bevy::audio::Volume;
 use bevy::prelude::*;
 
@@ -190,7 +190,7 @@ fn stop_bgm(commands: &mut Commands, current: &mut CurrentBgm) {
 /// `audio/<subdir>/`, trying `exts` in order and matching the on-disk filename
 /// case-insensitively (RM2000 names differ in case). `None` if nothing matches.
 fn resolve_audio(subdir: &str, name: &str, exts: &[&str]) -> Option<String> {
-    let dir = format!("{ASSET_ROOT}/audio/{subdir}");
+    let dir = format!("{}/audio/{subdir}", asset_root());
     let files: Vec<String> = std::fs::read_dir(&dir)
         .ok()?
         .flatten()

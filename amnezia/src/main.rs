@@ -33,17 +33,17 @@ mod title;
 mod vitals;
 mod world;
 
-use assets::{ASSET_ROOT, load_ron};
+use assets::{asset_root, load_ron};
 use bevy::prelude::*;
 
 fn main() -> AppExit {
-    let hero: amnezia_data::Hero = load_ron(&format!("{ASSET_ROOT}/hero.ron"));
+    let hero: amnezia_data::Hero = load_ron(&format!("{}/hero.ron", asset_root()));
     App::new()
         .add_plugins(
             DefaultPlugins
                 .set(ImagePlugin::default_nearest())
                 .set(AssetPlugin {
-                    file_path: ASSET_ROOT.to_string(),
+                    file_path: asset_root().to_string(),
                     ..default()
                 })
                 .set(WindowPlugin {
