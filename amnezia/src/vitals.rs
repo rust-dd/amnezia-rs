@@ -1,9 +1,8 @@
 //! Persistent party vitals: each actor's current HP/SP carried between battles
-//! (and, later, healed at an inn). The battle system reads them when building a
-//! fighter and writes them back when the fight ends; before an actor's first
-//! battle its entry defaults to the full HP/SP from its [`ActorDef`].
+//! and healed at an inn. The battle system reads a stored entry when building a
+//! fighter (an absent entry means the actor starts the fight full at its current
+//! level) and writes it back when the fight ends.
 
-use amnezia_data::ActorDef;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
@@ -12,15 +11,6 @@ use std::collections::HashMap;
 pub struct Vitals(HashMap<u32, (i32, i32)>);
 
 impl Vitals {
-    /// The actor's stored `(hp, sp)`, or its full starting values when it has not
-    /// fought yet.
-    pub fn get(&self, actor: &ActorDef) -> (i32, i32) {
-        self.0
-            .get(&actor.id)
-            .copied()
-            .unwrap_or((actor.hp as i32, actor.sp as i32))
-    }
-
     /// Store an actor's `(hp, sp)` after a battle.
     pub fn set(&mut self, actor_id: u32, hp: i32, sp: i32) {
         self.0.insert(actor_id, (hp, sp));
@@ -31,42 +21,56 @@ impl Vitals {
     pub fn heal_all(&mut self) {
         self.0.clear();
     }
+
+    /// The actor's stored `(hp, sp)`, or `None` when it has none yet — so a caller
+    /// can default to full at the actor's current level rather than its
+    /// starting-level HP/SP.
+    pub fn get_stored(&self, actor_id: u32) -> Option<(i32, i32)> {
+        self.0.get(&actor_id).copied()
+    }
+
+    /// Snapshot `(actor_id, (hp, sp))` pairs for the save file, in id order.
+    pub fn entries(&self) -> Vec<(u32, (i32, i32))> {
+        let mut entries: Vec<(u32, (i32, i32))> = self.0.iter().map(|(&k, &v)| (k, v)).collect();
+        entries.sort_by_key(|&(k, _)| k);
+        entries
+    }
+
+    /// Replace all stored vitals from a loaded save.
+    pub fn load(&mut self, entries: Vec<(u32, (i32, i32))>) {
+        self.0 = entries.into_iter().collect();
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn actor() -> ActorDef {
-        ActorDef {
-            id: 1,
-            name: "Ron".into(),
-            title: "Zsoldos".into(),
-            level: 2,
-            max_level: 50,
-            hp: 63,
-            sp: 37,
-            curves: Default::default(),
-            exp_base: 30,
-            exp_inflation: 30,
-            exp_correction: 0,
-        }
-    }
-
     #[test]
-    fn defaults_to_full_then_persists_stored_values() {
+    fn stores_and_reads_back_vitals() {
         let mut vitals = Vitals::default();
-        assert_eq!(vitals.get(&actor()), (63, 37));
+        assert_eq!(vitals.get_stored(1), None);
         vitals.set(1, 20, 5);
-        assert_eq!(vitals.get(&actor()), (20, 5));
+        assert_eq!(vitals.get_stored(1), Some((20, 5)));
     }
 
     #[test]
-    fn heal_all_restores_full_values() {
+    fn heal_all_clears_stored_damage() {
         let mut vitals = Vitals::default();
         vitals.set(1, 20, 5);
         vitals.heal_all();
-        let actor = actor();
-        assert_eq!(vitals.get(&actor), (actor.hp as i32, actor.sp as i32));
+        assert_eq!(vitals.get_stored(1), None);
+    }
+
+    #[test]
+    fn entries_round_trip_through_load() {
+        let mut vitals = Vitals::default();
+        vitals.set(1, 40, 12);
+        vitals.set(3, 30, 0);
+        let snapshot = vitals.entries();
+        let mut restored = Vitals::default();
+        restored.load(snapshot);
+        assert_eq!(restored.get_stored(1), Some((40, 12)));
+        assert_eq!(restored.get_stored(3), Some((30, 0)));
     }
 }

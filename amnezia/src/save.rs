@@ -8,8 +8,10 @@
 use crate::dialogue::Dialogue;
 use crate::interpreter::RunningEvent;
 use crate::player::Player;
+use crate::progression::Progression;
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::teleport::{Fade, PendingTeleport};
+use crate::vitals::Vitals;
 use crate::world::MapData;
 use bevy::prelude::*;
 use ron::ser::PrettyConfig;
@@ -56,6 +58,10 @@ struct SaveGame {
     party: Vec<u32>,
     items: Vec<(u32, u32)>,
     gold: i32,
+    #[serde(default)]
+    progression: Vec<(u32, u32)>,
+    #[serde(default)]
+    vitals: Vec<(u32, (i32, i32))>,
 }
 
 pub struct SavePlugin;
@@ -85,6 +91,8 @@ fn save_or_load(
     mut pending: ResMut<PendingTeleport>,
     mut load_request: ResMut<LoadRequest>,
     mut save_request: ResMut<SaveRequest>,
+    mut vitals: ResMut<Vitals>,
+    mut progression: ResMut<Progression>,
     mut players: Query<&mut Player>,
 ) {
     let save = keys.just_pressed(KeyCode::F5) || save_request.0;
@@ -111,6 +119,8 @@ fn save_or_load(
             party: party.snapshot(),
             items,
             gold,
+            progression: progression.entries(),
+            vitals: vitals.entries(),
         };
         match write_save(&game) {
             Ok(()) => info!("saved game to {SAVE_PATH}"),
@@ -127,6 +137,8 @@ fn save_or_load(
         variables.load(game.variables);
         party.restore(game.party);
         inventory.restore(game.items, game.gold);
+        progression.load(game.progression);
+        vitals.load(game.vitals);
         if let Ok(mut player) = players.single_mut() {
             player.dir = game.dir;
         }
@@ -175,6 +187,8 @@ mod tests {
             party: vec![1, 3],
             items: vec![(181, 2), (200, 1)],
             gold: 250,
+            progression: vec![(1, 500), (3, 20)],
+            vitals: vec![(1, (40, 12)), (3, (30, 0))],
         };
         let ron = ron::ser::to_string_pretty(&game, PrettyConfig::default()).unwrap();
         let decoded: SaveGame = ron::from_str(&ron).unwrap();

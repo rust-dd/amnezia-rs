@@ -9,6 +9,7 @@
 
 use super::BattleOutcome;
 use super::logic::{self, Stats};
+use crate::progression::Progression;
 use crate::vitals::Vitals;
 use amnezia_data::{ActorDef, MonsterDef, TroopDef};
 use bevy::prelude::*;
@@ -154,6 +155,7 @@ impl Battle {
         monsters: &[MonsterDef],
         actors: &[&ActorDef],
         vitals: &Vitals,
+        progression: &Progression,
         background: String,
         seed: u64,
     ) -> Self {
@@ -176,15 +178,23 @@ impl Battle {
         let members = actors
             .iter()
             .map(|a| {
-                let (hp, sp) = vitals.get(a);
+                let level = progression.level(a);
+                let (max_hp, max_sp) = logic::actor_hp_sp_at(&a.curves, level, a.hp, a.sp);
+                let (max_hp, max_sp) = (max_hp as i32, max_sp as i32);
+                // Resume stored HP/SP (clamped to the level's maxima), or start
+                // full at the current level when this actor has no stored vitals.
+                let (hp, sp) = match vitals.get_stored(a.id) {
+                    Some((h, s)) => (h.min(max_hp), s.min(max_sp)),
+                    None => (max_hp, max_sp),
+                };
                 Fighter {
                     actor_id: a.id,
                     name: a.name.clone(),
                     hp,
-                    max_hp: a.hp as i32,
+                    max_hp,
                     sp,
-                    max_sp: a.sp as i32,
-                    stats: logic::actor_stats(a.level),
+                    max_sp,
+                    stats: logic::actor_stats_at(&a.curves, level),
                     defending: false,
                     command: None,
                 }
@@ -368,6 +378,7 @@ pub(super) mod testkit {
             &monsters,
             &actors,
             &Vitals::default(),
+            &Progression::default(),
             "Cave1".into(),
             42,
         )
@@ -411,6 +422,7 @@ mod tests {
             &monsters,
             &actors,
             &Vitals::default(),
+            &Progression::default(),
             "Cave1".into(),
             7,
         );

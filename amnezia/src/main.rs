@@ -20,6 +20,7 @@ mod interpreter;
 mod menu;
 mod picture;
 mod player;
+mod progression;
 mod save;
 mod screenfx;
 mod shop;
@@ -85,5 +86,6 @@ fn main() -> AppExit {
         ))
         .add_plugins(inputnumber::InputNumberPlugin)
         .add_plugins(appearance::AppearancePlugin)
+        .add_plugins(progression::ProgressionPlugin)
         .run()
 }

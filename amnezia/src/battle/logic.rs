@@ -3,7 +3,7 @@
 //! filter. Kept free of Bevy and of the live battle state so every rule is
 //! unit-testable in isolation; the battle systems are thin wrappers over these.
 
-use amnezia_data::{MonsterDef, SkillDef};
+use amnezia_data::{ActorCurves, MonsterDef, SkillDef};
 
 /// A combatant's four battle stats. Enemies read them straight from their
 /// [`MonsterDef`]; party members, whose `ActorDef` carries only a level, get
@@ -39,6 +39,41 @@ pub fn actor_stats(level: u32) -> Stats {
         spirit: 8 + level * 3,
         agility: 8 + level * 2,
     }
+}
+
+/// A party member's battle stats at `level`, read from their stat curve (level L
+/// at index L-1). Falls back to the level formula when the curve is empty (e.g. a
+/// stale `actors.ron` predating the curve fields).
+pub fn actor_stats_at(curves: &ActorCurves, level: u32) -> Stats {
+    let i = (level.max(1) - 1) as usize;
+    match (
+        curves.attack.get(i),
+        curves.defense.get(i),
+        curves.spirit.get(i),
+        curves.agility.get(i),
+    ) {
+        (Some(&attack), Some(&defense), Some(&spirit), Some(&agility)) => Stats {
+            attack,
+            defense,
+            spirit,
+            agility,
+        },
+        _ => actor_stats(level),
+    }
+}
+
+/// A party member's max HP/SP at `level` from their curve, falling back to
+/// `(fallback_hp, fallback_sp)` when the curve is empty.
+pub fn actor_hp_sp_at(
+    curves: &ActorCurves,
+    level: u32,
+    fallback_hp: u32,
+    fallback_sp: u32,
+) -> (u32, u32) {
+    let i = (level.max(1) - 1) as usize;
+    let hp = curves.max_hp.get(i).copied().unwrap_or(fallback_hp);
+    let sp = curves.max_sp.get(i).copied().unwrap_or(fallback_sp);
+    (hp, sp)
 }
 
 /// RM2000-style physical damage: half the attacker's attack, less a quarter of
@@ -212,6 +247,32 @@ mod tests {
             }
         );
         assert!(actor_stats(10).attack > actor_stats(2).attack);
+    }
+
+    #[test]
+    fn actor_stats_at_reads_the_curve_then_falls_back_when_empty() {
+        let curves = ActorCurves {
+            max_hp: vec![100, 150, 200],
+            max_sp: vec![10, 20, 30],
+            attack: vec![10, 20, 30],
+            defense: vec![5, 10, 15],
+            spirit: vec![4, 8, 12],
+            agility: vec![3, 6, 9],
+        };
+        assert_eq!(
+            actor_stats_at(&curves, 2),
+            Stats {
+                attack: 20,
+                defense: 10,
+                spirit: 8,
+                agility: 6
+            }
+        );
+        assert_eq!(actor_hp_sp_at(&curves, 3, 0, 0), (200, 30));
+        // Empty curve -> fall back to the formula / provided fallbacks.
+        let empty = ActorCurves::default();
+        assert_eq!(actor_stats_at(&empty, 2), actor_stats(2));
+        assert_eq!(actor_hp_sp_at(&empty, 2, 63, 37), (63, 37));
     }
 
     #[test]

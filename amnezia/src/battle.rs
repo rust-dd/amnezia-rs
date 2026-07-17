@@ -22,6 +22,7 @@ mod ui;
 
 use crate::assets::{ASSET_ROOT, load_ron};
 use crate::gamedata::GameData;
+use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 use crate::vitals::Vitals;
 use amnezia_data::{ActorDef, MonsterDef, TroopDef};
@@ -103,6 +104,7 @@ fn start_on_request(
     battle_data: Res<BattleData>,
     party: Res<Party>,
     vitals: Res<Vitals>,
+    progression: Res<Progression>,
     mut battle: ResMut<Battle>,
     mut active: ResMut<BattleActive>,
     mut result: ResMut<BattleResult>,
@@ -130,6 +132,7 @@ fn start_on_request(
         &battle_data.monsters,
         &actors,
         &vitals,
+        &progression,
         BACKDROP.to_string(),
         seed,
     );
@@ -170,6 +173,7 @@ fn resolve_tick(time: Res<Time>, mut battle: ResMut<Battle>) {
 
 /// On the confirm key at the outcome screen: persist party HP/SP, pay out gold on
 /// a win, publish the [`BattleResult`], and tear the battle down.
+#[allow(clippy::too_many_arguments)]
 fn outcome_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut battle: ResMut<Battle>,
@@ -177,6 +181,8 @@ fn outcome_input(
     mut result: ResMut<BattleResult>,
     mut inventory: ResMut<Inventory>,
     mut vitals: ResMut<Vitals>,
+    data: Res<GameData>,
+    mut progression: ResMut<Progression>,
 ) {
     if battle.phase != Phase::Outcome {
         return;
@@ -190,6 +196,13 @@ fn outcome_input(
     }
     if outcome == BattleOutcome::Victory {
         inventory.add_gold(battle.reward_gold as i32);
+        // Award the fight's experience to every member; a crossed threshold
+        // raises their level (and, next fight, their curve-derived stats).
+        for fighter in &battle.members {
+            if let Some(def) = data.actor(fighter.actor_id) {
+                progression.add(def, battle.reward_exp);
+            }
+        }
     }
     result.0 = Some(outcome);
     active.0 = false;
@@ -260,6 +273,7 @@ mod tests {
         app.init_resource::<Party>();
         app.init_resource::<Inventory>();
         app.init_resource::<Vitals>();
+        app.init_resource::<Progression>();
         app.init_resource::<Battle>();
         app.init_resource::<BattleActive>();
         app.init_resource::<BattleResult>();
