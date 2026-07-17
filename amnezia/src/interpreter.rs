@@ -12,7 +12,7 @@ use crate::player::Player;
 use crate::state::{active_page, Inventory, Party, Switches, Variables};
 use crate::teleport::{Fade, PendingTeleport};
 use crate::text::{self, HeroName};
-use crate::world::{EventSprite, MapEvents};
+use crate::world::{decode_route, EventSprite, MapEvents, MoveQueue};
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 use std::collections::HashMap;
@@ -66,6 +66,7 @@ pub struct RunningEvent {
     ip: usize,
     active: bool,
     wait: f32,
+    wait_move: bool,
     event_id: u32,
     choices: HashMap<u32, i32>,
 }
@@ -91,6 +92,7 @@ impl RunningEvent {
         self.commands = commands;
         self.ip = 0;
         self.wait = 0.0;
+        self.wait_move = false;
         self.event_id = event_id;
         self.choices.clear();
         self.active = true;
@@ -101,6 +103,7 @@ impl RunningEvent {
         self.commands.clear();
         self.ip = 0;
         self.wait = 0.0;
+        self.wait_move = false;
         self.event_id = 0;
         self.choices.clear();
     }
@@ -111,7 +114,7 @@ pub struct InterpreterPlugin;
 impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RunningEvent>()
-            .add_systems(Update, (autorun, run_interpreter).chain());
+            .add_systems(Update, (autorun, run_interpreter, clear_move_wait).chain());
     }
 }
 
@@ -131,14 +134,17 @@ fn run_interpreter(
     mut inventory: ResMut<Inventory>,
     mut party: ResMut<Party>,
     mut pending: ResMut<PendingTeleport>,
-    mut players: Query<&mut Player>,
-    mut event_sprites: Query<&mut EventSprite>,
+    mut hero_queue: Query<&mut MoveQueue, With<Player>>,
+    mut event_movers: Query<(&EventSprite, &mut MoveQueue), Without<Player>>,
     mut audio: MessageWriter<AudioRequest>,
 ) {
     if !running.active {
         return;
     }
-    if dialogue.active || fade.busy() || choice.active() {
+    // Pause while a message box, teleport fade, choice, or pending transfer is in
+    // flight; the transfer guard holds the event across the fade so it resumes on
+    // the destination map (RM2000 Transfer Player continues the calling event).
+    if dialogue.active || fade.busy() || choice.active() || pending.0.is_some() {
         return;
     }
     // Resume after the player confirmed a choice: record the pick so the
@@ -148,6 +154,10 @@ fn run_interpreter(
     }
     if running.wait > 0.0 {
         running.wait -= time.delta_secs();
+        return;
+    }
+    // Hold until the character a `MoveEvent` set walking has drained its queue.
+    if running.wait_move {
         return;
     }
     for _ in 0..MAX_STEPS_PER_FRAME {
@@ -199,10 +209,13 @@ fn run_interpreter(
                 return;
             }
             TELEPORT => {
+                // Queue the transfer and pause (via the pending guard) until the
+                // fade swaps the map; the event then resumes at the next command
+                // on the destination map rather than terminating here.
                 if let [map, x, y, ..] = command.params.as_slice() {
                     pending.0 = Some((*map as u32, *x as u32, *y as u32));
                 }
-                running.stop();
+                running.ip += 1;
                 return;
             }
             CONDITIONAL_BRANCH => {
@@ -262,32 +275,25 @@ fn run_interpreter(
                 running.ip += 1;
             }
             MOVE_EVENT => {
+                // Enqueue the route onto its target and pause until it drains.
+                // `10001` is the hero, `10005` this event, else an event id.
                 let target = command.params.first().copied().unwrap_or(0);
-                let id = if target == 10005 { running.event_id as i32 } else { target };
-                for action in decode_route(&command.params) {
-                    match action {
-                        RouteAction::Face(dir) => {
-                            if target == 10001 {
-                                if let Ok(mut player) = players.single_mut() {
-                                    player.dir = dir;
-                                }
-                            } else if let Some(mut sprite) =
-                                event_sprites.iter_mut().find(|s| s.id as i32 == id)
-                            {
-                                sprite.dir = dir;
-                            }
-                        }
-                        RouteAction::ChangeGraphic(name, index) => {
-                            if let Some(mut sprite) =
-                                event_sprites.iter_mut().find(|s| s.id as i32 == id)
-                            {
-                                sprite.charset = name;
-                                sprite.index = index;
-                            }
-                        }
+                let steps = decode_route(&command.params);
+                if target == 10001 {
+                    if let Ok(mut queue) = hero_queue.single_mut() {
+                        queue.enqueue_route(steps);
+                    }
+                } else {
+                    let id = if target == 10005 { running.event_id as i32 } else { target };
+                    if let Some((_, mut queue)) =
+                        event_movers.iter_mut().find(|(e, _)| e.id as i32 == id)
+                    {
+                        queue.enqueue_route(steps);
                     }
                 }
+                running.wait_move = true;
                 running.ip += 1;
+                return;
             }
             ENEMY_ENCOUNTER | OPEN_SHOP | SHOW_INN => {
                 let terminator = SKIP_BLOCKS
@@ -546,43 +552,12 @@ fn skip_option_body(commands: &[EventCommand], ip: usize, indent: u32) -> usize 
     j
 }
 
-/// A decoded MoveEvent route action the interpreter applies instantly. Movement
-/// and other sub-commands are consumed for alignment but not represented.
-enum RouteAction {
-    Face(u32),
-    ChangeGraphic(String, u32),
-}
-
-/// Decode a MoveEvent's route (the ints after `[ref, freq, repeat, skip]`) into
-/// the `Face`/`ChangeGraphic` actions we apply; other sub-commands are skipped
-/// with their arguments so the int stream stays aligned.
-fn decode_route(params: &[i32]) -> Vec<RouteAction> {
-    let mut actions = Vec::new();
-    let mut i = 4;
-    while i < params.len() {
-        let sub = params[i];
-        i += 1;
-        match sub {
-            12..=15 => actions.push(RouteAction::Face((sub - 12) as u32)),
-            32 | 33 => i += 1,
-            34 => {
-                let len = params.get(i).copied().unwrap_or(0).max(0) as usize;
-                i += 1;
-                let end = (i + len).min(params.len());
-                let name: String = params[i..end].iter().map(|&b| b as u8 as char).collect();
-                i = end;
-                let frame = params.get(i).copied().unwrap_or(0).max(0) as u32;
-                i += 1;
-                actions.push(RouteAction::ChangeGraphic(name, frame));
-            }
-            35 => {
-                let len = params.get(i).copied().unwrap_or(0).max(0) as usize;
-                i += 1 + len + 3;
-            }
-            _ => {}
-        }
+/// Release the `MoveEvent` pause once every moved character's queue has drained,
+/// letting [`run_interpreter`] advance past the move on the next frame.
+fn clear_move_wait(mut running: ResMut<RunningEvent>, movers: Query<&MoveQueue>) {
+    if running.wait_move && movers.iter().all(|queue| !queue.busy()) {
+        running.wait_move = false;
     }
-    actions
 }
 
 /// Index of the `Loop` (12210) at `indent` that an `EndLoop` at `ip` closes
@@ -682,16 +657,6 @@ mod tests {
         let commands =
             vec![cmd(10140, 0), cmd(20140, 0), cmd(10210, 1), cmd(20140, 0), cmd(20141, 0)];
         assert_eq!(skip_option_body(&commands, 1, 0), 3);
-    }
-
-    #[test]
-    fn decodes_change_graphic_and_face() {
-        // ref, freq, repeat, skip, then: change_graphic "Torch" frame 1, face-left (15)
-        let params = vec![10005, 8, 0, 0, 34, 5, 84, 111, 114, 99, 104, 1, 15];
-        let actions = decode_route(&params);
-        assert_eq!(actions.len(), 2);
-        assert!(matches!(&actions[0], RouteAction::ChangeGraphic(n, 1) if n == "Torch"));
-        assert!(matches!(actions[1], RouteAction::Face(3)));
     }
 
     #[test]

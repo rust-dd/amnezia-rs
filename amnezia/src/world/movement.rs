@@ -1,0 +1,402 @@
+//! Shared tile-to-tile movement for the hero and event NPCs: decoding a
+//! RM2000 move route into steps, a per-character queue that tweens one tile per
+//! step, and the generic [`walk`] system that drives any [`Character`].
+//!
+//! Scripted routes (from the interpreter's `MoveEvent`) and the hero's own
+//! keyboard steps share this queue, so both animate smoothly across a tile
+//! instead of teleport-snapping. `Face`/`ChangeGraphic` route steps apply
+//! instantly and consume no tween; only actual moves (and `Wait`) take time.
+
+use super::MapData;
+use crate::assets::resolve_png;
+use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_RIGHT, DIR_UP};
+use bevy::ecs::component::Mutable;
+use bevy::prelude::*;
+use std::collections::VecDeque;
+
+/// Seconds a character spends tweening across one tile. RM2000 varies this with
+/// the move speed/frequency; a single brisk constant is the first-pass tuning.
+const STEP_DURATION: f32 = 0.18;
+
+/// The `(dx, dy)` of a diagonal move sub-command (4 upper-right, 5 lower-right,
+/// 6 lower-left, 7 upper-left).
+const DIAGONALS: [(i32, i32); 4] = [(1, -1), (1, 1), (-1, 1), (-1, -1)];
+
+/// One decoded move-route action. Cardinal/diagonal moves carry their tile
+/// delta and resulting facing; `Forward` resolves against the live facing.
+#[derive(Clone, PartialEq, Debug)]
+pub enum RouteAction {
+    Step { dx: i32, dy: i32, face: u32 },
+    Forward,
+    Face(u32),
+    ChangeGraphic(String, u32),
+    Wait,
+}
+
+/// A movable map character (the hero or an event NPC). Lets the shared movement
+/// code read and write a character's tile, facing, walk frame, and graphic
+/// without knowing its concrete component type.
+pub trait Character {
+    fn tile(&self) -> (i32, i32);
+    fn set_tile(&mut self, x: i32, y: i32);
+    fn dir(&self) -> u32;
+    fn set_dir(&mut self, dir: u32);
+    fn frame(&self) -> u32;
+    fn set_frame(&mut self, frame: u32);
+    fn index(&self) -> u32;
+    fn charset(&self) -> &str;
+    fn set_graphic(&mut self, name: String, index: u32);
+}
+
+/// An in-progress single-tile tween between two tile centers (equal for `Wait`).
+struct Tween {
+    from: Vec2,
+    to: Vec2,
+    elapsed: f32,
+}
+
+/// A character's pending route steps plus the tween of the step in flight. The
+/// interpreter enqueues scripted routes; the player system pushes keyboard
+/// steps. `route` marks a scripted run so the character settles to its standing
+/// frame when the route drains (keyboard idling settles separately).
+#[derive(Component, Default)]
+pub struct MoveQueue {
+    steps: VecDeque<RouteAction>,
+    active: Option<Tween>,
+    route: bool,
+}
+
+impl MoveQueue {
+    /// Append a scripted route and mark it as one, so the character settles to
+    /// its standing frame once the route finishes.
+    pub fn enqueue_route(&mut self, actions: impl IntoIterator<Item = RouteAction>) {
+        self.steps.extend(actions);
+        self.route = true;
+    }
+
+    /// Queue a single keyboard step (no scripted-settle).
+    pub fn push_step(&mut self, action: RouteAction) {
+        self.steps.push_back(action);
+    }
+
+    /// Whether a step is tweening or pending; the interpreter waits on this and
+    /// the sprite systems yield rendering to [`walk`] while it holds.
+    pub fn busy(&self) -> bool {
+        self.active.is_some() || !self.steps.is_empty()
+    }
+
+    /// Whether [`walk`] still has something to do (busy, or a scripted route to
+    /// settle). Keyboard idling stays out of the movement system.
+    fn has_work(&self) -> bool {
+        self.busy() || self.route
+    }
+
+    /// Advance the current step by `dt`, applying instant actions in order and
+    /// starting the next tween. Returns the world-space tile-center position to
+    /// render at this frame, or `None` when the character is idle.
+    fn advance<C: Character>(&mut self, ch: &mut C, data: &MapData, dt: f32) -> Option<Vec2> {
+        loop {
+            if let Some(tween) = self.active.as_mut() {
+                tween.elapsed += dt;
+                if tween.elapsed < STEP_DURATION {
+                    return Some(tween.from.lerp(tween.to, tween.elapsed / STEP_DURATION));
+                }
+                let end = tween.to;
+                self.active = None;
+                return Some(end);
+            }
+            match self.steps.pop_front() {
+                None => {
+                    if self.route {
+                        self.route = false;
+                        if ch.frame() != 1 {
+                            ch.set_frame(1);
+                        }
+                    }
+                    return None;
+                }
+                Some(RouteAction::Face(dir)) => ch.set_dir(dir),
+                Some(RouteAction::ChangeGraphic(name, index)) => ch.set_graphic(name, index),
+                Some(RouteAction::Wait) => {
+                    let (x, y) = ch.tile();
+                    let center = center(data, x, y);
+                    self.active = Some(Tween { from: center, to: center, elapsed: 0.0 });
+                }
+                Some(RouteAction::Step { dx, dy, face }) => self.begin_step(ch, data, dx, dy, face),
+                Some(RouteAction::Forward) => {
+                    let (dx, dy) = dir_delta(ch.dir());
+                    let face = ch.dir();
+                    self.begin_step(ch, data, dx, dy, face);
+                }
+            }
+        }
+    }
+
+    /// Commit a move to the adjacent tile: update the logical tile immediately
+    /// (so y-sorting and lookups use the destination), face and advance the walk
+    /// frame, and start the pixel tween from the old center to the new one.
+    fn begin_step<C: Character>(&mut self, ch: &mut C, data: &MapData, dx: i32, dy: i32, face: u32) {
+        let (x, y) = ch.tile();
+        let from = center(data, x, y);
+        let (nx, ny) = (x + dx, y + dy);
+        ch.set_tile(nx, ny);
+        ch.set_dir(face);
+        ch.set_frame((ch.frame() + 1) % 3);
+        self.active = Some(Tween { from, to: center(data, nx, ny), elapsed: 0.0 });
+    }
+}
+
+/// World-space center of a tile as a [`Vec2`].
+fn center(data: &MapData, x: i32, y: i32) -> Vec2 {
+    let (wx, wy) = data.tile_center(x, y);
+    Vec2::new(wx, wy)
+}
+
+/// The tile delta for a facing direction.
+fn dir_delta(dir: u32) -> (i32, i32) {
+    match dir {
+        DIR_UP => (0, -1),
+        DIR_RIGHT => (1, 0),
+        DIR_DOWN => (0, 1),
+        _ => (-1, 0),
+    }
+}
+
+/// Decode a `MoveEvent` route (the ints after `[ref, freq, repeat, skip]`) into
+/// the actions the movement queue runs: cardinal (0-3) and diagonal (4-7) moves,
+/// `Forward` (11), `Face` (12-15), and `Wait` (23). Switch (32/33), change-graphic
+/// (34), and play-SE (35) sub-commands keep their verified argument widths so the
+/// int stream stays aligned; every other sub-command consumes no args.
+pub fn decode_route(params: &[i32]) -> Vec<RouteAction> {
+    let mut actions = Vec::new();
+    let mut i = 4;
+    while i < params.len() {
+        let sub = params[i];
+        i += 1;
+        match sub {
+            0..=3 => {
+                let (dx, dy) = dir_delta(sub as u32);
+                actions.push(RouteAction::Step { dx, dy, face: sub as u32 });
+            }
+            4..=7 => {
+                let (dx, dy) = DIAGONALS[(sub - 4) as usize];
+                let face = if dy < 0 { DIR_UP } else { DIR_DOWN };
+                actions.push(RouteAction::Step { dx, dy, face });
+            }
+            11 => actions.push(RouteAction::Forward),
+            12..=15 => actions.push(RouteAction::Face((sub - 12) as u32)),
+            23 => actions.push(RouteAction::Wait),
+            32 | 33 => i += 1,
+            34 => {
+                let len = params.get(i).copied().unwrap_or(0).max(0) as usize;
+                i += 1;
+                let end = (i + len).min(params.len());
+                let name: String = params[i..end].iter().map(|&b| b as u8 as char).collect();
+                i = end;
+                let frame = params.get(i).copied().unwrap_or(0).max(0) as u32;
+                i += 1;
+                actions.push(RouteAction::ChangeGraphic(name, frame));
+            }
+            35 => {
+                let len = params.get(i).copied().unwrap_or(0).max(0) as usize;
+                i += 1 + len + 3;
+            }
+            _ => {}
+        }
+    }
+    actions
+}
+
+/// Drive every [`Character`]'s move queue: advance the tween, then reflect the
+/// interpolated position, walk frame, facing, and graphic onto its sprite. Runs
+/// only while a queue has work, leaving idle characters to their own change-driven
+/// sprite update.
+pub fn walk<C: Character + Component<Mutability = Mutable>>(
+    time: Res<Time>,
+    data: Res<MapData>,
+    asset_server: Res<AssetServer>,
+    mut movers: Query<(&mut C, &mut MoveQueue, &mut Transform, &mut Sprite)>,
+) {
+    let dt = time.delta_secs();
+    for (mut ch, mut queue, mut transform, mut sprite) in &mut movers {
+        if !queue.has_work() {
+            continue;
+        }
+        if let Some(pos) = queue.advance(&mut *ch, &data, dt) {
+            let (sx, sy) = tiles::charset_source(ch.index(), ch.dir(), ch.frame());
+            sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
+            sprite.image = asset_server.load(resolve_png("CharSet", ch.charset()));
+            transform.translation =
+                Vec3::new(pos.x, pos.y + CHAR_Y_OFFSET, tiles::character_z(ch.tile().1));
+        }
+    }
+}
+
+impl Character for super::EventSprite {
+    fn tile(&self) -> (i32, i32) {
+        (self.tile_x, self.tile_y)
+    }
+    fn set_tile(&mut self, x: i32, y: i32) {
+        self.tile_x = x;
+        self.tile_y = y;
+    }
+    fn dir(&self) -> u32 {
+        self.dir
+    }
+    fn set_dir(&mut self, dir: u32) {
+        self.dir = dir;
+    }
+    fn frame(&self) -> u32 {
+        self.frame
+    }
+    fn set_frame(&mut self, frame: u32) {
+        self.frame = frame;
+    }
+    fn index(&self) -> u32 {
+        self.index
+    }
+    fn charset(&self) -> &str {
+        &self.charset
+    }
+    fn set_graphic(&mut self, name: String, index: u32) {
+        self.charset = name;
+        self.index = index;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn decodes_two_moves_and_a_face() {
+        // [10005,8,0,0,3,3,12] -> move-left, move-left, face-up.
+        let actions = decode_route(&[10005, 8, 0, 0, 3, 3, 12]);
+        assert_eq!(actions.len(), 3);
+        assert!(matches!(actions[0], RouteAction::Step { dx: -1, dy: 0, face: 3 }));
+        assert!(matches!(actions[1], RouteAction::Step { dx: -1, dy: 0, face: 3 }));
+        assert!(matches!(actions[2], RouteAction::Face(0)));
+    }
+
+    #[test]
+    fn decodes_change_graphic_and_face() {
+        // change_graphic "Torch" frame 1, then face-left (15).
+        let params = vec![10005, 8, 0, 0, 34, 5, 84, 111, 114, 99, 104, 1, 15];
+        let actions = decode_route(&params);
+        assert_eq!(actions.len(), 2);
+        assert!(matches!(&actions[0], RouteAction::ChangeGraphic(n, 1) if n == "Torch"));
+        assert!(matches!(actions[1], RouteAction::Face(3)));
+    }
+
+    #[test]
+    fn decodes_the_intro_hero_route() {
+        // The map_0005 wake-up route: move-left, face-up, gfx Poses/0, wait, wait,
+        // gfx Chara1/0, face-down.
+        let params = vec![
+            10001, 8, 0, 0, 3, 12, 34, 5, 80, 111, 115, 101, 115, 0, 23, 23, 34, 6, 67, 104, 97,
+            114, 97, 49, 0, 14,
+        ];
+        let a = decode_route(&params);
+        assert_eq!(a.len(), 7);
+        assert!(matches!(a[0], RouteAction::Step { dx: -1, dy: 0, face: 3 }));
+        assert!(matches!(a[1], RouteAction::Face(0)));
+        assert!(matches!(&a[2], RouteAction::ChangeGraphic(n, 0) if n == "Poses"));
+        assert!(matches!(a[3], RouteAction::Wait));
+        assert!(matches!(a[4], RouteAction::Wait));
+        assert!(matches!(&a[5], RouteAction::ChangeGraphic(n, 0) if n == "Chara1"));
+        assert!(matches!(a[6], RouteAction::Face(2)));
+    }
+
+    #[test]
+    fn decodes_diagonal_forward_and_skips_switch_arg() {
+        // down-right (5), forward (11), switch-on (32 + 1 arg), then move-down (2).
+        let a = decode_route(&[10005, 8, 0, 0, 5, 11, 32, 7, 2]);
+        assert_eq!(a.len(), 3);
+        assert!(matches!(a[0], RouteAction::Step { dx: 1, dy: 1, face: 2 }));
+        assert!(matches!(a[1], RouteAction::Forward));
+        assert!(matches!(a[2], RouteAction::Step { dx: 0, dy: 1, face: 2 }));
+    }
+
+    #[test]
+    fn queue_tracks_busy_and_work() {
+        let mut q = MoveQueue::default();
+        assert!(!q.busy() && !q.has_work());
+        q.enqueue_route([RouteAction::Face(1)]);
+        assert!(q.busy() && q.has_work());
+    }
+
+    struct FakeChar {
+        x: i32,
+        y: i32,
+        dir: u32,
+        frame: u32,
+        charset: String,
+    }
+
+    impl Character for FakeChar {
+        fn tile(&self) -> (i32, i32) {
+            (self.x, self.y)
+        }
+        fn set_tile(&mut self, x: i32, y: i32) {
+            self.x = x;
+            self.y = y;
+        }
+        fn dir(&self) -> u32 {
+            self.dir
+        }
+        fn set_dir(&mut self, dir: u32) {
+            self.dir = dir;
+        }
+        fn frame(&self) -> u32 {
+            self.frame
+        }
+        fn set_frame(&mut self, frame: u32) {
+            self.frame = frame;
+        }
+        fn index(&self) -> u32 {
+            0
+        }
+        fn charset(&self) -> &str {
+            &self.charset
+        }
+        fn set_graphic(&mut self, name: String, _index: u32) {
+            self.charset = name;
+        }
+    }
+
+    fn test_map() -> MapData {
+        MapData {
+            map_id: 0,
+            width: 5,
+            height: 5,
+            offset_x: 40.0,
+            offset_y: 40.0,
+            lower: vec![0; 25],
+            upper: vec![10000; 25],
+            passages_down: vec![0x0F; 162],
+            passages_up: vec![0x0F; 144],
+        }
+    }
+
+    #[test]
+    fn advance_tweens_one_tile_then_settles() {
+        let data = test_map();
+        let mut ch = FakeChar { x: 2, y: 2, dir: DIR_DOWN, frame: 1, charset: "C".into() };
+        let mut q = MoveQueue::default();
+        q.enqueue_route([RouteAction::Step { dx: -1, dy: 0, face: 3 }]);
+        // The first tick commits the logical tile and faces the move, rendering
+        // still at the old tile's center.
+        let start = q.advance(&mut ch, &data, 0.0).unwrap();
+        assert_eq!(ch.tile(), (1, 2));
+        assert_eq!(ch.dir(), 3);
+        // Halfway through, the sprite sits between the two tile centers.
+        let mid = q.advance(&mut ch, &data, STEP_DURATION / 2.0).unwrap();
+        assert!(mid.x < start.x);
+        assert!(q.busy());
+        // Completing the step drains the route and settles to the standing frame.
+        q.advance(&mut ch, &data, STEP_DURATION).unwrap();
+        assert!(q.advance(&mut ch, &data, 0.0).is_none());
+        assert!(!q.busy());
+        assert_eq!(ch.frame(), 1);
+    }
+}

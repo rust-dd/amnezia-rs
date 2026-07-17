@@ -7,27 +7,66 @@ use crate::interpreter::RunningEvent;
 use crate::state::{active_page, Inventory, Party, Switches, Variables};
 use crate::teleport::Fade;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
-use crate::world::{MapData, MapEvents};
+use crate::world::{walk, Character, MapData, MapEvents, MoveQueue, RouteAction};
 use amnezia_data::EventPage;
 use bevy::prelude::*;
 
 const PLAYER_CHARSET: &str = "Chara1";
 const PLAYER_INDEX: u32 = 0;
 
-/// The hero the player controls, tracked in tile coordinates.
+/// The hero the player controls, tracked in tile coordinates. `charset`/`index`
+/// hold the current graphic so a `MoveEvent` `ChangeGraphic` (the intro's sleep
+/// pose) can swap it, like an event NPC's.
 #[derive(Component)]
 pub struct Player {
     pub tile_x: i32,
     pub tile_y: i32,
     pub dir: u32,
     pub frame: u32,
+    pub charset: String,
+    pub index: u32,
+}
+
+impl Character for Player {
+    fn tile(&self) -> (i32, i32) {
+        (self.tile_x, self.tile_y)
+    }
+    fn set_tile(&mut self, x: i32, y: i32) {
+        self.tile_x = x;
+        self.tile_y = y;
+    }
+    fn dir(&self) -> u32 {
+        self.dir
+    }
+    fn set_dir(&mut self, dir: u32) {
+        self.dir = dir;
+    }
+    fn frame(&self) -> u32 {
+        self.frame
+    }
+    fn set_frame(&mut self, frame: u32) {
+        self.frame = frame;
+    }
+    fn index(&self) -> u32 {
+        self.index
+    }
+    fn charset(&self) -> &str {
+        &self.charset
+    }
+    fn set_graphic(&mut self, name: String, index: u32) {
+        self.charset = name;
+        self.index = index;
+    }
 }
 
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (move_player, update_player_sprite, camera_follow).chain());
+        app.add_systems(
+            Update,
+            (move_player, walk::<Player>, update_player_sprite, camera_follow).chain(),
+        );
     }
 }
 
@@ -42,7 +81,15 @@ pub fn spawn_player(
     let (sx, sy) = tiles::charset_source(PLAYER_INDEX, DIR_DOWN, 1);
     let (world_x, world_y) = data.tile_center(start.0, start.1);
     commands.spawn((
-        Player { tile_x: start.0, tile_y: start.1, dir: DIR_DOWN, frame: 1 },
+        Player {
+            tile_x: start.0,
+            tile_y: start.1,
+            dir: DIR_DOWN,
+            frame: 1,
+            charset: PLAYER_CHARSET.to_string(),
+            index: PLAYER_INDEX,
+        },
+        MoveQueue::default(),
         Sprite {
             image,
             rect: Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H)),
@@ -76,47 +123,57 @@ fn move_player(
     party: Res<Party>,
     inventory: Res<Inventory>,
     mut running: ResMut<RunningEvent>,
-    mut players: Query<&mut Player>,
+    mut players: Query<(&mut Player, &mut MoveQueue)>,
 ) {
     if dialogue.active || fade.busy() || running.active() {
         return;
     }
-    let Ok(mut player) = players.single_mut() else {
+    let Ok((mut player, mut queue)) = players.single_mut() else {
         return;
     };
-    let step = if keys.just_pressed(KeyCode::ArrowUp) {
+    // Held (not tapped) so the hero keeps walking; the queue paces it one tile at
+    // a time via a smooth tween rather than an instant snap.
+    let step = if keys.pressed(KeyCode::ArrowUp) {
         Some((0, -1, DIR_UP))
-    } else if keys.just_pressed(KeyCode::ArrowDown) {
+    } else if keys.pressed(KeyCode::ArrowDown) {
         Some((0, 1, DIR_DOWN))
-    } else if keys.just_pressed(KeyCode::ArrowLeft) {
+    } else if keys.pressed(KeyCode::ArrowLeft) {
         Some((-1, 0, DIR_LEFT))
-    } else if keys.just_pressed(KeyCode::ArrowRight) {
+    } else if keys.pressed(KeyCode::ArrowRight) {
         Some((1, 0, DIR_RIGHT))
     } else {
         None
     };
-    if let Some((dx, dy, dir)) = step {
-        player.dir = dir;
-        let (nx, ny) = (player.tile_x + dx, player.tile_y + dy);
-        if nx < 0 || ny < 0 || nx >= data.width || ny >= data.height {
-            return;
+    let Some((dx, dy, dir)) = step else {
+        // Settle to the standing frame once the hero comes to rest.
+        if !queue.busy() && player.frame != 1 {
+            player.frame = 1;
         }
-        let blocked = !data.passable(nx, ny)
-            || event_blocks_at(&map_events, &switches, &variables, &party, &inventory, nx, ny);
-        if !blocked {
-            player.tile_x = nx;
-            player.tile_y = ny;
-            player.frame = (player.frame + 1) % 3;
-        }
-        // A player-touch event fires on the attempt to enter its tile — after a
-        // passable step onto it, or in place at a solid one (RM2000 doors/exits
-        // are solid). It fires only on input, never on the interpreter's own
-        // actions, so there's no re-trigger loop.
-        if let Some((id, page)) =
-            touch_page_at(&map_events, &switches, &variables, &party, &inventory, nx, ny)
-        {
-            running.start(id, page.commands.clone());
-        }
+        return;
+    };
+    // Finish the tile in flight before deciding the next one, so a step is one
+    // whole tile and facing doesn't flip mid-stride.
+    if queue.busy() {
+        return;
+    }
+    player.dir = dir;
+    let (nx, ny) = (player.tile_x + dx, player.tile_y + dy);
+    if nx < 0 || ny < 0 || nx >= data.width || ny >= data.height {
+        return;
+    }
+    let blocked = !data.passable(nx, ny)
+        || event_blocks_at(&map_events, &switches, &variables, &party, &inventory, nx, ny);
+    if !blocked {
+        queue.push_step(RouteAction::Step { dx, dy, face: dir });
+    }
+    // A player-touch event fires on the attempt to enter its tile — after a
+    // passable step onto it, or in place at a solid one (RM2000 doors/exits are
+    // solid). It fires only on input, never on the interpreter's own actions, so
+    // there's no re-trigger loop.
+    if let Some((id, page)) =
+        touch_page_at(&map_events, &switches, &variables, &party, &inventory, nx, ny)
+    {
+        running.start(id, page.commands.clone());
     }
 }
 
@@ -166,10 +223,17 @@ fn touch_page_at<'a>(
 
 fn update_player_sprite(
     data: Res<MapData>,
-    mut players: Query<(&Player, &mut Sprite, &mut Transform), Changed<Player>>,
+    asset_server: Res<AssetServer>,
+    mut players: Query<(&Player, &MoveQueue, &mut Sprite, &mut Transform), Changed<Player>>,
 ) {
-    for (player, mut sprite, mut transform) in &mut players {
-        let (sx, sy) = tiles::charset_source(PLAYER_INDEX, player.dir, player.frame);
+    for (player, queue, mut sprite, mut transform) in &mut players {
+        // While a step tweens, `walk` owns the sprite; here we only render the
+        // hero at rest (keyboard turns, teleport arrival, settled routes).
+        if queue.busy() {
+            continue;
+        }
+        sprite.image = asset_server.load(resolve_png("CharSet", &player.charset));
+        let (sx, sy) = tiles::charset_source(player.index, player.dir, player.frame);
         sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
         let (world_x, world_y) = data.tile_center(player.tile_x, player.tile_y);
         transform.translation.x = world_x;

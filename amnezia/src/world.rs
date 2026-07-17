@@ -10,6 +10,10 @@ use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN};
 use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::prelude::*;
 
+mod movement;
+
+pub use movement::{decode_route, walk, Character, MoveQueue, RouteAction};
+
 /// Developer start override. `None` uses the faithful LMT start (`start.ron`,
 /// the intro map_0005), whose autorun cutscene the interpreter now runs; set it
 /// to `Some(Start { .. })` to drop the hero onto a specific map/tile for testing
@@ -21,12 +25,16 @@ const DEV_START: Option<Start> = None;
 #[derive(Component)]
 pub struct MapScene;
 
-/// A rendered event NPC: its event id and current facing/frame/graphic. A
-/// running `MoveEvent` mutates this; [`update_event_sprites`] reflects the
-/// change onto the sprite.
+/// A rendered event NPC: its event id, live tile position, and current
+/// facing/frame/graphic. A running `MoveEvent` enqueues route steps that
+/// [`walk`] tweens across tiles (updating `tile_x`/`tile_y`), while
+/// [`update_event_sprites`] reflects facing/frame/graphic changes onto the
+/// sprite when the NPC is not mid-step.
 #[derive(Component)]
 pub struct EventSprite {
     pub id: u32,
+    pub tile_x: i32,
+    pub tile_y: i32,
     pub dir: u32,
     pub frame: u32,
     pub charset: String,
@@ -74,7 +82,10 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<WaterAnim>()
             .add_systems(Startup, setup)
-            .add_systems(Update, (update_event_sprites, animate_water));
+            .add_systems(
+                Update,
+                ((walk::<EventSprite>, update_event_sprites).chain(), animate_water),
+            );
     }
 }
 
@@ -189,15 +200,21 @@ pub fn load_map(
     let offset = (map.width as f32 * tiles::TILE / 2.0, map.height as f32 * tiles::TILE / 2.0);
 
     for (index, &id) in map.lower.iter().enumerate() {
+        // A star-flagged lower tile (roof/wall top/treetop painted on the ground
+        // layer) draws above the hero (z 4), the same rule the upper layer uses;
+        // ordinary ground stays at z 0 below everything.
+        let z = if tiles::above_hero_lower(id, &passages_down) { 4.0 } else { 0.0 };
         match tiles::lower_render(id) {
             tiles::LowerRender::Whole { src } => {
-                let tile = spawn_tile(commands, &chipset, src, index as i32, width, offset, 0.0);
+                let tile = spawn_tile(commands, &chipset, src, index as i32, width, offset, z);
                 if tiles::is_block_c(id) {
                     commands.entity(tile).insert(WaterCell { id });
                 }
             }
             tiles::LowerRender::Quarters(quarters) => {
-                spawn_lower_quarters(commands, &chipset, &quarters, id, index as i32, width, offset);
+                spawn_lower_quarters(
+                    commands, &chipset, &quarters, id, index as i32, width, offset, z,
+                );
             }
         }
     }
@@ -263,6 +280,7 @@ fn spawn_tile(
 /// the tile so the shape's edges and corners compose correctly. Quarters of an
 /// animated `BLOCK_A`/`BLOCK_B` water tile are tagged [`WaterQuarter`] so
 /// [`animate_water`] can scroll their source column.
+#[allow(clippy::too_many_arguments)]
 fn spawn_lower_quarters(
     commands: &mut Commands,
     chipset: &Handle<Image>,
@@ -271,6 +289,7 @@ fn spawn_lower_quarters(
     index: i32,
     width: i32,
     offset: (f32, f32),
+    z: f32,
 ) {
     let left = (index % width) as f32 * tiles::TILE - offset.0;
     let top = offset.1 - (index / width) as f32 * tiles::TILE;
@@ -289,7 +308,7 @@ fn spawn_lower_quarters(
                 custom_size: Some(Vec2::splat(tiles::QUARTER)),
                 ..default()
             },
-            Transform::from_xyz(world_x, world_y, 0.0),
+            Transform::from_xyz(world_x, world_y, z),
             MapScene,
         ));
         if tiles::is_ab_water(id) {
@@ -331,24 +350,27 @@ fn spawn_event_npc(
         Transform::from_xyz(world_x, world_y, tiles::character_z(event.y as i32)),
         EventSprite {
             id: event.id,
+            tile_x: event.x as i32,
+            tile_y: event.y as i32,
             dir: DIR_DOWN,
             frame: 1,
             charset: page.graphic_name.clone(),
             index: page.graphic_index,
         },
+        MoveQueue::default(),
         MapScene,
     ));
 }
 
-/// Re-render event NPCs whose facing/frame/graphic a running `MoveEvent`
-/// changed, reflecting the new charset sub-rect (and charset image) onto the
-/// sprite.
+/// Re-render event NPCs whose facing/frame/graphic changed, reflecting the new
+/// charset sub-rect (and charset image) onto the sprite. Skips NPCs mid-step:
+/// [`walk`] owns their rendering while a move tweens.
 fn update_event_sprites(
     asset_server: Res<AssetServer>,
-    mut sprites: Query<(&EventSprite, &mut Sprite), Changed<EventSprite>>,
+    mut sprites: Query<(&EventSprite, &MoveQueue, &mut Sprite), Changed<EventSprite>>,
 ) {
-    for (event, mut sprite) in &mut sprites {
-        if event.charset.is_empty() {
+    for (event, queue, mut sprite) in &mut sprites {
+        if event.charset.is_empty() || queue.busy() {
             continue;
         }
         sprite.image = asset_server.load(resolve_png("CharSet", &event.charset));
