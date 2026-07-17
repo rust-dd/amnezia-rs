@@ -16,6 +16,14 @@ impl Switches {
     pub fn set(&mut self, id: u32, value: bool) {
         self.0.insert(id, value);
     }
+    /// Every set switch as `(id, value)` pairs, for a save snapshot.
+    pub fn entries(&self) -> Vec<(u32, bool)> {
+        self.0.iter().map(|(&id, &value)| (id, value)).collect()
+    }
+    /// Replace all switches with a restored snapshot.
+    pub fn load(&mut self, entries: Vec<(u32, bool)>) {
+        self.0 = entries.into_iter().collect();
+    }
 }
 
 /// The game's integer variables, keyed by 1-based id (default 0).
@@ -28,6 +36,14 @@ impl Variables {
     }
     pub fn set(&mut self, id: u32, value: i32) {
         self.0.insert(id, value);
+    }
+    /// Every set variable as `(id, value)` pairs, for a save snapshot.
+    pub fn entries(&self) -> Vec<(u32, i32)> {
+        self.0.iter().map(|(&id, &value)| (id, value)).collect()
+    }
+    /// Replace all variables with a restored snapshot.
+    pub fn load(&mut self, entries: Vec<(u32, i32)>) {
+        self.0 = entries.into_iter().collect();
     }
 }
 
@@ -58,6 +74,14 @@ impl Party {
 impl Party {
     pub fn has(&self, actor_id: u32) -> bool {
         self.members.contains(&actor_id)
+    }
+    /// The roster as actor ids in join order, for a save snapshot.
+    pub fn snapshot(&self) -> Vec<u32> {
+        self.members.clone()
+    }
+    /// Replace the roster with a restored snapshot.
+    pub fn restore(&mut self, members: Vec<u32>) {
+        self.members = members;
     }
 }
 
@@ -94,6 +118,15 @@ impl Inventory {
     }
     pub fn gold(&self) -> i32 {
         self.gold
+    }
+    /// Item `(id, count)` pairs plus gold, for a save snapshot.
+    pub fn snapshot(&self) -> (Vec<(u32, u32)>, i32) {
+        (self.items.iter().map(|(&id, &count)| (id, count)).collect(), self.gold)
+    }
+    /// Replace items and gold with a restored snapshot.
+    pub fn restore(&mut self, items: Vec<(u32, u32)>, gold: i32) {
+        self.items = items.into_iter().collect();
+        self.gold = gold;
     }
 }
 

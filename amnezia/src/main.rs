@@ -13,6 +13,7 @@ mod events;
 mod font;
 mod interpreter;
 mod player;
+mod save;
 mod state;
 mod teleport;
 mod text;
@@ -44,6 +45,7 @@ fn main() -> AppExit {
             interpreter::InterpreterPlugin,
             audio::AudioPlugin,
             choice::ChoicePlugin,
+            save::SavePlugin,
             debug::DebugPlugin,
         ))
         .run()
