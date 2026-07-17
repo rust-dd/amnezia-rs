@@ -123,7 +123,7 @@ impl Foe {
 pub enum Command {
     Attack { target: usize },
     Skill { skill_id: u32, target: usize },
-    Item,
+    Item { item_id: u32 },
     Defend,
     Nothing,
 }
@@ -158,6 +158,9 @@ pub struct Battle {
     /// The skill table, looked up by id on a cast for its element, inflicted
     /// states, and heal-vs-damage scope.
     pub(super) skills: Vec<SkillDef>,
+    /// The item table, looked up by id when a member uses a medicine so its real
+    /// HP/SP recovery and status cures apply, rather than a flat placeholder heal.
+    pub(super) items: Vec<ItemDef>,
     /// The current battle round, counting from `1`, gating turn-numbered AI.
     pub round: u32,
     pub turn: usize,
@@ -273,6 +276,7 @@ impl Battle {
             attributes: attributes.to_vec(),
             states: states.to_vec(),
             skills: skills.to_vec(),
+            items: items.to_vec(),
             timer: Timer::from_seconds(RESOLVE_STEP_SECS, TimerMode::Repeating),
             log: vec![format!("{} rátok támad!", troop.name)],
             rng: seed | 1,

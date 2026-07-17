@@ -9,10 +9,6 @@ use super::logic;
 use super::model::{Action, Battle, Command, Phase, Source, rng_next};
 use amnezia_data::SkillDef;
 
-/// Flat HP a medicine item restores in v1. `ItemDef` carries no heal magnitude,
-/// so item potency is a documented constant rather than data-driven.
-const ITEM_HEAL: i32 = 100;
-
 /// The outcome of a party member's weapon strike: a clean miss, or a landed hit
 /// carrying the damage dealt and whether it critical'd (for the log line).
 enum Strike {
@@ -81,11 +77,7 @@ impl Battle {
                     None => return,
                 }
             }
-            (Source::Party(pi), Command::Item) => {
-                let f = &mut self.members[pi];
-                f.hp = (f.hp + ITEM_HEAL).min(f.max_hp);
-                format!("{} gyógyul +{}", f.name, ITEM_HEAL)
-            }
+            (Source::Party(pi), Command::Item { item_id }) => self.apply_item(pi, item_id),
             (Source::Party(pi), Command::Defend) => {
                 self.members[pi].defending = true;
                 format!("{} védekezik", self.members[pi].name)
@@ -296,6 +288,48 @@ impl Battle {
             }
         }
         lines
+    }
+
+    /// Apply item `item_id`'s effect to the using member `pi`. Choosing an ally
+    /// target is a deferred slice, so an item self-applies to its user for now:
+    /// restore HP and SP by the item's flat amount plus its percent-of-maximum
+    /// (each clamped to the maximum) and cure each of its `cure_states`. The item
+    /// was already consumed from the inventory when the order was committed, so an
+    /// unknown id or an item with no restorative effect still logs a use line.
+    fn apply_item(&mut self, pi: usize, item_id: u32) -> String {
+        let name = self.members[pi].name.clone();
+        let Some(item) = self.items.iter().find(|i| i.id == item_id).cloned() else {
+            return format!("{name} használ");
+        };
+        let (max_hp, max_sp) = (self.members[pi].max_hp, self.members[pi].max_sp);
+        let hp_gain = item.recover_hp as i32 + max_hp * item.recover_hp_rate as i32 / 100;
+        let sp_gain = item.recover_sp as i32 + max_sp * item.recover_sp_rate as i32 / 100;
+        if hp_gain > 0 {
+            self.members[pi].hp = (self.members[pi].hp + hp_gain).min(max_hp);
+        }
+        if sp_gain > 0 {
+            self.members[pi].sp = (self.members[pi].sp + sp_gain).min(max_sp);
+        }
+        let mut cured: Vec<String> = Vec::new();
+        for &sid in &item.cure_states {
+            if logic::has_state(&self.members[pi].states, sid) {
+                logic::cure(&mut self.members[pi].states, sid);
+                if let Some(state) = self.states.iter().find(|s| s.id == sid) {
+                    cured.push(state.name.clone());
+                }
+            }
+        }
+        let gain = match (hp_gain > 0, sp_gain > 0) {
+            (true, true) => format!(" (+{hp_gain} HP, +{sp_gain} SP)"),
+            (true, false) => format!(" (+{hp_gain} HP)"),
+            (false, true) => format!(" (+{sp_gain} SP)"),
+            (false, false) => String::new(),
+        };
+        let mut lines = vec![format!("{name} használ: {}{gain}", item.name)];
+        for state_name in cured {
+            lines.push(format!("{name} gyógyul: {state_name}"));
+        }
+        lines.join("\n")
     }
 
     /// Choose living enemy `i`'s action for the coming round. A status restriction
@@ -923,5 +957,66 @@ mod tests {
         battle.commit(Command::Defend); // member 1 (free) finishes the round
         while battle.resolve_next() {}
         assert!(battle.members[1].hp < ally_hp);
+    }
+
+    fn medicine(
+        id: u32,
+        recover_hp: u32,
+        recover_sp: u32,
+        cure_states: Vec<u32>,
+    ) -> amnezia_data::ItemDef {
+        amnezia_data::ItemDef {
+            id,
+            name: "Gyógyfű".into(),
+            description: String::new(),
+            item_type: 6,
+            price: 0,
+            recover_hp,
+            recover_hp_rate: 0,
+            recover_sp,
+            recover_sp_rate: 0,
+            cure_states,
+            scope: 0,
+            only_field: false,
+            uses: 0,
+            atk: 0,
+            def: 0,
+            spi: 0,
+            agi: 0,
+            attribute_defense: vec![],
+            state_defense: vec![],
+            two_handed: false,
+            hit: 0,
+            crit: 0,
+            weapon_animation: 0,
+        }
+    }
+
+    #[test]
+    fn a_recover_hp_item_raises_the_users_hp_clamped_to_max() {
+        let mut battle = build_1v2();
+        let max = battle.members[0].max_hp;
+        // A flat +20 raises a wounded user by exactly 20.
+        battle.items = vec![medicine(50, 20, 0, vec![])];
+        battle.members[0].hp = 10;
+        let line = battle.apply_item(0, 50);
+        assert_eq!(battle.members[0].hp, 30);
+        assert!(line.contains("+20 HP"));
+        // A heal that overshoots the maximum clamps to it.
+        battle.members[0].hp = max - 5;
+        battle.items = vec![medicine(51, 200, 0, vec![])];
+        battle.apply_item(0, 51);
+        assert_eq!(battle.members[0].hp, max);
+    }
+
+    #[test]
+    fn a_cure_states_item_lifts_that_state_from_the_user() {
+        let mut battle = build_1v2();
+        battle.states = vec![poison_state(3)];
+        battle.members[0].states = vec![(3, 0)];
+        battle.items = vec![medicine(60, 0, 0, vec![3])];
+        let line = battle.apply_item(0, 60);
+        assert!(!logic::has_state(&battle.members[0].states, 3));
+        assert!(line.contains("gyógyul"));
     }
 }

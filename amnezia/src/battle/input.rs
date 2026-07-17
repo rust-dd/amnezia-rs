@@ -113,7 +113,7 @@ fn item_menu(
         && let Some(&(id, _)) = choices.get(battle.cursor)
     {
         inventory.remove_item(id, 1);
-        battle.commit(Command::Item);
+        battle.commit(Command::Item { item_id: id });
     }
 }
 
@@ -200,4 +200,61 @@ fn any_key(keys: &ButtonInput<KeyCode>) -> bool {
 /// The action key: Space or Enter, as the dialogue and shop boxes use.
 fn confirm(keys: &ButtonInput<KeyCode>) -> bool {
     keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::model::testkit::build_1v2;
+    use super::*;
+    use amnezia_data::ItemDef;
+
+    fn medicine(id: u32) -> ItemDef {
+        ItemDef {
+            id,
+            name: "Gyógyfű".into(),
+            description: String::new(),
+            item_type: MEDICINE,
+            price: 0,
+            recover_hp: 50,
+            recover_hp_rate: 0,
+            recover_sp: 0,
+            recover_sp_rate: 0,
+            cure_states: vec![],
+            scope: 0,
+            only_field: false,
+            uses: 0,
+            atk: 0,
+            def: 0,
+            spi: 0,
+            agi: 0,
+            attribute_defense: vec![],
+            state_defense: vec![],
+            two_handed: false,
+            hit: 0,
+            crit: 0,
+            weapon_animation: 0,
+        }
+    }
+
+    #[test]
+    fn committing_an_item_emits_its_id_and_consumes_one() {
+        let data = GameData {
+            actors: vec![],
+            items: vec![medicine(50)],
+            skills: vec![],
+        };
+        let mut inventory = Inventory::default();
+        inventory.add_item(50, 2);
+        let mut battle = build_1v2();
+        battle.menu = MenuLevel::Item;
+        battle.cursor = 0;
+        let mut keys = ButtonInput::<KeyCode>::default();
+        keys.press(KeyCode::Enter);
+        item_menu(&keys, &data, &mut inventory, &mut battle);
+        assert_eq!(inventory.count(50), 1); // one of the two consumed
+        assert!(matches!(
+            battle.members[0].command,
+            Some(Command::Item { item_id: 50 })
+        ));
+    }
 }
