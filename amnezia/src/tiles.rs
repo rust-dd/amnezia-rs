@@ -99,6 +99,18 @@ pub fn above_hero(upper_id: u16, passages_up: &[u8]) -> bool {
         .is_some_and(|byte| byte & ABOVE_HERO_BIT != 0)
 }
 
+/// Whether a LOWER-layer tile carries the "above hero" (star) flag in its
+/// `passages_down` byte and must therefore draw above the hero — roof surfaces,
+/// wall tops, treetops, and cliff overhangs are painted on the ground layer yet
+/// occlude the hero as they pass behind them. RM2000's star flag applies to both
+/// layers; the game only honoured it on the upper layer before, so these tiles
+/// wrongly drew under the hero. Indexes `passages_down` the way [`passable`] does.
+pub fn above_hero_lower(lower_id: u16, passages_down: &[u8]) -> bool {
+    passages_lower_index(lower_id)
+        .and_then(|i| passages_down.get(i))
+        .is_some_and(|byte| byte & ABOVE_HERO_BIT != 0)
+}
+
 /// The `passages` "wall" bit; a BLOCK_D autotile with this set is a wall whose
 /// walk-on shapes (edges/thresholds) the hero can still cross.
 const WALL_BIT: u8 = 0x20;
@@ -185,6 +197,18 @@ mod tests {
         assert!(!above_hero(10000, &up)); // the empty upper tile is never above
         assert!(!above_hero(9999, &up)); // below the upper-layer id range
         assert!(!above_hero(10144, &up)); // index past the array defaults to not-above
+    }
+
+    #[test]
+    fn above_hero_lower_reads_the_star_bit_on_ground_tiles() {
+        let mut down = vec![0x0F; 162];
+        // BLOCK_E index for id 5075 is (5075-5000)+18 = 93 (a roof surface).
+        down[93] = 0x1F; // 0x0F | 0x10: passable ground tile flagged to draw above the hero
+        down[94] = 0x0F; // ordinary passable ground, at/below the hero
+        assert!(above_hero_lower(5075, &down));
+        assert!(!above_hero_lower(5076, &down));
+        // A plain grass tile (index 0) with no star bit is never above-hero.
+        assert!(!above_hero_lower(0, &down));
     }
 
     #[test]
