@@ -27,6 +27,11 @@ const SAVE_PATH: &str = "saves/slot1.ron";
 #[derive(Resource, Default)]
 pub struct LoadRequest(pub bool);
 
+/// A request to save, honoured by [`save_or_load`] as if `F5` had been pressed.
+/// The in-game menu's Save action sets it, reusing the same snapshot path.
+#[derive(Resource, Default)]
+pub struct SaveRequest(pub bool);
+
 /// Whether the single save slot exists on disk, for the title's Continue gate.
 pub fn save_slot_exists() -> bool {
     slot_exists(SAVE_PATH)
@@ -58,6 +63,7 @@ pub struct SavePlugin;
 impl Plugin for SavePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<LoadRequest>()
+            .init_resource::<SaveRequest>()
             .add_systems(Update, save_or_load);
     }
 }
@@ -78,10 +84,12 @@ fn save_or_load(
     mut inventory: ResMut<Inventory>,
     mut pending: ResMut<PendingTeleport>,
     mut load_request: ResMut<LoadRequest>,
+    mut save_request: ResMut<SaveRequest>,
     mut players: Query<&mut Player>,
 ) {
-    let save = keys.just_pressed(KeyCode::F5);
+    let save = keys.just_pressed(KeyCode::F5) || save_request.0;
     let load = keys.just_pressed(KeyCode::F9) || load_request.0;
+    save_request.0 = false;
     if (!save && !load) || dialogue.active || fade.busy() || running.active() {
         return;
     }

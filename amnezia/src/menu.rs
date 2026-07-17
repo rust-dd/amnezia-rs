@@ -8,6 +8,7 @@
 use crate::battle::BattleActive;
 use crate::font::GameFont;
 use crate::gamedata::GameData;
+use crate::save::SaveRequest;
 use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party};
 use crate::title::TitleActive;
@@ -131,6 +132,7 @@ fn menu_input(
     title: Res<TitleActive>,
     mut open: ResMut<MenuOpen>,
     mut state: ResMut<MenuState>,
+    mut save_request: ResMut<SaveRequest>,
 ) {
     // A shop, battle, or the title screen owns the input while up, so the menu
     // can't open over it.
@@ -146,6 +148,10 @@ fn menu_input(
     }
     if !open.0 {
         return;
+    }
+    // Save the game from the menu (the F5 path); the save module honours it.
+    if keys.just_pressed(KeyCode::KeyS) {
+        save_request.0 = true;
     }
     if keys.just_pressed(KeyCode::ArrowRight) {
         state.tab = (state.tab + 1) % TABS.len();
@@ -259,7 +265,7 @@ fn compose(tab: usize, cursor: usize, rows: &[String]) -> String {
         .collect::<Vec<_>>()
         .join("   ");
     let start = viewport_start(cursor, rows.len());
-    let mut out = format!("{header}\n\n");
+    let mut out = format!("{header}          [S] Mentés\n\n");
     for (i, row) in rows.iter().enumerate().skip(start).take(VISIBLE_ROWS) {
         out.push_str(if i == cursor { "▶ " } else { "  " });
         out.push_str(row);
