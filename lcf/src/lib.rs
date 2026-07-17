@@ -9,15 +9,15 @@
 //!
 //! Parsing is split by file: [`map`] handles map units and the map tree, and
 //! [`database`] handles the `RPG_RT.ldb` chipset, actor, skill, item, monster,
-//! and troop tables.
+//! troop, attribute, and state tables.
 
 mod database;
 mod map;
 
 pub use database::{
-    Actor, Chipset, CommonEvent, Item, Monster, Skill, StatCurves, Troop, TroopMember,
-    parse_actors, parse_chipsets, parse_common_events, parse_items, parse_monsters, parse_skills,
-    parse_troops,
+    Actor, Attribute, Chipset, CommonEvent, Item, Monster, Skill, StatCurves, State, Troop,
+    TroopMember, parse_actors, parse_attributes, parse_chipsets, parse_common_events, parse_items,
+    parse_monsters, parse_skills, parse_states, parse_troops,
 };
 pub use map::{
     Event, EventCommand, EventCondition, EventPage, MapUnit, Start, parse_map, parse_start,
@@ -50,6 +50,10 @@ pub enum LcfError {
     MissingMonsters,
     #[error("LCF database has no troop section (chunk 0x0F)")]
     MissingTroops,
+    #[error("LCF database has no attribute section (chunk 0x11)")]
+    MissingAttributes,
+    #[error("LCF database has no state section (chunk 0x12)")]
+    MissingStates,
     #[error("LCF database has no common event section (chunk 0x19)")]
     MissingCommonEvents,
 }

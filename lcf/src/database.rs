@@ -1,22 +1,26 @@
 //! Database (`RPG_RT.ldb`) parsing: the chipset, actor, skill, item, monster,
-//! and troop definition tables. Every section shares the LDB struct-list shape — a
-//! `[count]` header then per entry a 1-based id followed by a chunk stream
-//! (terminated by id 0). Chunk ids follow EasyRPG/liblcf
-//! `src/generated/lcf/ldb/chunks.h`.
+//! troop, attribute (element), and state (status condition) definition tables.
+//! Every section shares the LDB struct-list shape — a `[count]` header then per
+//! entry a 1-based id followed by a chunk stream (terminated by id 0). Chunk ids
+//! follow EasyRPG/liblcf `src/generated/lcf/ldb/chunks.h`.
 
 use crate::LcfError;
 use crate::{Reader, decode_cp1250};
 
 mod actors;
+mod attributes;
 mod common_events;
 mod monsters;
 mod skills;
+mod states;
 mod troops;
 
 pub use actors::{Actor, StatCurves, parse_actors};
+pub use attributes::{Attribute, parse_attributes};
 pub use common_events::{CommonEvent, parse_common_events};
 pub use monsters::{Monster, parse_monsters};
 pub use skills::{Skill, parse_skills};
+pub use states::{State, parse_states};
 pub use troops::{Troop, TroopMember, parse_troops};
 
 /// Locate one top-level LDB section (`ChunkData`) by id, returning its raw
