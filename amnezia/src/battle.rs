@@ -25,7 +25,7 @@ use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 use crate::vitals::Vitals;
-use amnezia_data::{ActorDef, MonsterDef, TroopDef};
+use amnezia_data::{ActorDef, AttributeDef, MonsterDef, StateDef, TroopDef};
 use bevy::prelude::*;
 use model::{Battle, Phase};
 
@@ -66,6 +66,12 @@ pub struct BattleResult(pub Option<BattleOutcome>);
 struct BattleData {
     monsters: Vec<MonsterDef>,
     troops: Vec<TroopDef>,
+    /// The attribute (element) and state tables, loaded for the elemental and
+    /// status resolution that lands separately.
+    #[allow(dead_code)]
+    attributes: Vec<AttributeDef>,
+    #[allow(dead_code)]
+    states: Vec<StateDef>,
 }
 
 pub struct BattlePlugin;
@@ -80,6 +86,8 @@ impl Plugin for BattlePlugin {
             .insert_resource(BattleData {
                 monsters: load_ron(&format!("{}/monsters.ron", asset_root())),
                 troops: load_ron(&format!("{}/troops.ron", asset_root())),
+                attributes: load_ron(&format!("{}/attributes.ron", asset_root())),
+                states: load_ron(&format!("{}/states.ron", asset_root())),
             })
             .add_systems(
                 Update,
@@ -131,6 +139,7 @@ fn start_on_request(
         troop,
         &battle_data.monsters,
         &actors,
+        &data.items,
         &vitals,
         &progression,
         BACKDROP.to_string(),
@@ -280,6 +289,8 @@ mod tests {
                     y: 100,
                 }],
             }],
+            attributes: vec![],
+            states: vec![],
         });
         app.init_resource::<Party>();
         app.init_resource::<Inventory>();

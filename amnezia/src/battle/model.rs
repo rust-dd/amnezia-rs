@@ -11,7 +11,7 @@ use super::BattleOutcome;
 use super::logic::{self, Stats};
 use crate::progression::Progression;
 use crate::vitals::Vitals;
-use amnezia_data::{ActorDef, MonsterDef, TroopDef};
+use amnezia_data::{ActorDef, ItemDef, MonsterDef, TroopDef};
 use bevy::prelude::*;
 
 /// Seconds between two resolved actions, so the log and damage read at a human
@@ -53,6 +53,15 @@ pub struct Fighter {
     pub stats: Stats,
     pub defending: bool,
     pub command: Option<Command>,
+    /// The equipped weapon's hit and crit rates (percent) and its element id,
+    /// captured at build time for the to-hit / critical / elemental resolution
+    /// that lands separately. Empty-handed leaves them `0` / `0` / `None`.
+    #[allow(dead_code)]
+    pub weapon_hit: u32,
+    #[allow(dead_code)]
+    pub weapon_crit: u32,
+    #[allow(dead_code)]
+    pub weapon_element: Option<u32>,
 }
 
 impl Fighter {
@@ -72,11 +81,30 @@ pub struct Foe {
     pub gold: u32,
     pub x: u32,
     pub y: u32,
+    /// This foe's per-attribute damage ranks (0=A … 4=E), copied from its
+    /// `MonsterDef`. The vector is truncated, so ids past its end read neutral C.
+    #[allow(dead_code)]
+    pub attribute_ranks: Vec<u8>,
+    /// This foe's per-state affliction ranks, copied from its `MonsterDef`, for
+    /// the status-infliction chance that lands separately.
+    #[allow(dead_code)]
+    pub state_ranks: Vec<u8>,
 }
 
 impl Foe {
     pub fn alive(&self) -> bool {
         self.hp > 0
+    }
+
+    /// This foe's damage rank (0=A … 4=E) against attribute `attr_id`. Ids past
+    /// the truncated `attribute_ranks` vector — and the non-elemental id `0` —
+    /// read neutral C (`2`).
+    #[allow(dead_code)]
+    pub fn attribute_rank(&self, attr_id: u32) -> u8 {
+        attr_id
+            .checked_sub(1)
+            .and_then(|i| self.attribute_ranks.get(i as usize).copied())
+            .unwrap_or(2)
     }
 }
 
@@ -150,10 +178,12 @@ impl Battle {
     /// Assemble a fresh encounter: instantiate each troop member as a live
     /// [`Foe`], each party actor as a live [`Fighter`] (HP/SP from `vitals`, or
     /// full on a first fight), and enter the command phase.
+    #[allow(clippy::too_many_arguments)]
     pub fn build(
         troop: &TroopDef,
         monsters: &[MonsterDef],
         actors: &[&ActorDef],
+        items: &[ItemDef],
         vitals: &Vitals,
         progression: &Progression,
         background: String,
@@ -172,6 +202,8 @@ impl Battle {
                     gold: d.gold,
                     x: m.x,
                     y: m.y,
+                    attribute_ranks: d.attribute_ranks.clone(),
+                    state_ranks: d.state_ranks.clone(),
                 })
             })
             .collect();
@@ -187,6 +219,16 @@ impl Battle {
                     Some((h, s)) => (h.min(max_hp), s.min(max_sp)),
                     None => (max_hp, max_sp),
                 };
+                let mut stats = logic::actor_stats_at(&a.curves, level);
+                let bonus = logic::equipment_bonus(a, items);
+                stats.attack += bonus.attack;
+                stats.defense += bonus.defense;
+                stats.spirit += bonus.spirit;
+                stats.agility += bonus.agility;
+                // The equipped weapon lends its hit, crit, and first element for
+                // later resolution; id `0` matches no real item, so an empty
+                // weapon slot resolves to `None`.
+                let weapon = items.iter().find(|i| i.id == a.weapon);
                 Fighter {
                     actor_id: a.id,
                     name: a.name.clone(),
@@ -194,9 +236,12 @@ impl Battle {
                     max_hp,
                     sp,
                     max_sp,
-                    stats: logic::actor_stats_at(&a.curves, level),
+                    stats,
                     defending: false,
                     command: None,
+                    weapon_hit: weapon.map_or(0, |w| w.hit),
+                    weapon_crit: weapon.map_or(0, |w| w.crit),
+                    weapon_element: weapon.and_then(|w| w.attribute_defense.first().copied()),
                 }
             })
             .collect();
@@ -367,6 +412,34 @@ pub(super) mod testkit {
         }
     }
 
+    pub fn item(id: u32, atk: u32, def: u32, hit: u32, crit: u32, element: u32) -> ItemDef {
+        ItemDef {
+            id,
+            name: String::new(),
+            description: String::new(),
+            item_type: 1,
+            price: 0,
+            recover_hp: 0,
+            recover_hp_rate: 0,
+            recover_sp: 0,
+            recover_sp_rate: 0,
+            cure_states: vec![],
+            scope: 0,
+            only_field: false,
+            uses: 0,
+            atk,
+            def,
+            spi: 0,
+            agi: 0,
+            attribute_defense: if element == 0 { vec![] } else { vec![element] },
+            state_defense: vec![],
+            two_handed: false,
+            hit,
+            crit,
+            weapon_animation: 0,
+        }
+    }
+
     pub fn troop(members: &[(u32, u32, u32)]) -> TroopDef {
         TroopDef {
             id: 1,
@@ -388,6 +461,7 @@ pub(super) mod testkit {
             &troop,
             &monsters,
             &actors,
+            &[],
             &Vitals::default(),
             &Progression::default(),
             "Cave1".into(),
@@ -432,6 +506,7 @@ mod tests {
             &troop,
             &monsters,
             &actors,
+            &[],
             &Vitals::default(),
             &Progression::default(),
             "Cave1".into(),
@@ -453,5 +528,49 @@ mod tests {
         assert!(battle.members[0].command.is_none());
         assert!(!battle.members[0].defending);
         assert!(battle.phase == Phase::Command);
+    }
+
+    #[test]
+    fn build_adds_equipment_bonuses_and_captures_the_weapon() {
+        let mut ron = testkit::actor(1, 1, 50, 10);
+        ron.weapon = 1;
+        ron.armor = 2;
+        let actors = vec![&ron];
+        let items = vec![
+            testkit::item(1, 10, 0, 85, 5, 4), // weapon: +10 atk, hit 85, crit 5, element 4
+            testkit::item(2, 0, 20, 0, 0, 0),  // armor: +20 def, no weapon fields
+        ];
+        let monsters = vec![testkit::monster(1, 30, 10, 30)];
+        let troop = testkit::troop(&[(1, 100, 100)]);
+        let prog = Progression::default();
+        let base = logic::actor_stats_at(&ron.curves, prog.level(&ron));
+        let battle = Battle::build(
+            &troop,
+            &monsters,
+            &actors,
+            &items,
+            &Vitals::default(),
+            &prog,
+            "Cave1".into(),
+            1,
+        );
+        let f = &battle.members[0];
+        assert_eq!(f.stats.attack, base.attack + 10);
+        assert_eq!(f.stats.defense, base.defense + 20);
+        assert_eq!(f.weapon_hit, 85);
+        assert_eq!(f.weapon_crit, 5);
+        assert_eq!(f.weapon_element, Some(4));
+    }
+
+    #[test]
+    fn foe_attribute_rank_reads_the_vector_then_defaults_to_neutral_c() {
+        let mut battle = build_1v2();
+        battle.enemies[0].attribute_ranks = vec![0, 2, 4]; // attrs 1,2,3 -> A, C, E
+        let foe = &battle.enemies[0];
+        assert_eq!(foe.attribute_rank(1), 0); // A
+        assert_eq!(foe.attribute_rank(2), 2); // C
+        assert_eq!(foe.attribute_rank(3), 4); // E
+        assert_eq!(foe.attribute_rank(4), 2); // past the truncated vector -> C
+        assert_eq!(foe.attribute_rank(0), 2); // non-elemental id -> C
     }
 }

@@ -405,8 +405,8 @@ fn run_interpreter(
                 if op == 3 {
                     subsystems.camera_pan.target = Vec2::ZERO;
                 } else if op == 2 {
-                    let dist =
-                        command.params.get(2).copied().unwrap_or(0).max(0) as f32 * crate::tiles::TILE;
+                    let dist = command.params.get(2).copied().unwrap_or(0).max(0) as f32
+                        * crate::tiles::TILE;
                     let speed = command.params.get(3).copied().unwrap_or(4).max(1) as f32;
                     let delta = match command.params.get(1).copied().unwrap_or(0) {
                         0 => Vec2::new(0.0, dist),

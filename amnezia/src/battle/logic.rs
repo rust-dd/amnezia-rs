@@ -3,7 +3,7 @@
 //! filter. Kept free of Bevy and of the live battle state so every rule is
 //! unit-testable in isolation; the battle systems are thin wrappers over these.
 
-use amnezia_data::{ActorCurves, MonsterDef, SkillDef};
+use amnezia_data::{ActorCurves, ActorDef, AttributeDef, ItemDef, MonsterDef, SkillDef};
 
 /// A combatant's four battle stats. Enemies read them straight from their
 /// [`MonsterDef`]; party members, whose `ActorDef` carries only a level, get
@@ -76,6 +76,33 @@ pub fn actor_hp_sp_at(
     (hp, sp)
 }
 
+/// The stat bonus an actor's five equipment slots (weapon, shield, armor, helmet,
+/// accessory) add on top of the curve-derived base: the summed `atk`/`def`/`spi`/
+/// `agi` of each equipped item. Empty slots (id `0`) and ids absent from `items`
+/// contribute nothing.
+pub fn equipment_bonus(actor: &ActorDef, items: &[ItemDef]) -> Stats {
+    let slots = [
+        actor.weapon,
+        actor.shield,
+        actor.armor,
+        actor.helmet,
+        actor.accessory,
+    ];
+    let mut bonus = Stats::default();
+    for id in slots {
+        if id == 0 {
+            continue;
+        }
+        if let Some(item) = items.iter().find(|i| i.id == id) {
+            bonus.attack += item.atk;
+            bonus.defense += item.def;
+            bonus.spirit += item.spi;
+            bonus.agility += item.agi;
+        }
+    }
+    bonus
+}
+
 /// RM2000-style physical damage: half the attacker's attack, less a quarter of
 /// the defender's defense, never below zero.
 pub fn physical_damage(attack: u32, defense: u32) -> i32 {
@@ -90,6 +117,45 @@ pub fn skill_damage(power: u32, spirit: u32, target_spirit: u32) -> i32 {
         return 0;
     }
     (power as i32 + spirit as i32 / 2 - target_spirit as i32 / 4).max(1)
+}
+
+/// The RM2000 damage percent for `rank` (0=A … 4=E) from an attribute's own A–E
+/// rate table. A weak rank yields >100%, a resist rank <100% (E often 0). A rank
+/// past E clamps to the E rate.
+#[allow(dead_code)]
+pub fn attribute_percent(attr: &AttributeDef, rank: u8) -> u32 {
+    match rank {
+        0 => attr.a_rate,
+        1 => attr.b_rate,
+        2 => attr.c_rate,
+        3 => attr.d_rate,
+        _ => attr.e_rate,
+    }
+}
+
+/// Scale `base` damage by the target's resistance to `attr_id` (100% = unchanged).
+/// A non-elemental hit (`attr_id == 0`) or an unknown id leaves `base` untouched;
+/// otherwise the target's A–E rank for that attribute (neutral C when the id falls
+/// past the truncated `target_ranks` vector) picks the percentage. The elemental
+/// resolution that consumes this lands separately.
+#[allow(dead_code)]
+pub fn elemental_damage(
+    base: i32,
+    attr_id: u32,
+    target_ranks: &[u8],
+    attributes: &[AttributeDef],
+) -> i32 {
+    if attr_id == 0 {
+        return base;
+    }
+    let Some(attr) = attributes.iter().find(|a| a.id == attr_id) else {
+        return base;
+    };
+    let rank = target_ranks
+        .get((attr_id - 1) as usize)
+        .copied()
+        .unwrap_or(2);
+    (base * attribute_percent(attr, rank) as i32 / 100).max(0)
 }
 
 /// Spread a base damage by ±10% from a `roll` in `0..=20` (10 = no change), so
@@ -182,6 +248,47 @@ mod tests {
             absorb: false,
             attributes: vec![],
             affected_states: vec![],
+        }
+    }
+
+    fn gear(id: u32, atk: u32, def: u32, spi: u32, agi: u32) -> ItemDef {
+        ItemDef {
+            id,
+            name: String::new(),
+            description: String::new(),
+            item_type: 1,
+            price: 0,
+            recover_hp: 0,
+            recover_hp_rate: 0,
+            recover_sp: 0,
+            recover_sp_rate: 0,
+            cure_states: vec![],
+            scope: 0,
+            only_field: false,
+            uses: 0,
+            atk,
+            def,
+            spi,
+            agi,
+            attribute_defense: vec![],
+            state_defense: vec![],
+            two_handed: false,
+            hit: 0,
+            crit: 0,
+            weapon_animation: 0,
+        }
+    }
+
+    fn attr(id: u32, a: u32, b: u32, c: u32, d: u32, e: u32) -> AttributeDef {
+        AttributeDef {
+            id,
+            name: String::new(),
+            attribute_type: 0,
+            a_rate: a,
+            b_rate: b,
+            c_rate: c,
+            d_rate: d,
+            e_rate: e,
         }
     }
 
@@ -295,5 +402,59 @@ mod tests {
         let usable = usable_skills(&skills, 40);
         assert_eq!(usable.len(), 1);
         assert_eq!(usable[0].id, 1);
+    }
+
+    #[test]
+    fn equipment_bonus_sums_only_the_equipped_gear() {
+        use super::super::model::testkit::actor;
+        let items = vec![
+            gear(1, 10, 5, 0, 2),    // weapon
+            gear(2, 0, 20, 4, 1),    // armor
+            gear(9, 99, 99, 99, 99), // in the catalogue but not equipped
+        ];
+        let mut a = actor(1, 2, 60, 30);
+        a.weapon = 1;
+        a.armor = 2; // shield/helmet/accessory stay 0 (empty slots)
+        assert_eq!(
+            equipment_bonus(&a, &items),
+            Stats {
+                attack: 10,
+                defense: 25,
+                spirit: 4,
+                agility: 3,
+            }
+        );
+        // Empty and unknown ids add nothing.
+        a.weapon = 0;
+        a.armor = 0;
+        a.helmet = 777;
+        assert_eq!(equipment_bonus(&a, &items), Stats::default());
+    }
+
+    #[test]
+    fn attribute_percent_maps_ranks_a_through_e() {
+        let fire = attr(5, 200, 150, 100, 50, 0);
+        assert_eq!(attribute_percent(&fire, 0), 200); // A, most vulnerable
+        assert_eq!(attribute_percent(&fire, 1), 150); // B
+        assert_eq!(attribute_percent(&fire, 2), 100); // C, neutral
+        assert_eq!(attribute_percent(&fire, 3), 50); // D
+        assert_eq!(attribute_percent(&fire, 4), 0); // E, immune
+        assert_eq!(attribute_percent(&fire, 9), 0); // past E clamps to E
+    }
+
+    #[test]
+    fn elemental_damage_amplifies_weak_reduces_resist_and_passes_through() {
+        // attr 5 (fire): weak A doubles, resist E zeroes; attr 6 (ice): resist E halves.
+        let attrs = vec![
+            attr(5, 200, 150, 100, 50, 0),
+            attr(6, 200, 150, 100, 50, 50),
+        ];
+        let ranks = [0u8, 0, 0, 0, 0, 4]; // fire -> A (weak), ice -> E (resist)
+        assert_eq!(elemental_damage(100, 5, &ranks, &attrs), 200); // weak amplifies
+        assert_eq!(elemental_damage(100, 6, &ranks, &attrs), 50); // resist reduces
+        assert_eq!(elemental_damage(100, 0, &ranks, &attrs), 100); // non-elemental unchanged
+        assert_eq!(elemental_damage(100, 42, &ranks, &attrs), 100); // unknown id -> unchanged
+        // An id past the truncated rank vector reads neutral C (100%).
+        assert_eq!(elemental_damage(80, 6, &[0], &attrs), 80);
     }
 }
