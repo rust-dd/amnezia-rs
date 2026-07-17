@@ -30,6 +30,17 @@ pub enum ShopRequest {
 #[derive(Resource, Default)]
 pub struct ShopOpen(pub bool);
 
+/// Whether the player actually bought or sold while the shop was open. Reset to
+/// `false` each time a merchant screen opens and set `true` on the first
+/// successful trade, so the interpreter can pick the Transaction / NoTransaction
+/// branch after the shop closes.
+#[derive(Resource, Default)]
+pub struct ShopOutcome {
+    /// Read by the interpreter's shop-branch arm, which lands separately.
+    #[allow(dead_code)]
+    pub transacted: bool,
+}
+
 /// What the merchant overlay is currently showing.
 #[derive(Resource, Default)]
 enum Screen {
@@ -65,6 +76,7 @@ impl Plugin for ShopPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<ShopRequest>()
             .init_resource::<ShopOpen>()
+            .init_resource::<ShopOutcome>()
             .init_resource::<Screen>()
             .add_systems(Startup, spawn_ui)
             .add_systems(
@@ -90,6 +102,7 @@ fn open_requests(
     mut requests: MessageReader<ShopRequest>,
     mut screen: ResMut<Screen>,
     mut open: ResMut<ShopOpen>,
+    mut outcome: ResMut<ShopOutcome>,
 ) {
     for request in requests.read() {
         *screen = match request {
@@ -105,6 +118,7 @@ fn open_requests(
             },
         };
         open.0 = true;
+        outcome.transacted = false;
     }
 }
 
@@ -117,6 +131,7 @@ fn shop_input(
     mut vitals: ResMut<Vitals>,
     mut screen: ResMut<Screen>,
     mut open: ResMut<ShopOpen>,
+    mut outcome: ResMut<ShopOutcome>,
 ) {
     if matches!(*screen, Screen::Closed) || !any_menu_key(&keys) {
         return;
@@ -128,7 +143,15 @@ fn shop_input(
             items,
             mode,
             cursor,
-        } => shop_step(&keys, &data, &mut inventory, items, mode, cursor),
+        } => shop_step(
+            &keys,
+            &data,
+            &mut inventory,
+            items,
+            mode,
+            cursor,
+            &mut outcome,
+        ),
         Screen::Inn { cost, yes, done } => {
             inn_step(&keys, &mut inventory, &mut vitals, *cost, yes, done)
         }
@@ -149,6 +172,7 @@ fn shop_step(
     items: &[u32],
     mode: &mut Mode,
     cursor: &mut usize,
+    outcome: &mut ShopOutcome,
 ) -> bool {
     if keys.just_pressed(KeyCode::Escape) {
         return false;
@@ -170,8 +194,9 @@ fn shop_step(
     }
     if confirm(keys)
         && let Some(&(id, _)) = entries.get(*cursor)
+        && apply_trade(*mode, id, data, inventory)
     {
-        apply_trade(*mode, id, data, inventory);
+        outcome.transacted = true;
     }
     true
 }
@@ -211,10 +236,12 @@ fn inn_step(
     true
 }
 
-/// Apply a buy or sell of item `id` against the live gold and inventory.
-fn apply_trade(mode: Mode, id: u32, data: &GameData, inventory: &mut Inventory) {
+/// Apply a buy or sell of item `id` against the live gold and inventory,
+/// returning whether the trade actually happened (afforded when buying, held
+/// when selling) so the caller can flag the shop's [`ShopOutcome`].
+fn apply_trade(mode: Mode, id: u32, data: &GameData, inventory: &mut Inventory) -> bool {
     let Some(item) = data.item(id) else {
-        return;
+        return false;
     };
     match mode {
         Mode::Buy => {
@@ -222,13 +249,17 @@ fn apply_trade(mode: Mode, id: u32, data: &GameData, inventory: &mut Inventory) 
             if buy(price, inventory.gold()).is_some() {
                 inventory.remove_gold(price);
                 inventory.add_item(id, 1);
+                return true;
             }
+            false
         }
         Mode::Sell => {
             if inventory.count(id) > 0 {
                 inventory.remove_item(id, 1);
                 inventory.add_gold(sell_price(item.price));
+                return true;
             }
+            false
         }
     }
 }
@@ -479,13 +510,16 @@ mod tests {
         };
         let mut inv = Inventory::default();
         inv.add_gold(2000);
-        apply_trade(Mode::Buy, 2, &data, &mut inv);
+        assert!(apply_trade(Mode::Buy, 2, &data, &mut inv));
         assert_eq!(inv.gold(), 800);
         assert_eq!(inv.count(2), 1);
-        apply_trade(Mode::Sell, 2, &data, &mut inv);
+        assert!(apply_trade(Mode::Sell, 2, &data, &mut inv));
         assert_eq!(inv.gold(), 1400); // 800 + 1200/2
         assert_eq!(inv.count(2), 0);
-        apply_trade(Mode::Buy, 2, &data, &mut inv); // 1400 < ... affordable, buy again
+        // Nothing held to sell: no transaction, gold unchanged.
+        assert!(!apply_trade(Mode::Sell, 2, &data, &mut inv));
+        assert_eq!(inv.gold(), 1400);
+        assert!(apply_trade(Mode::Buy, 2, &data, &mut inv)); // affordable, buy again
         assert_eq!(inv.count(2), 1);
     }
 }

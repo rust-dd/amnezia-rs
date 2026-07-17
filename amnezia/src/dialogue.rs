@@ -36,6 +36,19 @@ impl Dialogue {
     }
 }
 
+/// Where the message box sits vertically (`MessageOptions` 10120). The default
+/// [`MessagePosition::Bottom`] is RM2000's usual placement; [`update_position`]
+/// moves the box when the interpreter changes this. `Top`/`Middle` are only
+/// produced by the interpreter's MessageOptions arm, which lands separately.
+#[derive(Resource, Default, Clone, Copy, PartialEq, Eq)]
+#[allow(dead_code)]
+pub enum MessagePosition {
+    Top,
+    Middle,
+    #[default]
+    Bottom,
+}
+
 #[derive(Component)]
 struct DialoguePanel;
 
@@ -53,8 +66,9 @@ pub struct DialoguePlugin;
 impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Dialogue>()
+            .init_resource::<MessagePosition>()
             .add_systems(Startup, spawn_ui)
-            .add_systems(Update, (interact, update_ui));
+            .add_systems(Update, (interact, update_ui, update_position));
     }
 }
 
@@ -252,5 +266,38 @@ fn update_ui(
         } else {
             Val::Px(0.0)
         };
+    }
+}
+
+/// Anchor the dialogue box to the top, middle, or bottom of the screen when
+/// [`MessagePosition`] changes. Bottom (the spawn default) pins it to the
+/// bottom; Top pins it to the top; Middle centres it, nudged up by half the
+/// box's min height so the box straddles the centre line.
+fn update_position(
+    position: Res<MessagePosition>,
+    mut panels: Query<&mut Node, With<DialoguePanel>>,
+) {
+    if !position.is_changed() {
+        return;
+    }
+    let Ok(mut node) = panels.single_mut() else {
+        return;
+    };
+    match *position {
+        MessagePosition::Top => {
+            node.top = Val::Px(16.0);
+            node.bottom = Val::Auto;
+            node.margin.top = Val::Px(0.0);
+        }
+        MessagePosition::Middle => {
+            node.top = Val::Percent(50.0);
+            node.bottom = Val::Auto;
+            node.margin.top = Val::Px(-48.0);
+        }
+        MessagePosition::Bottom => {
+            node.top = Val::Auto;
+            node.bottom = Val::Px(16.0);
+            node.margin.top = Val::Px(0.0);
+        }
     }
 }

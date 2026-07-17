@@ -29,6 +29,7 @@ mod state;
 mod teleport;
 mod text;
 mod tiles;
+mod timer;
 mod title;
 mod vitals;
 mod world;
@@ -89,5 +90,6 @@ fn main() -> AppExit {
         .add_plugins(appearance::AppearancePlugin)
         .add_plugins(progression::ProgressionPlugin)
         .add_plugins(i18n::I18nPlugin)
+        .add_plugins(timer::GameClockPlugin)
         .run()
 }

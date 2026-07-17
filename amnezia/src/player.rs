@@ -63,20 +63,42 @@ impl Character for Player {
     }
 }
 
+/// A camera offset for cutscene panning (`PanScreen` 11060). [`camera_follow`]
+/// adds `offset` after clamping to the map, so a pan can scroll past the map
+/// edge; [`ease_camera_pan`] slides `offset` toward `target` at `speed` world
+/// units per second. The interpreter's PanScreen arm sets `target`/`speed` and
+/// zeroes `target` to return.
+#[derive(Resource, Default)]
+pub struct CameraPan {
+    pub offset: Vec2,
+    pub target: Vec2,
+    pub speed: f32,
+}
+
+/// The hero's transparency on the RM2000 0..7 scale (`PlayerTransparency`
+/// 11310): 0 is opaque, 7 the most see-through. [`update_hero_transparency`]
+/// maps it to the sprite's alpha.
+#[derive(Resource, Default)]
+pub struct HeroTransparency(pub u8);
+
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                move_player,
-                walk::<Player>,
-                update_player_sprite,
-                camera_follow,
-            )
-                .chain(),
-        );
+        app.init_resource::<CameraPan>()
+            .init_resource::<HeroTransparency>()
+            .add_systems(
+                Update,
+                (
+                    move_player,
+                    walk::<Player>,
+                    update_player_sprite,
+                    update_hero_transparency,
+                    ease_camera_pan,
+                    camera_follow,
+                )
+                    .chain(),
+            );
     }
 }
 
@@ -275,9 +297,26 @@ fn update_player_sprite(
     }
 }
 
+/// Fade the hero sprite to match [`HeroTransparency`]: alpha `1 - t/8` on the
+/// RM2000 0..7 scale. Runs on change (and once at startup), independent of the
+/// per-tile sprite refresh so it holds while the hero walks or stands.
+fn update_hero_transparency(
+    transparency: Res<HeroTransparency>,
+    mut players: Query<&mut Sprite, With<Player>>,
+) {
+    if !transparency.is_changed() {
+        return;
+    }
+    let alpha = 1.0 - transparency.0 as f32 / 8.0;
+    for mut sprite in &mut players {
+        sprite.color = sprite.color.with_alpha(alpha);
+    }
+}
+
 #[allow(clippy::type_complexity)]
 fn camera_follow(
     data: Res<MapData>,
+    pan: Res<CameraPan>,
     players: Query<&Transform, With<Player>>,
     mut cameras: Query<(&mut Transform, &Projection), (With<Camera2d>, Without<Player>)>,
 ) {
@@ -294,8 +333,12 @@ fn camera_follow(
     };
     let half_map_w = data.width as f32 * tiles::TILE / 2.0;
     let half_map_h = data.height as f32 * tiles::TILE / 2.0;
-    camera.translation.x = clamp_to_map(player.translation.x, half_map_w, view.area.width() / 2.0);
-    camera.translation.y = clamp_to_map(player.translation.y, half_map_h, view.area.height() / 2.0);
+    // The pan offset is added after the clamp so a cutscene can deliberately
+    // scroll past the map edge; a zero offset leaves the normal follow untouched.
+    camera.translation.x =
+        clamp_to_map(player.translation.x, half_map_w, view.area.width() / 2.0) + pan.offset.x;
+    camera.translation.y =
+        clamp_to_map(player.translation.y, half_map_h, view.area.height() / 2.0) + pan.offset.y;
 }
 
 /// Follow `target` but keep the camera inside the map: never scroll past the
@@ -310,9 +353,46 @@ fn clamp_to_map(target: f32, half_map: f32, half_view: f32) -> f32 {
     }
 }
 
+/// Ease the camera pan: slide `offset` toward `target` at `speed` world units
+/// per second, snapping the last fraction of a step so it settles exactly.
+fn ease_camera_pan(time: Res<Time>, mut pan: ResMut<CameraPan>) {
+    pan.offset = ease_toward(pan.offset, pan.target, pan.speed * time.delta_secs());
+}
+
+/// Step `offset` toward `target` by at most `step`; snap to `target` once within
+/// one step (or already there), which also avoids normalising a zero vector.
+fn ease_toward(offset: Vec2, target: Vec2, step: f32) -> Vec2 {
+    let delta = target - offset;
+    if delta.length() <= step {
+        target
+    } else {
+        offset + delta.normalize() * step
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::clamp_to_map;
+    use super::{clamp_to_map, ease_toward};
+    use bevy::math::Vec2;
+
+    #[test]
+    fn pan_eases_toward_target_then_snaps() {
+        // A full step moves exactly `step` along the direction to the target.
+        assert_eq!(
+            ease_toward(Vec2::ZERO, Vec2::new(10.0, 0.0), 2.0),
+            Vec2::new(2.0, 0.0)
+        );
+        // Within one step of the target: snap onto it, no overshoot.
+        assert_eq!(
+            ease_toward(Vec2::new(9.0, 0.0), Vec2::new(10.0, 0.0), 5.0),
+            Vec2::new(10.0, 0.0)
+        );
+        // Already at the target: stay put (and don't normalise a zero delta).
+        assert_eq!(
+            ease_toward(Vec2::splat(4.0), Vec2::splat(4.0), 5.0),
+            Vec2::splat(4.0)
+        );
+    }
 
     #[test]
     fn camera_clamps_to_map_edges() {
