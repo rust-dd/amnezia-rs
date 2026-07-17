@@ -30,8 +30,9 @@ pub fn command_input(
     match battle.menu {
         MenuLevel::Command => command_menu(&keys, &mut battle),
         MenuLevel::Skill => skill_menu(&keys, &data, &mut battle),
-        MenuLevel::Item => item_menu(&keys, &data, &mut inventory, &mut battle),
+        MenuLevel::Item => item_menu(&keys, &data, &inventory, &mut battle),
         MenuLevel::Target => target_menu(&keys, &mut battle),
+        MenuLevel::AllyTarget => ally_target_menu(&keys, &mut inventory, &mut battle),
     }
 }
 
@@ -93,14 +94,29 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
     if confirm(keys)
         && let Some(&(skill_id, _, _)) = choices.get(battle.cursor)
     {
-        open_target(battle, Some(skill_id));
+        let scope = battle
+            .skills
+            .iter()
+            .find(|s| s.id == skill_id)
+            .map(|s| s.scope);
+        match scope {
+            // Self (2) and all-allies (4) need no target pick: resolve applies to
+            // the caster / loops the party, so commit at once. Single-ally (3)
+            // opens the ally target menu; enemy scopes (0/1) the enemy one.
+            Some(2 | 4) => {
+                let target = battle.turn;
+                battle.commit(Command::Skill { skill_id, target });
+            }
+            Some(3) => open_ally_target(battle, Some(skill_id), None),
+            _ => open_target(battle, Some(skill_id)),
+        }
     }
 }
 
 fn item_menu(
     keys: &ButtonInput<KeyCode>,
     data: &GameData,
-    inventory: &mut Inventory,
+    inventory: &Inventory,
     battle: &mut Battle,
 ) {
     if keys.just_pressed(KeyCode::Escape) {
@@ -112,8 +128,7 @@ fn item_menu(
     if confirm(keys)
         && let Some(&(id, _)) = choices.get(battle.cursor)
     {
-        inventory.remove_item(id, 1);
-        battle.commit(Command::Item { item_id: id });
+        open_ally_target(battle, None, Some(id));
     }
 }
 
@@ -143,6 +158,36 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     }
 }
 
+/// The ally target menu: move the cursor over living party members and, on
+/// confirm, commit the pending ally-scope skill or item against the chosen one. A
+/// cancel returns to the Skill or Item menu the selection came from.
+fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &mut Inventory, battle: &mut Battle) {
+    let living = battle.living_members();
+    if living.is_empty() {
+        enter(battle, MenuLevel::Command);
+        return;
+    }
+    if keys.just_pressed(KeyCode::Escape) {
+        let back = if battle.pending_skill.is_some() {
+            MenuLevel::Skill
+        } else {
+            MenuLevel::Item
+        };
+        enter(battle, back);
+        return;
+    }
+    move_cursor(keys, &mut battle.cursor, living.len());
+    if confirm(keys) {
+        let target = living[battle.cursor.min(living.len() - 1)];
+        if let Some(skill_id) = battle.pending_skill {
+            battle.commit(Command::Skill { skill_id, target });
+        } else if let Some(item_id) = battle.pending_item {
+            inventory.remove_item(item_id, 1);
+            battle.commit(Command::Item { item_id, target });
+        }
+    }
+}
+
 /// Enter the target menu for an attack (`None`) or a chosen skill (its id).
 fn open_target(battle: &mut Battle, skill: Option<u32>) {
     if battle.living_enemies().is_empty() {
@@ -150,6 +195,18 @@ fn open_target(battle: &mut Battle, skill: Option<u32>) {
     }
     battle.pending_skill = skill;
     battle.menu = MenuLevel::Target;
+    battle.cursor = 0;
+}
+
+/// Enter the ally target menu for a chosen ally-scope skill or item; exactly one
+/// of `skill` / `item` is `Some`. The cursor then ranges over living members.
+fn open_ally_target(battle: &mut Battle, skill: Option<u32>, item: Option<u32>) {
+    if battle.living_members().is_empty() {
+        return;
+    }
+    battle.pending_skill = skill;
+    battle.pending_item = item;
+    battle.menu = MenuLevel::AllyTarget;
     battle.cursor = 0;
 }
 
@@ -204,9 +261,9 @@ fn confirm(keys: &ButtonInput<KeyCode>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::super::model::testkit::build_1v2;
+    use super::super::model::testkit::build_party2;
     use super::*;
-    use amnezia_data::ItemDef;
+    use amnezia_data::{ItemDef, SkillDef};
 
     fn medicine(id: u32) -> ItemDef {
         ItemDef {
@@ -236,8 +293,86 @@ mod tests {
         }
     }
 
+    fn skill_def(id: u32, power: u32, scope: u32) -> SkillDef {
+        SkillDef {
+            id,
+            name: "S".into(),
+            description: String::new(),
+            sp_cost: 3,
+            power,
+            hit: 0,
+            skill_type: 0,
+            scope,
+            physical_rate: 0,
+            magical_rate: 3,
+            affect_hp: true,
+            affect_sp: false,
+            absorb: false,
+            attributes: vec![],
+            affected_states: vec![],
+        }
+    }
+
     #[test]
-    fn committing_an_item_emits_its_id_and_consumes_one() {
+    fn a_single_ally_skill_opens_the_ally_menu_then_commits_on_the_chosen_member() {
+        let heal = skill_def(2, 40, 3); // scope 3: single ally
+        let data = GameData {
+            actors: vec![],
+            items: vec![],
+            skills: vec![heal.clone()],
+        };
+        let mut battle = build_party2();
+        battle.skills = vec![heal];
+        battle.menu = MenuLevel::Skill;
+        battle.cursor = 0;
+        let mut keys = ButtonInput::<KeyCode>::default();
+        keys.press(KeyCode::Enter);
+        skill_menu(&keys, &data, &mut battle);
+        assert!(battle.menu == MenuLevel::AllyTarget);
+        assert_eq!(battle.pending_skill, Some(2));
+        // Point the cursor at the second member and confirm.
+        battle.cursor = 1;
+        let mut confirm_keys = ButtonInput::<KeyCode>::default();
+        confirm_keys.press(KeyCode::Enter);
+        let mut inventory = Inventory::default();
+        ally_target_menu(&confirm_keys, &mut inventory, &mut battle);
+        assert!(matches!(
+            battle.members[0].command,
+            Some(Command::Skill {
+                skill_id: 2,
+                target: 1
+            })
+        ));
+    }
+
+    #[test]
+    fn a_self_scope_skill_commits_immediately_on_the_caster() {
+        let buff = skill_def(5, 30, 2); // scope 2: self
+        let data = GameData {
+            actors: vec![],
+            items: vec![],
+            skills: vec![buff.clone()],
+        };
+        let mut battle = build_party2();
+        battle.skills = vec![buff];
+        battle.menu = MenuLevel::Skill;
+        battle.cursor = 0;
+        let mut keys = ButtonInput::<KeyCode>::default();
+        keys.press(KeyCode::Enter);
+        skill_menu(&keys, &data, &mut battle);
+        // No target menu: committed at once against the caster (member 0).
+        assert!(battle.menu == MenuLevel::Command);
+        assert!(matches!(
+            battle.members[0].command,
+            Some(Command::Skill {
+                skill_id: 5,
+                target: 0
+            })
+        ));
+    }
+
+    #[test]
+    fn committing_an_item_targets_the_chosen_ally_and_consumes_one() {
         let data = GameData {
             actors: vec![],
             items: vec![medicine(50)],
@@ -245,16 +380,28 @@ mod tests {
         };
         let mut inventory = Inventory::default();
         inventory.add_item(50, 2);
-        let mut battle = build_1v2();
+        let mut battle = build_party2();
         battle.menu = MenuLevel::Item;
         battle.cursor = 0;
         let mut keys = ButtonInput::<KeyCode>::default();
         keys.press(KeyCode::Enter);
-        item_menu(&keys, &data, &mut inventory, &mut battle);
-        assert_eq!(inventory.count(50), 1); // one of the two consumed
+        item_menu(&keys, &data, &inventory, &mut battle);
+        // Selecting the item opens the ally menu; nothing is consumed yet.
+        assert!(battle.menu == MenuLevel::AllyTarget);
+        assert_eq!(battle.pending_item, Some(50));
+        assert_eq!(inventory.count(50), 2);
+        // Confirm the item on the second member.
+        battle.cursor = 1;
+        let mut confirm_keys = ButtonInput::<KeyCode>::default();
+        confirm_keys.press(KeyCode::Enter);
+        ally_target_menu(&confirm_keys, &mut inventory, &mut battle);
+        assert_eq!(inventory.count(50), 1); // one consumed on confirm
         assert!(matches!(
             battle.members[0].command,
-            Some(Command::Item { item_id: 50 })
+            Some(Command::Item {
+                item_id: 50,
+                target: 1
+            })
         ));
     }
 }

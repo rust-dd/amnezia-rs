@@ -41,6 +41,7 @@ pub enum MenuLevel {
     Skill,
     Item,
     Target,
+    AllyTarget,
 }
 
 /// A party member in the fight: live HP/SP, derived stats, and the command it has
@@ -123,7 +124,7 @@ impl Foe {
 pub enum Command {
     Attack { target: usize },
     Skill { skill_id: u32, target: usize },
-    Item { item_id: u32 },
+    Item { item_id: u32, target: usize },
     Defend,
     Nothing,
 }
@@ -168,6 +169,8 @@ pub struct Battle {
     pub cursor: usize,
     /// The chosen skill's id while its target is being picked.
     pub pending_skill: Option<u32>,
+    /// The chosen item's id while its ally target is being picked.
+    pub pending_item: Option<u32>,
     pub queue: Vec<Action>,
     pub queue_at: usize,
     pub timer: Timer,
@@ -303,6 +306,16 @@ impl Battle {
             .collect()
     }
 
+    /// Living party member indices, in party order (the ally-target-menu order).
+    pub fn living_members(&self) -> Vec<usize> {
+        self.members
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| m.alive())
+            .map(|(i, _)| i)
+            .collect()
+    }
+
     /// Commit `command` for the member currently choosing, then move on: to the
     /// next chooser, or into resolution once every living member has an order.
     pub fn commit(&mut self, command: Command) {
@@ -312,6 +325,7 @@ impl Battle {
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;
+        self.pending_item = None;
         self.skip_restricted_choosers();
     }
 
@@ -322,6 +336,7 @@ impl Battle {
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;
+        self.pending_item = None;
         let target = self.members[..self.turn]
             .iter()
             .enumerate()
@@ -383,6 +398,7 @@ impl Battle {
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;
+        self.pending_item = None;
         self.phase = Phase::Command;
         self.skip_restricted_choosers();
     }
@@ -498,6 +514,29 @@ pub(super) mod testkit {
             &Progression::default(),
             "Cave1".into(),
             42,
+        )
+    }
+
+    /// A two-member party (heroes 1 and 2) versus one 30-HP bandit, for the
+    /// ally-target selection tests.
+    pub fn build_party2() -> Battle {
+        let ron = actor(1, 2, 63, 37);
+        let tiff = actor(2, 3, 38, 75);
+        let actors = vec![&ron, &tiff];
+        let monsters = vec![monster(1, 30, 10, 30)];
+        let troop = troop(&[(1, 100, 100)]);
+        Battle::build(
+            &troop,
+            &monsters,
+            &actors,
+            &[],
+            &[],
+            &[],
+            &[],
+            &Vitals::default(),
+            &Progression::default(),
+            "Cave1".into(),
+            7,
         )
     }
 }

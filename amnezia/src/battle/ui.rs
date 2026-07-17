@@ -185,6 +185,11 @@ fn compose_command(battle: &Battle, data: &GameData, inventory: &Inventory) -> S
             .iter()
             .map(|&i| i18n::tr(&battle.enemies[i].name))
             .collect(),
+        MenuLevel::AllyTarget => battle
+            .living_members()
+            .iter()
+            .map(|&i| i18n::tr(&battle.members[i].name))
+            .collect(),
     };
     let mut out = format!("{} parancsa:\n", i18n::tr(&actor.name));
     for (i, row) in rows.iter().enumerate() {

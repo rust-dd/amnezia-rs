@@ -77,7 +77,9 @@ impl Battle {
                     None => return,
                 }
             }
-            (Source::Party(pi), Command::Item { item_id }) => self.apply_item(pi, item_id),
+            (Source::Party(pi), Command::Item { item_id, target }) => {
+                self.apply_item(pi, item_id, target)
+            }
             (Source::Party(pi), Command::Defend) => {
                 self.members[pi].defending = true;
                 format!("{} védekezik", self.members[pi].name)
@@ -290,30 +292,35 @@ impl Battle {
         lines
     }
 
-    /// Apply item `item_id`'s effect to the using member `pi`. Choosing an ally
-    /// target is a deferred slice, so an item self-applies to its user for now:
-    /// restore HP and SP by the item's flat amount plus its percent-of-maximum
-    /// (each clamped to the maximum) and cure each of its `cure_states`. The item
-    /// was already consumed from the inventory when the order was committed, so an
-    /// unknown id or an item with no restorative effect still logs a use line.
-    fn apply_item(&mut self, pi: usize, item_id: u32) -> String {
-        let name = self.members[pi].name.clone();
+    /// Apply item `item_id`, used by member `pi`, to ally `target` (falling back to
+    /// the user when that member is gone): restore HP and SP by the item's flat
+    /// amount plus its percent-of-maximum (each clamped to the maximum) and cure
+    /// each of its `cure_states` from the recipient. The item was already consumed
+    /// from the inventory when the order was committed, so an unknown id or an item
+    /// with no restorative effect still logs a use line.
+    fn apply_item(&mut self, pi: usize, item_id: u32, target: usize) -> String {
+        let user = self.members[pi].name.clone();
         let Some(item) = self.items.iter().find(|i| i.id == item_id).cloned() else {
-            return format!("{name} használ");
+            return format!("{user} használ");
         };
-        let (max_hp, max_sp) = (self.members[pi].max_hp, self.members[pi].max_sp);
+        let ti = if self.members.get(target).is_some_and(|m| m.alive()) {
+            target
+        } else {
+            pi
+        };
+        let (max_hp, max_sp) = (self.members[ti].max_hp, self.members[ti].max_sp);
         let hp_gain = item.recover_hp as i32 + max_hp * item.recover_hp_rate as i32 / 100;
         let sp_gain = item.recover_sp as i32 + max_sp * item.recover_sp_rate as i32 / 100;
         if hp_gain > 0 {
-            self.members[pi].hp = (self.members[pi].hp + hp_gain).min(max_hp);
+            self.members[ti].hp = (self.members[ti].hp + hp_gain).min(max_hp);
         }
         if sp_gain > 0 {
-            self.members[pi].sp = (self.members[pi].sp + sp_gain).min(max_sp);
+            self.members[ti].sp = (self.members[ti].sp + sp_gain).min(max_sp);
         }
         let mut cured: Vec<String> = Vec::new();
         for &sid in &item.cure_states {
-            if logic::has_state(&self.members[pi].states, sid) {
-                logic::cure(&mut self.members[pi].states, sid);
+            if logic::has_state(&self.members[ti].states, sid) {
+                logic::cure(&mut self.members[ti].states, sid);
                 if let Some(state) = self.states.iter().find(|s| s.id == sid) {
                     cured.push(state.name.clone());
                 }
@@ -325,9 +332,10 @@ impl Battle {
             (false, true) => format!(" (+{sp_gain} SP)"),
             (false, false) => String::new(),
         };
-        let mut lines = vec![format!("{name} használ: {}{gain}", item.name)];
+        let recipient = self.members[ti].name.clone();
+        let mut lines = vec![format!("{user} használ: {}{gain}", item.name)];
         for state_name in cured {
-            lines.push(format!("{name} gyógyul: {state_name}"));
+            lines.push(format!("{recipient} gyógyul: {state_name}"));
         }
         lines.join("\n")
     }
@@ -640,7 +648,7 @@ impl Battle {
 
 #[cfg(test)]
 mod tests {
-    use super::super::model::testkit::build_1v2;
+    use super::super::model::testkit::{build_1v2, build_party2};
     use super::*;
 
     fn fire_attr() -> amnezia_data::AttributeDef {
@@ -999,13 +1007,13 @@ mod tests {
         // A flat +20 raises a wounded user by exactly 20.
         battle.items = vec![medicine(50, 20, 0, vec![])];
         battle.members[0].hp = 10;
-        let line = battle.apply_item(0, 50);
+        let line = battle.apply_item(0, 50, 0);
         assert_eq!(battle.members[0].hp, 30);
         assert!(line.contains("+20 HP"));
         // A heal that overshoots the maximum clamps to it.
         battle.members[0].hp = max - 5;
         battle.items = vec![medicine(51, 200, 0, vec![])];
-        battle.apply_item(0, 51);
+        battle.apply_item(0, 51, 0);
         assert_eq!(battle.members[0].hp, max);
     }
 
@@ -1015,8 +1023,22 @@ mod tests {
         battle.states = vec![poison_state(3)];
         battle.members[0].states = vec![(3, 0)];
         battle.items = vec![medicine(60, 0, 0, vec![3])];
-        let line = battle.apply_item(0, 60);
+        let line = battle.apply_item(0, 60, 0);
         assert!(!logic::has_state(&battle.members[0].states, 3));
         assert!(line.contains("gyógyul"));
+    }
+
+    #[test]
+    fn an_item_used_on_an_ally_heals_that_member_not_the_caster() {
+        let mut battle = build_party2();
+        battle.items = vec![medicine(50, 20, 0, vec![])];
+        let max = battle.members[1].max_hp;
+        battle.members[1].hp = (max - 25).max(0);
+        let before_ally = battle.members[1].hp;
+        let before_caster = battle.members[0].hp;
+        let line = battle.apply_item(0, 50, 1); // caster 0 uses the item on ally 1
+        assert_eq!(battle.members[1].hp, (before_ally + 20).min(max));
+        assert_eq!(battle.members[0].hp, before_caster); // the caster is untouched
+        assert!(line.contains("+20 HP"));
     }
 }
