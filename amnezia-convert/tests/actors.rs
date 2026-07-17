@@ -1,4 +1,4 @@
-use amnezia_data::ActorDef;
+use amnezia_data::{ActorCurves, ActorDef};
 use std::path::Path;
 
 fn varint(mut v: u32) -> Vec<u8> {
@@ -64,7 +64,7 @@ fn converts_ldb_to_actors_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    let params = parameters([[40, 44], [12, 15], [0, 0], [0, 0], [0, 0], [0, 0]]);
+    let params = parameters([[40, 44], [12, 15], [5, 7], [4, 6], [3, 5], [6, 9]]);
     let ron = element(
         1,
         &[
@@ -72,6 +72,9 @@ fn converts_ldb_to_actors_ron() {
             subchunk(0x02, b"Zsoldos"),
             subchunk(0x07, &varint(2)),
             subchunk(0x1F, &params),
+            subchunk(0x29, &varint(31)),
+            subchunk(0x2A, &varint(29)),
+            subchunk(0x2B, &varint(40)),
         ],
     );
     let ldb = make_ldb(0x0B, &[ron]);
@@ -92,6 +95,17 @@ fn converts_ldb_to_actors_ron() {
             max_level: 2,
             hp: 44,
             sp: 15,
+            curves: ActorCurves {
+                max_hp: vec![40, 44],
+                max_sp: vec![12, 15],
+                attack: vec![5, 7],
+                defense: vec![4, 6],
+                spirit: vec![3, 5],
+                agility: vec![6, 9],
+            },
+            exp_base: 31,
+            exp_inflation: 29,
+            exp_correction: 40,
         }
     );
 }

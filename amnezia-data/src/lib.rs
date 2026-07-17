@@ -101,9 +101,22 @@ pub struct Hero {
     pub name: String,
 }
 
-/// A playable actor's definition, read by the status and equip menus: its
-/// 1-based id, name and class title, its starting and maximum level, and the
-/// HP/SP it begins with (taken from the level-parameter curve at `level`).
+/// Per-level stat curves for a playable actor (level L is index L-1; length == max_level).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActorCurves {
+    pub max_hp: Vec<u32>,
+    pub max_sp: Vec<u32>,
+    pub attack: Vec<u32>,
+    pub defense: Vec<u32>,
+    pub spirit: Vec<u32>,
+    pub agility: Vec<u32>,
+}
+
+/// A playable actor's definition, read by the status and equip menus and the
+/// level-up system: its 1-based id, name and class title, its starting and
+/// maximum level, and the HP/SP it begins with (taken from the level-parameter
+/// curve at `level`). `curves` holds the full per-level stat tables and
+/// `exp_base`/`exp_inflation`/`exp_correction` parameterise the experience curve.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorDef {
     pub id: u32,
@@ -113,6 +126,14 @@ pub struct ActorDef {
     pub max_level: u32,
     pub hp: u32,
     pub sp: u32,
+    #[serde(default)]
+    pub curves: ActorCurves,
+    #[serde(default)]
+    pub exp_base: u32,
+    #[serde(default)]
+    pub exp_inflation: u32,
+    #[serde(default)]
+    pub exp_correction: u32,
 }
 
 /// An item's definition, read by the shop and item menus: its 1-based id, name,

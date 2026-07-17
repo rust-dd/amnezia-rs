@@ -323,6 +323,10 @@ pub(super) mod testkit {
             max_level: 50,
             hp,
             sp,
+            curves: Default::default(),
+            exp_base: 30,
+            exp_inflation: 30,
+            exp_correction: 0,
         }
     }
 

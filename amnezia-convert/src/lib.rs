@@ -4,8 +4,8 @@
 pub mod midi;
 
 use amnezia_data::{
-    ActorDef, Chipset, CommonEvent, Event, EventCommand, EventPage, Hero, ItemDef, Map, MonsterDef,
-    SkillDef, Start, TroopDef, TroopMemberDef,
+    ActorCurves, ActorDef, Chipset, CommonEvent, Event, EventCommand, EventPage, Hero, ItemDef,
+    Map, MonsterDef, SkillDef, Start, TroopDef, TroopMemberDef,
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -221,8 +221,9 @@ pub fn convert_hero(input: &Path, output: &Path) -> Result<String> {
 }
 
 /// Convert the actor table in `input/RPG_RT.ldb` into `output/actors.ron` (each
-/// actor's id, name, class title, levels, and starting HP/SP), returning the
-/// number of actors written. The status and equip menus read it.
+/// actor's id, name, class title, levels, starting HP/SP, per-level stat curves,
+/// and experience-curve parameters), returning the number of actors written.
+/// The status and equip menus and the level-up system read it.
 pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -240,6 +241,47 @@ pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
             max_level: a.max_level,
             hp: a.initial_hp,
             sp: a.initial_sp,
+            curves: ActorCurves {
+                max_hp: a
+                    .stat_curves
+                    .max_hp
+                    .iter()
+                    .map(|&v| v.max(0) as u32)
+                    .collect(),
+                max_sp: a
+                    .stat_curves
+                    .max_sp
+                    .iter()
+                    .map(|&v| v.max(0) as u32)
+                    .collect(),
+                attack: a
+                    .stat_curves
+                    .attack
+                    .iter()
+                    .map(|&v| v.max(0) as u32)
+                    .collect(),
+                defense: a
+                    .stat_curves
+                    .defense
+                    .iter()
+                    .map(|&v| v.max(0) as u32)
+                    .collect(),
+                spirit: a
+                    .stat_curves
+                    .spirit
+                    .iter()
+                    .map(|&v| v.max(0) as u32)
+                    .collect(),
+                agility: a
+                    .stat_curves
+                    .agility
+                    .iter()
+                    .map(|&v| v.max(0) as u32)
+                    .collect(),
+            },
+            exp_base: a.exp_base,
+            exp_inflation: a.exp_inflation,
+            exp_correction: a.exp_correction,
         })
         .collect();
     let count = actors.len();
