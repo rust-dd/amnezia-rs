@@ -11,7 +11,7 @@ use super::BattleOutcome;
 use super::logic::{self, Stats};
 use crate::progression::Progression;
 use crate::vitals::Vitals;
-use amnezia_data::{ActorDef, ItemDef, MonsterDef, TroopDef};
+use amnezia_data::{ActorDef, AttributeDef, ItemDef, MonsterDef, StateDef, TroopDef};
 use bevy::prelude::*;
 
 /// Seconds between two resolved actions, so the log and damage read at a human
@@ -54,13 +54,11 @@ pub struct Fighter {
     pub defending: bool,
     pub command: Option<Command>,
     /// The equipped weapon's hit and crit rates (percent) and its element id,
-    /// captured at build time for the to-hit / critical / elemental resolution
-    /// that lands separately. Empty-handed leaves them `0` / `0` / `None`.
-    #[allow(dead_code)]
+    /// captured at build time and consumed by the to-hit / critical / elemental
+    /// resolution in [`super::resolve`]. Empty-handed leaves them `0` / `0` /
+    /// `None`; a `0` hit reads as the RM2000 bare-hands 90% default.
     pub weapon_hit: u32,
-    #[allow(dead_code)]
     pub weapon_crit: u32,
-    #[allow(dead_code)]
     pub weapon_element: Option<u32>,
 }
 
@@ -83,7 +81,6 @@ pub struct Foe {
     pub y: u32,
     /// This foe's per-attribute damage ranks (0=A … 4=E), copied from its
     /// `MonsterDef`. The vector is truncated, so ids past its end read neutral C.
-    #[allow(dead_code)]
     pub attribute_ranks: Vec<u8>,
     /// This foe's per-state affliction ranks, copied from its `MonsterDef`, for
     /// the status-infliction chance that lands separately.
@@ -148,6 +145,11 @@ pub struct Battle {
     pub background: String,
     pub members: Vec<Fighter>,
     pub enemies: Vec<Foe>,
+    /// The attribute (element) table, consulted by the elemental damage step.
+    pub(super) attributes: Vec<AttributeDef>,
+    /// The state (status) table, for the status resolution that lands separately.
+    #[allow(dead_code)]
+    pub(super) states: Vec<StateDef>,
     pub turn: usize,
     pub menu: MenuLevel,
     pub cursor: usize,
@@ -184,6 +186,8 @@ impl Battle {
         monsters: &[MonsterDef],
         actors: &[&ActorDef],
         items: &[ItemDef],
+        attributes: &[AttributeDef],
+        states: &[StateDef],
         vitals: &Vitals,
         progression: &Progression,
         background: String,
@@ -250,6 +254,8 @@ impl Battle {
             background,
             members,
             enemies,
+            attributes: attributes.to_vec(),
+            states: states.to_vec(),
             timer: Timer::from_seconds(RESOLVE_STEP_SECS, TimerMode::Repeating),
             log: vec![format!("{} rátok támad!", troop.name)],
             rng: seed | 1,
@@ -462,6 +468,8 @@ pub(super) mod testkit {
             &monsters,
             &actors,
             &[],
+            &[],
+            &[],
             &Vitals::default(),
             &Progression::default(),
             "Cave1".into(),
@@ -507,6 +515,8 @@ mod tests {
             &monsters,
             &actors,
             &[],
+            &[],
+            &[],
             &Vitals::default(),
             &Progression::default(),
             "Cave1".into(),
@@ -549,6 +559,8 @@ mod tests {
             &monsters,
             &actors,
             &items,
+            &[],
+            &[],
             &Vitals::default(),
             &prog,
             "Cave1".into(),

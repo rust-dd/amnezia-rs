@@ -12,6 +12,13 @@ use super::model::{Action, Battle, Command, Phase, Source, rng_next};
 /// so item potency is a documented constant rather than data-driven.
 const ITEM_HEAL: i32 = 100;
 
+/// The outcome of a party member's weapon strike: a clean miss, or a landed hit
+/// carrying the damage dealt and whether it critical'd (for the log line).
+enum Strike {
+    Miss,
+    Hit { dmg: i32, crit: bool },
+}
+
 impl Battle {
     /// Apply the next queued action (skipping a fainted actor, retargeting a dead
     /// target) and append its log line. Returns `false` once the queue is spent.
@@ -36,16 +43,19 @@ impl Battle {
     fn apply(&mut self, action: Action) {
         let line = match (action.source, action.kind) {
             (Source::Party(pi), Command::Attack { target }) => {
-                let attack = self.members[pi].stats.attack;
                 let Some(ti) = self.retarget_enemy(target) else {
                     return;
                 };
-                let base = logic::physical_damage(attack, self.enemies[ti].stats.defense);
-                let dmg = self.hit_enemy(ti, base);
-                format!(
-                    "{} rácsap: {} -{}",
-                    self.members[pi].name, self.enemies[ti].name, dmg
-                )
+                let strike = self.strike_enemy(pi, ti);
+                let member = &self.members[pi].name;
+                let enemy = &self.enemies[ti].name;
+                match strike {
+                    Strike::Miss => format!("{member} rácsap: {enemy} elkerülte"),
+                    Strike::Hit { dmg, crit: true } => {
+                        format!("{member} rácsap: Kritikus! {enemy} -{dmg}")
+                    }
+                    Strike::Hit { dmg, crit: false } => format!("{member} rácsap: {enemy} -{dmg}"),
+                }
             }
             (
                 Source::Party(pi),
@@ -60,6 +70,11 @@ impl Battle {
                 let Some(ti) = self.retarget_enemy(target) else {
                     return;
                 };
+                // TODO: scale by the skill's element. `Command::Skill` carries only
+                // power/cost/target, so the element id and its `AttributeDef` are
+                // unavailable here; wiring `logic::elemental_damage` in needs the
+                // element-carrying Command (a later slice — Command and input.rs are
+                // off-limits now), so a skill stays non-elemental until then.
                 let base = logic::skill_damage(power, spirit, self.enemies[ti].stats.spirit);
                 let dmg = self.hit_enemy(ti, base);
                 format!(
@@ -94,6 +109,37 @@ impl Battle {
             (Source::Enemy(_), _) => return,
         };
         self.log.push(line);
+    }
+
+    /// Resolve a party member's weapon strike on enemy `ti`: a to-hit roll (bare
+    /// hands default 90%), then on a hit the weapon's element against the foe's
+    /// resistance ranks, a critical that triples, and finally ±10% variance.
+    fn strike_enemy(&mut self, pi: usize, ti: usize) -> Strike {
+        let base = logic::physical_damage(
+            self.members[pi].stats.attack,
+            self.enemies[ti].stats.defense,
+        );
+        let hit_rate = logic::effective_hit(self.members[pi].weapon_hit);
+        if (rng_next(&mut self.rng) % 100) as u32 >= hit_rate {
+            return Strike::Miss;
+        }
+        let element = self.members[pi].weapon_element.unwrap_or(0);
+        let base = logic::elemental_damage(
+            base,
+            element,
+            &self.enemies[ti].attribute_ranks,
+            &self.attributes,
+        );
+        let crit = ((rng_next(&mut self.rng) % 100) as u32) < self.members[pi].weapon_crit;
+        let base = if crit {
+            logic::critical_damage(base)
+        } else {
+            base
+        };
+        let roll = (rng_next(&mut self.rng) % 21) as u32;
+        let dmg = logic::with_variance(base, roll).max(0);
+        self.enemies[ti].hp -= dmg;
+        Strike::Hit { dmg, crit }
     }
 
     fn hit_enemy(&mut self, ti: usize, base: i32) -> i32 {
@@ -198,14 +244,101 @@ mod tests {
     use super::super::model::testkit::build_1v2;
     use super::*;
 
+    fn fire_attr() -> amnezia_data::AttributeDef {
+        amnezia_data::AttributeDef {
+            id: 5,
+            name: "Tűz".into(),
+            attribute_type: 0,
+            a_rate: 200, // rank A: weak, double damage
+            b_rate: 150,
+            c_rate: 100,
+            d_rate: 50,
+            e_rate: 0, // rank E: immune, no damage
+        }
+    }
+
     #[test]
     fn a_party_attack_wounds_its_target_and_logs() {
         let mut battle = build_1v2();
+        // Force a guaranteed hit so the wound assertion doesn't ride on the new
+        // 90% bare-hands to-hit roll (which would miss 10% of seeds).
+        battle.members[0].weapon_hit = 100;
         battle.commit(Command::Attack { target: 0 });
         let before = battle.enemies[0].hp;
         while battle.resolve_next() {}
         assert!(battle.enemies[0].hp < before);
         assert!(battle.log.iter().any(|l| l.contains("rácsap")));
+    }
+
+    #[test]
+    fn a_forced_critical_triples_the_blow() {
+        let mut battle = build_1v2();
+        battle.members[0].weapon_hit = 100; // never miss
+        battle.members[0].weapon_crit = 100; // always crit
+        let base = logic::physical_damage(
+            battle.members[0].stats.attack,
+            battle.enemies[0].stats.defense,
+        );
+        let Strike::Hit { dmg, crit } = battle.strike_enemy(0, 0) else {
+            panic!("a forced-hit strike missed");
+        };
+        assert!(crit);
+        // ±10% variance around the tripled base leaves it in this band, and it
+        // clearly beats a plain blow either way.
+        let tripled = base * 3;
+        assert!(dmg >= tripled - tripled / 10 && dmg <= tripled + tripled / 10);
+        assert!(dmg > base);
+    }
+
+    #[test]
+    fn a_missed_strike_deals_no_damage() {
+        let mut battle = build_1v2();
+        battle.members[0].weapon_hit = 90; // bare-hands default: misses 10% of rolls
+        // Wind the rng to a state whose next to-hit roll falls in the miss band.
+        loop {
+            let mut probe = battle.rng;
+            if rng_next(&mut probe) % 100 >= 90 {
+                break;
+            }
+            rng_next(&mut battle.rng);
+        }
+        let before = battle.enemies[0].hp;
+        let strike = battle.strike_enemy(0, 0);
+        assert!(matches!(strike, Strike::Miss));
+        assert_eq!(battle.enemies[0].hp, before); // a miss deals 0
+    }
+
+    #[test]
+    fn an_elemental_strike_amplifies_against_a_weak_foe() {
+        let mut battle = build_1v2();
+        battle.members[0].weapon_hit = 100; // never miss
+        battle.members[0].weapon_crit = 0; // never crit — isolate the element
+        battle.members[0].weapon_element = Some(5); // fire
+        battle.attributes = vec![fire_attr()];
+        battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 0]; // attr 5 -> rank A (weak)
+        let base = logic::physical_damage(
+            battle.members[0].stats.attack,
+            battle.enemies[0].stats.defense,
+        );
+        let Strike::Hit { dmg, .. } = battle.strike_enemy(0, 0) else {
+            panic!("a forced-hit strike missed");
+        };
+        assert!(dmg > base); // a weak (A) rank amplifies past the plain hit
+    }
+
+    #[test]
+    fn an_elemental_strike_is_nullified_by_an_immune_foe() {
+        let mut battle = build_1v2();
+        battle.members[0].weapon_hit = 100; // never miss
+        battle.members[0].weapon_element = Some(5); // fire
+        battle.attributes = vec![fire_attr()];
+        battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 4]; // attr 5 -> rank E (0%)
+        let before = battle.enemies[0].hp;
+        let Strike::Hit { dmg, .. } = battle.strike_enemy(0, 0) else {
+            panic!("a forced-hit strike missed");
+        };
+        assert_eq!(dmg, 0); // immune (E, 0%) nullifies the blow
+        assert_eq!(battle.enemies[0].hp, before);
     }
 
     #[test]

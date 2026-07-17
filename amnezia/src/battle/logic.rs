@@ -109,6 +109,17 @@ pub fn physical_damage(attack: u32, defense: u32) -> i32 {
     (attack as i32 / 2 - defense as i32 / 4).max(0)
 }
 
+/// The effective to-hit percentage for a weapon: an empty weapon slot (`hit == 0`,
+/// i.e. bare hands) lands at the RM2000 90% default; a real weapon keeps its rate.
+pub fn effective_hit(weapon_hit: u32) -> u32 {
+    if weapon_hit == 0 { 90 } else { weapon_hit }
+}
+
+/// A critical hit's damage: RM2000 triples the blow.
+pub fn critical_damage(base: i32) -> i32 {
+    base * 3
+}
+
 /// Skill damage: the skill's base `power` plus half the caster's spirit, less a
 /// quarter of the target's spirit. A powered skill always lands at least 1; a
 /// zero-power skill does nothing (its effect type is not modelled in v1).
@@ -122,7 +133,6 @@ pub fn skill_damage(power: u32, spirit: u32, target_spirit: u32) -> i32 {
 /// The RM2000 damage percent for `rank` (0=A … 4=E) from an attribute's own A–E
 /// rate table. A weak rank yields >100%, a resist rank <100% (E often 0). A rank
 /// past E clamps to the E rate.
-#[allow(dead_code)]
 pub fn attribute_percent(attr: &AttributeDef, rank: u8) -> u32 {
     match rank {
         0 => attr.a_rate,
@@ -136,9 +146,8 @@ pub fn attribute_percent(attr: &AttributeDef, rank: u8) -> u32 {
 /// Scale `base` damage by the target's resistance to `attr_id` (100% = unchanged).
 /// A non-elemental hit (`attr_id == 0`) or an unknown id leaves `base` untouched;
 /// otherwise the target's A–E rank for that attribute (neutral C when the id falls
-/// past the truncated `target_ranks` vector) picks the percentage. The elemental
-/// resolution that consumes this lands separately.
-#[allow(dead_code)]
+/// past the truncated `target_ranks` vector) picks the percentage. Consumed by the
+/// weapon-strike resolution in [`super::resolve`].
 pub fn elemental_damage(
     base: i32,
     attr_id: u32,
@@ -297,6 +306,18 @@ mod tests {
         assert_eq!(physical_damage(40, 20), 15); // 20 - 5
         assert_eq!(physical_damage(20, 8), 8); // 10 - 2
         assert_eq!(physical_damage(4, 100), 0); // floored, never negative
+    }
+
+    #[test]
+    fn effective_hit_defaults_bare_hands_to_ninety() {
+        assert_eq!(effective_hit(0), 90); // empty weapon slot -> RM2000 default
+        assert_eq!(effective_hit(85), 85); // a real weapon keeps its own rate
+    }
+
+    #[test]
+    fn critical_triples_the_base() {
+        assert_eq!(critical_damage(12), 36);
+        assert_eq!(critical_damage(0), 0);
     }
 
     #[test]

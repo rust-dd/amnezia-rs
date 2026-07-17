@@ -140,6 +140,8 @@ fn start_on_request(
         &battle_data.monsters,
         &actors,
         &data.items,
+        &battle_data.attributes,
+        &battle_data.states,
         &vitals,
         &progression,
         BACKDROP.to_string(),
