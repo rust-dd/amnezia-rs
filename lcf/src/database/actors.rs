@@ -1,8 +1,9 @@
 //! Actor (playable character) definitions from the database
 //! (`ChunkData::actors`, `0x0B`). Beyond the identity fields, each actor carries
-//! six per-level stat curves packed into one `Parameters` blob and an
-//! experience curve stored as three scalar chunks — the numbers a faithful
-//! level-up needs. Chunk ids follow liblcf `ChunkActor`.
+//! six per-level stat curves packed into one `Parameters` blob, an experience
+//! curve stored as three scalar chunks, and its initial equipment — the numbers
+//! a faithful level-up and equip screen need. Chunk ids follow liblcf
+//! `ChunkActor`.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
@@ -27,6 +28,12 @@ pub struct StatCurves {
 /// values at `initial_level`. `stat_curves` holds the full per-level tables and
 /// `exp_base`/`exp_inflation`/`exp_correction` parameterise the RM2000
 /// experience curve.
+///
+/// `weapon`/`shield`/`armor`/`helmet`/`accessory` are the item ids the actor
+/// starts equipped with (0 = that slot is empty). `two_weapons` marks a
+/// dual-wielding actor (the shield slot holds a second weapon), `fix_equipment`
+/// an actor whose gear can't be changed, and `unarmed_animation` the battle
+/// animation id used when the actor attacks with no weapon.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Actor {
     pub id: u32,
@@ -40,6 +47,14 @@ pub struct Actor {
     pub exp_base: u32,
     pub exp_inflation: u32,
     pub exp_correction: u32,
+    pub weapon: u32,
+    pub shield: u32,
+    pub armor: u32,
+    pub helmet: u32,
+    pub accessory: u32,
+    pub two_weapons: bool,
+    pub fix_equipment: bool,
+    pub unarmed_animation: u32,
 }
 
 const ACTOR_SECTION: u32 = 0x0B;
@@ -47,15 +62,20 @@ const ACTOR_NAME: u32 = 0x01;
 const ACTOR_TITLE: u32 = 0x02;
 const ACTOR_INITIAL_LEVEL: u32 = 0x07;
 const ACTOR_FINAL_LEVEL: u32 = 0x08;
+const ACTOR_TWO_WEAPON: u32 = 0x15;
+const ACTOR_LOCK_EQUIPMENT: u32 = 0x16;
 const ACTOR_PARAMETERS: u32 = 0x1F;
 const ACTOR_EXP_BASE: u32 = 0x29;
 const ACTOR_EXP_INFLATION: u32 = 0x2A;
 const ACTOR_EXP_CORRECTION: u32 = 0x2B;
+const ACTOR_INITIAL_EQUIPMENT: u32 = 0x33;
+const ACTOR_UNARMED_ANIMATION: u32 = 0x38;
 const ACTOR_DEFAULT_LEVEL: u32 = 1;
 const ACTOR_DEFAULT_EXP_BASE: u32 = 30;
 const ACTOR_DEFAULT_EXP_INFLATION: u32 = 30;
 const ACTOR_DEFAULT_EXP_CORRECTION: u32 = 0;
 const PARAMETER_STATS: usize = 6;
+const EQUIPMENT_SLOTS: usize = 5;
 
 /// Number of levels stored in a `Parameters` blob: six equal Int16 arrays, two
 /// bytes per level. Clamped to at least one so callers can always index level 1.
@@ -96,10 +116,26 @@ fn parse_stat_curves(parameters: &[u8], max_level: u32) -> StatCurves {
     }
 }
 
+/// Decode the actor `initial_equipment` struct (`0x33`): five Int16 (LE) item
+/// ids in slot order — weapon, shield, armor, helmet, accessory. Trailing slots
+/// the blob omits read as 0, and negative ids clamp to 0.
+fn read_equipment(data: &[u8]) -> [u32; EQUIPMENT_SLOTS] {
+    let mut slots = [0u32; EQUIPMENT_SLOTS];
+    for (slot, value) in slots.iter_mut().enumerate() {
+        let byte = slot * 2;
+        if let Some(pair) = data.get(byte..byte + 2) {
+            *value = i16::from_le_bytes([pair[0], pair[1]]).max(0) as u32;
+        }
+    }
+    slots
+}
+
 /// Parse the actor table (`ChunkData::actors` = `0x0B`) out of an LDB byte
 /// slice. Chunk ids (liblcf `ChunkActor`): name `0x01`, title `0x02`,
-/// initial_level `0x07`, final_level `0x08`, parameters `0x1F`, exp_base `0x29`,
-/// exp_inflation `0x2A`, exp_correction `0x2B`.
+/// initial_level `0x07`, final_level `0x08`, two_weapon `0x15`, lock_equipment
+/// `0x16`, parameters `0x1F`, exp_base `0x29`, exp_inflation `0x2A`,
+/// exp_correction `0x2B`, initial_equipment `0x33` (five Int16 item ids),
+/// unarmed_animation `0x38`.
 pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
     let section = find_section(bytes, ACTOR_SECTION, LcfError::MissingActors)?;
     let mut reader = Reader::new(section);
@@ -115,6 +151,10 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
         let mut exp_base = ACTOR_DEFAULT_EXP_BASE;
         let mut exp_inflation = ACTOR_DEFAULT_EXP_INFLATION;
         let mut exp_correction = ACTOR_DEFAULT_EXP_CORRECTION;
+        let mut equipment = [0u32; EQUIPMENT_SLOTS];
+        let mut two_weapons = false;
+        let mut fix_equipment = false;
+        let mut unarmed_animation = 0;
         loop {
             let sub_id = reader.varint()?;
             if sub_id == 0 {
@@ -127,10 +167,14 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
                 ACTOR_TITLE => title = decode_cp1250(sub_data),
                 ACTOR_INITIAL_LEVEL => initial_level = Reader::new(sub_data).varint()?,
                 ACTOR_FINAL_LEVEL => final_level = Some(Reader::new(sub_data).varint()?),
+                ACTOR_TWO_WEAPON => two_weapons = Reader::new(sub_data).varint()? != 0,
+                ACTOR_LOCK_EQUIPMENT => fix_equipment = Reader::new(sub_data).varint()? != 0,
                 ACTOR_PARAMETERS => parameters = sub_data,
                 ACTOR_EXP_BASE => exp_base = Reader::new(sub_data).varint()?,
                 ACTOR_EXP_INFLATION => exp_inflation = Reader::new(sub_data).varint()?,
                 ACTOR_EXP_CORRECTION => exp_correction = Reader::new(sub_data).varint()?,
+                ACTOR_INITIAL_EQUIPMENT => equipment = read_equipment(sub_data),
+                ACTOR_UNARMED_ANIMATION => unarmed_animation = Reader::new(sub_data).varint()?,
                 _ => {}
             }
         }
@@ -156,6 +200,14 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
             exp_base,
             exp_inflation,
             exp_correction,
+            weapon: equipment[0],
+            shield: equipment[1],
+            armor: equipment[2],
+            helmet: equipment[3],
+            accessory: equipment[4],
+            two_weapons,
+            fix_equipment,
+            unarmed_animation,
         });
     }
     Ok(actors)
@@ -290,6 +342,44 @@ mod tests {
         assert_eq!((a.initial_hp, a.initial_sp), (0, 0));
         assert_eq!(a.stat_curves.max_hp, vec![0]);
         assert_eq!((a.exp_base, a.exp_inflation, a.exp_correction), (30, 30, 0));
+        assert_eq!(
+            (a.weapon, a.shield, a.armor, a.helmet, a.accessory),
+            (0, 0, 0, 0, 0),
+            "empty equipment slots default to 0"
+        );
+        assert!(!a.two_weapons && !a.fix_equipment);
+        assert_eq!(a.unarmed_animation, 0);
+    }
+
+    #[test]
+    fn parses_initial_equipment_and_flags() {
+        // initial_equipment (0x33) is five Int16 (LE) item ids: weapon 1,
+        // shield 0, armor 64, helmet 83, accessory 0 — Ron's starting gear.
+        let equipment = [1, 0, 0, 0, 64, 0, 83, 0, 0, 0];
+        let hero = element(
+            1,
+            &[
+                subchunk(0x15, &varint(1)),
+                subchunk(0x16, &varint(1)),
+                subchunk(0x33, &equipment),
+                subchunk(0x38, &varint(9)),
+            ],
+        );
+        let ldb = make_ldb(&[(0x0B, section(&[hero]))]);
+        let actor = &parse_actors(&ldb).unwrap()[0];
+        assert_eq!(
+            (
+                actor.weapon,
+                actor.shield,
+                actor.armor,
+                actor.helmet,
+                actor.accessory
+            ),
+            (1, 0, 64, 83, 0)
+        );
+        assert!(actor.two_weapons, "dual wielding");
+        assert!(actor.fix_equipment, "equipment locked");
+        assert_eq!(actor.unarmed_animation, 9);
     }
 
     #[test]

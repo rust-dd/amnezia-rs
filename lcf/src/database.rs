@@ -5,11 +5,12 @@
 //! follow EasyRPG/liblcf `src/generated/lcf/ldb/chunks.h`.
 
 use crate::LcfError;
-use crate::{Reader, decode_cp1250};
+use crate::Reader;
 
 mod actors;
 mod attributes;
 mod common_events;
+mod items;
 mod monsters;
 mod skills;
 mod states;
@@ -18,6 +19,7 @@ mod troops;
 pub use actors::{Actor, StatCurves, parse_actors};
 pub use attributes::{Attribute, parse_attributes};
 pub use common_events::{CommonEvent, parse_common_events};
+pub use items::{Item, parse_items};
 pub use monsters::{Monster, parse_monsters};
 pub use skills::{Skill, parse_skills};
 pub use states::{State, parse_states};
@@ -105,65 +107,10 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
     Ok(chipsets)
 }
 
-/// An item definition: the fields a shop and item menu need. `item_type` is the
-/// raw RM2000 category index (0 normal, 1 weapon, 2 shield, 3 armor, 4 helmet,
-/// 5 accessory, 6 medicine, 7 book, 8 material, 9 special, 10 switch).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Item {
-    pub id: u32,
-    pub name: String,
-    pub description: String,
-    pub item_type: u32,
-    pub price: u32,
-}
-
-const ITEM_SECTION: u32 = 0x0D;
-const ITEM_NAME: u32 = 0x01;
-const ITEM_DESCRIPTION: u32 = 0x02;
-const ITEM_TYPE: u32 = 0x03;
-const ITEM_PRICE: u32 = 0x05;
-
-/// Parse the item table (`ChunkData::items` = `0x0D`) out of an LDB byte slice.
-/// Chunk ids (liblcf `ChunkItem`): name `0x01`, description `0x02`, type
-/// `0x03`, price `0x05`.
-pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
-    let section = find_section(bytes, ITEM_SECTION, LcfError::MissingItems)?;
-    let mut reader = Reader::new(section);
-    let count = reader.varint()?;
-    let mut items = Vec::with_capacity(count as usize);
-    for _ in 0..count {
-        let id = reader.varint()?;
-        let mut item = Item {
-            id,
-            name: String::new(),
-            description: String::new(),
-            item_type: 0,
-            price: 0,
-        };
-        loop {
-            let sub_id = reader.varint()?;
-            if sub_id == 0 {
-                break;
-            }
-            let sub_size = reader.varint()? as usize;
-            let sub_data = reader.take(sub_size)?;
-            match sub_id {
-                ITEM_NAME => item.name = decode_cp1250(sub_data),
-                ITEM_DESCRIPTION => item.description = decode_cp1250(sub_data),
-                ITEM_TYPE => item.item_type = Reader::new(sub_data).varint()?,
-                ITEM_PRICE => item.price = Reader::new(sub_data).varint()?,
-                _ => {}
-            }
-        }
-        items.push(item);
-    }
-    Ok(items)
-}
-
 #[cfg(test)]
 mod tests {
-    use crate::test_util::{element, make_ldb, section, subchunk, varint};
-    use crate::{Item, LcfError, parse_chipsets, parse_items};
+    use crate::test_util::{element, make_ldb, section, subchunk};
+    use crate::{LcfError, parse_chipsets};
 
     #[test]
     fn parses_chipset_graphic_names() {
@@ -235,44 +182,5 @@ mod tests {
             parse_chipsets(&ldb),
             Err(LcfError::MissingChipsets)
         ));
-    }
-
-    #[test]
-    fn parses_item_definitions() {
-        // Description bytes decode CP1250 "Éles penge" (0xC9 = 'É').
-        let desc = [0xC9, 0x6C, 0x65, 0x73, 0x20, 0x70, 0x65, 0x6E, 0x67, 0x65];
-        let sword = element(
-            1,
-            &[
-                subchunk(0x01, b"Ton-Kard"),
-                subchunk(0x02, &desc),
-                subchunk(0x03, &varint(1)),
-                subchunk(0x05, &varint(1200)),
-            ],
-        );
-        let potion = element(2, &[subchunk(0x01, b"Ital"), subchunk(0x03, &varint(6))]);
-        let ldb = make_ldb(&[(0x0C, vec![7]), (0x0D, section(&[sword, potion]))]);
-        let items = parse_items(&ldb).unwrap();
-        assert_eq!(items.len(), 2);
-        assert_eq!(
-            items[0],
-            Item {
-                id: 1,
-                name: "Ton-Kard".to_string(),
-                description: "Éles penge".to_string(),
-                item_type: 1,
-                price: 1200,
-            }
-        );
-        assert_eq!(items[1].name, "Ital");
-        assert_eq!(items[1].item_type, 6, "medicine");
-        assert_eq!(items[1].price, 0, "omitted price defaults to 0");
-        assert!(items[1].description.is_empty());
-    }
-
-    #[test]
-    fn parse_items_errors_when_section_absent() {
-        let ldb = make_ldb(&[(0x14, section(&[]))]);
-        assert!(matches!(parse_items(&ldb), Err(LcfError::MissingItems)));
     }
 }

@@ -222,8 +222,9 @@ pub fn convert_hero(input: &Path, output: &Path) -> Result<String> {
 
 /// Convert the actor table in `input/RPG_RT.ldb` into `output/actors.ron` (each
 /// actor's id, name, class title, levels, starting HP/SP, per-level stat curves,
-/// and experience-curve parameters), returning the number of actors written.
-/// The status and equip menus and the level-up system read it.
+/// experience-curve parameters, initial equipment ids, and the dual-wield /
+/// fixed-equipment / unarmed-animation flags), returning the number of actors
+/// written. The status and equip menus and the level-up system read it.
 pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -282,6 +283,14 @@ pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
             exp_base: a.exp_base,
             exp_inflation: a.exp_inflation,
             exp_correction: a.exp_correction,
+            weapon: a.weapon,
+            shield: a.shield,
+            armor: a.armor,
+            helmet: a.helmet,
+            accessory: a.accessory,
+            two_weapons: a.two_weapons,
+            fix_equipment: a.fix_equipment,
+            unarmed_animation: a.unarmed_animation,
         })
         .collect();
     let count = actors.len();
@@ -293,8 +302,11 @@ pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
 }
 
 /// Convert the item table in `input/RPG_RT.ldb` into `output/items.ron` (each
-/// item's id, name, description, category, and price), returning the number of
-/// items written. The shop and item menus read it.
+/// item's id, name, description, category, price, the use-effect a consumable
+/// applies — recovery amounts, cured states, scope, field-only flag, uses — and
+/// the equipment parameters gear applies — stat bonuses, resisted attributes and
+/// guarded states, two-handed flag, hit/crit, and weapon animation), returning
+/// the number of items written. The shop, item, and equip menus read it.
 pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -304,12 +316,46 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
     let parsed = lcf::parse_items(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
     let items: Vec<ItemDef> = parsed
         .into_iter()
-        .map(|i| ItemDef {
-            id: i.id,
-            name: i.name,
-            description: i.description,
-            item_type: i.item_type,
-            price: i.price,
+        .map(|i| {
+            // The raw `state_set`/`attribute_set` sets play different roles by
+            // category: on gear (types 1–5) they are the resisted attributes and
+            // guarded states, on a consumable the states it cures.
+            let is_equipment = matches!(i.item_type, 1..=5);
+            let (cure_states, state_defense) = if is_equipment {
+                (Vec::new(), i.state_set)
+            } else {
+                (i.state_set, Vec::new())
+            };
+            let attribute_defense = if is_equipment {
+                i.attribute_set
+            } else {
+                Vec::new()
+            };
+            ItemDef {
+                id: i.id,
+                name: i.name,
+                description: i.description,
+                item_type: i.item_type,
+                price: i.price,
+                recover_hp: i.recover_hp,
+                recover_hp_rate: i.recover_hp_rate,
+                recover_sp: i.recover_sp,
+                recover_sp_rate: i.recover_sp_rate,
+                cure_states,
+                scope: i.scope,
+                only_field: i.only_field,
+                uses: i.uses,
+                atk: i.atk,
+                def: i.def,
+                spi: i.spi,
+                agi: i.agi,
+                attribute_defense,
+                state_defense,
+                two_handed: i.two_handed,
+                hit: i.hit,
+                crit: i.crit,
+                weapon_animation: i.weapon_animation,
+            }
         })
         .collect();
     let count = items.len();

@@ -65,16 +65,22 @@ fn converts_ldb_to_actors_ron() {
     std::fs::create_dir_all(&input).unwrap();
 
     let params = parameters([[40, 44], [12, 15], [5, 7], [4, 6], [3, 5], [6, 9]]);
+    // initial_equipment (0x33) is five Int16 (LE) item ids: weapon 1, shield 0,
+    // armor 64, helmet 83, accessory 0; 0x15 marks dual wielding; 0x38 the
+    // unarmed attack animation.
     let ron = element(
         1,
         &[
             subchunk(0x01, b"Ron"),
             subchunk(0x02, b"Zsoldos"),
             subchunk(0x07, &varint(2)),
+            subchunk(0x15, &varint(1)),
             subchunk(0x1F, &params),
             subchunk(0x29, &varint(31)),
             subchunk(0x2A, &varint(29)),
             subchunk(0x2B, &varint(40)),
+            subchunk(0x33, &[1, 0, 0, 0, 64, 0, 83, 0, 0, 0]),
+            subchunk(0x38, &varint(9)),
         ],
     );
     let ldb = make_ldb(0x0B, &[ron]);
@@ -106,6 +112,14 @@ fn converts_ldb_to_actors_ron() {
             exp_base: 31,
             exp_inflation: 29,
             exp_correction: 40,
+            weapon: 1,
+            shield: 0,
+            armor: 64,
+            helmet: 83,
+            accessory: 0,
+            two_weapons: true,
+            fix_equipment: false,
+            unarmed_animation: 9,
         }
     );
 }

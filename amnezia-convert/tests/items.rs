@@ -56,7 +56,9 @@ fn converts_ldb_to_items_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    // Description bytes are CP1250: 0xC9 0x6C 0x65 0x73 -> "Éles".
+    // Description bytes are CP1250: 0xC9 0x6C 0x65 0x73 -> "Éles". The sword is a
+    // two-handed weapon: atk 10, def 5, hit 85, crit 5, attack animation 2, and
+    // carrying attribute (element) 1 — surfaced as `attribute_defense` for gear.
     let sword = element(
         1,
         &[
@@ -64,9 +66,30 @@ fn converts_ldb_to_items_ron() {
             subchunk(0x02, &[0xC9, 0x6C, 0x65, 0x73]),
             subchunk(0x03, &varint(1)),
             subchunk(0x05, &varint(1200)),
+            subchunk(0x0B, &varint(10)),
+            subchunk(0x0C, &varint(5)),
+            subchunk(0x0F, &varint(1)),
+            subchunk(0x11, &varint(85)),
+            subchunk(0x12, &varint(5)),
+            subchunk(0x14, &varint(2)),
+            subchunk(0x42, &[1]),
         ],
     );
-    let potion = element(2, &[subchunk(0x01, b"Ital"), subchunk(0x03, &varint(6))]);
+    // A medicine: recover 30% + 20 HP and 5 SP for the whole party, field-only,
+    // curing states 1 and 4.
+    let potion = element(
+        2,
+        &[
+            subchunk(0x01, b"Ital"),
+            subchunk(0x03, &varint(6)),
+            subchunk(0x1F, &varint(1)),
+            subchunk(0x20, &varint(30)),
+            subchunk(0x21, &varint(20)),
+            subchunk(0x23, &varint(5)),
+            subchunk(0x25, &varint(1)),
+            subchunk(0x40, &[1, 0, 0, 1]),
+        ],
+    );
     let ldb = make_ldb(0x0D, &[sword, potion]);
     std::fs::write(input.join("RPG_RT.ldb"), ldb).unwrap();
 
@@ -83,9 +106,38 @@ fn converts_ldb_to_items_ron() {
             description: "Éles".to_string(),
             item_type: 1,
             price: 1200,
+            recover_hp: 0,
+            recover_hp_rate: 0,
+            recover_sp: 0,
+            recover_sp_rate: 0,
+            cure_states: vec![],
+            scope: 0,
+            only_field: false,
+            uses: 0,
+            atk: 10,
+            def: 5,
+            spi: 0,
+            agi: 0,
+            attribute_defense: vec![1],
+            state_defense: vec![],
+            two_handed: true,
+            hit: 85,
+            crit: 5,
+            weapon_animation: 2,
         }
     );
-    assert_eq!(items[1].name, "Ital");
-    assert_eq!(items[1].item_type, 6);
-    assert_eq!(items[1].price, 0);
+    let potion = &items[1];
+    assert_eq!(potion.name, "Ital");
+    assert_eq!(potion.item_type, 6);
+    assert_eq!(potion.price, 0);
+    assert_eq!(potion.recover_hp_rate, 30);
+    assert_eq!(potion.recover_hp, 20);
+    assert_eq!(potion.recover_sp, 5);
+    assert_eq!(potion.scope, 1, "whole party");
+    assert!(potion.only_field);
+    assert_eq!(potion.cure_states, vec![1, 4]);
+    assert!(
+        potion.state_defense.is_empty() && potion.attribute_defense.is_empty(),
+        "a consumable's sets are cure_states, not gear defenses"
+    );
 }

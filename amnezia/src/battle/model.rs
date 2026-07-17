@@ -337,6 +337,14 @@ pub(super) mod testkit {
             exp_base: 30,
             exp_inflation: 30,
             exp_correction: 0,
+            weapon: 0,
+            shield: 0,
+            armor: 0,
+            helmet: 0,
+            accessory: 0,
+            two_weapons: false,
+            fix_equipment: false,
+            unarmed_animation: 0,
         }
     }
 
