@@ -106,6 +106,35 @@ pub fn equipment_bonus(actor: &ActorDef, items: &[ItemDef]) -> Stats {
     bonus
 }
 
+/// The 1-based attribute (element) ids an actor's five equipment slots (weapon,
+/// shield, armor, helmet, accessory) guard against: the de-duplicated union of
+/// each equipped item's `attribute_defense`. Empty slots (id `0`) and ids absent
+/// from `items` contribute nothing. Consumed by [`super::resolve`] to halve a
+/// matching enemy skill's damage against the wearer.
+pub fn equipment_resist(actor: &ActorDef, items: &[ItemDef]) -> Vec<u32> {
+    let slots = [
+        actor.weapon,
+        actor.shield,
+        actor.armor,
+        actor.helmet,
+        actor.accessory,
+    ];
+    let mut resist: Vec<u32> = Vec::new();
+    for id in slots {
+        if id == 0 {
+            continue;
+        }
+        if let Some(item) = items.iter().find(|i| i.id == id) {
+            for &attr in &item.attribute_defense {
+                if !resist.contains(&attr) {
+                    resist.push(attr);
+                }
+            }
+        }
+    }
+    resist
+}
+
 /// RM2000-style physical damage: half the attacker's attack, less a quarter of
 /// the defender's defense, never below zero.
 pub fn physical_damage(attack: u32, defense: u32) -> i32 {
@@ -406,19 +435,26 @@ pub fn choose_enemy_action(
 
 /// Map a chosen enemy `action` to a battle [`Command`] against `target` (a living
 /// party member). A skill action (`kind == 1`) casts its `skill_id`; a basic
-/// action defends (`2`), does nothing (observe/charge/wait — `3`/`4`/`7`), or
-/// attacks (`0`/`1`, plus any unmodelled action — self-destruct, escape, or a
-/// transform — which falls back to a plain attack). `None` (nothing eligible)
-/// also attacks, so an enemy always acts.
+/// action maps by its RM2000 `basic` code: `0` attack, `1` double-attack, `2`
+/// defend, `3`/`7` observe/do-nothing (a no-op [`Command::Nothing`]), `4`
+/// charge-up, `5` self-destruct, `6` escape. An unknown basic — and `None`
+/// (nothing eligible) — falls back to a plain attack, so an enemy always acts.
 pub fn enemy_command(action: Option<&EnemyActionDef>, target: usize) -> Command {
     match action {
         Some(a) if a.kind == 1 => Command::Skill {
             skill_id: a.skill_id,
             target,
         },
-        Some(a) if a.basic == 2 => Command::Defend,
-        Some(a) if matches!(a.basic, 3 | 4 | 7) => Command::Nothing,
-        _ => Command::Attack { target },
+        Some(a) => match a.basic {
+            1 => Command::DoubleAttack { target },
+            2 => Command::Defend,
+            3 | 7 => Command::Nothing,
+            4 => Command::Charge,
+            5 => Command::SelfDestruct,
+            6 => Command::Escape,
+            _ => Command::Attack { target },
+        },
+        None => Command::Attack { target },
     }
 }
 
@@ -823,5 +859,56 @@ mod tests {
             enemy_command(None, 3),
             Command::Attack { target: 3 }
         ));
+    }
+
+    #[test]
+    fn enemy_command_maps_the_monster_only_basics() {
+        assert!(matches!(
+            enemy_command(Some(&action(0, 1, 0, 0, 0, 0, 0)), 2),
+            Command::DoubleAttack { target: 2 }
+        ));
+        assert!(matches!(
+            enemy_command(Some(&action(0, 4, 0, 0, 0, 0, 0)), 0),
+            Command::Charge
+        ));
+        assert!(matches!(
+            enemy_command(Some(&action(0, 5, 0, 0, 0, 0, 0)), 0),
+            Command::SelfDestruct
+        ));
+        assert!(matches!(
+            enemy_command(Some(&action(0, 6, 0, 0, 0, 0, 0)), 0),
+            Command::Escape
+        ));
+        // Observe (3) and do-nothing (7) both no-op; an unknown basic attacks.
+        assert!(matches!(
+            enemy_command(Some(&action(0, 7, 0, 0, 0, 0, 0)), 0),
+            Command::Nothing
+        ));
+        assert!(matches!(
+            enemy_command(Some(&action(0, 9, 0, 0, 0, 0, 0)), 4),
+            Command::Attack { target: 4 }
+        ));
+    }
+
+    #[test]
+    fn equipment_resist_unions_attribute_defense_and_dedups() {
+        use super::super::model::testkit::actor;
+        let mut weapon = gear(1, 0, 0, 0, 0);
+        weapon.attribute_defense = vec![3];
+        let mut armor = gear(2, 0, 0, 0, 0);
+        armor.attribute_defense = vec![5, 3]; // overlaps the weapon's 3
+        let mut unequipped = gear(9, 0, 0, 0, 0);
+        unequipped.attribute_defense = vec![7];
+        let items = vec![weapon, armor, unequipped];
+        let mut a = actor(1, 2, 60, 30);
+        a.weapon = 1;
+        a.armor = 2; // shield/helmet/accessory stay empty
+        let mut resist = equipment_resist(&a, &items);
+        resist.sort();
+        assert_eq!(resist, vec![3, 5]); // deduped union; unequipped 7 excluded
+        // No gear -> nothing guarded.
+        a.weapon = 0;
+        a.armor = 0;
+        assert!(equipment_resist(&a, &items).is_empty());
     }
 }

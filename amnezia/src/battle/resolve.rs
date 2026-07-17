@@ -102,12 +102,10 @@ impl Battle {
                         self.enemies[ei].name, self.enemies[ti].name, dmg
                     )
                 } else {
-                    let attack = self.enemies[ei].stats.attack;
                     let Some(ti) = self.retarget_member(target) else {
                         return;
                     };
-                    let base = logic::physical_damage(attack, self.members[ti].stats.defense);
-                    let dmg = self.hit_member(ti, base);
+                    let dmg = self.enemy_strike_member(ei, ti);
                     format!(
                         "{} támad: {} -{}",
                         self.enemies[ei].name, self.members[ti].name, dmg
@@ -120,7 +118,42 @@ impl Battle {
                     None => return,
                 }
             }
-            (Source::Enemy(_), _) => return,
+            (Source::Enemy(ei), Command::DoubleAttack { target }) => {
+                let Some(ti) = self.retarget_member(target) else {
+                    return;
+                };
+                let d1 = self.enemy_strike_member(ei, ti);
+                let d2 = self.enemy_strike_member(ei, ti);
+                format!(
+                    "{} kétszer támad: {} -{d1}, -{d2}",
+                    self.enemies[ei].name, self.members[ti].name
+                )
+            }
+            (Source::Enemy(ei), Command::Defend) => {
+                self.enemies[ei].defending = true;
+                format!("{} védekezik", self.enemies[ei].name)
+            }
+            (Source::Enemy(ei), Command::SelfDestruct) => {
+                let damage = self.enemies[ei].stats.attack as i32;
+                let name = self.enemies[ei].name.clone();
+                for ti in self.living_members() {
+                    self.hit_member(ti, damage);
+                }
+                self.enemies[ei].hp = 0;
+                format!("{name} felrobban!")
+            }
+            (Source::Enemy(ei), Command::Escape) => {
+                self.enemies[ei].fled = true;
+                format!("{} elmenekül", self.enemies[ei].name)
+            }
+            (Source::Enemy(ei), Command::Charge) => {
+                self.enemies[ei].charging = true;
+                format!("{} erőt gyűjt", self.enemies[ei].name)
+            }
+            (Source::Enemy(ei), Command::Nothing) => {
+                format!("{} tétovázik", self.enemies[ei].name)
+            }
+            _ => return,
         };
         self.log.push(line);
     }
@@ -151,7 +184,12 @@ impl Battle {
             base
         };
         let roll = (rng_next(&mut self.rng) % 21) as u32;
-        let dmg = logic::with_variance(base, roll).max(0);
+        let mut dmg = logic::with_variance(base, roll).max(0);
+        // A defending foe halves the final result (min 1 on a landed hit),
+        // matching the member Defend, applied after element/crit/variance.
+        if self.enemies[ti].defending && dmg > 0 {
+            dmg = logic::defended(dmg).max(1);
+        }
         self.enemies[ti].hp -= dmg;
         self.release_states_on_enemy(ti);
         Strike::Hit { dmg, crit }
@@ -159,7 +197,10 @@ impl Battle {
 
     fn hit_enemy(&mut self, ti: usize, base: i32) -> i32 {
         let roll = (rng_next(&mut self.rng) % 21) as u32;
-        let dmg = logic::with_variance(base, roll).max(0);
+        let mut dmg = logic::with_variance(base, roll).max(0);
+        if self.enemies[ti].defending && dmg > 0 {
+            dmg = logic::defended(dmg).max(1);
+        }
         self.enemies[ti].hp -= dmg;
         self.release_states_on_enemy(ti);
         dmg
@@ -174,6 +215,22 @@ impl Battle {
         self.members[ti].hp -= dmg;
         self.release_states_on_member(ti);
         dmg
+    }
+
+    /// One enemy `ei` physical strike on member `ti`, reusing `hit_member` (its
+    /// ±10% variance and the member's own defend halving). A pending charge-up
+    /// doubles the blow and is consumed here, so the foe's *next* strike — this
+    /// one — lands double and later strikes are normal again.
+    fn enemy_strike_member(&mut self, ei: usize, ti: usize) -> i32 {
+        let mut base = logic::physical_damage(
+            self.enemies[ei].stats.attack,
+            self.members[ti].stats.defense,
+        );
+        if self.enemies[ei].charging {
+            base *= 2;
+            self.enemies[ei].charging = false;
+        }
+        self.hit_member(ti, base)
     }
 
     /// Resolve member `pi`'s cast of skill `skill_id` at `target`: deduct SP, then
@@ -401,8 +458,9 @@ impl Battle {
 
     /// Resolve enemy `ei`'s cast of `skill_id` at member `target`: an ally-scope
     /// skill (scope 2/3/4) heals the caster itself (a foe keeps no ally list),
-    /// clamped to its max HP; any other scope damages the member (halved while it
-    /// defends, like a physical hit). `None` for an unknown skill id.
+    /// clamped to its max HP; any other scope damages the member (halved once if
+    /// the member's equipment guards one of the skill's elements, and again while
+    /// it defends, like a physical hit). `None` for an unknown skill id.
     fn enemy_cast(&mut self, ei: usize, skill_id: u32, target: usize) -> Option<String> {
         let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
         let spirit = self.enemies[ei].stats.spirit;
@@ -417,6 +475,15 @@ impl Battle {
         }
         let ti = self.retarget_member(target)?;
         let base = logic::skill_damage(skill.power, spirit, self.members[ti].stats.spirit);
+        // Members carry no A–E element ranks, so an enemy skill's element bites
+        // only through the target's equipment: one guarded element halves it
+        // (min 1). Only skills that actually carry an attribute can be resisted.
+        let resisted = base > 0
+            && skill
+                .attributes
+                .iter()
+                .any(|a| self.members[ti].resist_attributes.contains(a));
+        let base = if resisted { (base / 2).max(1) } else { base };
         let dmg = self.hit_member(ti, base);
         Some(format!("{name} varázsol: {} -{dmg}", self.members[ti].name))
     }
@@ -597,9 +664,15 @@ impl Battle {
         }
     }
 
-    /// Total `(exp, gold)` for defeating the whole troop.
+    /// Total `(exp, gold)` for defeating the troop: every foe actually beaten. A
+    /// fled foe (RM2000 Escape) is not defeated, so it grants nothing.
     pub fn victory_rewards(&self) -> (u32, u32) {
-        let rewards: Vec<(u32, u32)> = self.enemies.iter().map(|e| (e.exp, e.gold)).collect();
+        let rewards: Vec<(u32, u32)> = self
+            .enemies
+            .iter()
+            .filter(|e| !e.fled)
+            .map(|e| (e.exp, e.gold))
+            .collect();
         logic::total_rewards(&rewards)
     }
 
@@ -1040,5 +1113,195 @@ mod tests {
         assert_eq!(battle.members[1].hp, (before_ally + 20).min(max));
         assert_eq!(battle.members[0].hp, before_caster); // the caster is untouched
         assert!(line.contains("+20 HP"));
+    }
+
+    /// An always-eligible enemy AI entry of the given `basic` code.
+    fn enemy_action_def(basic: u32) -> amnezia_data::EnemyActionDef {
+        amnezia_data::EnemyActionDef {
+            kind: 0,
+            basic,
+            skill_id: 0,
+            enemy_id: 0,
+            condition_type: 0, // always eligible
+            condition_min: 0,
+            condition_max: 0,
+            priority: 1,
+        }
+    }
+
+    #[test]
+    fn a_defending_foe_takes_half_of_an_identical_strike() {
+        let mut battle = build_1v2();
+        battle.members[0].weapon_hit = 100; // never miss
+        battle.members[0].weapon_crit = 0; // never crit — isolate the halving
+        // Foe 0 (open) and foe 1 (defending) are identical bandits; strike each
+        // from the same RNG state so only the Defend stance differs.
+        let rng_save = battle.rng;
+        let Strike::Hit { dmg: full, .. } = battle.strike_enemy(0, 0) else {
+            panic!("a forced-hit strike missed");
+        };
+        battle.rng = rng_save;
+        battle.enemies[1].defending = true;
+        let Strike::Hit { dmg: half, .. } = battle.strike_enemy(0, 1) else {
+            panic!("a forced-hit strike missed");
+        };
+        assert!(half < full);
+        assert_eq!(half, (full / 2).max(1));
+    }
+
+    #[test]
+    fn a_defending_enemy_guards_and_deals_no_damage_that_turn() {
+        let mut battle = build_1v2();
+        for e in &mut battle.enemies {
+            e.actions = vec![enemy_action_def(2)]; // basic 2 = defend
+        }
+        let hp_before = battle.members[0].hp;
+        battle.commit(Command::Defend); // the lone member defends -> resolution
+        while battle.resolve_next() {}
+        assert!(battle.enemies.iter().all(|e| e.defending));
+        assert_eq!(battle.members[0].hp, hp_before); // no foe attacked
+        assert!(battle.log.iter().any(|l| l.contains("védekezik")));
+    }
+
+    #[test]
+    fn a_double_attack_strikes_the_target_twice() {
+        let mut battle = build_1v2();
+        let hp0 = battle.members[0].hp;
+        let rng_save = battle.rng;
+        // Baseline: a single enemy strike from this RNG state.
+        battle.apply(Action {
+            source: Source::Enemy(0),
+            kind: Command::Attack { target: 0 },
+            agility: 0,
+        });
+        let single = hp0 - battle.members[0].hp;
+        assert!(single > 0);
+        // Same RNG state, but a double-attack: the first blow matches `single`,
+        // the second adds more, so the total clearly exceeds one strike.
+        battle.rng = rng_save;
+        battle.members[0].hp = hp0;
+        battle.apply(Action {
+            source: Source::Enemy(0),
+            kind: Command::DoubleAttack { target: 0 },
+            agility: 0,
+        });
+        let double = hp0 - battle.members[0].hp;
+        assert!(
+            double > single,
+            "double-attack ({double}) should exceed a single strike ({single})"
+        );
+    }
+
+    #[test]
+    fn self_destruct_hits_every_member_then_kills_the_foe() {
+        let mut battle = build_party2(); // 2 members, 1 foe (attack 20)
+        let hp = [battle.members[0].hp, battle.members[1].hp];
+        battle.apply(Action {
+            source: Source::Enemy(0),
+            kind: Command::SelfDestruct,
+            agility: 0,
+        });
+        assert!(battle.members[0].hp < hp[0]);
+        assert!(battle.members[1].hp < hp[1]);
+        assert_eq!(battle.enemies[0].hp, 0);
+        assert!(!battle.enemies[0].alive());
+        assert!(battle.log.iter().any(|l| l.contains("felrobban")));
+    }
+
+    #[test]
+    fn an_escaping_foe_leaves_battle_and_grants_no_reward() {
+        let mut battle = build_1v2(); // 2 foes, each 10 exp / 30 gold
+        battle.apply(Action {
+            source: Source::Enemy(0),
+            kind: Command::Escape,
+            agility: 0,
+        });
+        assert!(battle.enemies[0].fled);
+        assert!(!battle.enemies[0].alive());
+        assert!(!battle.living_enemies().contains(&0));
+        // Defeat the remaining foe: victory pays only for the one truly beaten.
+        battle.enemies[1].hp = 0;
+        assert!(matches!(battle.end_state(), Some(BattleOutcome::Victory)));
+        assert_eq!(battle.victory_rewards(), (10, 30));
+        assert!(battle.log.iter().any(|l| l.contains("elmenekül")));
+    }
+
+    #[test]
+    fn a_charged_foe_doubles_its_next_strike_then_clears() {
+        let mut battle = build_1v2();
+        let hp0 = battle.members[0].hp;
+        let rng_save = battle.rng;
+        battle.apply(Action {
+            source: Source::Enemy(0),
+            kind: Command::Attack { target: 0 },
+            agility: 0,
+        });
+        let normal = hp0 - battle.members[0].hp;
+        assert!(normal > 0);
+        // Same RNG, but the foe has charged: the strike lands double, then clears.
+        battle.rng = rng_save;
+        battle.members[0].hp = hp0;
+        battle.enemies[0].charging = true;
+        battle.apply(Action {
+            source: Source::Enemy(0),
+            kind: Command::Attack { target: 0 },
+            agility: 0,
+        });
+        let charged = hp0 - battle.members[0].hp;
+        assert!(
+            charged > normal,
+            "charged strike ({charged}) should exceed a normal one ({normal})"
+        );
+        assert!(!battle.enemies[0].charging); // consumed by the strike
+    }
+
+    #[test]
+    fn equipped_element_defence_halves_a_matching_enemy_skill_only() {
+        use super::super::model::testkit;
+        use crate::progression::Progression;
+        use crate::vitals::Vitals;
+        let mut ron = testkit::actor(1, 3, 200, 50);
+        ron.armor = 2; // equip armor guarding attribute 5
+        let actors = vec![&ron];
+        let items = vec![testkit::item(2, 0, 0, 0, 0, 5)];
+        let monsters = vec![testkit::monster(1, 30, 10, 30)];
+        let troop = testkit::troop(&[(1, 100, 100)]);
+        let mut battle = Battle::build(
+            &troop,
+            &monsters,
+            &actors,
+            &items,
+            &[],
+            &[],
+            &[],
+            &Vitals::default(),
+            &Progression::default(),
+            "Cave1".into(),
+            5,
+        );
+        assert!(battle.members[0].resist_attributes.contains(&5));
+        // Wind to a no-spread variance roll so the halving is exact and the two
+        // casts compare cleanly.
+        loop {
+            let mut probe = battle.rng;
+            if rng_next(&mut probe) % 21 == 10 {
+                break;
+            }
+            rng_next(&mut battle.rng);
+        }
+        let rng_save = battle.rng;
+        let before = battle.members[0].hp;
+        // A guarded (attribute 5) enemy skill is halved.
+        battle.skills = vec![damage_skill(1, 40, vec![5], vec![])];
+        battle.enemy_cast(0, 1, 0);
+        let resisted = before - battle.members[0].hp;
+        // The same skill on an unguarded element (6) lands full, same RNG.
+        battle.rng = rng_save;
+        battle.members[0].hp = before;
+        battle.skills = vec![damage_skill(1, 40, vec![6], vec![])];
+        battle.enemy_cast(0, 1, 0);
+        let full = before - battle.members[0].hp;
+        assert!(resisted < full);
+        assert_eq!(resisted, (full / 2).max(1));
     }
 }

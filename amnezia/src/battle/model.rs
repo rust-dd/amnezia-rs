@@ -66,6 +66,10 @@ pub struct Fighter {
     /// This fighter's active status effects as `(state_id, turns_held)` pairs; the
     /// turn count drives [`logic::tick_recovery`]'s hold-then-wear-off schedule.
     pub states: Vec<(u32, u32)>,
+    /// The 1-based attribute (element) ids this member's equipped gear guards
+    /// against, unioned across its five slots at build time. A matching enemy
+    /// skill's damage is halved once in [`super::resolve`].
+    pub(super) resist_attributes: Vec<u32>,
 }
 
 impl Fighter {
@@ -96,14 +100,26 @@ pub struct Foe {
     /// This foe's active status effects as `(state_id, turns_held)` pairs; the
     /// turn count drives [`logic::tick_recovery`]'s hold-then-wear-off schedule.
     pub states: Vec<(u32, u32)>,
+    /// Whether this foe took the RM2000 Defend stance on its last turn; it halves
+    /// incoming damage in [`super::resolve`] until [`Battle::new_round`] clears it.
+    pub(super) defending: bool,
+    /// Whether this foe fled the battle (RM2000 monster Escape). It then counts as
+    /// gone (see [`Foe::alive`]) but, unlike a defeated foe, grants no reward.
+    pub(super) fled: bool,
+    /// Whether this foe gathered power (RM2000 Charge): its next physical strike
+    /// deals double, and the flag is consumed on that strike.
+    pub(super) charging: bool,
     /// This foe's RM2000 battle-AI action list, consulted each round to choose
     /// its command (cast a skill, defend, or attack on turn/HP conditions).
     pub actions: Vec<EnemyActionDef>,
 }
 
 impl Foe {
+    /// Whether this foe is still in the fight: living HP and not fled. A fled foe
+    /// (RM2000 Escape) counts as gone, so it drops out of targeting and the
+    /// living-enemy list and grants no reward.
     pub fn alive(&self) -> bool {
-        self.hp > 0
+        self.hp > 0 && !self.fled
     }
 
     /// This foe's damage rank (0=A … 4=E) against attribute `attr_id`. Ids past
@@ -118,15 +134,35 @@ impl Foe {
     }
 }
 
-/// A chosen action, from either side, awaiting resolution. Enemies only ever
-/// [`Command::Attack`].
+/// A chosen action, from either side, awaiting resolution. Party members choose
+/// `Attack`, `Skill`, `Item`, `Defend`, or `Nothing`; the enemy AI reuses `Attack`,
+/// `Skill`, `Defend`, and `Nothing`, and adds the RM2000 monster-only basics
+/// `DoubleAttack`, `SelfDestruct`, `Escape`, and `Charge`.
 #[derive(Clone, Copy)]
 pub enum Command {
-    Attack { target: usize },
-    Skill { skill_id: u32, target: usize },
-    Item { item_id: u32, target: usize },
+    Attack {
+        target: usize,
+    },
+    Skill {
+        skill_id: u32,
+        target: usize,
+    },
+    Item {
+        item_id: u32,
+        target: usize,
+    },
     Defend,
     Nothing,
+    /// Enemy-only: strike the target twice (two independent hit/damage rolls).
+    DoubleAttack {
+        target: usize,
+    },
+    /// Enemy-only: damage every living party member, then the foe dies.
+    SelfDestruct,
+    /// Enemy-only: flee the fight — the foe leaves without granting a reward.
+    Escape,
+    /// Enemy-only: gather power so the foe's next physical strike deals double.
+    Charge,
 }
 
 /// Which side (and index) an action originates from.
@@ -228,6 +264,9 @@ impl Battle {
                     attribute_ranks: d.attribute_ranks.clone(),
                     state_ranks: d.state_ranks.clone(),
                     states: Vec::new(),
+                    defending: false,
+                    fled: false,
+                    charging: false,
                     actions: d.actions.clone(),
                 })
             })
@@ -268,6 +307,7 @@ impl Battle {
                     weapon_crit: weapon.map_or(0, |w| w.crit),
                     weapon_element: weapon.and_then(|w| w.attribute_defense.first().copied()),
                     states: Vec::new(),
+                    resist_attributes: logic::equipment_resist(a, items),
                 }
             })
             .collect();
@@ -391,6 +431,11 @@ impl Battle {
         for f in &mut self.members {
             f.command = None;
             f.defending = false;
+        }
+        // A foe's Defend lasts until its next turn; clearing it here (one round
+        // later) is the RM2000 approximation, mirroring the members above.
+        for e in &mut self.enemies {
+            e.defending = false;
         }
         self.run_recovery();
         self.queue.clear();
@@ -602,6 +647,16 @@ mod tests {
         assert!(battle.members[0].command.is_none());
         assert!(!battle.members[0].defending);
         assert!(battle.phase == Phase::Command);
+    }
+
+    #[test]
+    fn new_round_clears_every_foe_defence() {
+        let mut battle = build_1v2();
+        for e in &mut battle.enemies {
+            e.defending = true;
+        }
+        battle.new_round();
+        assert!(battle.enemies.iter().all(|e| !e.defending));
     }
 
     #[test]
