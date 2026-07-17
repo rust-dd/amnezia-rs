@@ -22,6 +22,7 @@ mod state;
 mod teleport;
 mod text;
 mod tiles;
+mod title;
 mod vitals;
 mod world;
 
@@ -59,6 +60,7 @@ fn main() -> AppExit {
             menu::MenuPlugin,
             shop::ShopPlugin,
             battle::BattlePlugin,
+            title::TitlePlugin,
         ))
         .run()
 }

@@ -14,11 +14,29 @@ use crate::world::MapData;
 use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// Directory (relative to the working directory) holding save slots.
 const SAVE_DIR: &str = "saves";
 /// The single v1 save slot.
 const SAVE_PATH: &str = "saves/slot1.ron";
+
+/// A request to load the save slot, honoured by [`save_or_load`] on the next
+/// frame exactly as if `F9` had been pressed. The title screen's "Folytatás" sets
+/// it so a resume reuses the same restore path without duplicating the load body.
+#[derive(Resource, Default)]
+pub struct LoadRequest(pub bool);
+
+/// Whether the single save slot exists on disk, for the title's Continue gate.
+pub fn save_slot_exists() -> bool {
+    slot_exists(SAVE_PATH)
+}
+
+/// Whether `path` names an existing file. Split out so the gate is testable
+/// without depending on the fixed [`SAVE_PATH`].
+fn slot_exists(path: &str) -> bool {
+    Path::new(path).exists()
+}
 
 /// A serialisable snapshot of the whole runtime game state. Maps are stored as
 /// sorted-order-independent `Vec`s of pairs so RON stays diffable and stable.
@@ -39,7 +57,8 @@ pub struct SavePlugin;
 
 impl Plugin for SavePlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, save_or_load);
+        app.init_resource::<LoadRequest>()
+            .add_systems(Update, save_or_load);
     }
 }
 
@@ -58,10 +77,11 @@ fn save_or_load(
     mut party: ResMut<Party>,
     mut inventory: ResMut<Inventory>,
     mut pending: ResMut<PendingTeleport>,
+    mut load_request: ResMut<LoadRequest>,
     mut players: Query<&mut Player>,
 ) {
     let save = keys.just_pressed(KeyCode::F5);
-    let load = keys.just_pressed(KeyCode::F9);
+    let load = keys.just_pressed(KeyCode::F9) || load_request.0;
     if (!save && !load) || dialogue.active || fade.busy() || running.active() {
         return;
     }
@@ -88,7 +108,13 @@ fn save_or_load(
             Ok(()) => info!("saved game to {SAVE_PATH}"),
             Err(e) => error!("save failed: {e}"),
         }
-    } else if let Some(game) = read_save() {
+    } else {
+        // Consume the request whether or not the slot reads back, so a missing or
+        // corrupt file can't wedge a waiting Continue.
+        load_request.0 = false;
+        let Some(game) = read_save() else {
+            return;
+        };
         switches.load(game.switches);
         variables.load(game.variables);
         party.restore(game.party);
@@ -145,5 +171,16 @@ mod tests {
         let ron = ron::ser::to_string_pretty(&game, PrettyConfig::default()).unwrap();
         let decoded: SaveGame = ron::from_str(&ron).unwrap();
         assert_eq!(game, decoded);
+    }
+
+    #[test]
+    fn slot_exists_tracks_the_file() {
+        let path = std::env::temp_dir().join(format!("amnezia_slot_{}.ron", std::process::id()));
+        let path = path.to_str().unwrap();
+        let _ = std::fs::remove_file(path);
+        assert!(!slot_exists(path));
+        std::fs::write(path, "x").unwrap();
+        assert!(slot_exists(path));
+        let _ = std::fs::remove_file(path);
     }
 }

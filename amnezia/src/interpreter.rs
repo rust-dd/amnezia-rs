@@ -15,6 +15,7 @@ use crate::shop::{ShopOpen, ShopRequest};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::{Fade, PendingTeleport};
 use crate::text::{self, HeroName};
+use crate::title::TitleActive;
 use crate::world::{EventSprite, MapEvents, MoveQueue, decode_route};
 use amnezia_data::EventCommand;
 use bevy::ecs::system::SystemParam;
@@ -29,18 +30,19 @@ use commands::*;
 use flow::*;
 use opcodes::*;
 
-/// The overlays that pause the running event (menu, shop, battle). Bundled into
-/// one `SystemParam` so `run_interpreter` stays within Bevy's 16-parameter cap.
+/// The overlays that pause the running event (title, menu, shop, battle). Bundled
+/// into one `SystemParam` so `run_interpreter` stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 pub struct Blockers<'w> {
     menu: Res<'w, MenuOpen>,
     shop: Res<'w, ShopOpen>,
     battle: Res<'w, BattleActive>,
+    title: Res<'w, TitleActive>,
 }
 
 impl Blockers<'_> {
     fn any(&self) -> bool {
-        self.menu.0 || self.shop.0 || self.battle.0
+        self.menu.0 || self.shop.0 || self.battle.0 || self.title.0
     }
 }
 
@@ -439,9 +441,11 @@ fn autorun(
     menu: Res<MenuOpen>,
     shop: Res<ShopOpen>,
     battle: Res<BattleActive>,
+    title: Res<TitleActive>,
     mut running: ResMut<RunningEvent>,
 ) {
-    if running.active() || dialogue.active || fade.busy() || menu.0 || shop.0 || battle.0 {
+    if running.active() || dialogue.active || fade.busy() || menu.0 || shop.0 || battle.0 || title.0
+    {
         return;
     }
     for event in &map_events.events {

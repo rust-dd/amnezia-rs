@@ -13,6 +13,7 @@ use crate::player::{Player, facing_tile};
 use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::Fade;
+use crate::title::TitleActive;
 use crate::world::MapEvents;
 use bevy::prelude::*;
 use bevy::text::FontSource;
@@ -158,11 +159,12 @@ fn interact(
     menu: Res<MenuOpen>,
     shop: Res<ShopOpen>,
     battle: Res<BattleActive>,
+    title: Res<TitleActive>,
     mut dialogue: ResMut<Dialogue>,
     mut running: ResMut<RunningEvent>,
     players: Query<&Player>,
 ) {
-    if fade.busy() || menu.0 || shop.0 || battle.0 {
+    if fade.busy() || menu.0 || shop.0 || battle.0 || title.0 {
         return;
     }
     if !keys.just_pressed(KeyCode::Space) && !keys.just_pressed(KeyCode::Enter) {

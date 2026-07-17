@@ -10,6 +10,7 @@ use crate::font::GameFont;
 use crate::gamedata::GameData;
 use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party};
+use crate::title::TitleActive;
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
@@ -127,11 +128,13 @@ fn menu_input(
     inventory: Res<Inventory>,
     shop: Res<ShopOpen>,
     battle: Res<BattleActive>,
+    title: Res<TitleActive>,
     mut open: ResMut<MenuOpen>,
     mut state: ResMut<MenuState>,
 ) {
-    // A shop or battle owns Escape while it's up, so the menu can't open over it.
-    if !open.0 && (shop.0 || battle.0) {
+    // A shop, battle, or the title screen owns the input while up, so the menu
+    // can't open over it.
+    if !open.0 && (shop.0 || battle.0 || title.0) {
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {

@@ -10,6 +10,7 @@ use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::Fade;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
+use crate::title::TitleActive;
 use crate::world::{Character, MapData, MapEvents, MoveQueue, RouteAction, walk};
 use amnezia_data::EventPage;
 use bevy::prelude::*;
@@ -138,10 +139,12 @@ fn move_player(
     menu: Res<MenuOpen>,
     shop: Res<ShopOpen>,
     battle: Res<BattleActive>,
+    title: Res<TitleActive>,
     mut running: ResMut<RunningEvent>,
     mut players: Query<(&mut Player, &mut MoveQueue)>,
 ) {
-    if dialogue.active || fade.busy() || running.active() || menu.0 || shop.0 || battle.0 {
+    if dialogue.active || fade.busy() || running.active() || menu.0 || shop.0 || battle.0 || title.0
+    {
         return;
     }
     let Ok((mut player, mut queue)) = players.single_mut() else {
