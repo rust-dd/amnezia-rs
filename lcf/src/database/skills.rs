@@ -16,7 +16,10 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// allies) and `skill_type` its family (`0` normal — the only battle-relevant
 /// kind — `1` teleport, `2` escape, `3` switch). `physical_rate`/`magical_rate`
 /// (0–10) weight how much the caster's attack versus spirit feeds the damage
-/// formula. `affect_hp`/`affect_sp` say which pool the effect changes and
+/// formula, and `variance` (0–10) is RM2000's damage-spread factor: the final
+/// effect is randomised around the computed amount by a band that widens with
+/// `variance` (editor default 4). `affect_hp`/`affect_sp` say which pool the
+/// effect changes and
 /// `absorb` whether the caster drains what it deals. `attributes` lists the
 /// 1-based element ids the damage is checked against and `affected_states` the
 /// 1-based state ids it inflicts (RM2000's `state_effects`; this game never sets
@@ -33,6 +36,7 @@ pub struct Skill {
     pub scope: u32,
     pub physical_rate: u32,
     pub magical_rate: u32,
+    pub variance: u32,
     pub affect_hp: bool,
     pub affect_sp: bool,
     pub absorb: bool,
@@ -48,6 +52,7 @@ const SKILL_SP_COST: u32 = 0x0B;
 const SKILL_SCOPE: u32 = 0x0C;
 const SKILL_PHYSICAL_RATE: u32 = 0x15;
 const SKILL_MAGICAL_RATE: u32 = 0x16;
+const SKILL_VARIANCE: u32 = 0x17;
 const SKILL_POWER: u32 = 0x18;
 const SKILL_HIT: u32 = 0x19;
 const SKILL_AFFECT_HP: u32 = 0x1F;
@@ -56,8 +61,10 @@ const SKILL_ABSORB_DAMAGE: u32 = 0x25;
 const SKILL_STATE_EFFECTS: u32 = 0x2A;
 const SKILL_ATTRIBUTE_EFFECTS: u32 = 0x2C;
 
-// RM2000 omits `magical_rate` when it equals the editor default of 3.
+// RM2000 omits `magical_rate` when it equals the editor default of 3, and
+// `variance` when it equals the editor default of 4 (liblcf `RPG::Skill`).
 const SKILL_DEFAULT_MAGICAL_RATE: u32 = 3;
+const SKILL_DEFAULT_VARIANCE: u32 = 4;
 
 /// Decode an LCF `vector<bool>` payload — one byte per element, the byte at
 /// index `i` (0-based) flagging element id `i + 1` — into the ascending list of
@@ -73,11 +80,12 @@ fn decode_flag_ids(data: &[u8]) -> Vec<u32> {
 /// Parse the skill table (`ChunkData::skills` = `0x0C`) out of an LDB byte
 /// slice. Chunk ids (liblcf `ChunkSkill`): name `0x01`, description `0x02`, type
 /// `0x08`, sp_cost `0x0B`, scope `0x0C`, physical_rate `0x15`, magical_rate
-/// `0x16`, power `0x18`, hit `0x19`, affect_hp `0x1F`, affect_sp `0x20`,
-/// absorb_damage `0x25`, state_effects `0x2A`, attribute_effects `0x2C`. Scalar
-/// fields are integer chunks; the two effect lists are `vector<bool>` chunks
-/// (one byte per element). Omitted fields default to 0/false, except
-/// `magical_rate` which defaults to the RM2000 editor value 3.
+/// `0x16`, variance `0x17`, power `0x18`, hit `0x19`, affect_hp `0x1F`,
+/// affect_sp `0x20`, absorb_damage `0x25`, state_effects `0x2A`,
+/// attribute_effects `0x2C`. Scalar fields are integer chunks; the two effect
+/// lists are `vector<bool>` chunks (one byte per element). Omitted fields
+/// default to 0/false, except `magical_rate` (RM2000 editor value 3) and
+/// `variance` (RM2000 editor value 4).
 pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
     let section = find_section(bytes, SKILL_SECTION, LcfError::MissingSkills)?;
     let mut reader = Reader::new(section);
@@ -96,6 +104,7 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
             scope: 0,
             physical_rate: 0,
             magical_rate: SKILL_DEFAULT_MAGICAL_RATE,
+            variance: SKILL_DEFAULT_VARIANCE,
             affect_hp: false,
             affect_sp: false,
             absorb: false,
@@ -117,6 +126,7 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
                 SKILL_SCOPE => skill.scope = Reader::new(sub_data).varint()?,
                 SKILL_PHYSICAL_RATE => skill.physical_rate = Reader::new(sub_data).varint()?,
                 SKILL_MAGICAL_RATE => skill.magical_rate = Reader::new(sub_data).varint()?,
+                SKILL_VARIANCE => skill.variance = Reader::new(sub_data).varint()?,
                 SKILL_POWER => skill.power = Reader::new(sub_data).varint()?,
                 SKILL_HIT => skill.hit = Reader::new(sub_data).varint()?,
                 SKILL_AFFECT_HP => skill.affect_hp = Reader::new(sub_data).varint()? != 0,
@@ -176,6 +186,7 @@ mod tests {
                 scope: 0,
                 physical_rate: 0,
                 magical_rate: 10,
+                variance: 4,
                 affect_hp: true,
                 affect_sp: false,
                 absorb: false,
@@ -197,6 +208,7 @@ mod tests {
         assert_eq!((s.power, s.hit), (0, 0));
         assert_eq!((s.skill_type, s.scope, s.physical_rate), (0, 0, 0));
         assert_eq!(s.magical_rate, 3, "omitted magical_rate defaults to 3");
+        assert_eq!(s.variance, 4, "omitted variance defaults to 4");
         assert!(!s.affect_hp && !s.affect_sp && !s.absorb);
         assert!(s.attributes.is_empty() && s.affected_states.is_empty());
         assert!(s.description.is_empty());
@@ -238,6 +250,16 @@ mod tests {
         let s = &parse_skills(&ldb).unwrap()[0];
         assert_eq!(s.affected_states, vec![2, 9]);
         assert_eq!(s.attributes, vec![1, 3]);
+    }
+
+    #[test]
+    fn parses_skill_variance() {
+        // A skill whose damage spread is set to 6 (chunk 0x17, between
+        // magical_rate 0x16 and power 0x18).
+        let spread = element(5, &[subchunk(0x17, &varint(6))]);
+        let ldb = make_ldb(&[(0x0C, section(&[spread]))]);
+        let s = &parse_skills(&ldb).unwrap()[0];
+        assert_eq!(s.variance, 6, "explicit variance is parsed");
     }
 
     #[test]

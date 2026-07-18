@@ -176,9 +176,9 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
 
 /// Convert the skill table in `input/RPG_RT.ldb` into `output/skills.ron` (each
 /// skill's id, name, description, SP cost, power, hit rate, and battle effect —
-/// target scope, type, physical/magical rates, HP/SP and absorb flags, and the
-/// element and inflicted-state id lists), returning the number of skills
-/// written. The skill menu and battle system read it.
+/// target scope, type, physical/magical rates, damage variance, HP/SP and
+/// absorb flags, and the element and inflicted-state id lists), returning the
+/// number of skills written. The skill menu and battle system read it.
 pub fn convert_skills(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -199,6 +199,7 @@ pub fn convert_skills(input: &Path, output: &Path) -> Result<usize> {
             scope: s.scope,
             physical_rate: s.physical_rate,
             magical_rate: s.magical_rate,
+            variance: s.variance,
             affect_hp: s.affect_hp,
             affect_sp: s.affect_sp,
             absorb: s.absorb,

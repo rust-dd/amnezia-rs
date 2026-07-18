@@ -305,6 +305,7 @@ mod tests {
             scope,
             physical_rate: 0,
             magical_rate: 3,
+            variance: 4,
             affect_hp: true,
             affect_sp: false,
             absorb: false,

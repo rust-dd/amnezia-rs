@@ -715,6 +715,11 @@ mod tests {
             hold_turn: 0,
             auto_release_prob,
             release_by_damage: 0,
+            hp_change_type: 0,
+            hp_change_max: 0,
+            hp_change_val: 0,
+            hp_change_map_steps: 0,
+            hp_change_map_val: 0,
         }
     }
 

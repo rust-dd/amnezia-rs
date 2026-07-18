@@ -69,8 +69,18 @@ fn converts_ldb_to_states_ron() {
             subchunk(0x17, &varint(50)),
         ],
     );
-    // Poison: acts normally (restriction omitted -> 0), priority omitted -> 50.
-    let poison = element(2, &[subchunk(0x01, b"Mereg")]);
+    // Poison: acts normally (restriction omitted -> 0), priority omitted -> 50,
+    // and carries an explicit per-turn HP-change block: type 0x2D=1, max-percent
+    // 0x3D=10, flat val 0x3E=5.
+    let poison = element(
+        2,
+        &[
+            subchunk(0x01, b"Mereg"),
+            subchunk(0x2D, &varint(1)),
+            subchunk(0x3D, &varint(10)),
+            subchunk(0x3E, &varint(5)),
+        ],
+    );
     let ldb = make_ldb(0x12, &[sleep, poison]);
     std::fs::write(input.join("RPG_RT.ldb"), ldb).unwrap();
 
@@ -89,6 +99,11 @@ fn converts_ldb_to_states_ron() {
             hold_turn: 1,
             auto_release_prob: 25,
             release_by_damage: 50,
+            hp_change_type: 0,
+            hp_change_max: 0,
+            hp_change_val: 0,
+            hp_change_map_steps: 0,
+            hp_change_map_val: 0,
         }
     );
     assert_eq!(states[1].name, "Mereg");
@@ -101,5 +116,19 @@ fn converts_ldb_to_states_ron() {
             states[1].release_by_damage
         ),
         (0, 0, 0)
+    );
+    assert_eq!(
+        (
+            states[1].hp_change_type,
+            states[1].hp_change_max,
+            states[1].hp_change_val
+        ),
+        (1, 10, 5),
+        "poison's per-turn HP drain round-trips through the RON"
+    );
+    assert_eq!(
+        (states[1].hp_change_map_steps, states[1].hp_change_map_val),
+        (0, 0),
+        "omitted map-step drain defaults to 0"
     );
 }

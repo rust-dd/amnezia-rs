@@ -6,9 +6,10 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 /// Convert the state (status condition) table in `input/RPG_RT.ldb` into
-/// `output/states.ron` (each state's id, name, action restriction, priority, and
-/// recovery odds), returning the number of states written. The battle system
-/// reads it to apply and lift status conditions.
+/// `output/states.ron` (each state's id, name, action restriction, priority,
+/// recovery odds, and per-turn HP-change fields), returning the number of states
+/// written. The battle system reads it to apply and lift status conditions and
+/// to drain or regenerate HP each turn (e.g. Poison).
 pub fn convert_states(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -26,6 +27,11 @@ pub fn convert_states(input: &Path, output: &Path) -> Result<usize> {
             hold_turn: s.hold_turn,
             auto_release_prob: s.auto_release_prob,
             release_by_damage: s.release_by_damage,
+            hp_change_type: s.hp_change_type,
+            hp_change_max: s.hp_change_max,
+            hp_change_val: s.hp_change_val,
+            hp_change_map_steps: s.hp_change_map_steps,
+            hp_change_map_val: s.hp_change_map_val,
         })
         .collect();
     let count = states.len();

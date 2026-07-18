@@ -1,8 +1,9 @@
 //! State (status condition) definitions from the database
 //! (`ChunkData::states`, `0x12`). A state is a battle status — KO, Poison,
-//! Sleep, Berserk — that changes how a battler may act (`restriction`) and how
-//! it wears off (`hold_turn`, `auto_release_prob`, `release_by_damage`). Chunk
-//! ids follow liblcf `ChunkState`.
+//! Sleep, Berserk — that changes how a battler may act (`restriction`), how it
+//! wears off (`hold_turn`, `auto_release_prob`, `release_by_damage`), and
+//! whether it drains or regenerates HP each turn (`hp_change_*`). Chunk ids
+//! follow liblcf `ChunkState`.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
@@ -19,6 +20,13 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// percent chance to lift when the battler is hit by a physical attack. All
 /// three default to `0` (a state that never lifts on its own, like KO or
 /// Poison).
+///
+/// `hp_change_type` says how an HP-changing state moves HP (liblcf
+/// `ChangeType`: `0` lose, `1` gain, `2` nothing). Each battle turn the battler
+/// loses or gains `hp_change_val` flat points plus `hp_change_max` percent of
+/// its max HP, while `hp_change_map_steps`/`hp_change_map_val` drain it on the
+/// map (`hp_change_map_val` HP per `hp_change_map_steps` steps walked). All five
+/// default to `0` (a zero-amount no-op); Poison sets them to bleed HP each turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
     pub id: u32,
@@ -28,6 +36,11 @@ pub struct State {
     pub hold_turn: u32,
     pub auto_release_prob: u32,
     pub release_by_damage: u32,
+    pub hp_change_type: u32,
+    pub hp_change_max: u32,
+    pub hp_change_val: u32,
+    pub hp_change_map_steps: u32,
+    pub hp_change_map_val: u32,
 }
 
 const STATE_SECTION: u32 = 0x12;
@@ -37,6 +50,11 @@ const STATE_RESTRICTION: u32 = 0x05;
 const STATE_HOLD_TURN: u32 = 0x15;
 const STATE_AUTO_RELEASE_PROB: u32 = 0x16;
 const STATE_RELEASE_BY_DAMAGE: u32 = 0x17;
+const STATE_HP_CHANGE_TYPE: u32 = 0x2D;
+const STATE_HP_CHANGE_MAX: u32 = 0x3D;
+const STATE_HP_CHANGE_VAL: u32 = 0x3E;
+const STATE_HP_CHANGE_MAP_STEPS: u32 = 0x3F;
+const STATE_HP_CHANGE_MAP_VAL: u32 = 0x40;
 
 // RM2000 omits a state's priority when it equals the editor default of 50; the
 // death state (id 1) leaves its name to the System vocabulary and so stores no
@@ -46,8 +64,10 @@ const STATE_DEFAULT_PRIORITY: u32 = 50;
 /// Parse the state table (`ChunkData::states` = `0x12`) out of an LDB byte
 /// slice. Chunk ids (liblcf `ChunkState`): name `0x01`, priority `0x04`,
 /// restriction `0x05`, hold_turn `0x15`, auto_release_prob `0x16`,
-/// release_by_damage `0x17`. Each numeric field is a scalar integer chunk;
-/// omitted recovery odds default to 0 and omitted priority to 50.
+/// release_by_damage `0x17`, hp_change_type `0x2D`, hp_change_max `0x3D`,
+/// hp_change_val `0x3E`, hp_change_map_steps `0x3F`, hp_change_map_val `0x40`.
+/// Each numeric field is a scalar integer chunk; omitted recovery odds and
+/// hp-change fields default to 0 and omitted priority to 50.
 pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
     let section = find_section(bytes, STATE_SECTION, LcfError::MissingStates)?;
     let mut reader = Reader::new(section);
@@ -63,6 +83,11 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
             hold_turn: 0,
             auto_release_prob: 0,
             release_by_damage: 0,
+            hp_change_type: 0,
+            hp_change_max: 0,
+            hp_change_val: 0,
+            hp_change_map_steps: 0,
+            hp_change_map_val: 0,
         };
         loop {
             let sub_id = reader.varint()?;
@@ -81,6 +106,15 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
                 }
                 STATE_RELEASE_BY_DAMAGE => {
                     state.release_by_damage = Reader::new(sub_data).varint()?
+                }
+                STATE_HP_CHANGE_TYPE => state.hp_change_type = Reader::new(sub_data).varint()?,
+                STATE_HP_CHANGE_MAX => state.hp_change_max = Reader::new(sub_data).varint()?,
+                STATE_HP_CHANGE_VAL => state.hp_change_val = Reader::new(sub_data).varint()?,
+                STATE_HP_CHANGE_MAP_STEPS => {
+                    state.hp_change_map_steps = Reader::new(sub_data).varint()?
+                }
+                STATE_HP_CHANGE_MAP_VAL => {
+                    state.hp_change_map_val = Reader::new(sub_data).varint()?
                 }
                 _ => {}
             }
@@ -122,7 +156,38 @@ mod tests {
                 hold_turn: 1,
                 auto_release_prob: 25,
                 release_by_damage: 50,
+                hp_change_type: 0,
+                hp_change_max: 0,
+                hp_change_val: 0,
+                hp_change_map_steps: 0,
+                hp_change_map_val: 0,
             }
+        );
+    }
+
+    #[test]
+    fn parses_hp_change_block() {
+        // An explicit per-turn HP-change block parses its three scalar fields:
+        // type (0x2D), max-percent (0x3D), flat val (0x3E). The map-step fields
+        // are omitted, so they stay 0.
+        let bleeder = element(
+            2,
+            &[
+                subchunk(0x01, b"Mereg"),
+                subchunk(0x2D, &varint(1)),
+                subchunk(0x3D, &varint(10)),
+                subchunk(0x3E, &varint(5)),
+            ],
+        );
+        let ldb = make_ldb(&[(0x12, section(&[bleeder]))]);
+        let state = &parse_states(&ldb).unwrap()[0];
+        assert_eq!(state.hp_change_type, 1);
+        assert_eq!(state.hp_change_max, 10);
+        assert_eq!(state.hp_change_val, 5);
+        assert_eq!(
+            (state.hp_change_map_steps, state.hp_change_map_val),
+            (0, 0),
+            "omitted map-step drain defaults to 0"
         );
     }
 

@@ -474,6 +474,7 @@ mod tests {
             scope: 0,
             physical_rate: 0,
             magical_rate: 3,
+            variance: 4,
             affect_hp: false,
             affect_sp: false,
             absorb: false,
@@ -720,6 +721,11 @@ mod tests {
             hold_turn,
             auto_release_prob: auto,
             release_by_damage: by_damage,
+            hp_change_type: 0,
+            hp_change_max: 0,
+            hp_change_val: 0,
+            hp_change_map_steps: 0,
+            hp_change_map_val: 0,
         }
     }
 

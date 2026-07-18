@@ -229,11 +229,12 @@ pub struct ItemDef {
 /// targets (`0` one enemy, `1` all enemies, `2` self, `3` one ally, `4` all
 /// allies) and `skill_type` its family (`0` normal — the only battle-relevant
 /// kind — `1` teleport, `2` escape, `3` switch). `physical_rate`/`magical_rate`
-/// (0–10) weight the caster's attack versus spirit in the damage formula.
-/// `affect_hp`/`affect_sp` mark which pool the effect changes and `absorb`
-/// whether the caster drains what it deals. `attributes` holds the 1-based
-/// element ids the damage is checked against and `affected_states` the 1-based
-/// state ids the skill inflicts.
+/// (0–10) weight the caster's attack versus spirit in the damage formula and
+/// `variance` (0–10) sets how widely the final damage is randomised around the
+/// computed amount (RM2000 editor default 4). `affect_hp`/`affect_sp` mark which
+/// pool the effect changes and `absorb` whether the caster drains what it deals.
+/// `attributes` holds the 1-based element ids the damage is checked against and
+/// `affected_states` the 1-based state ids the skill inflicts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillDef {
     pub id: u32,
@@ -250,6 +251,8 @@ pub struct SkillDef {
     pub physical_rate: u32,
     #[serde(default)]
     pub magical_rate: u32,
+    #[serde(default)]
+    pub variance: u32,
     #[serde(default)]
     pub affect_hp: bool,
     #[serde(default)]
@@ -270,6 +273,13 @@ pub struct SkillDef {
 /// Recovery is governed by `hold_turn` (minimum turns held before it can lift),
 /// `auto_release_prob` (percent chance per turn to lift afterwards), and
 /// `release_by_damage` (percent chance to lift when hit by a physical attack).
+///
+/// `hp_change_type` says how an HP-changing state moves HP (`0` lose, `1` gain,
+/// `2` nothing): each battle turn the battler loses or gains `hp_change_val`
+/// flat points plus `hp_change_max` percent of its max HP, while
+/// `hp_change_map_steps`/`hp_change_map_val` drain it on the map
+/// (`hp_change_map_val` HP per `hp_change_map_steps` steps). All five default to
+/// 0 (a zero-amount no-op); Poison sets them to bleed HP each battle turn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateDef {
     pub id: u32,
@@ -279,6 +289,16 @@ pub struct StateDef {
     pub hold_turn: u32,
     pub auto_release_prob: u32,
     pub release_by_damage: u32,
+    #[serde(default)]
+    pub hp_change_type: u32,
+    #[serde(default)]
+    pub hp_change_max: u32,
+    #[serde(default)]
+    pub hp_change_val: u32,
+    #[serde(default)]
+    pub hp_change_map_steps: u32,
+    #[serde(default)]
+    pub hp_change_map_val: u32,
 }
 
 /// An attribute (element) definition, read by the battle system: its 1-based
