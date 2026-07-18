@@ -83,3 +83,8 @@ pub(super) const ERASE_PICTURE: u32 = 11130;
 
 /// End the game to the Game Over screen.
 pub(super) const GAME_OVER: u32 = 12420;
+
+/// Open the save menu (RM2000 `SaveMenu`). The remake performs a single-slot save
+/// directly, so this needs no interactive screen; the save crystal's action page
+/// runs it.
+pub(super) const OPEN_SAVE_MENU: u32 = 11910;

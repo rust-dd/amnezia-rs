@@ -200,12 +200,31 @@ fn interact(
         return;
     };
     let (fx, fy) = facing_tile(player);
+    // RM2000 `CheckEventTriggerThere`: a trigger-0 event on the tile the hero
+    // faces fires only when its active page shares the hero's layer (layer 1).
     for event in &map_events.events {
         if event.x as i32 != fx || event.y as i32 != fy {
             continue;
         }
         if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
             && page.trigger == 0
+            && page.layer == 1
+        {
+            running.start(event.id, page.commands.clone());
+            return;
+        }
+    }
+    // RM2000 `CheckEventTriggerHere`: a trigger-0 event on the hero's own tile
+    // fires when its active page is below or above the hero (layer != 1). The save
+    // crystal's action page sits on the above-hero layer, so it activates while the
+    // hero stands on the crystal rather than by facing it.
+    for event in &map_events.events {
+        if event.x as i32 != player.tile_x || event.y as i32 != player.tile_y {
+            continue;
+        }
+        if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
+            && page.trigger == 0
+            && page.layer != 1
         {
             running.start(event.id, page.commands.clone());
             return;

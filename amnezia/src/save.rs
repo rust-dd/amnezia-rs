@@ -34,6 +34,13 @@ pub struct LoadRequest(pub bool);
 #[derive(Resource, Default)]
 pub struct SaveRequest(pub bool);
 
+/// A save requested by the event interpreter (opcode 11910, `OpenSaveMenu`) — the
+/// save crystal. Unlike [`SaveRequest`], [`save_or_load`] honours it even while
+/// the requesting event is still `running.active()`; only a fade defers it. Kept
+/// distinct so the F5 / menu save stays gated behind a running event as before.
+#[derive(Resource, Default)]
+pub struct EventSaveRequest(pub bool);
+
 /// Whether the single save slot exists on disk, for the title's Continue gate.
 pub fn save_slot_exists() -> bool {
     slot_exists(SAVE_PATH)
@@ -70,13 +77,38 @@ impl Plugin for SavePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<LoadRequest>()
             .init_resource::<SaveRequest>()
+            .init_resource::<EventSaveRequest>()
             .add_systems(Update, save_or_load);
     }
 }
 
-/// Handle the save (`F5`) and load (`F9`) hotkeys. Both are suppressed while a
-/// dialogue, fade, or event script is in progress so a snapshot is never taken
-/// or applied mid-transition (mirrors the movement guard).
+/// What [`save_or_load`] does this frame once a fade has been ruled out.
+#[derive(PartialEq, Eq, Debug)]
+enum Action {
+    Save,
+    Load,
+}
+
+/// Decide the frame's action. A dialogue or a still-running event (`gated`) holds
+/// back the hotkey/menu save (`hotkey_save`) and any load, but an
+/// interpreter-originated save (`event_save`, opcode 11910) bypasses that gate —
+/// it fires while its own event is deliberately still running. A save takes
+/// precedence over a load requested in the same frame.
+fn resolve(event_save: bool, hotkey_save: bool, load: bool, gated: bool) -> Option<Action> {
+    if event_save || (hotkey_save && !gated) {
+        Some(Action::Save)
+    } else if load && !gated {
+        Some(Action::Load)
+    } else {
+        None
+    }
+}
+
+/// Handle the save (`F5`) and load (`F9`) hotkeys, the menu's Save action, and the
+/// interpreter's `OpenSaveMenu` (opcode 11910). A fade defers everything so a
+/// snapshot is never taken or applied mid-transition. A dialogue or running event
+/// additionally holds back the hotkey/menu save and any load, but not the
+/// interpreter save — the save crystal saves while its own event still runs.
 #[allow(clippy::too_many_arguments)]
 fn save_or_load(
     keys: Res<ButtonInput<KeyCode>>,
@@ -91,61 +123,72 @@ fn save_or_load(
     mut pending: ResMut<PendingTeleport>,
     mut load_request: ResMut<LoadRequest>,
     mut save_request: ResMut<SaveRequest>,
+    mut event_save: ResMut<EventSaveRequest>,
     mut vitals: ResMut<Vitals>,
     mut progression: ResMut<Progression>,
     mut players: Query<&mut Player>,
 ) {
-    let save = keys.just_pressed(KeyCode::F5) || save_request.0;
+    let hotkey_save = keys.just_pressed(KeyCode::F5) || save_request.0;
     let load = keys.just_pressed(KeyCode::F9) || load_request.0;
+    // The hotkey/menu save is one-shot: cleared whether or not it runs, so a press
+    // during a blocked frame is dropped rather than queued.
     save_request.0 = false;
-    if (!save && !load) || dialogue.active || fade.busy() || running.active() {
+    // A fade defers every save and load. A pending interpreter save is left set
+    // (not consumed) so it retries once the fade ends.
+    if fade.busy() {
         return;
     }
-    if save {
-        let Some(map_data) = map_data else {
-            return;
-        };
-        let Ok(player) = players.single() else {
-            return;
-        };
-        let (items, gold) = inventory.snapshot();
-        let game = SaveGame {
-            map_id: map_data.map_id,
-            x: player.tile_x.max(0) as u32,
-            y: player.tile_y.max(0) as u32,
-            dir: player.dir,
-            switches: switches.entries(),
-            variables: variables.entries(),
-            party: party.snapshot(),
-            items,
-            gold,
-            progression: progression.entries(),
-            vitals: vitals.entries(),
-        };
-        match write_save(&game) {
-            Ok(()) => info!("saved game to {SAVE_PATH}"),
-            Err(e) => error!("save failed: {e}"),
+    let event_save = std::mem::take(&mut event_save.0);
+    let gated = dialogue.active || running.active();
+    match resolve(event_save, hotkey_save, load, gated) {
+        Some(Action::Save) => {
+            let Some(map_data) = map_data else {
+                return;
+            };
+            let Ok(player) = players.single() else {
+                return;
+            };
+            let (items, gold) = inventory.snapshot();
+            let game = SaveGame {
+                map_id: map_data.map_id,
+                x: player.tile_x.max(0) as u32,
+                y: player.tile_y.max(0) as u32,
+                dir: player.dir,
+                switches: switches.entries(),
+                variables: variables.entries(),
+                party: party.snapshot(),
+                items,
+                gold,
+                progression: progression.entries(),
+                vitals: vitals.entries(),
+            };
+            match write_save(&game) {
+                Ok(()) => info!("saved game to {SAVE_PATH}"),
+                Err(e) => error!("save failed: {e}"),
+            }
         }
-    } else {
-        // Consume the request whether or not the slot reads back, so a missing or
-        // corrupt file can't wedge a waiting Continue.
-        load_request.0 = false;
-        let Some(game) = read_save() else {
-            return;
-        };
-        switches.load(game.switches);
-        variables.load(game.variables);
-        party.restore(game.party);
-        inventory.restore(game.items, game.gold);
-        progression.load(game.progression);
-        vitals.load(game.vitals);
-        if let Ok(mut player) = players.single_mut() {
-            player.dir = game.dir;
+        Some(Action::Load) => {
+            // Consume the request whether or not the slot reads back, so a missing
+            // or corrupt file can't wedge a waiting Continue.
+            load_request.0 = false;
+            let Some(game) = read_save() else {
+                return;
+            };
+            switches.load(game.switches);
+            variables.load(game.variables);
+            party.restore(game.party);
+            inventory.restore(game.items, game.gold);
+            progression.load(game.progression);
+            vitals.load(game.vitals);
+            if let Ok(mut player) = players.single_mut() {
+                player.dir = game.dir;
+            }
+            // The teleport picks this up next, reloading the saved map at the saved
+            // tile; `swap_map` reads the state we just restored above.
+            pending.0 = Some((game.map_id, game.x, game.y));
+            info!("loaded game from {SAVE_PATH}");
         }
-        // The teleport picks this up next, reloading the saved map at the saved
-        // tile; `swap_map` reads the state we just restored above.
-        pending.0 = Some((game.map_id, game.x, game.y));
-        info!("loaded game from {SAVE_PATH}");
+        None => {}
     }
 }
 
@@ -204,5 +247,79 @@ mod tests {
         std::fs::write(path, "x").unwrap();
         assert!(slot_exists(path));
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn resolve_lets_an_event_save_bypass_the_running_gate() {
+        // Gated (a dialogue or a still-running event): an interpreter save (opcode
+        // 11910) still saves, but the F5 / menu save and any load are held back.
+        assert_eq!(resolve(true, false, false, true), Some(Action::Save));
+        assert_eq!(resolve(false, true, false, true), None);
+        assert_eq!(resolve(false, false, true, true), None);
+        // Ungated: the hotkey save and load work as before, a save winning a tie.
+        assert_eq!(resolve(false, true, false, false), Some(Action::Save));
+        assert_eq!(resolve(false, false, true, false), Some(Action::Load));
+        assert_eq!(resolve(false, true, true, false), Some(Action::Save));
+        assert_eq!(resolve(false, false, false, false), None);
+    }
+
+    #[test]
+    fn open_save_menu_saves_while_its_event_is_running() {
+        // Protect any real slot: back it up, then restore it before asserting so a
+        // failure can never clobber a developer's save.
+        let backup = std::fs::read_to_string(SAVE_PATH).ok();
+        let _ = std::fs::remove_file(SAVE_PATH);
+
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.init_resource::<ButtonInput<KeyCode>>()
+            .init_resource::<Dialogue>()
+            .init_resource::<Fade>()
+            .init_resource::<PendingTeleport>()
+            .init_resource::<Switches>()
+            .init_resource::<Variables>()
+            .init_resource::<Party>()
+            .init_resource::<Inventory>()
+            .init_resource::<LoadRequest>()
+            .init_resource::<SaveRequest>()
+            .init_resource::<EventSaveRequest>()
+            .init_resource::<Vitals>()
+            .init_resource::<Progression>();
+        app.insert_resource(MapData::for_test(20, 15));
+        // An event is mid-run when the save is requested (as `OpenSaveMenu` is).
+        let mut running = RunningEvent::default();
+        running.start(1, Vec::new());
+        assert!(running.active());
+        app.insert_resource(running);
+        app.world_mut().spawn(Player {
+            tile_x: 3,
+            tile_y: 4,
+            dir: 2,
+            frame: 1,
+            charset: "Chara1".into(),
+            index: 0,
+        });
+        // Stand in for the interpreter's OpenSaveMenu (opcode 11910) arm.
+        app.world_mut().resource_mut::<EventSaveRequest>().0 = true;
+        app.add_systems(Update, save_or_load);
+        app.update();
+
+        let saved = Path::new(SAVE_PATH).exists();
+        let consumed = !app.world().resource::<EventSaveRequest>().0;
+        match &backup {
+            Some(contents) => std::fs::write(SAVE_PATH, contents).unwrap(),
+            None => {
+                let _ = std::fs::remove_file(SAVE_PATH);
+                let _ = std::fs::remove_dir(SAVE_DIR);
+            }
+        }
+        assert!(
+            saved,
+            "an OpenSaveMenu save must be written even while its event runs"
+        );
+        assert!(
+            consumed,
+            "the event-save request must be consumed once saved"
+        );
     }
 }

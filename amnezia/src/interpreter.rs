@@ -16,6 +16,7 @@ use crate::inputnumber::InputNumber;
 use crate::menu::MenuOpen;
 use crate::picture::PictureCommand;
 use crate::player::{CameraPan, HeroTransparency, Player};
+use crate::save::EventSaveRequest;
 use crate::screenfx::{ScreenEffect, Weather};
 use crate::shop::{ShopOpen, ShopOutcome, ShopRequest};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
@@ -67,6 +68,17 @@ struct CharacterVisuals<'w> {
     anim_writer: MessageWriter<'w, ShowMapAnimation>,
 }
 
+/// The interpreter's merchant channel: the writer that opens the shop/inn screen
+/// (opcodes 10720 / 10730) and the outcome it reads back once the screen closes.
+/// Bundled into one nested `SystemParam` so [`SubsystemIo`] — and thus
+/// `run_interpreter` — keeps within Bevy's 16-parameter cap once the save-request
+/// resource is added.
+#[derive(SystemParam)]
+struct Merchant<'w> {
+    writer: MessageWriter<'w, ShopRequest>,
+    outcome: Res<'w, ShopOutcome>,
+}
+
 /// The interpreter's channel to the shop and battle subsystems: the writers that
 /// open each screen and the finished-battle result it consumes to pick a handler
 /// branch. Bundled into one `SystemParam` so `run_interpreter` stays within
@@ -74,7 +86,7 @@ struct CharacterVisuals<'w> {
 #[derive(SystemParam)]
 pub struct SubsystemIo<'w> {
     battle_result: ResMut<'w, BattleResult>,
-    shop_writer: MessageWriter<'w, ShopRequest>,
+    merchant: Merchant<'w>,
     battle_writer: MessageWriter<'w, BattleRequest>,
     screen_writer: MessageWriter<'w, ScreenEffect>,
     picture_writer: MessageWriter<'w, PictureCommand>,
@@ -88,7 +100,7 @@ pub struct SubsystemIo<'w> {
     weather: ResMut<'w, Weather>,
     message_position: ResMut<'w, MessagePosition>,
     game_clock: ResMut<'w, GameClock>,
-    shop_outcome: Res<'w, ShopOutcome>,
+    event_save: ResMut<'w, EventSaveRequest>,
 }
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
@@ -275,7 +287,7 @@ fn run_interpreter(
         // The merchant screen closed: record whether a trade happened and step into
         // the block so the Transaction/Stay (or NoTransaction/Cancel) handler arms
         // self-select, mirroring the battle-outcome handlers.
-        running.shop_transacted = Some(subsystems.shop_outcome.transacted);
+        running.shop_transacted = Some(subsystems.merchant.outcome.transacted);
         running.shop_pending = false;
         running.ip += 1;
     }
@@ -613,7 +625,8 @@ fn run_interpreter(
                     .map(|&p| p as u32)
                     .collect();
                 subsystems
-                    .shop_writer
+                    .merchant
+                    .writer
                     .write(ShopRequest::OpenShop { items });
                 running.shop_pending = true;
                 return;
@@ -621,7 +634,10 @@ fn run_interpreter(
             SHOW_INN => {
                 // Charge `params[1]` gold to rest; pause as for the shop.
                 let cost = command.params.get(1).copied().unwrap_or(0);
-                subsystems.shop_writer.write(ShopRequest::ShowInn { cost });
+                subsystems
+                    .merchant
+                    .writer
+                    .write(ShopRequest::ShowInn { cost });
                 running.shop_pending = true;
                 return;
             }
@@ -666,6 +682,13 @@ fn run_interpreter(
                     }
                     None => running.ip += 1,
                 }
+            }
+            OPEN_SAVE_MENU => {
+                // Request a single-slot save. `save_or_load` performs it even
+                // though this event is still `running.active()` — only a fade
+                // defers it — so the save crystal saves while its page runs.
+                subsystems.event_save.0 = true;
+                running.ip += 1;
             }
             _ => {
                 // Every not-yet-supported command (weather, pan, …) simply advances.
