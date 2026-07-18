@@ -4,6 +4,7 @@
 //! event dialogue. Depends only on `amnezia-data` + Bevy; it never touches the
 //! legacy RPG Maker formats.
 
+mod animation;
 mod appearance;
 mod assets;
 mod audio;
@@ -85,6 +86,7 @@ fn main() -> AppExit {
             screenfx::ScreenFxPlugin,
             picture::PicturePlugin,
             gameover::GameOverPlugin,
+            animation::AnimationPlugin,
         ))
         .add_plugins(inputnumber::InputNumberPlugin)
         .add_plugins(appearance::AppearancePlugin)
