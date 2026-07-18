@@ -80,12 +80,14 @@ pub(super) fn blank_item(id: u32, item_type: u32) -> ItemDef {
     }
 }
 
-fn skill() -> SkillDef {
+/// A plain single-enemy attack skill (scope `0`, `skill_type` 0): never
+/// field-usable, so the skill tests can assert the greyed/inert branch.
+pub(super) fn skill(id: u32, name: &str, sp_cost: u32) -> SkillDef {
     SkillDef {
-        id: 1,
-        name: "X-Csapás".into(),
+        id,
+        name: name.into(),
         description: String::new(),
-        sp_cost: 20,
+        sp_cost,
         power: 50,
         hit: 0,
         skill_type: 0,
@@ -94,7 +96,7 @@ fn skill() -> SkillDef {
         physical_rate: 0,
         magical_rate: 3,
         variance: 4,
-        affect_hp: false,
+        affect_hp: true,
         affect_sp: false,
         absorb: false,
         attributes: vec![],
@@ -102,11 +104,20 @@ fn skill() -> SkillDef {
     }
 }
 
-/// The default database: the hero, the healing item, and one skill.
+/// A single-ally HP-recovery skill (scope `3`, affects HP, `power` heal): the
+/// field-usable case for the Skill command.
+pub(super) fn heal_skill(id: u32, name: &str, sp_cost: u32, power: u32) -> SkillDef {
+    let mut s = skill(id, name, sp_cost);
+    s.scope = 3;
+    s.power = power;
+    s
+}
+
+/// The default database: the hero, the healing item, and one attack skill.
 pub(super) fn data() -> GameData {
     GameData {
         actors: vec![actor()],
         items: vec![herb()],
-        skills: vec![skill()],
+        skills: vec![skill(1, "X-Csapás", 20)],
     }
 }

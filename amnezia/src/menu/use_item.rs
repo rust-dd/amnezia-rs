@@ -1,6 +1,6 @@
 //! The field item-use sub-screen: pick a party member and apply a held,
 //! field-usable recovery item to them. This module owns the field-usable
-//! predicate, the held-item ordering that maps a browse row back to an item id,
+//! predicate, the held-item ordering that maps an item-list row back to an item id,
 //! the pure heal arithmetic (mirroring the battle item formula), and the target
 //! list rendering. The state transitions and the inventory/vitals writes live in
 //! the parent `menu` module.
@@ -30,8 +30,8 @@ pub(super) fn field_usable(item: &ItemDef) -> bool {
         || item.only_field
 }
 
-/// The ids of the held items in the order the Items tab lists them, so a
-/// browse-cursor row index maps back to the item id under it. Rows past the end
+/// The ids of the held items in the order the item list shows them, so a
+/// item-list cursor row index maps back to the item id under it. Rows past the end
 /// of this list are the blank spacer and the gold line, which select nothing.
 pub(super) fn held_item_ids(data: &GameData, inventory: &Inventory) -> Vec<u32> {
     data.items
@@ -65,7 +65,7 @@ pub(super) fn heal(hp: i32, sp: i32, max_hp: i32, max_sp: i32, item: &ItemDef) -
 /// Apply the field item to the `member`-th party member: heal via [`Vitals`]
 /// (max HP/SP derived at their level, exactly as battle does) and consume one from
 /// the inventory. Returns `true` when the stack is now empty, signalling the
-/// caller to return to Browse.
+/// caller to return to the item list.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn apply_field_item(
     item_id: u32,
@@ -233,7 +233,10 @@ mod tests {
             &mut inv,
             &mut vitals,
         );
-        assert!(empty, "last herb consumed -> caller returns to Browse");
+        assert!(
+            empty,
+            "last herb consumed -> caller returns to the item list"
+        );
         assert_eq!(inv.count(ITEM_HERB), 0);
     }
 

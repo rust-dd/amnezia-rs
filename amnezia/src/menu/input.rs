@@ -1,0 +1,291 @@
+//! The menu's input and rendering systems. Escape toggles the menu and backs out
+//! of a sub-screen; Up/Down move the active cursor; →, from the command list,
+//! focuses the party window for a status look; Enter/Space confirm. The pure
+//! navigation math lives in [`super::nav`]; these systems only apply it and touch
+//! the world (inventory, vitals, save request, title).
+
+use crate::battle::BattleActive;
+use crate::gamedata::GameData;
+use crate::progression::Progression;
+use crate::save::SaveRequest;
+use crate::shop::ShopOpen;
+use crate::state::{Inventory, Party};
+use crate::title::TitleActive;
+use crate::vitals::Vitals;
+use bevy::prelude::*;
+
+use super::nav::{
+    confirm_pressed, end_game_transition, escape_transition, item_target, skill_target, step,
+};
+use super::view::{MenuAux, MenuAuxPanel, MenuPanel, MenuText};
+use super::{
+    MemberAction, MenuOpen, MenuScreen, MenuState, command, items, render, skills, use_item,
+};
+
+/// Toggle the menu on Escape (backing out of a sub-screen first) and drive the
+/// active screen: move the cursor and confirm into the next screen, apply a field
+/// item or skill, request a save, or return to the title on End Game.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn menu_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    data: Res<GameData>,
+    party: Res<Party>,
+    progression: Res<Progression>,
+    mut inventory: ResMut<Inventory>,
+    mut vitals: ResMut<Vitals>,
+    shop: Res<ShopOpen>,
+    battle: Res<BattleActive>,
+    mut title: ResMut<TitleActive>,
+    mut open: ResMut<MenuOpen>,
+    mut state: ResMut<MenuState>,
+    mut save_request: ResMut<SaveRequest>,
+) {
+    // A shop, battle, or the title screen owns the input while up, so the menu
+    // can't open over it.
+    if !open.0 && (shop.0 || battle.0 || title.0) {
+        return;
+    }
+    if keys.just_pressed(KeyCode::Escape) {
+        let was_open = open.0;
+        let (next_open, next_screen) = escape_transition(open.0, state.screen);
+        open.0 = next_open;
+        state.screen = next_screen;
+        if next_open && !was_open {
+            state.cursor = 0;
+        }
+        return;
+    }
+    if !open.0 {
+        return;
+    }
+    // The F5 / Esc-S quick save from anywhere in the menu (silent, no prompt).
+    if keys.just_pressed(KeyCode::KeyS) {
+        save_request.0 = true;
+    }
+    let confirm = confirm_pressed(&keys);
+    let up = keys.just_pressed(KeyCode::ArrowUp);
+    let down = keys.just_pressed(KeyCode::ArrowDown);
+    let members = party.snapshot().len().saturating_sub(1);
+    match state.screen {
+        MenuScreen::Command => {
+            state.cursor = step(state.cursor, up, down, command::COMMANDS.len() - 1);
+            if keys.just_pressed(KeyCode::ArrowRight) {
+                state.screen = MenuScreen::MemberSelect {
+                    action: MemberAction::Status,
+                    cursor: 0,
+                };
+            } else if confirm {
+                match command::dispatch(command::COMMANDS[state.cursor]) {
+                    command::CommandAction::Open(screen) => state.screen = screen,
+                    command::CommandAction::Save => {
+                        save_request.0 = true;
+                        state.screen = MenuScreen::Saved;
+                    }
+                }
+            }
+        }
+        MenuScreen::ItemList { cursor } => {
+            let max = items::selectable(&data, &inventory).saturating_sub(1);
+            let cursor = step(cursor, up, down, max);
+            state.screen = MenuScreen::ItemList { cursor };
+            if confirm && let Some(next) = item_target(cursor, &data, &inventory) {
+                state.screen = next;
+            }
+        }
+        MenuScreen::ItemTarget { item_id, cursor } => {
+            let cursor = step(cursor, up, down, members);
+            state.screen = MenuScreen::ItemTarget { item_id, cursor };
+            if confirm
+                && use_item::apply_field_item(
+                    item_id,
+                    cursor,
+                    &data,
+                    &party,
+                    &progression,
+                    &mut inventory,
+                    &mut vitals,
+                )
+            {
+                state.screen = MenuScreen::ItemList { cursor: 0 };
+            }
+        }
+        MenuScreen::MemberSelect { action, cursor } => {
+            let cursor = step(cursor, up, down, members);
+            state.screen = MenuScreen::MemberSelect { action, cursor };
+            if confirm {
+                state.screen = command::member_screen(action, cursor);
+            }
+        }
+        MenuScreen::SkillList { member, cursor } => {
+            let max = data.skills.len().saturating_sub(1);
+            let cursor = step(cursor, up, down, max);
+            state.screen = MenuScreen::SkillList { member, cursor };
+            if confirm && let Some(next) = skill_target(member, cursor, &data) {
+                state.screen = next;
+            }
+        }
+        MenuScreen::SkillTarget {
+            member,
+            skill_id,
+            cursor,
+        } => {
+            let cursor = step(cursor, up, down, members);
+            state.screen = MenuScreen::SkillTarget {
+                member,
+                skill_id,
+                cursor,
+            };
+            if confirm
+                && skills::apply_field_skill(
+                    member,
+                    cursor,
+                    skill_id,
+                    &data,
+                    &party,
+                    &progression,
+                    &mut vitals,
+                )
+            {
+                state.screen = MenuScreen::SkillList { member, cursor: 0 };
+            }
+        }
+        MenuScreen::Equip { .. } | MenuScreen::Status { .. } => {}
+        MenuScreen::Saved => {
+            if confirm {
+                state.screen = MenuScreen::Command;
+            }
+        }
+        MenuScreen::EndGame { cursor } => {
+            let cursor = step(cursor, up, down, render::END_GAME_ROWS.len() - 1);
+            state.screen = MenuScreen::EndGame { cursor };
+            if confirm {
+                let (next_open, next_title) = end_game_transition(cursor, title.0);
+                open.0 = next_open;
+                title.0 = next_title;
+                state.screen = MenuScreen::Command;
+            }
+        }
+    }
+}
+
+/// Reflect the menu state into the two windows: show or hide the overlay, recompose
+/// the active screen, and hide the right (party) window on sub-screens where its
+/// column is empty.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn update_ui(
+    open: Res<MenuOpen>,
+    state: Res<MenuState>,
+    data: Res<GameData>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
+    progression: Res<Progression>,
+    vitals: Res<Vitals>,
+    mut panels: Query<&mut Visibility, (With<MenuPanel>, Without<MenuAuxPanel>)>,
+    mut aux_panels: Query<&mut Visibility, With<MenuAuxPanel>>,
+    mut left: Query<&mut Text, (With<MenuText>, Without<MenuAux>)>,
+    mut right: Query<&mut Text, With<MenuAux>>,
+) {
+    if !open.is_changed() && !state.is_changed() && !inventory.is_changed() && !vitals.is_changed()
+    {
+        return;
+    }
+    if let Ok(mut visibility) = panels.single_mut() {
+        *visibility = if open.0 {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+    if !open.0 {
+        return;
+    }
+    let (left_text, right_text) = render::compose(
+        state.screen,
+        state.cursor,
+        &data,
+        &party,
+        &progression,
+        &inventory,
+        &vitals,
+    );
+    if let Ok(mut aux) = aux_panels.single_mut() {
+        *aux = if right_text.is_empty() {
+            Visibility::Hidden
+        } else {
+            Visibility::Visible
+        };
+    }
+    if let Ok(mut text) = left.single_mut() {
+        **text = left_text;
+    }
+    if let Ok(mut text) = right.single_mut() {
+        **text = right_text;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::menu::testkit;
+
+    /// A headless app with just the menu input system and the resources it reads,
+    /// opened on `screen` with `cursor` as the command-list cursor.
+    fn app_on(cursor: usize, screen: MenuScreen) -> App {
+        let mut app = App::new();
+        app.insert_resource(testkit::data())
+            .init_resource::<Party>()
+            .init_resource::<Progression>()
+            .init_resource::<Inventory>()
+            .init_resource::<Vitals>()
+            .insert_resource(ShopOpen(false))
+            .insert_resource(BattleActive(false))
+            .insert_resource(TitleActive(false))
+            .insert_resource(MenuOpen(true))
+            .insert_resource(MenuState { cursor, screen })
+            .init_resource::<SaveRequest>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .add_systems(Update, menu_input);
+        app
+    }
+
+    /// Press a key and run one input frame.
+    fn confirm(app: &mut App, key: KeyCode) {
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(key);
+        app.update();
+    }
+
+    #[test]
+    fn save_command_sets_the_save_request_and_shows_the_confirmation() {
+        // Cursor 3 is "Mentés" (Save) in the RM2000 command order.
+        let mut app = app_on(3, MenuScreen::Command);
+        confirm(&mut app, KeyCode::Enter);
+        assert!(
+            app.world().resource::<SaveRequest>().0,
+            "the Save command must raise SaveRequest (the F5/Esc-S path)"
+        );
+        assert_eq!(
+            app.world().resource::<MenuState>().screen,
+            MenuScreen::Saved,
+            "and show the save confirmation screen"
+        );
+    }
+
+    #[test]
+    fn end_game_igen_closes_the_menu_and_raises_the_title() {
+        // Confirming Igen (cursor 0) on the End Game prompt returns to the title.
+        let mut app = app_on(4, MenuScreen::EndGame { cursor: 0 });
+        confirm(&mut app, KeyCode::Enter);
+        assert!(!app.world().resource::<MenuOpen>().0, "menu closed");
+        assert!(
+            app.world().resource::<TitleActive>().0,
+            "title raised (return-to-title, opcode 12510)"
+        );
+        assert_eq!(
+            app.world().resource::<MenuState>().screen,
+            MenuScreen::Command,
+            "and the menu resets to the command list for next time"
+        );
+    }
+}
