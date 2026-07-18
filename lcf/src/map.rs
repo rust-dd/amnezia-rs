@@ -169,12 +169,16 @@ pub struct Event {
 
 /// One page of an event: its trigger, graphic, layer, condition, and commands.
 /// The layer (0 = below hero, 1 = same as hero, 2 = above hero) decides
-/// collision: a `layer == 1` page blocks the player.
+/// collision: a `layer == 1` page blocks the player. `direction` is the CharSet
+/// facing row (Up=0, Right=1, Down=2, Left=3; default 2 = down) and `pattern`
+/// the walk frame column (default 1 = the standing middle frame).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventPage {
     pub trigger: u32,
     pub graphic_name: String,
     pub graphic_index: u32,
+    pub direction: u32,
+    pub pattern: u32,
     pub layer: u32,
     pub condition: EventCondition,
     pub commands: Vec<EventCommand>,
@@ -271,6 +275,8 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
             trigger: 0,
             graphic_name: String::new(),
             graphic_index: 0,
+            direction: 2,
+            pattern: 1,
             layer: 0,
             condition: EventCondition::default(),
             commands: Vec::new(),
@@ -286,6 +292,8 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
                 0x02 => page.condition = parse_condition(sub_data)?,
                 0x15 => page.graphic_name = decode_cp1250(sub_data),
                 0x16 => page.graphic_index = Reader::new(sub_data).varint()?,
+                0x17 => page.direction = Reader::new(sub_data).varint()?,
+                0x18 => page.pattern = Reader::new(sub_data).varint()?,
                 0x21 => page.trigger = Reader::new(sub_data).varint()?,
                 0x22 => page.layer = Reader::new(sub_data).varint()?,
                 0x34 => page.commands = parse_commands(sub_data)?,
@@ -525,6 +533,40 @@ mod tests {
         let condition = &map.events[0].pages[0].condition;
         assert_eq!((condition.flags, condition.switch_a), (1, 2));
         assert_eq!((condition.item_id, condition.actor_id), (5, 3));
+    }
+
+    #[test]
+    fn parses_page_direction_and_defaults_pattern() {
+        // Page 1 carries an explicit direction chunk (0x17 = 3, left) but no
+        // pattern chunk; page 2 carries neither. The explicit direction survives,
+        // an omitted pattern defaults to 1, and an omitted direction to 2 (down).
+        let mut page_a = varint(1);
+        page_a.extend(subchunk(0x17, &varint(3)));
+        page_a.push(0);
+        let mut page_b = varint(2);
+        page_b.push(0);
+        let mut pages = varint(2);
+        pages.extend_from_slice(&page_a);
+        pages.extend_from_slice(&page_b);
+        let mut event = varint(7);
+        event.extend(subchunk(0x05, &pages));
+        event.push(0);
+        let mut section = varint(1);
+        section.extend_from_slice(&event);
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[
+                (0x02, varint(2)),
+                (0x03, varint(1)),
+                (0x47, layer_bytes(&[0, 0])),
+                (0x48, layer_bytes(&[0, 0])),
+                (0x51, section),
+            ],
+        );
+        let map = parse_map(&file).unwrap();
+        let pages = &map.events[0].pages;
+        assert_eq!((pages[0].direction, pages[0].pattern), (3, 1));
+        assert_eq!((pages[1].direction, pages[1].pattern), (2, 1));
     }
 
     #[test]

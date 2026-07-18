@@ -31,15 +31,30 @@ pub struct Event {
     pub pages: Vec<EventPage>,
 }
 
-/// One page of an event: its trigger, graphic, and command list.
+/// One page of an event: its trigger, graphic, and command list. `direction` is
+/// the CharSet facing row (Up=0, Right=1, Down=2, Left=3) and `pattern` the walk
+/// frame column the NPC stands at. Both carry `serde` defaults (2 = down, 1 =
+/// middle frame) so map RON written before these fields existed still loads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventPage {
     pub trigger: u32,
     pub graphic_name: String,
     pub graphic_index: u32,
+    #[serde(default = "default_direction")]
+    pub direction: u32,
+    #[serde(default = "default_pattern")]
+    pub pattern: u32,
     pub layer: u32,
     pub condition: EventCondition,
     pub commands: Vec<EventCommand>,
+}
+
+fn default_direction() -> u32 {
+    2
+}
+
+fn default_pattern() -> u32 {
+    1
 }
 
 /// A page's activation condition (see `lcf::EventCondition`).

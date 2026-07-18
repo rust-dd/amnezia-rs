@@ -45,6 +45,8 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
                         trigger: p.trigger,
                         graphic_name: p.graphic_name,
                         graphic_index: p.graphic_index,
+                        direction: p.direction,
+                        pattern: p.pattern,
                         layer: p.layer,
                         condition: amnezia_data::EventCondition {
                             flags: p.condition.flags,

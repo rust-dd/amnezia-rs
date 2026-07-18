@@ -185,6 +185,8 @@ mod tests {
             trigger: 0,
             graphic_name: String::new(),
             graphic_index: 0,
+            direction: 2,
+            pattern: 1,
             layer: 0,
             condition,
             commands: vec![],

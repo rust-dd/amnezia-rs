@@ -7,7 +7,7 @@ use super::water::WaterQuarter;
 use super::{EventSprite, MapScene, MoveQueue};
 use crate::assets::resolve_png;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
-use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN};
+use crate::tiles::{self, CHAR_Y_OFFSET};
 use amnezia_data::Event;
 use bevy::prelude::*;
 
@@ -103,7 +103,7 @@ pub(super) fn spawn_event_npc(
         return;
     }
     let image = asset_server.load(resolve_png("CharSet", &page.graphic_name));
-    let (sx, sy) = tiles::charset_source(page.graphic_index, DIR_DOWN, 1);
+    let (sx, sy) = tiles::charset_source(page.graphic_index, page.direction, page.pattern);
     let world_x = event.x as f32 * tiles::TILE - offset.0 + tiles::TILE / 2.0;
     let world_y = offset.1 - event.y as f32 * tiles::TILE - tiles::TILE / 2.0 + CHAR_Y_OFFSET;
     commands.spawn((
@@ -118,8 +118,8 @@ pub(super) fn spawn_event_npc(
             id: event.id,
             tile_x: event.x as i32,
             tile_y: event.y as i32,
-            dir: DIR_DOWN,
-            frame: 1,
+            dir: page.direction,
+            frame: page.pattern,
             charset: page.graphic_name.clone(),
             index: page.graphic_index,
         },
