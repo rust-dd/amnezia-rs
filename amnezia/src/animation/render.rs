@@ -1,5 +1,5 @@
 //! Sprite rendering for the effect-animation player: turning an animation
-//! frame's cells into overlay sprites, the local target-flash quad, and the
+//! frame's cells into overlay sprites, the full-screen screen-flash quad, and the
 //! pure geometry/colour helpers the player and its tests share.
 //!
 //! The sprites draw on [`OVERLAY_LAYER`], rendered by the fixed effect-overlay
@@ -8,21 +8,23 @@
 //! 96×96 cell sub-rect draws at its native size, and screen-space is pure: an
 //! RM2000 offset `(x, y)` from centre (y downward) is world `(x, -y)`, with no
 //! camera-follow term. Because that camera has a higher `order` and no clear,
-//! the effect composites over the map, the pictures, and the battle UI alike.
+//! the effect composites over the map, the pictures, the battle scene, and the
+//! HUD-less overlay alike. The battle backdrop and battlers ([`crate::battle`])
+//! share this layer, so animations land on the battlers by construction.
 
 use crate::assets::resolve_png;
 use amnezia_data::AnimationDef;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 
-/// The render layer the effect-overlay camera draws. Cells and flash quads carry
-/// it so only that fixed, higher-`order` camera renders them — painting over the
-/// layer-0 world and UI instead of hiding behind the battle UI.
+/// The render layer the effect-overlay camera draws. Cells, flash quads, and the
+/// battle scene carry it so only that fixed, higher-`order` camera renders them —
+/// painting over the layer-0 world instead of hiding behind it.
 pub(super) const OVERLAY_LAYER: usize = 1;
 
 /// A fresh [`RenderLayers`] on [`OVERLAY_LAYER`] (the type isn't `Copy`, so each
 /// spawned sprite and the overlay camera take their own).
-pub(super) fn overlay_layer() -> RenderLayers {
+pub fn overlay_layer() -> RenderLayers {
     RenderLayers::layer(OVERLAY_LAYER)
 }
 
@@ -31,28 +33,29 @@ pub(super) fn overlay_layer() -> RenderLayers {
 const CELL: f32 = 96.0;
 const COLS: u32 = 5;
 
-/// World z of the animation cells: well above the map (z < 4) and pictures
-/// (100..150), within the 2D camera's ±1000 range. Later cells in a frame add a
+/// The RM2000 screen extent, matching the fixed overlay projection.
+const SCREEN_W: f32 = 320.0;
+const SCREEN_H: f32 = 240.0;
+
+/// World z of the animation cells on the overlay: above the backdrop (100),
+/// battlers (200), and screen flash (300) the battle scene draws on this same
+/// layer, and within the 2D camera's ±1000 range. Later cells in a frame add a
 /// sliver so they draw over earlier ones, matching RM2000's paint order.
 const CELL_Z: f32 = 510.0;
 
-/// World z of a target-flash quad: just under the cells so the effect paints
-/// over the flash it triggers.
-const FLASH_Z: f32 = 505.0;
-
-/// Edge length of a target-flash quad, roughly one battler. The real RM2000
-/// flash tints the target sprite itself; a fixed quad is an approximation.
-const FLASH_SIZE: f32 = 96.0;
+/// World z of a full-screen screen-flash quad: over the backdrop and battlers but
+/// under the cells, so the effect that triggered the flash still paints over it.
+const SCREEN_FLASH_Z: f32 = 300.0;
 
 /// The world translation of an overlay sprite at RM2000 screen offset `pos` from
 /// centre (y downward) with depth `z`. The overlay camera sits at the origin, so
 /// this is pure screen-space: `x` unchanged, `y` flipped for world y-up.
-fn overlay_translation(pos: Vec2, z: f32) -> Vec3 {
+pub fn overlay_translation(pos: Vec2, z: f32) -> Vec3 {
     Vec3::new(pos.x, -pos.y, z)
 }
 
-/// A decaying target-flash quad: `rgb` its colour (0..1), `peak` the starting
-/// alpha, fading linearly to 0 over `secs`.
+/// A decaying flash quad: `rgb` its colour (0..1), `peak` the starting alpha,
+/// fading linearly to 0 over `secs`.
 #[derive(Component)]
 pub(super) struct FlashQuad {
     pub elapsed: f32,
@@ -134,21 +137,17 @@ pub(super) fn spawn_frame_cells(
     cells
 }
 
-/// Spawn a target-flash quad of colour `rgb` and starting alpha `peak` at
-/// `base`, decaying over `secs`.
-pub(super) fn spawn_target_flash(
-    commands: &mut Commands,
-    base: Vec2,
-    rgb: [f32; 3],
-    peak: f32,
-    secs: f32,
-) {
+/// Spawn a full-screen screen-flash quad of colour `rgb` and starting alpha
+/// `peak`, decaying over `secs`. It covers the whole 320×240 overlay at
+/// [`SCREEN_FLASH_Z`]; RM2000's animation screen flash is a full-screen tint, not
+/// a box on the target.
+pub(super) fn spawn_screen_flash(commands: &mut Commands, rgb: [f32; 3], peak: f32, secs: f32) {
     commands.spawn((
         Sprite::from_color(
             Color::srgba(rgb[0], rgb[1], rgb[2], peak),
-            Vec2::splat(FLASH_SIZE),
+            Vec2::new(SCREEN_W, SCREEN_H),
         ),
-        Transform::from_translation(overlay_translation(base, FLASH_Z)),
+        Transform::from_translation(overlay_translation(Vec2::ZERO, SCREEN_FLASH_Z)),
         overlay_layer(),
         FlashQuad {
             elapsed: 0.0,
@@ -159,8 +158,7 @@ pub(super) fn spawn_target_flash(
     ));
 }
 
-/// Decay each live target flash, repainting its alpha and despawning it once
-/// spent.
+/// Decay each live flash quad, repainting its alpha and despawning it once spent.
 pub(super) fn fade_flashes(
     time: Res<Time>,
     mut commands: Commands,
@@ -217,8 +215,8 @@ mod tests {
             Vec3::new(0.0, 0.0, 510.0)
         );
         assert_eq!(
-            overlay_translation(Vec2::new(40.0, -20.0), 505.0),
-            Vec3::new(40.0, 20.0, 505.0)
+            overlay_translation(Vec2::new(40.0, -20.0), 300.0),
+            Vec3::new(40.0, 20.0, 300.0)
         );
     }
 
@@ -229,5 +227,21 @@ mod tests {
         assert_eq!(next_frame(57, 58), None);
         assert_eq!(next_frame(0, 1), None);
         assert_eq!(next_frame(0, 0), None);
+    }
+
+    #[test]
+    fn spawn_screen_flash_makes_a_fullscreen_overlay_quad() {
+        use bevy::ecs::world::CommandQueue;
+        let mut world = World::new();
+        let mut queue = CommandQueue::default();
+        {
+            let mut commands = Commands::new(&mut queue, &world);
+            spawn_screen_flash(&mut commands, [1.0, 1.0, 1.0], 0.5, 0.2);
+        }
+        queue.apply(&mut world);
+        let mut quads = world.query::<(&FlashQuad, &Sprite)>();
+        let (flash, sprite) = quads.single(&world).expect("a screen flash quad");
+        assert_eq!(sprite.custom_size, Some(Vec2::new(SCREEN_W, SCREEN_H)));
+        assert!((flash.peak - 0.5).abs() < 1e-6);
     }
 }

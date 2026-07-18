@@ -14,11 +14,12 @@
 //! ends in victory (exp + gold rewarded), defeat, or a successful flee. Party
 //! HP/SP persists between fights in [`Vitals`].
 
+mod hud;
 mod input;
 mod logic;
 mod model;
 mod resolve;
-mod ui;
+mod scene;
 
 use crate::animation::PlayAnimation;
 use crate::assets::{asset_root, load_ron};
@@ -27,6 +28,7 @@ use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 use crate::vitals::Vitals;
 use amnezia_data::{ActorDef, AttributeDef, MonsterDef, StateDef, TroopDef};
+use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use model::{Battle, Phase};
 
@@ -90,6 +92,7 @@ impl Plugin for BattlePlugin {
                 attributes: load_ron(&format!("{}/attributes.ron", asset_root())),
                 states: load_ron(&format!("{}/states.ron", asset_root())),
             })
+            .add_systems(Startup, spawn_hud_camera)
             .add_systems(
                 Update,
                 (
@@ -101,8 +104,32 @@ impl Plugin for BattlePlugin {
                     drain_pending_anims.after(resolve_tick),
                 ),
             );
-        ui::register(app);
+        scene::register(app);
+        hud::register(app);
     }
+}
+
+/// The order-2 HUD camera the battle windows render on. It sits above the order-1
+/// effect overlay (backdrop, battlers, animations) and the order-0 world. Its
+/// [`RenderLayers`] points at the otherwise-unused layer 2 so its 2D pass draws no
+/// world sprites — only the HUD, which `bevy_ui` composites by target camera, not
+/// by render layer.
+#[derive(Component)]
+struct HudCamera;
+
+/// Spawn the HUD camera at startup (order 2, no clear), so [`hud`]'s windows can
+/// target it and paint over the effect overlay the battle scene draws on.
+fn spawn_hud_camera(mut commands: Commands) {
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 2,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        RenderLayers::layer(2),
+        HudCamera,
+    ));
 }
 
 /// Build a live encounter when a [`BattleRequest`] arrives (ignored while one is

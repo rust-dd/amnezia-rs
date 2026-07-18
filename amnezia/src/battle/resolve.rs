@@ -9,10 +9,6 @@ use super::logic;
 use super::model::{Action, Battle, Command, PendingAnim, Phase, Source, rng_next};
 use amnezia_data::SkillDef;
 
-/// RM2000 has no per-monster normal-attack animation, so an enemy physical strike
-/// plays the default hit sheet (animation id 1); the user can retune it later.
-const ENEMY_ATTACK_ANIM: u32 = 1;
-
 /// RM2000 front-view draws no party sprites, so a hit a member takes animates at
 /// the bottom-centre party area — just below the screen centre (y grows down).
 const PARTY_ANIM_Y: f32 = 80.0;
@@ -335,12 +331,10 @@ impl Battle {
     /// roll off the RM2000 90% bare-hands base that returns `None` on a miss, else
     /// the dealt damage via `hit_member` (its variance and the member's own defend
     /// halving). A pending charge-up doubles the blow; it is spent on the swing
-    /// whether or not the blow lands, so the foe's next strike is normal again.
-    /// The RM2000 default attack animation is queued at the target member's
-    /// bottom-centre party slot up front, so the swing shows on hit or miss.
+    /// whether or not the blow lands, so the foe's next strike is normal again. An
+    /// rpg2k enemy normal attack plays no animation, so none is queued here (a
+    /// weapon/unarmed animation on a party strike is a member-side concern).
     fn enemy_strike_member(&mut self, ei: usize, ti: usize) -> Option<i32> {
-        let x = self.party_anim_x(ti);
-        self.push_anim(ENEMY_ATTACK_ANIM, x, PARTY_ANIM_Y);
         let charged = self.enemies[ei].charging;
         self.enemies[ei].charging = false;
         let hit = logic::to_hit(
@@ -1098,12 +1092,24 @@ mod tests {
     #[test]
     fn a_zero_animation_attacker_queues_nothing() {
         // build_1v2's hero is bare-handed with unarmed_animation 0, so its swing
-        // queues no member animation (only the foe's default-attack id 1 may
-        // appear); id 0 must never be pushed.
+        // queues no member animation, and rpg2k enemy normal attacks play none
+        // either — so a full round queues nothing, and id 0 is never pushed.
         let mut battle = build_1v2();
         battle.commit(Command::Attack { target: 0 });
         while battle.resolve_next() {}
         assert!(battle.pending_anims.iter().all(|a| a.anim_id != 0));
+    }
+
+    #[test]
+    fn an_enemy_normal_attack_queues_no_animation() {
+        // An rpg2k enemy normal attack shows no animation, so a strike queues
+        // nothing regardless of whether the to-hit roll lands.
+        let mut battle = build_1v2();
+        battle.enemy_strike_member(0, 0);
+        assert!(
+            battle.pending_anims.is_empty(),
+            "an enemy normal attack plays no animation"
+        );
     }
 
     #[test]

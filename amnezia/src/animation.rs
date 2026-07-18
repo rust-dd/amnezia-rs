@@ -3,10 +3,12 @@
 //! names an animation id and a screen position; this plugin spawns a
 //! [`LiveAnimation`] that steps its frames at a fixed rate, drawing each frame's
 //! cells (see [`render`]) and firing that frame's sound-effect and flash
-//! timings. It owns the renderer plus the fixed overlay camera the effects draw
-//! on, so they composite over the battle UI; `battle` emits a [`PlayAnimation`]
-//! per physical hit, and the interpreter's [`ShowMapAnimation`] (opcode 11210)
-//! projects a target character to its screen position and plays one on the map.
+//! timings. It owns the renderer plus the fixed overlay camera (render order 1)
+//! the effects draw on, which the battle backdrop and battlers ([`crate::battle`])
+//! share, so effects composite over the map and land on the battlers by
+//! construction; `battle` emits a [`PlayAnimation`] per physical hit, and the
+//! interpreter's [`ShowMapAnimation`] (opcode 11210) projects a target character
+//! to its screen position and plays one on the map.
 //!
 //! Positions are RM2000 screen coordinates measured from the screen centre
 //! (`0,0` = centre), y growing downward, matching the source data. `scope`
@@ -20,14 +22,15 @@ use crate::audio::AudioRequest;
 use crate::battle::BattleActive;
 use crate::menu::MenuOpen;
 use crate::player::Player;
-use crate::screenfx::ScreenEffect;
 use crate::shop::ShopOpen;
 use crate::title::TitleActive;
 use crate::world::{EventSprite, MainCamera};
 use amnezia_data::{AnimationDef, AnimationTimingDef};
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
-use render::{fade_flashes, next_frame, overlay_layer, spawn_frame_cells, spawn_target_flash};
+use render::{fade_flashes, next_frame, spawn_frame_cells, spawn_screen_flash};
+
+pub use render::{overlay_layer, overlay_translation};
 
 /// Seconds each animation frame is shown (RM2000 runs animations at ~15 fps).
 pub const FRAME_SECS: f32 = 1.0 / 15.0;
@@ -50,6 +53,20 @@ pub struct PlayAnimation {
     pub anim_id: u32,
     pub x: f32,
     pub y: f32,
+}
+
+/// A request to flash-tint a target battler sprite as an animation's target
+/// flash fires: `pos` is the battler's RM2000 screen offset from centre (the same
+/// point the animation plays on), `rgb` the flash colour (0..1), `power` its peak
+/// strength (0..1), decaying over `secs`. `battle::scene` finds the battler at
+/// `pos` and drives its sprite colour. RM2000 front view draws no party sprites,
+/// so a party-area target flash matches no battler and shows nothing.
+#[derive(Message)]
+pub struct BattlerFlash {
+    pub pos: Vec2,
+    pub rgb: [f32; 3],
+    pub power: f32,
+    pub secs: f32,
 }
 
 /// The character a [`ShowMapAnimation`] plays on, already resolved from the
@@ -94,6 +111,7 @@ impl Plugin for AnimationPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<PlayAnimation>()
             .add_message::<ShowMapAnimation>()
+            .add_message::<BattlerFlash>()
             .insert_resource(AnimationLibrary(load_ron(&format!(
                 "{}/animations.ron",
                 asset_root()
@@ -116,11 +134,13 @@ impl Plugin for AnimationPlugin {
 }
 
 /// Spawn the fixed effect-overlay camera: a second 2D camera at the origin with
-/// the same fixed 320×240 scaling as the main camera, a higher render `order`,
-/// and no clear. It draws only [`render::OVERLAY_LAYER`], so it paints the
-/// effect sprites over everything the main camera already rendered — the world,
-/// the pictures, and the z-118 battle UI. It deliberately does not follow the
-/// hero, which is what makes [`PlayAnimation`]'s `(x, y)` pure screen-space.
+/// the same fixed 320×240 scaling as the main camera, render `order` 1, and no
+/// clear. It draws only [`render::OVERLAY_LAYER`], so it paints the effect sprites
+/// (and the battle backdrop/battlers, which share the layer) over everything the
+/// main camera already rendered — the world and the pictures — while the order-2
+/// HUD camera composites the battle windows above it. It deliberately does not
+/// follow the hero, which is what makes [`PlayAnimation`]'s `(x, y)` pure
+/// screen-space.
 fn spawn_overlay_camera(mut commands: Commands) {
     commands.spawn((
         Camera2d,
@@ -149,7 +169,7 @@ fn start_animations(
     library: Res<AnimationLibrary>,
     mut requests: MessageReader<PlayAnimation>,
     mut audio: MessageWriter<AudioRequest>,
-    mut screen: MessageWriter<ScreenEffect>,
+    mut battler_flash: MessageWriter<BattlerFlash>,
 ) {
     for request in requests.read() {
         let Some(index) = library.0.iter().position(|a| a.id == request.anim_id) else {
@@ -161,7 +181,7 @@ fn start_animations(
         }
         let base = Vec2::new(request.x, request.y);
         let cells = spawn_frame_cells(&mut commands, &asset_server, def, 0, base);
-        fire_timings(&mut commands, &mut audio, &mut screen, def, 0, base);
+        fire_timings(&mut commands, &mut audio, &mut battler_flash, def, 0, base);
         commands.spawn(LiveAnimation {
             index,
             base,
@@ -181,7 +201,7 @@ fn step_animations(
     asset_server: Res<AssetServer>,
     library: Res<AnimationLibrary>,
     mut audio: MessageWriter<AudioRequest>,
-    mut screen: MessageWriter<ScreenEffect>,
+    mut battler_flash: MessageWriter<BattlerFlash>,
     mut animations: Query<(Entity, &mut LiveAnimation)>,
 ) {
     for (entity, mut anim) in &mut animations {
@@ -199,7 +219,7 @@ fn step_animations(
                 fire_timings(
                     &mut commands,
                     &mut audio,
-                    &mut screen,
+                    &mut battler_flash,
                     def,
                     frame,
                     anim.base,
@@ -215,14 +235,14 @@ fn step_animations(
 fn fire_timings(
     commands: &mut Commands,
     audio: &mut MessageWriter<AudioRequest>,
-    screen: &mut MessageWriter<ScreenEffect>,
+    battler_flash: &mut MessageWriter<BattlerFlash>,
     def: &AnimationDef,
     frame: usize,
     base: Vec2,
 ) {
     for timing in def.timings.iter().filter(|t| t.frame as usize == frame + 1) {
         emit_sound(audio, timing);
-        emit_flash(commands, screen, timing, base);
+        emit_flash(commands, battler_flash, timing, base);
     }
 }
 
@@ -239,11 +259,16 @@ fn emit_sound(audio: &mut MessageWriter<AudioRequest>, timing: &AnimationTimingD
     });
 }
 
-/// Emit the timing's flash: a screen flash reuses the [`ScreenEffect`] overlay;
-/// a target flash spawns a local decaying quad at the animation base.
+/// Emit the timing's flash. A screen flash spawns a full-screen decaying quad on
+/// the overlay (RM2000's animation screen flash is a full-screen tint). A target
+/// flash publishes a [`BattlerFlash`] for `battle::scene` to tint the target
+/// battler sprite — never a drawn box. `ScreenEffect::Flash` is deliberately
+/// unused here: it is a main-camera overlay that would hide behind the order-1
+/// overlay backdrop during battle; it stays reserved for the interpreter's map
+/// `FlashScreen` opcode.
 fn emit_flash(
     commands: &mut Commands,
-    screen: &mut MessageWriter<ScreenEffect>,
+    battler_flash: &mut MessageWriter<BattlerFlash>,
     timing: &AnimationTimingDef,
     base: Vec2,
 ) {
@@ -252,24 +277,16 @@ fn emit_flash(
         flash_channel(timing.flash_green),
         flash_channel(timing.flash_blue),
     ];
+    let power = flash_channel(timing.flash_power);
     match timing.flash_scope {
-        FLASH_SCOPE_SCREEN => {
-            screen.write(ScreenEffect::Flash {
-                r: timing.flash_red as i32,
-                g: timing.flash_green as i32,
-                b: timing.flash_blue as i32,
-                intensity: timing.flash_power as i32,
+        FLASH_SCOPE_SCREEN => spawn_screen_flash(commands, rgb, power, FLASH_SECS),
+        FLASH_SCOPE_TARGET => {
+            battler_flash.write(BattlerFlash {
+                pos: base,
+                rgb,
+                power,
                 secs: FLASH_SECS,
             });
-        }
-        FLASH_SCOPE_TARGET => {
-            spawn_target_flash(
-                commands,
-                base,
-                rgb,
-                flash_channel(timing.flash_power),
-                FLASH_SECS,
-            );
         }
         _ => {}
     }
@@ -354,6 +371,67 @@ fn target_screen_offset(target: Vec2, camera: Vec2) -> Vec2 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn flash_timing(scope: u32) -> AnimationTimingDef {
+        AnimationTimingDef {
+            frame: 1,
+            se_name: String::new(),
+            flash_scope: scope,
+            flash_red: 31,
+            flash_green: 20,
+            flash_blue: 10,
+            flash_power: 31,
+        }
+    }
+
+    #[test]
+    fn a_screen_scope_flash_spawns_a_fullscreen_quad_and_no_battler_flash() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_message::<BattlerFlash>();
+        app.add_systems(
+            Update,
+            |mut commands: Commands, mut bf: MessageWriter<BattlerFlash>| {
+                emit_flash(
+                    &mut commands,
+                    &mut bf,
+                    &flash_timing(2),
+                    Vec2::new(16.0, -24.0),
+                );
+            },
+        );
+        app.update();
+        let mut quads = app.world_mut().query::<&render::FlashQuad>();
+        assert_eq!(quads.iter(app.world()).count(), 1, "one full-screen quad");
+        let messages = app.world().resource::<Messages<BattlerFlash>>();
+        let mut cursor = messages.get_cursor();
+        assert_eq!(cursor.read(messages).count(), 0, "no target tint");
+    }
+
+    #[test]
+    fn a_target_scope_flash_publishes_a_battler_flash_not_a_box() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_message::<BattlerFlash>();
+        app.add_systems(
+            Update,
+            |mut commands: Commands, mut bf: MessageWriter<BattlerFlash>| {
+                emit_flash(
+                    &mut commands,
+                    &mut bf,
+                    &flash_timing(1),
+                    Vec2::new(16.0, -24.0),
+                );
+            },
+        );
+        app.update();
+        let mut quads = app.world_mut().query::<&render::FlashQuad>();
+        assert_eq!(quads.iter(app.world()).count(), 0, "no drawn box");
+        let messages = app.world().resource::<Messages<BattlerFlash>>();
+        let mut cursor = messages.get_cursor();
+        let flashes: Vec<Vec2> = cursor.read(messages).map(|f| f.pos).collect();
+        assert_eq!(flashes, vec![Vec2::new(16.0, -24.0)]);
+    }
 
     #[test]
     fn flash_channel_normalises_and_clamps_the_0_31_scale() {

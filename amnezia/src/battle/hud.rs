@@ -1,14 +1,13 @@
-//! The front-view battle UI: a full-screen backdrop with placeholder enemy
-//! battlers in front, and three windowskin panels (log, command, status) styled
-//! with the same `System.png` 9-slice as the dialogue box. Everything is a hidden
-//! overlay toggled by the battle phase; the enemy nodes are (re)built per fight to
-//! match the live troop. Monster battler graphics are not resolvable from the
-//! converted data (Hungarian monster names vs English `Monster/*.png` files with
-//! no mapping field), so enemies render as coloured, named placeholders.
+//! The battle HUD: the three windowskin panels (command, status, log/message)
+//! styled with the same `System.png` 9-slice as the dialogue box, laid along the
+//! bottom of the screen. They render on a dedicated order-2 [`HudCamera`] (spawned
+//! in [`super`]) so they sit ABOVE the order-1 effect overlay the backdrop,
+//! battlers, and animations draw on — bound to it with [`UiTargetCamera`] since
+//! the main camera owns the default UI. The panels are hidden until a fight runs
+//! and their text is recomposed whenever the [`Battle`] changes.
 
 use super::input::{COMMAND_LABELS, item_choices, skill_choices};
 use super::model::{Battle, MenuLevel, Phase};
-use crate::assets::resolve_png;
 use crate::font::GameFont;
 use crate::gamedata::GameData;
 use crate::i18n;
@@ -16,16 +15,8 @@ use crate::state::Inventory;
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
-/// The RM2000 battle field is 320×240 px; enemy positions map into it as
-/// percentages of the screen.
-const FIELD_W: f32 = 320.0;
-const FIELD_H: f32 = 240.0;
-
 #[derive(Component)]
-pub struct BattleRoot;
-
-#[derive(Component)]
-struct BattleBg;
+struct HudRoot;
 
 #[derive(Component)]
 struct LogText;
@@ -36,87 +27,45 @@ struct CommandText;
 #[derive(Component)]
 struct StatusText;
 
-/// A placeholder enemy battler node, indexed into [`Battle::enemies`].
-#[derive(Component)]
-struct EnemyNode {
-    index: usize,
-}
-
-/// Spawn the hidden battle overlay: a backdrop, then three windowskin panels
-/// stacked above it. Enemy nodes are added per fight by [`sync_enemies`].
-pub fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<AssetServer>) {
+/// Spawn the hidden HUD windows and bind them to the order-2 HUD camera, so they
+/// composite above the effect overlay. Runs after [`super::spawn_hud_camera`], so
+/// the camera entity exists to target.
+fn spawn_hud(
+    mut commands: Commands,
+    font: Res<GameFont>,
+    asset_server: Res<AssetServer>,
+    camera: Query<Entity, With<super::HudCamera>>,
+) {
+    let Ok(hud_camera) = camera.single() else {
+        return;
+    };
     let system: Handle<Image> = asset_server.load("graphics/System/System.png");
     commands
         .spawn((
             full_screen(),
             Visibility::Hidden,
-            GlobalZIndex(118),
-            BattleRoot,
+            UiTargetCamera(hud_camera),
+            HudRoot,
         ))
         .with_children(|root| {
-            root.spawn((full_screen(), ImageNode::default(), ZIndex(0), BattleBg));
-            spawn_panel(root, &system, &font, log_node(), LogText);
             spawn_panel(root, &system, &font, command_node(), CommandText);
             spawn_panel(root, &system, &font, status_node(), StatusText);
+            spawn_panel(root, &system, &font, log_node(), LogText);
         });
 }
 
-/// Rebuild the enemy battler nodes when a new fight starts (or clear them when it
-/// ends), keyed on the battle's per-fight generation stamp.
-fn sync_enemies(
-    mut commands: Commands,
-    battle: Res<Battle>,
-    asset_server: Res<AssetServer>,
-    roots: Query<Entity, With<BattleRoot>>,
-    nodes: Query<Entity, With<EnemyNode>>,
-    mut synced: Local<u64>,
-) {
-    if !battle.is_changed() || battle.generation == *synced {
-        return;
-    }
-    *synced = battle.generation;
-    for entity in &nodes {
-        commands.entity(entity).despawn();
-    }
-    let Ok(root) = roots.single() else {
-        return;
-    };
-    commands.entity(root).with_children(|root| {
-        for (index, foe) in battle.enemies.iter().enumerate() {
-            root.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Percent(foe.x as f32 / FIELD_W * 100.0),
-                    top: Val::Percent(foe.y as f32 / FIELD_H * 100.0),
-                    ..default()
-                },
-                ImageNode {
-                    image: asset_server.load(resolve_png("Monster", &foe.battler)),
-                    color: enemy_tint(true, false),
-                    ..default()
-                },
-                ZIndex(1),
-                EnemyNode { index },
-            ));
-        }
-    });
-}
-
-/// Reflect the live battle into the overlay: toggle it, set the backdrop, refresh
-/// the three panels, and update each enemy node's label and tint.
+/// Toggle the HUD by phase and, while a fight runs, recompose the three panels'
+/// text from the live battle.
 #[allow(clippy::type_complexity)]
-fn update_ui(
+fn update_hud(
     battle: Res<Battle>,
     data: Res<GameData>,
     inventory: Res<Inventory>,
-    asset_server: Res<AssetServer>,
-    mut root: Query<&mut Visibility, With<BattleRoot>>,
-    mut backdrop: Query<&mut ImageNode, (With<BattleBg>, Without<EnemyNode>)>,
+    mut root: Query<&mut Visibility, With<HudRoot>>,
     mut texts: ParamSet<(
         Query<&mut Text, With<LogText>>,
         Query<&mut Text, With<CommandText>>,
         Query<&mut Text, With<StatusText>>,
-        Query<(&EnemyNode, &mut ImageNode), Without<BattleBg>>,
     )>,
 ) {
     if !battle.is_changed() {
@@ -133,9 +82,6 @@ fn update_ui(
     if !active {
         return;
     }
-    if let Ok(mut image) = backdrop.single_mut() {
-        image.image = asset_server.load(resolve_png("Backdrop", &battle.background));
-    }
     if let Ok(mut text) = texts.p0().single_mut() {
         **text = battle.log_tail();
     }
@@ -144,11 +90,6 @@ fn update_ui(
     }
     if let Ok(mut text) = texts.p2().single_mut() {
         **text = compose_status(&battle);
-    }
-    for (node, mut image) in &mut texts.p3() {
-        if let Some(foe) = battle.enemies.get(node.index) {
-            image.color = enemy_tint(foe.alive(), targeted(&battle, node.index));
-        }
     }
 }
 
@@ -232,28 +173,6 @@ fn or_empty(rows: Vec<String>, fallback: &str) -> Vec<String> {
     }
 }
 
-/// Whether the target cursor currently rests on enemy `index`.
-fn targeted(battle: &Battle, index: usize) -> bool {
-    if battle.phase != Phase::Command || battle.menu != MenuLevel::Target {
-        return false;
-    }
-    let living = battle.living_enemies();
-    living.get(battle.cursor.min(living.len().saturating_sub(1))) == Some(&index)
-}
-
-/// The tint applied to an enemy battler sprite: faded and dark once it's dead,
-/// a warm gold glow while it's the current target, and its natural colours
-/// (white, no tint) otherwise.
-fn enemy_tint(alive: bool, targeted: bool) -> Color {
-    if !alive {
-        return Color::srgba(0.35, 0.35, 0.35, 0.5);
-    }
-    if targeted {
-        return Color::srgb(1.0, 0.9, 0.55);
-    }
-    Color::WHITE
-}
-
 /// Spawn a windowskin panel (frame + tint + text) carrying text `marker`.
 fn spawn_panel<M: Component>(
     root: &mut ChildSpawnerCommands,
@@ -262,7 +181,7 @@ fn spawn_panel<M: Component>(
     node: Node,
     marker: M,
 ) {
-    root.spawn((node, ZIndex(2))).with_children(|panel| {
+    root.spawn(node).with_children(|panel| {
         panel.spawn((
             inset_node(0.0),
             ImageNode {
@@ -304,7 +223,14 @@ fn text_font(font: &GameFont, size: f32) -> TextFont {
 }
 
 fn full_screen() -> Node {
-    inset_node(0.0)
+    Node {
+        position_type: PositionType::Absolute,
+        left: Val::Px(0.0),
+        right: Val::Px(0.0),
+        top: Val::Px(0.0),
+        bottom: Val::Px(0.0),
+        ..default()
+    }
 }
 
 fn inset_node(px: f32) -> Node {
@@ -318,44 +244,49 @@ fn inset_node(px: f32) -> Node {
     }
 }
 
-fn log_node() -> Node {
+/// The command window: bottom-left, above the log strip (RM2000 actor-command
+/// window). Tall enough for the command title plus its rows.
+fn command_node() -> Node {
     Node {
         position_type: PositionType::Absolute,
-        left: Val::Px(8.0),
-        right: Val::Px(8.0),
-        top: Val::Px(8.0),
-        min_height: Val::Px(40.0),
+        left: Val::Px(4.0),
+        bottom: Val::Percent(12.0),
+        width: Val::Percent(48.0),
+        min_height: Val::Percent(22.0),
         padding: UiRect::all(Val::Px(10.0)),
         ..default()
     }
 }
 
-fn command_node() -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        left: Val::Px(8.0),
-        bottom: Val::Px(8.0),
-        width: Val::Percent(50.0),
-        min_height: Val::Px(120.0),
-        padding: UiRect::all(Val::Px(12.0)),
-        ..default()
-    }
-}
-
+/// The status window: bottom-right, above the log strip (RM2000 party status).
 fn status_node() -> Node {
     Node {
         position_type: PositionType::Absolute,
-        right: Val::Px(8.0),
-        bottom: Val::Px(8.0),
-        width: Val::Percent(44.0),
-        min_height: Val::Px(120.0),
-        padding: UiRect::all(Val::Px(12.0)),
+        right: Val::Px(4.0),
+        bottom: Val::Percent(12.0),
+        width: Val::Percent(48.0),
+        min_height: Val::Percent(22.0),
+        padding: UiRect::all(Val::Px(10.0)),
         ..default()
     }
 }
 
-/// Register the battle UI systems on the given app.
+/// The log/message window: the full-width strip along the very bottom.
+fn log_node() -> Node {
+    Node {
+        position_type: PositionType::Absolute,
+        left: Val::Px(4.0),
+        right: Val::Px(4.0),
+        bottom: Val::Px(4.0),
+        min_height: Val::Percent(12.0),
+        padding: UiRect::all(Val::Px(8.0)),
+        ..default()
+    }
+}
+
+/// Register the battle HUD: spawn its windows after the HUD camera exists, then
+/// keep them in sync with the live battle.
 pub fn register(app: &mut App) {
-    app.add_systems(Startup, spawn_ui)
-        .add_systems(Update, (sync_enemies, update_ui));
+    app.add_systems(Startup, spawn_hud.after(super::spawn_hud_camera))
+        .add_systems(Update, update_hud);
 }
