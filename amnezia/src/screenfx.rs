@@ -10,6 +10,7 @@
 //! and adds an offset the follow overwrites again next frame, so it never
 //! accumulates.
 
+use crate::world::MainCamera;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 
@@ -379,7 +380,7 @@ fn overlay_color(fx: &Fx, layer: FxLayer) -> Color {
 /// Add the current shake offset to the camera after `camera_follow` set its base
 /// position. Runs every frame; the follow re-centres next frame, so the offset
 /// never accumulates.
-fn apply_camera_shake(fx: Res<Fx>, mut cameras: Query<&mut Transform, With<Camera2d>>) {
+fn apply_camera_shake(fx: Res<Fx>, mut cameras: Query<&mut Transform, With<MainCamera>>) {
     let Ok(mut camera) = cameras.single_mut() else {
         return;
     };

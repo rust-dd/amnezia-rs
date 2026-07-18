@@ -11,7 +11,7 @@ use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::Fade;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::title::TitleActive;
-use crate::world::{Character, MapData, MapEvents, MoveQueue, RouteAction, walk};
+use crate::world::{Character, MainCamera, MapData, MapEvents, MoveQueue, RouteAction, walk};
 use amnezia_data::EventPage;
 use bevy::prelude::*;
 
@@ -318,7 +318,7 @@ fn camera_follow(
     data: Res<MapData>,
     pan: Res<CameraPan>,
     players: Query<&Transform, With<Player>>,
-    mut cameras: Query<(&mut Transform, &Projection), (With<Camera2d>, Without<Player>)>,
+    mut cameras: Query<(&mut Transform, &Projection), (With<MainCamera>, Without<Player>)>,
 ) {
     let Ok(player) = players.single() else {
         return;

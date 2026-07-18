@@ -3,8 +3,10 @@
 //! names an animation id and a screen position; this plugin spawns a
 //! [`LiveAnimation`] that steps its frames at a fixed rate, drawing each frame's
 //! cells (see [`render`]) and firing that frame's sound-effect and flash
-//! timings. It owns only the renderer; a follow-up wires it into per-hit battle
-//! and the interpreter.
+//! timings. It owns the renderer plus the fixed overlay camera the effects draw
+//! on, so they composite over the battle UI; `battle` emits a [`PlayAnimation`]
+//! per physical hit. Wiring the interpreter's map animation (opcode 11210) is a
+//! separate follow-up.
 //!
 //! Positions are RM2000 screen coordinates measured from the screen centre
 //! (`0,0` = centre), y growing downward, matching the source data. `scope`
@@ -17,13 +19,13 @@ use crate::assets::{asset_root, load_ron};
 use crate::audio::AudioRequest;
 use crate::battle::BattleActive;
 use crate::menu::MenuOpen;
-use crate::screenfx::{ScreenEffect, ScreenShakeSet};
+use crate::screenfx::ScreenEffect;
 use crate::shop::ShopOpen;
 use crate::title::TitleActive;
 use amnezia_data::{AnimationDef, AnimationTimingDef};
+use bevy::camera::ScalingMode;
 use bevy::prelude::*;
-use bevy::transform::TransformSystems;
-use render::{fade_flashes, next_frame, pin_to_screen, spawn_frame_cells, spawn_target_flash};
+use render::{fade_flashes, next_frame, overlay_layer, spawn_frame_cells, spawn_target_flash};
 
 /// Seconds each animation frame is shown (RM2000 runs animations at ~15 fps).
 pub const FRAME_SECS: f32 = 1.0 / 15.0;
@@ -73,20 +75,41 @@ impl Plugin for AnimationPlugin {
                 "{}/animations.ron",
                 asset_root()
             ))))
+            .add_systems(Startup, spawn_overlay_camera)
             .add_systems(
                 Update,
                 (
                     (debug_preview, start_animations, step_animations).chain(),
                     fade_flashes,
                 ),
-            )
-            .add_systems(
-                PostUpdate,
-                pin_to_screen
-                    .after(ScreenShakeSet)
-                    .before(TransformSystems::Propagate),
             );
     }
+}
+
+/// Spawn the fixed effect-overlay camera: a second 2D camera at the origin with
+/// the same fixed 320×240 scaling as the main camera, a higher render `order`,
+/// and no clear. It draws only [`render::OVERLAY_LAYER`], so it paints the
+/// effect sprites over everything the main camera already rendered — the world,
+/// the pictures, and the z-118 battle UI. It deliberately does not follow the
+/// hero, which is what makes [`PlayAnimation`]'s `(x, y)` pure screen-space.
+fn spawn_overlay_camera(mut commands: Commands) {
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: ScalingMode::Fixed {
+                width: 320.0,
+                height: 240.0,
+            },
+            ..OrthographicProjection::default_2d()
+        }),
+        Transform::default(),
+        overlay_layer(),
+    ));
 }
 
 /// Spawn a [`LiveAnimation`] for each [`PlayAnimation`], drawing its first frame

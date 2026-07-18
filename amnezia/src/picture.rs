@@ -10,6 +10,7 @@
 
 use crate::assets::resolve_png;
 use crate::screenfx::ScreenShakeSet;
+use crate::world::MainCamera;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
 
@@ -223,7 +224,7 @@ fn drive_tweens(time: Res<Time>, mut pictures: Query<&mut Picture>) {
 /// Pin each picture to the (shaken) camera centre plus its screen offset, and
 /// repaint its opacity and zoom.
 fn place_pictures(
-    cameras: Query<&Transform, (With<Camera2d>, Without<Picture>)>,
+    cameras: Query<&Transform, (With<MainCamera>, Without<Picture>)>,
     mut pictures: Query<(&Picture, &mut Transform, &mut Sprite)>,
 ) {
     let Ok(camera) = cameras.single() else {

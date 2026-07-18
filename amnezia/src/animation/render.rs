@@ -1,16 +1,30 @@
 //! Sprite rendering for the effect-animation player: turning an animation
-//! frame's cells into camera-pinned world sprites, the local target-flash quad,
-//! and the pure geometry/colour helpers the player and its tests share.
+//! frame's cells into overlay sprites, the local target-flash quad, and the
+//! pure geometry/colour helpers the player and its tests share.
 //!
-//! The world camera uses a fixed 320×240 scaling mode, so one world unit is one
-//! RM2000 pixel and a 96×96 cell sub-rect draws at its native size. Like
-//! `picture.rs`, every sprite is centre-anchored and re-pinned to the (shaken)
-//! camera each frame via [`ScreenAnchored`], so the effect stays fixed to the
-//! screen instead of scrolling with the map.
+//! The sprites draw on [`OVERLAY_LAYER`], rendered by the fixed effect-overlay
+//! camera (see [`super`]) that sits at the origin with the same fixed 320×240
+//! scaling mode as the main camera. So one world unit is one RM2000 pixel, a
+//! 96×96 cell sub-rect draws at its native size, and screen-space is pure: an
+//! RM2000 offset `(x, y)` from centre (y downward) is world `(x, -y)`, with no
+//! camera-follow term. Because that camera has a higher `order` and no clear,
+//! the effect composites over the map, the pictures, and the battle UI alike.
 
 use crate::assets::resolve_png;
 use amnezia_data::AnimationDef;
+use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
+
+/// The render layer the effect-overlay camera draws. Cells and flash quads carry
+/// it so only that fixed, higher-`order` camera renders them — painting over the
+/// layer-0 world and UI instead of hiding behind the battle UI.
+pub(super) const OVERLAY_LAYER: usize = 1;
+
+/// A fresh [`RenderLayers`] on [`OVERLAY_LAYER`] (the type isn't `Copy`, so each
+/// spawned sprite and the overlay camera take their own).
+pub(super) fn overlay_layer() -> RenderLayers {
+    RenderLayers::layer(OVERLAY_LAYER)
+}
 
 /// A sheet is a 5-column, row-major grid of 96×96 cells (a `Battle` graphic is
 /// 480 wide, so 5 columns; the row count varies).
@@ -30,13 +44,11 @@ const FLASH_Z: f32 = 505.0;
 /// flash tints the target sprite itself; a fixed quad is an approximation.
 const FLASH_SIZE: f32 = 96.0;
 
-/// A screen-space overlay pinned to the camera centre every frame. `pos` is the
-/// RM2000 screen offset from centre (y grows downward, as in the source data);
-/// `z` the world depth to sit at.
-#[derive(Component)]
-pub(super) struct ScreenAnchored {
-    pub pos: Vec2,
-    pub z: f32,
+/// The world translation of an overlay sprite at RM2000 screen offset `pos` from
+/// centre (y downward) with depth `z`. The overlay camera sits at the origin, so
+/// this is pure screen-space: `x` unchanged, `y` flipped for world y-up.
+fn overlay_translation(pos: Vec2, z: f32) -> Vec3 {
+    Vec3::new(pos.x, -pos.y, z)
 }
 
 /// A decaying target-flash quad: `rgb` its colour (0..1), `peak` the starting
@@ -100,6 +112,7 @@ pub(super) fn spawn_frame_cells(
             tone_channel(cell.tone_blue),
             alpha_from_transparency(cell.transparency),
         );
+        let pos = Vec2::new(base.x + cell.x as f32, base.y + cell.y as f32);
         let entity = commands
             .spawn((
                 Sprite {
@@ -108,11 +121,12 @@ pub(super) fn spawn_frame_cells(
                     color,
                     ..default()
                 },
-                Transform::from_scale(Vec3::splat(cell.scale as f32 / 100.0)),
-                ScreenAnchored {
-                    pos: Vec2::new(base.x + cell.x as f32, base.y + cell.y as f32),
-                    z: CELL_Z + i as f32 * 0.1,
+                Transform {
+                    translation: overlay_translation(pos, CELL_Z + i as f32 * 0.1),
+                    scale: Vec3::splat(cell.scale as f32 / 100.0),
+                    ..default()
                 },
+                overlay_layer(),
             ))
             .id();
         cells.push(entity);
@@ -134,11 +148,8 @@ pub(super) fn spawn_target_flash(
             Color::srgba(rgb[0], rgb[1], rgb[2], peak),
             Vec2::splat(FLASH_SIZE),
         ),
-        Transform::default(),
-        ScreenAnchored {
-            pos: base,
-            z: FLASH_Z,
-        },
+        Transform::from_translation(overlay_translation(base, FLASH_Z)),
+        overlay_layer(),
         FlashQuad {
             elapsed: 0.0,
             secs,
@@ -164,22 +175,6 @@ pub(super) fn fade_flashes(
         }
         let alpha = flash.peak * (1.0 - flash.elapsed / flash.secs);
         sprite.color = Color::srgba(flash.rgb[0], flash.rgb[1], flash.rgb[2], alpha);
-    }
-}
-
-/// Pin every [`ScreenAnchored`] sprite to the (shaken) camera centre plus its
-/// screen offset. RM2000 y grows downward, so it flips against world y. Runs in
-/// `PostUpdate` after the shake so effects shake with the view.
-pub(super) fn pin_to_screen(
-    cameras: Query<&Transform, (With<Camera2d>, Without<ScreenAnchored>)>,
-    mut anchored: Query<(&ScreenAnchored, &mut Transform), Without<Camera2d>>,
-) {
-    let Ok(camera) = cameras.single() else {
-        return;
-    };
-    let center = camera.translation.truncate();
-    for (anchor, mut transform) in &mut anchored {
-        transform.translation = (center + Vec2::new(anchor.pos.x, -anchor.pos.y)).extend(anchor.z);
     }
 }
 
@@ -211,6 +206,20 @@ mod tests {
         assert_eq!(alpha_from_transparency(100), 0.0);
         assert_eq!(alpha_from_transparency(50), 0.5);
         assert_eq!(alpha_from_transparency(150), 0.0);
+    }
+
+    #[test]
+    fn overlay_translation_flips_y_and_keeps_x_and_z() {
+        // On the origin-fixed overlay camera an RM2000 offset (x, y-down) is
+        // world (x, -y); z passes through unchanged.
+        assert_eq!(
+            overlay_translation(Vec2::new(0.0, 0.0), 510.0),
+            Vec3::new(0.0, 0.0, 510.0)
+        );
+        assert_eq!(
+            overlay_translation(Vec2::new(40.0, -20.0), 505.0),
+            Vec3::new(40.0, 20.0, 505.0)
+        );
     }
 
     #[test]

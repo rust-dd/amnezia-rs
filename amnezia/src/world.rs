@@ -27,6 +27,14 @@ const DEV_START: Option<Start> = None;
 #[derive(Component)]
 pub struct MapScene;
 
+/// The main world camera: it follows the hero (`player::camera_follow`), takes
+/// the screen shake, draws the map / pictures / UI on the default render layer
+/// 0, and is the [`IsDefaultUiCamera`]. The fixed effect-overlay camera in
+/// [`crate::animation`] deliberately lacks this marker, so the follow, shake,
+/// and picture-pinning systems keep matching exactly one camera.
+#[derive(Component)]
+pub struct MainCamera;
+
 /// A rendered event NPC: its event id, live tile position, and current
 /// facing/frame/graphic. A running `MoveEvent` enqueues route steps that
 /// [`walk`] tweens across tiles (updating `tile_x`/`tile_y`), while
@@ -144,6 +152,10 @@ fn setup(
     // pixel-perfect and no gray margin shows around a small map.
     commands.spawn((
         Camera2d,
+        // Own the UI so the second (effect-overlay) camera doesn't make the UI
+        // camera ambiguous; the overlay camera then paints animations over this.
+        IsDefaultUiCamera,
+        MainCamera,
         Projection::Orthographic(OrthographicProjection {
             scaling_mode: bevy::camera::ScalingMode::Fixed {
                 width: 320.0,

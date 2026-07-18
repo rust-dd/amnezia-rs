@@ -20,6 +20,7 @@ mod model;
 mod resolve;
 mod ui;
 
+use crate::animation::PlayAnimation;
 use crate::assets::{asset_root, load_ron};
 use crate::gamedata::GameData;
 use crate::progression::Progression;
@@ -97,6 +98,7 @@ impl Plugin for BattlePlugin {
                     input::command_input,
                     resolve_tick,
                     outcome_input,
+                    drain_pending_anims.after(resolve_tick),
                 ),
             );
         ui::register(app);
@@ -180,6 +182,25 @@ fn resolve_tick(time: Res<Time>, mut battle: ResMut<Battle>) {
         battle.finish(outcome);
     } else if !more {
         battle.new_round();
+    }
+}
+
+/// Drain the battle's per-tick attack-animation queue into overlay
+/// [`PlayAnimation`] messages: each physical strike resolved this tick queued its
+/// attacker's attack animation at its target's screen position (see `resolve`).
+/// Emitting them here keeps the queue-push Bevy-free and plays each effect once.
+/// Guarded on non-empty so an idle fight never marks [`Battle`] changed (which
+/// would re-run the UI every frame).
+fn drain_pending_anims(mut battle: ResMut<Battle>, mut plays: MessageWriter<PlayAnimation>) {
+    if battle.pending_anims.is_empty() {
+        return;
+    }
+    for anim in battle.pending_anims.drain(..) {
+        plays.write(PlayAnimation {
+            anim_id: anim.anim_id,
+            x: anim.x,
+            y: anim.y,
+        });
     }
 }
 

@@ -6,8 +6,20 @@
 
 use super::BattleOutcome;
 use super::logic;
-use super::model::{Action, Battle, Command, Phase, Source, rng_next};
+use super::model::{Action, Battle, Command, PendingAnim, Phase, Source, rng_next};
 use amnezia_data::SkillDef;
+
+/// RM2000 has no per-monster normal-attack animation, so an enemy physical strike
+/// plays the default hit sheet (animation id 1); the user can retune it later.
+const ENEMY_ATTACK_ANIM: u32 = 1;
+
+/// RM2000 front-view draws no party sprites, so a hit a member takes animates at
+/// the bottom-centre party area — just below the screen centre (y grows down).
+const PARTY_ANIM_Y: f32 = 80.0;
+
+/// Horizontal spacing between adjacent members' incoming-hit animations, so a
+/// multi-member party doesn't stack every hit at the exact centre.
+const PARTY_ANIM_SPREAD: f32 = 16.0;
 
 /// The outcome of a party member's weapon strike: a clean miss, or a landed hit
 /// carrying the damage dealt and whether it critical'd (for the log line).
@@ -215,11 +227,37 @@ impl Battle {
         self.log.push(line);
     }
 
+    /// Queue `anim_id` at RM2000 screen offset `(x, y)` from centre (y downward)
+    /// for `battle.rs` to play as this tick resolves. A `0` id (no animation) is
+    /// skipped, so an attacker with neither a weapon animation nor an unarmed one
+    /// plays nothing rather than a stray effect.
+    fn push_anim(&mut self, anim_id: u32, x: f32, y: f32) {
+        if anim_id != 0 {
+            self.pending_anims.push(PendingAnim { anim_id, x, y });
+        }
+    }
+
+    /// The horizontal screen offset for member `ti`'s incoming-hit animation:
+    /// centred on 0 and fanned out a little by member index (see
+    /// [`PARTY_ANIM_SPREAD`]), since the party isn't drawn in front view.
+    fn party_anim_x(&self, ti: usize) -> f32 {
+        let count = self.members.len().max(1) as f32;
+        (ti as f32 - (count - 1.0) / 2.0) * PARTY_ANIM_SPREAD
+    }
+
     /// Resolve a party member's weapon strike on enemy `ti`, in RM2000 order: an
     /// agility-adjusted to-hit roll (bare hands default 90%), then on a hit the
     /// weapon's element against the foe's resistance ranks, a critical that
-    /// triples, the `var=4` variance, and finally the defending-foe halving.
+    /// triples, the `var=4` variance, and finally the defending-foe halving. The
+    /// attacker's attack animation is queued on the struck foe up front, so the
+    /// swing shows whether or not the blow lands.
     fn strike_enemy(&mut self, pi: usize, ti: usize) -> Strike {
+        let anim = self.members[pi].attack_animation;
+        let (x, y) = (
+            self.enemies[ti].x as f32 - 160.0,
+            self.enemies[ti].y as f32 - 120.0,
+        );
+        self.push_anim(anim, x, y);
         let base = logic::physical_damage(
             self.members[pi].stats.attack,
             self.enemies[ti].stats.defense,
@@ -291,7 +329,11 @@ impl Battle {
     /// the dealt damage via `hit_member` (its variance and the member's own defend
     /// halving). A pending charge-up doubles the blow; it is spent on the swing
     /// whether or not the blow lands, so the foe's next strike is normal again.
+    /// The RM2000 default attack animation is queued at the target member's
+    /// bottom-centre party slot up front, so the swing shows on hit or miss.
     fn enemy_strike_member(&mut self, ei: usize, ti: usize) -> Option<i32> {
+        let x = self.party_anim_x(ti);
+        self.push_anim(ENEMY_ATTACK_ANIM, x, PARTY_ANIM_Y);
         let charged = self.enemies[ei].charging;
         self.enemies[ei].charging = false;
         let hit = logic::to_hit(
@@ -954,6 +996,106 @@ mod tests {
         while battle.resolve_next() {}
         assert!(battle.enemies[0].hp < before);
         assert!(battle.log.iter().any(|l| l.contains("rácsap")));
+    }
+
+    /// One hero with a weapon whose `weapon_animation` is 7, versus a lone foe
+    /// placed at RM2000 (100, 100), for the attack-animation queue tests.
+    fn build_weapon_anim(weapon_animation: u32) -> Battle {
+        use super::super::model::testkit;
+        use crate::progression::Progression;
+        use crate::vitals::Vitals;
+        let mut ron = testkit::actor(1, 2, 63, 37);
+        ron.weapon = 1;
+        let mut sword = testkit::item(1, 10, 0, 100, 0, 0);
+        sword.weapon_animation = weapon_animation;
+        let actors = vec![&ron];
+        let items = vec![sword];
+        let monsters = vec![testkit::monster(1, 30, 10, 30)];
+        let troop = testkit::troop(&[(1, 100, 100)]);
+        Battle::build(
+            &troop,
+            &monsters,
+            &actors,
+            &items,
+            &[],
+            &[],
+            &[],
+            &Vitals::default(),
+            &Progression::default(),
+            "Cave1".into(),
+            1,
+        )
+    }
+
+    #[test]
+    fn a_party_strike_queues_the_weapon_animation_on_the_struck_foe() {
+        let mut battle = build_weapon_anim(7);
+        battle.commit(Command::Attack { target: 0 });
+        while battle.resolve_next() {}
+        // The member's swing queued its weapon animation (7) at the foe's screen
+        // slot: x = foe.x - 160, y = foe.y - 120 (foe at 100, 100).
+        let anim = battle
+            .pending_anims
+            .iter()
+            .find(|a| a.anim_id == 7)
+            .expect("the weapon attack animation should be queued");
+        assert!((anim.x + 60.0).abs() < 1e-6, "x = {}", anim.x);
+        assert!((anim.y + 20.0).abs() < 1e-6, "y = {}", anim.y);
+    }
+
+    #[test]
+    fn an_unarmed_party_strike_falls_back_to_the_actor_unarmed_animation() {
+        use super::super::model::testkit;
+        use crate::progression::Progression;
+        use crate::vitals::Vitals;
+        let mut ron = testkit::actor(1, 2, 63, 37);
+        ron.weapon = 0; // bare-handed
+        ron.unarmed_animation = 3;
+        let actors = vec![&ron];
+        let monsters = vec![testkit::monster(1, 30, 10, 30)];
+        let troop = testkit::troop(&[(1, 100, 100)]);
+        let mut battle = Battle::build(
+            &troop,
+            &monsters,
+            &actors,
+            &[],
+            &[],
+            &[],
+            &[],
+            &Vitals::default(),
+            &Progression::default(),
+            "Cave1".into(),
+            1,
+        );
+        battle.commit(Command::Attack { target: 0 });
+        while battle.resolve_next() {}
+        assert!(
+            battle.pending_anims.iter().any(|a| a.anim_id == 3),
+            "the unarmed attacker should queue its unarmed_animation"
+        );
+    }
+
+    #[test]
+    fn a_zero_animation_attacker_queues_nothing() {
+        // build_1v2's hero is bare-handed with unarmed_animation 0, so its swing
+        // queues no member animation (only the foe's default-attack id 1 may
+        // appear); id 0 must never be pushed.
+        let mut battle = build_1v2();
+        battle.commit(Command::Attack { target: 0 });
+        while battle.resolve_next() {}
+        assert!(battle.pending_anims.iter().all(|a| a.anim_id != 0));
+    }
+
+    #[test]
+    fn new_round_clears_the_pending_animation_queue() {
+        let mut battle = build_1v2();
+        battle.pending_anims.push(PendingAnim {
+            anim_id: 5,
+            x: 1.0,
+            y: 2.0,
+        });
+        battle.new_round();
+        assert!(battle.pending_anims.is_empty());
     }
 
     #[test]

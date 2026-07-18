@@ -63,6 +63,10 @@ pub struct Fighter {
     pub weapon_hit: u32,
     pub weapon_crit: u32,
     pub weapon_element: Option<u32>,
+    /// The animation this member's normal attack plays on its target: the
+    /// equipped weapon's `weapon_animation`, or the actor's `unarmed_animation`
+    /// when it has no weapon. `0` means "no animation" and plays nothing.
+    pub(super) attack_animation: u32,
     /// This fighter's active status effects as `(state_id, turns_held)` pairs; the
     /// turn count drives [`logic::tick_recovery`]'s hold-then-wear-off schedule.
     pub states: Vec<(u32, u32)>,
@@ -180,6 +184,17 @@ pub struct Action {
     pub agility: u32,
 }
 
+/// One queued attack animation, produced as a physical strike resolves and
+/// drained by `battle.rs`'s `drain_pending_anims` into a `PlayAnimation` overlay
+/// message. `anim_id` is the effect id; `x`/`y` its RM2000 screen offset from the
+/// screen centre (y downward), matching the animation player's coordinates.
+#[derive(Clone, Copy)]
+pub(super) struct PendingAnim {
+    pub anim_id: u32,
+    pub x: f32,
+    pub y: f32,
+}
+
 /// The whole live battle, held as a Bevy resource and reset to `default()` (the
 /// `Inactive` phase) between fights.
 #[derive(Resource, Default)]
@@ -217,6 +232,10 @@ pub struct Battle {
     /// A unique-per-fight stamp (the build seed) the UI watches to rebuild the
     /// enemy battler nodes exactly once when a new encounter begins.
     pub generation: u64,
+    /// Attack animations queued as the current tick's actions resolve; drained
+    /// each frame by `battle.rs` into `PlayAnimation` overlays and cleared by
+    /// [`Battle::new_round`] (a fresh [`Battle::build`] starts it empty).
+    pub(super) pending_anims: Vec<PendingAnim>,
     pub(super) rng: u64,
 }
 
@@ -306,6 +325,12 @@ impl Battle {
                     weapon_hit: weapon.map_or(0, |w| w.hit),
                     weapon_crit: weapon.map_or(0, |w| w.crit),
                     weapon_element: weapon.and_then(|w| w.attribute_defense.first().copied()),
+                    // A weapon animates with its own `weapon_animation`; an empty
+                    // slot falls back to the actor's bare-handed animation.
+                    attack_animation: match weapon {
+                        Some(w) => w.weapon_animation,
+                        None => a.unarmed_animation,
+                    },
                     states: Vec::new(),
                     resist_attributes: logic::equipment_resist(a, items),
                 }
@@ -440,6 +465,7 @@ impl Battle {
         self.run_recovery();
         self.queue.clear();
         self.queue_at = 0;
+        self.pending_anims.clear();
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;
