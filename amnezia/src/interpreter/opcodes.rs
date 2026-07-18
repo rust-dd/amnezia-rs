@@ -88,3 +88,58 @@ pub(super) const GAME_OVER: u32 = 12420;
 /// directly, so this needs no interactive screen; the save crystal's action page
 /// runs it.
 pub(super) const OPEN_SAVE_MENU: u32 = 11910;
+
+/// Change an actor's level: `params = [mode, id, operation, operand_type, operand,
+/// show_msg]`. Applied through the experience curve (see `apply_change_level`).
+pub(super) const CHANGE_LEVEL: u32 = 10420;
+/// Set actor `params[0]`'s name to `string`. The remake tracks only the hero
+/// (actor 1) name, which `\N[k]` inserts.
+pub(super) const CHANGE_HERO_NAME: u32 = 10610;
+/// Memorize the party's position: write the current map id and the hero's tile
+/// into the three variables `params = [var_map, var_x, var_y]`.
+pub(super) const MEMORIZE_LOCATION: u32 = 10820;
+/// Teleport the hero to a memorized position read back from `params = [var_map,
+/// var_x, var_y]`; pauses through the fade like [`TELEPORT`].
+pub(super) const RECALL_TO_LOCATION: u32 = 10830;
+/// Cancel every character's pending forced movement (`params` empty).
+pub(super) const HALT_ALL_MOVEMENT: u32 = 11350;
+/// Wait for (or sample) a key press and store its RM2000 code in a variable:
+/// `params = [var_id, wait, dirs/decision/cancel flags…]`.
+pub(super) const KEY_INPUT_PROC: u32 = 11610;
+/// Enable or disable the in-menu Save command: `params = [allow]` (0 off, 1 on).
+pub(super) const CHANGE_SAVE_ACCESS: u32 = 11930;
+/// Enable or disable opening the main menu: `params = [allow]` (0 off, 1 on).
+pub(super) const CHANGE_MENU_ACCESS: u32 = 11960;
+/// Call another event's page (or a common event) as a sub-frame: `params = [mode,
+/// event_ref, page]`; only map-event mode (1) occurs in the data.
+pub(super) const CALL_EVENT: u32 = 12330;
+/// Return to the title screen (`params` empty); ends the running event.
+pub(super) const RETURN_TO_TITLE: u32 = 12510;
+
+/// Learn or forget an actor skill. Decoded but a no-op: the game has no per-actor
+/// skill state (the menu casts from the whole skill database).
+pub(super) const CHANGE_SKILLS: u32 = 10440;
+/// Equip or unequip an actor. Decoded but a no-op: equipment is view-only here.
+pub(super) const CHANGE_EQUIPMENT: u32 = 10450;
+/// Add or remove an actor state/condition. A no-op: the remake carries no
+/// persistent field conditions (every observed use is a state removal).
+pub(super) const CHANGE_CONDITION: u32 = 10480;
+/// Set a system BGM slot (battle, victory, …). A no-op: music is driven by
+/// explicit `PlayBgm` events, and the system slots have no consumer.
+pub(super) const CHANGE_SYSTEM_BGM: u32 = 10660;
+/// Choose the map/battle transition style. A cosmetic no-op: the fade is fixed.
+pub(super) const CHANGE_SCREEN_TRANSITIONS: u32 = 10690;
+/// Board or leave a vehicle. A no-op: the game has no vehicles.
+pub(super) const ENTER_EXIT_VEHICLE: u32 = 10840;
+/// Reposition a vehicle. A no-op: the game has no vehicles.
+pub(super) const SET_VEHICLE_LOCATION: u32 = 10850;
+/// Flash a character sprite. A cosmetic no-op: no per-sprite flash effect exists.
+pub(super) const FLASH_SPRITE: u32 = 11320;
+/// Change the panorama background. A no-op: no parallax/panorama renderer exists.
+pub(super) const CHANGE_PBG: u32 = 11720;
+/// An editor comment; carries no runtime effect.
+pub(super) const COMMENT: u32 = 12410;
+/// A comment continuation line; carries no runtime effect.
+pub(super) const COMMENT_2: u32 = 22410;
+/// The block/event terminator marker; flow continues past it.
+pub(super) const END_MARKER: u32 = 10;

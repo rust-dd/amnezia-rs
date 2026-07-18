@@ -41,6 +41,20 @@ pub struct SaveRequest(pub bool);
 #[derive(Resource, Default)]
 pub struct EventSaveRequest(pub bool);
 
+/// Whether the in-menu Save command is allowed (RM2000 `ChangeSaveAccess`, opcode
+/// 11930). Defaults enabled; a cutscene disables it to block manual saves and
+/// re-enables it afterwards. Only the menu's Save entry (and the `Esc`-`S` quick
+/// save) honour this — the save crystal ([`EventSaveRequest`], `OpenSaveMenu`) and
+/// the `F5` dev hotkey are deliberately ungated, matching RPG_RT's `SetAllowSave`.
+#[derive(Resource)]
+pub struct SaveAccess(pub bool);
+
+impl Default for SaveAccess {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
 /// Whether the single save slot exists on disk, for the title's Continue gate.
 pub fn save_slot_exists() -> bool {
     slot_exists(SAVE_PATH)
@@ -78,6 +92,7 @@ impl Plugin for SavePlugin {
         app.init_resource::<LoadRequest>()
             .init_resource::<SaveRequest>()
             .init_resource::<EventSaveRequest>()
+            .init_resource::<SaveAccess>()
             .add_systems(Update, save_or_load);
     }
 }

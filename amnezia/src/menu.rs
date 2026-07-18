@@ -41,6 +41,19 @@ use bevy::prelude::*;
 #[derive(Resource, Default)]
 pub struct MenuOpen(pub bool);
 
+/// Whether the player may open the main menu (RM2000 `ChangeMainMenuAccess`,
+/// opcode 11960). Defaults enabled; a cutscene disables it to lock the menu shut
+/// and re-enables it afterwards. Only opening is gated — a menu already up stays
+/// usable, matching RPG_RT's `SetAllowMenu`.
+#[derive(Resource)]
+pub struct MenuAccess(pub bool);
+
+impl Default for MenuAccess {
+    fn default() -> Self {
+        Self(true)
+    }
+}
+
 /// What a member-select prompt is choosing a party member *for*: to cast a skill,
 /// to inspect equipment, or to view status detail.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,6 +115,7 @@ pub struct MenuPlugin;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MenuOpen>()
+            .init_resource::<MenuAccess>()
             .init_resource::<MenuState>()
             .add_systems(Startup, view::spawn_ui)
             .add_systems(Update, (input::menu_input, input::update_ui));

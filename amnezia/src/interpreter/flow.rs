@@ -4,7 +4,34 @@
 //! free, so they unit-test directly against hand-built command lists.
 
 use super::opcodes::*;
-use amnezia_data::EventCommand;
+use amnezia_data::{Event, EventCommand};
+
+/// Resolve a `CallEvent` (12330) into the callee's command list and event id.
+/// Only the map-event mode (`params[0] == 1`) occurs in this game's data, so that
+/// is what is supported: `params[1]` is the target event (10005 = the calling
+/// event), `params[2]` its 1-based page number. Returns `None` for any other mode
+/// or an unknown event/page — the caller then skips the command, as EasyRPG does
+/// on a missing target. Mirrors `Game_Interpreter::CommandCallEvent`.
+pub(super) fn call_event_page(
+    events: &[Event],
+    params: &[i32],
+    this_event: u32,
+) -> Option<(Vec<EventCommand>, u32)> {
+    if params.first().copied() != Some(1) {
+        return None;
+    }
+    let event_ref = params.get(1).copied().unwrap_or(0);
+    let page = params.get(2).copied().unwrap_or(0);
+    let event_id = if event_ref == 10005 {
+        this_event
+    } else {
+        event_ref.max(0) as u32
+    };
+    let event = events.iter().find(|e| e.id == event_id)?;
+    let index = (page.max(1) - 1) as usize;
+    let commands = event.pages.get(index)?.commands.clone();
+    Some((commands, event_id))
+}
 
 /// The instruction pointer to jump to when a branch at `indent` is NOT taken:
 /// skip the true body (every command deeper than `indent`), then enter the else
@@ -159,6 +186,38 @@ mod tests {
             string: String::new(),
             params,
         }
+    }
+
+    fn page(marker: u32) -> amnezia_data::EventPage {
+        amnezia_data::EventPage {
+            trigger: 0,
+            graphic_name: String::new(),
+            graphic_index: 0,
+            direction: 2,
+            pattern: 1,
+            layer: 0,
+            condition: amnezia_data::EventCondition::default(),
+            commands: vec![cmd(marker, 0)],
+        }
+    }
+
+    #[test]
+    fn call_event_resolves_this_event_page_by_number() {
+        let events = vec![Event {
+            id: 7,
+            x: 0,
+            y: 0,
+            name: String::new(),
+            // Page 1 marker 100, page 2 marker 200, page 3 marker 300.
+            pages: vec![page(100), page(200), page(300)],
+        }];
+        // [mode 1, this-event (10005), page 2] -> page index 1 (marker 200).
+        let (commands, id) = call_event_page(&events, &[1, 10005, 2], 7).unwrap();
+        assert_eq!(id, 7);
+        assert_eq!(commands[0].code, 200);
+        // A common-event call (mode 0) and an out-of-range page both decline.
+        assert!(call_event_page(&events, &[0, 1, 0], 7).is_none());
+        assert!(call_event_page(&events, &[1, 10005, 9], 7).is_none());
     }
 
     #[test]

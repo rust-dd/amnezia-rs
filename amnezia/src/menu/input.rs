@@ -7,7 +7,7 @@
 use crate::battle::BattleActive;
 use crate::gamedata::GameData;
 use crate::progression::Progression;
-use crate::save::SaveRequest;
+use crate::save::{SaveAccess, SaveRequest};
 use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party};
 use crate::title::TitleActive;
@@ -19,7 +19,8 @@ use super::nav::{
 };
 use super::view::{MenuAux, MenuAuxPanel, MenuPanel, MenuText};
 use super::{
-    MemberAction, MenuOpen, MenuScreen, MenuState, command, items, render, skills, use_item,
+    MemberAction, MenuAccess, MenuOpen, MenuScreen, MenuState, command, items, render, skills,
+    use_item,
 };
 
 /// Toggle the menu on Escape (backing out of a sub-screen first) and drive the
@@ -35,14 +36,16 @@ pub(super) fn menu_input(
     mut vitals: ResMut<Vitals>,
     shop: Res<ShopOpen>,
     battle: Res<BattleActive>,
+    menu_access: Res<MenuAccess>,
+    save_access: Res<SaveAccess>,
     mut title: ResMut<TitleActive>,
     mut open: ResMut<MenuOpen>,
     mut state: ResMut<MenuState>,
     mut save_request: ResMut<SaveRequest>,
 ) {
-    // A shop, battle, or the title screen owns the input while up, so the menu
-    // can't open over it.
-    if !open.0 && (shop.0 || battle.0 || title.0) {
+    // A shop, battle, the title screen, or a cutscene that locked menu access
+    // (opcode 11960) owns the input while up, so the menu can't open over it.
+    if !open.0 && (shop.0 || battle.0 || title.0 || !menu_access.0) {
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {
@@ -58,8 +61,9 @@ pub(super) fn menu_input(
     if !open.0 {
         return;
     }
-    // The F5 / Esc-S quick save from anywhere in the menu (silent, no prompt).
-    if keys.just_pressed(KeyCode::KeyS) {
+    // The F5 / Esc-S quick save from anywhere in the menu (silent, no prompt),
+    // blocked while a cutscene has disabled save access (opcode 11930).
+    if save_access.0 && keys.just_pressed(KeyCode::KeyS) {
         save_request.0 = true;
     }
     let confirm = confirm_pressed(&keys);
@@ -77,10 +81,12 @@ pub(super) fn menu_input(
             } else if confirm {
                 match command::dispatch(command::COMMANDS[state.cursor]) {
                     command::CommandAction::Open(screen) => state.screen = screen,
-                    command::CommandAction::Save => {
+                    // Save access disabled (opcode 11930) makes the Save entry inert.
+                    command::CommandAction::Save if save_access.0 => {
                         save_request.0 = true;
                         state.screen = MenuScreen::Saved;
                     }
+                    command::CommandAction::Save => {}
                 }
             }
         }
@@ -240,6 +246,8 @@ mod tests {
             .insert_resource(ShopOpen(false))
             .insert_resource(BattleActive(false))
             .insert_resource(TitleActive(false))
+            .init_resource::<MenuAccess>()
+            .init_resource::<SaveAccess>()
             .insert_resource(MenuOpen(true))
             .insert_resource(MenuState { cursor, screen })
             .init_resource::<SaveRequest>()
@@ -269,6 +277,36 @@ mod tests {
             app.world().resource::<MenuState>().screen,
             MenuScreen::Saved,
             "and show the save confirmation screen"
+        );
+    }
+
+    #[test]
+    fn menu_stays_closed_when_menu_access_is_disabled() {
+        // A cutscene disabled menu access (opcode 11960): Escape must not open it.
+        let mut app = app_on(0, MenuScreen::Command);
+        app.world_mut().insert_resource(MenuOpen(false));
+        app.world_mut().insert_resource(MenuAccess(false));
+        confirm(&mut app, KeyCode::Escape);
+        assert!(
+            !app.world().resource::<MenuOpen>().0,
+            "the menu must stay closed while access is disabled"
+        );
+    }
+
+    #[test]
+    fn save_command_is_inert_when_save_access_is_disabled() {
+        // Save access disabled (opcode 11930): the Save entry raises no request.
+        let mut app = app_on(3, MenuScreen::Command);
+        app.world_mut().insert_resource(SaveAccess(false));
+        confirm(&mut app, KeyCode::Enter);
+        assert!(
+            !app.world().resource::<SaveRequest>().0,
+            "Save must be inert while save access is disabled"
+        );
+        assert_eq!(
+            app.world().resource::<MenuState>().screen,
+            MenuScreen::Command,
+            "and the menu stays on the command list"
         );
     }
 

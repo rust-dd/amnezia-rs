@@ -42,6 +42,15 @@ impl Progression {
         level
     }
 
+    /// Set the actor's stored experience so its level becomes `target`, clamped to
+    /// `[def.level, def.max_level]` (RM2000 `ChangeLevel` clamps the same way). The
+    /// total is set to exactly the target level's cumulative requirement, so the
+    /// next fight's stats derive from the new level.
+    pub fn set_level(&mut self, def: &ActorDef, target: u32) {
+        let clamped = target.clamp(def.level.max(1), def.max_level);
+        self.0.insert(def.id, exp_for_level(clamped, def));
+    }
+
     /// Snapshot `(actor_id, exp)` pairs for the save file, in id order.
     pub fn entries(&self) -> Vec<(u32, u32)> {
         let mut entries: Vec<(u32, u32)> = self.0.iter().map(|(&k, &v)| (k, v)).collect();

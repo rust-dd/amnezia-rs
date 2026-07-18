@@ -4,6 +4,8 @@
 //! Bevy so they unit-test directly against the plain state resources.
 
 use crate::animation::AnimTarget;
+use crate::gamedata::GameData;
+use crate::progression::Progression;
 use crate::state::{Inventory, Party, Switches, Variables};
 
 /// Apply a `ControlSwitches` command `[mode, start_id, end_id, op]` to the id
@@ -117,6 +119,142 @@ pub(super) fn resolve_anim_target(char_ref: i32, this_event: u32) -> Option<Anim
         10005 => Some(AnimTarget::Event(this_event)),
         id if id > 0 => Some(AnimTarget::Event(id as u32)),
         _ => None,
+    }
+}
+
+/// Resolve an RM2000 change-command value operand, mirroring EasyRPG's
+/// `OperateValue`: `operand_type` 0 reads the constant `operand`, 1 reads the
+/// value of variable `operand`; `operation` 1 (subtract) negates the result, any
+/// other (0 = add) leaves it. Shared by the actor `Change*` commands.
+pub(super) fn operate_value(
+    operation: i32,
+    operand_type: i32,
+    operand: i32,
+    variables: &Variables,
+) -> i32 {
+    let value = if operand_type == 1 {
+        variables.get(operand as u32)
+    } else {
+        operand
+    };
+    if operation == 1 { -value } else { value }
+}
+
+/// The actor ids an actor-target `Change*` command addresses, mirroring EasyRPG's
+/// `GetActors`: mode 0 = the whole party, 1 = the fixed actor `id_operand`, 2 =
+/// the actor whose id is in variable `id_operand`. An unknown mode targets none.
+pub(super) fn actor_targets(
+    mode: i32,
+    id_operand: i32,
+    variables: &Variables,
+    party: &Party,
+) -> Vec<u32> {
+    match mode {
+        0 => party.snapshot(),
+        1 => vec![id_operand.max(0) as u32],
+        2 => vec![variables.get(id_operand as u32).max(0) as u32],
+        _ => Vec::new(),
+    }
+}
+
+/// Apply a `ChangeLevel` command `[mode, id, operation, operand_type, operand,
+/// show_msg]` (EasyRPG code 10420): raise or lower each targeted actor's level by
+/// the operate-value delta, via [`Progression::set_level`] so the new level drives
+/// the actor's curve-derived battle stats. The `show_msg` flag (a level-up popup)
+/// has no analogue here and is ignored.
+pub(super) fn apply_change_level(
+    progression: &mut Progression,
+    data: &GameData,
+    params: &[i32],
+    variables: &Variables,
+    party: &Party,
+) {
+    let [mode, id, operation, operand_type, operand, ..] = params else {
+        return;
+    };
+    let delta = operate_value(*operation, *operand_type, *operand, variables);
+    for actor_id in actor_targets(*mode, *id, variables, party) {
+        if let Some(def) = data.actor(actor_id) {
+            let target = (progression.level(def) as i32 + delta).max(1) as u32;
+            progression.set_level(def, target);
+        }
+    }
+}
+
+/// Which keys a `KeyInputProc` (11610) accepts, decoded from its parameters.
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+pub(super) struct KeyAccept {
+    pub decision: bool,
+    pub cancel: bool,
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+    pub shift: bool,
+}
+
+/// Decode which keys a `KeyInputProc` accepts, following EasyRPG's RPG2k layout:
+/// `params[3]` = decision, `params[4]` = cancel always; a short list (< 6, the
+/// pre-1.50 form seen in this game's data) enables all four arrows together via
+/// `params[2]`, while a full list reads `params[5]` = shift and `params[6..10]` =
+/// down/left/right/up individually.
+pub(super) fn decode_key_accept(params: &[i32]) -> KeyAccept {
+    let flag = |i: usize| params.get(i).copied().unwrap_or(0) != 0;
+    let (decision, cancel) = (flag(3), flag(4));
+    if params.len() < 6 {
+        let dirs = flag(2);
+        KeyAccept {
+            decision,
+            cancel,
+            up: dirs,
+            down: dirs,
+            left: dirs,
+            right: dirs,
+            shift: false,
+        }
+    } else {
+        KeyAccept {
+            decision,
+            cancel,
+            shift: flag(5),
+            down: flag(6),
+            left: flag(7),
+            right: flag(8),
+            up: flag(9),
+        }
+    }
+}
+
+/// The RM2000 key code a `KeyInputProc` stores, given which accepted keys are
+/// active this frame. Mirrors EasyRPG's `CheckInput` priority (shift 7, cancel 6,
+/// decision 5, up 4, right 3, left 2, down 1); nothing pressed yields 0.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn key_code(
+    accept: &KeyAccept,
+    up: bool,
+    down: bool,
+    left: bool,
+    right: bool,
+    decision: bool,
+    cancel: bool,
+    shift: bool,
+) -> i32 {
+    if accept.shift && shift {
+        7
+    } else if accept.cancel && cancel {
+        6
+    } else if accept.decision && decision {
+        5
+    } else if accept.up && up {
+        4
+    } else if accept.right && right {
+        3
+    } else if accept.left && left {
+        2
+    } else if accept.down && down {
+        1
+    } else {
+        0
     }
 }
 
@@ -260,6 +398,136 @@ mod tests {
         assert!(branch_holds(&[1, 1, 0, 6, 0, 0], &sw, &var, &party, &inv)); // == 6
         assert!(!branch_holds(&[1, 1, 0, 10, 1, 0], &sw, &var, &party, &inv)); // >= 10 false
         assert!(branch_holds(&[1, 1, 0, 10, 4, 0], &sw, &var, &party, &inv)); // < 10 true
+    }
+
+    #[test]
+    fn operate_value_reads_constant_variable_and_negates_on_subtract() {
+        let mut vars = Variables::default();
+        vars.set(7, 40);
+        // operand_type 0 = constant, 1 = variable; operation 1 = subtract.
+        assert_eq!(operate_value(0, 0, 5, &vars), 5);
+        assert_eq!(operate_value(0, 1, 7, &vars), 40);
+        assert_eq!(operate_value(1, 0, 5, &vars), -5);
+        assert_eq!(operate_value(1, 1, 7, &vars), -40);
+    }
+
+    #[test]
+    fn actor_targets_resolves_party_fixed_and_variable() {
+        let mut vars = Variables::default();
+        vars.set(3, 9);
+        let mut party = Party::default();
+        party.add(2);
+        assert_eq!(actor_targets(0, 0, &vars, &party), vec![1, 2]);
+        assert_eq!(actor_targets(1, 5, &vars, &party), vec![5]);
+        assert_eq!(actor_targets(2, 3, &vars, &party), vec![9]);
+        assert!(actor_targets(7, 0, &vars, &party).is_empty());
+    }
+
+    fn level_def() -> amnezia_data::ActorDef {
+        amnezia_data::ActorDef {
+            id: 1,
+            name: "Ron".into(),
+            title: String::new(),
+            level: 2,
+            max_level: 50,
+            hp: 30,
+            sp: 10,
+            curves: amnezia_data::ActorCurves::default(),
+            exp_base: 30,
+            exp_inflation: 30,
+            exp_correction: 0,
+            weapon: 0,
+            shield: 0,
+            armor: 0,
+            helmet: 0,
+            accessory: 0,
+            two_weapons: false,
+            fix_equipment: false,
+            unarmed_animation: 0,
+        }
+    }
+
+    #[test]
+    fn change_level_raises_the_targeted_actor() {
+        let data = GameData {
+            actors: vec![level_def()],
+            items: vec![],
+            skills: vec![],
+        };
+        let mut prog = Progression::default();
+        let vars = Variables::default();
+        let party = Party::default();
+        assert_eq!(prog.level(&data.actors[0]), 2);
+        // [mode 1 (actor 1), add, constant, +5, show_msg] -> level 2 + 5 = 7.
+        apply_change_level(&mut prog, &data, &[1, 1, 0, 0, 5, 0], &vars, &party);
+        assert_eq!(prog.level(&data.actors[0]), 7);
+        // Subtract clamps to the actor's starting level (2), never below.
+        apply_change_level(&mut prog, &data, &[1, 1, 1, 0, 99, 0], &vars, &party);
+        assert_eq!(prog.level(&data.actors[0]), 2);
+    }
+
+    #[test]
+    fn key_accept_decodes_short_and_full_forms() {
+        // Short (< 6): params[2] enables all arrows, params[3]/[4] decision/cancel.
+        let short = decode_key_accept(&[52, 1, 1, 1, 0]);
+        assert_eq!(
+            short,
+            KeyAccept {
+                decision: true,
+                cancel: false,
+                up: true,
+                down: true,
+                left: true,
+                right: true,
+                shift: false,
+            }
+        );
+        // Full (>= 6): individual down/left/right/up plus shift.
+        let full = decode_key_accept(&[52, 1, 0, 1, 0, 1, 1, 0, 0, 0]);
+        assert!(full.decision && full.shift && full.down && !full.left && !full.up);
+    }
+
+    #[test]
+    fn key_code_follows_easyrpg_priority() {
+        let accept = KeyAccept {
+            decision: true,
+            cancel: true,
+            up: true,
+            down: true,
+            left: true,
+            right: true,
+            shift: true,
+        };
+        // Cancel (6) outranks decision (5) which outranks the arrows.
+        assert_eq!(
+            key_code(&accept, false, false, false, false, true, true, false),
+            6
+        );
+        assert_eq!(
+            key_code(&accept, true, false, false, false, true, false, false),
+            5
+        );
+        assert_eq!(
+            key_code(&accept, true, false, false, true, false, false, false),
+            4
+        );
+        assert_eq!(
+            key_code(&accept, false, true, false, false, false, false, false),
+            1
+        );
+        assert_eq!(
+            key_code(&accept, false, false, false, false, false, false, false),
+            0
+        );
+        // An unaccepted key stays silent even when pressed.
+        let only_decision = KeyAccept {
+            decision: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            key_code(&only_decision, true, true, true, true, false, true, true),
+            0
+        );
     }
 
     #[test]

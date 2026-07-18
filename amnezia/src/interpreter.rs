@@ -7,106 +7,53 @@
 use crate::animation::ShowMapAnimation;
 use crate::appearance::SpriteChange;
 use crate::audio::AudioRequest;
-use crate::battle::{BattleActive, BattleOutcome, BattleRequest, BattleResult};
+use crate::battle::{BattleActive, BattleOutcome, BattleRequest};
 use crate::choice::Choice;
 use crate::dialogue::{Dialogue, MessagePosition};
 use crate::events::message_boxes;
 use crate::gameover::GameOverActive;
-use crate::inputnumber::InputNumber;
 use crate::menu::MenuOpen;
-use crate::picture::PictureCommand;
-use crate::player::{CameraPan, HeroTransparency, Player};
-use crate::save::EventSaveRequest;
-use crate::screenfx::{ScreenEffect, Weather};
-use crate::shop::{ShopOpen, ShopOutcome, ShopRequest};
+use crate::player::Player;
+use crate::screenfx::Weather;
+use crate::shop::{ShopOpen, ShopRequest};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::{Fade, PendingTeleport};
-use crate::text::{self, HeroName};
-use crate::timer::GameClock;
+use crate::text;
 use crate::title::TitleActive;
-use crate::vitals::Vitals;
 use crate::world::{EventSprite, MapEvents, MoveQueue, RelocateEvent, decode_route};
 use amnezia_data::EventCommand;
-use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
 mod commands;
 mod flow;
 mod opcodes;
+mod params;
 mod present;
 
 use commands::*;
 use flow::*;
 use opcodes::*;
+use params::{Blockers, SubsystemIo};
 use present::{Present, parse_present};
-
-/// The overlays that pause the running event (title, menu, shop, battle). Bundled
-/// into one `SystemParam` so `run_interpreter` stays within Bevy's 16-parameter cap.
-#[derive(SystemParam)]
-pub struct Blockers<'w> {
-    menu: Res<'w, MenuOpen>,
-    shop: Res<'w, ShopOpen>,
-    battle: Res<'w, BattleActive>,
-    title: Res<'w, TitleActive>,
-}
-
-impl Blockers<'_> {
-    fn any(&self) -> bool {
-        self.menu.0 || self.shop.0 || self.battle.0 || self.title.0
-    }
-}
-
-/// The interpreter's character-visual output writers: an actor reskin
-/// ([`SpriteChange`], opcode 10630) and a map battle animation
-/// ([`ShowMapAnimation`], opcode 11210). Bundled into one nested `SystemParam` so
-/// [`SubsystemIo`] — and thus `run_interpreter` — keeps within Bevy's
-/// 16-parameter cap.
-#[derive(SystemParam)]
-struct CharacterVisuals<'w> {
-    sprite_writer: MessageWriter<'w, SpriteChange>,
-    anim_writer: MessageWriter<'w, ShowMapAnimation>,
-}
-
-/// The interpreter's merchant channel: the writer that opens the shop/inn screen
-/// (opcodes 10720 / 10730) and the outcome it reads back once the screen closes.
-/// Bundled into one nested `SystemParam` so [`SubsystemIo`] — and thus
-/// `run_interpreter` — keeps within Bevy's 16-parameter cap once the save-request
-/// resource is added.
-#[derive(SystemParam)]
-struct Merchant<'w> {
-    writer: MessageWriter<'w, ShopRequest>,
-    outcome: Res<'w, ShopOutcome>,
-}
-
-/// The interpreter's channel to the shop and battle subsystems: the writers that
-/// open each screen and the finished-battle result it consumes to pick a handler
-/// branch. Bundled into one `SystemParam` so `run_interpreter` stays within
-/// Bevy's 16-parameter cap.
-#[derive(SystemParam)]
-pub struct SubsystemIo<'w> {
-    battle_result: ResMut<'w, BattleResult>,
-    merchant: Merchant<'w>,
-    battle_writer: MessageWriter<'w, BattleRequest>,
-    screen_writer: MessageWriter<'w, ScreenEffect>,
-    picture_writer: MessageWriter<'w, PictureCommand>,
-    gameover: ResMut<'w, GameOverActive>,
-    vitals: ResMut<'w, Vitals>,
-    input_number: ResMut<'w, InputNumber>,
-    visuals: CharacterVisuals<'w>,
-    relocate_writer: MessageWriter<'w, RelocateEvent>,
-    camera_pan: ResMut<'w, CameraPan>,
-    hero_transparency: ResMut<'w, HeroTransparency>,
-    weather: ResMut<'w, Weather>,
-    message_position: ResMut<'w, MessagePosition>,
-    game_clock: ResMut<'w, GameClock>,
-    event_save: ResMut<'w, EventSaveRequest>,
-}
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
 /// that never advances) can't lock up the frame. Well-formed pages never
 /// approach it — every command strictly advances the instruction pointer.
 const MAX_STEPS_PER_FRAME: usize = 10_000;
+
+/// The maximum nested `CallEvent` depth, guarding a page that calls itself (or a
+/// cycle of pages) from growing the call stack without bound.
+const MAX_CALL_DEPTH: usize = 64;
+
+/// A caller frame suspended by `CallEvent` (12330): the interrupted command list,
+/// the instruction pointer to resume at, and the event id in scope. The callee
+/// runs in place; reaching its end pops the frame and resumes the caller.
+struct CallFrame {
+    commands: Vec<EventCommand>,
+    ip: usize,
+    event_id: u32,
+}
 
 /// The event currently executing: its command list, the instruction pointer,
 /// whether a run is live, and the remaining `Wait` countdown in seconds.
@@ -119,6 +66,14 @@ pub struct RunningEvent {
     wait_move: bool,
     event_id: u32,
     choices: HashMap<u32, i32>,
+    /// Suspended caller frames from `CallEvent`; a finished callee pops back to the
+    /// top frame, and the run ends only when the stack is empty.
+    call_stack: Vec<CallFrame>,
+    /// Set while a waiting `KeyInputProc` (11610) holds the event: each frame's
+    /// poll writes the pressed key's RM2000 code into `key_var` and resumes.
+    key_pending: bool,
+    key_var: u32,
+    key_accept: KeyAccept,
     /// Set while a `BattleRequest` is in flight: holds the event paused across the
     /// fight until [`BattleResult`] is published, then consumed into `battle_outcome`.
     battle_pending: bool,
@@ -161,6 +116,10 @@ impl RunningEvent {
         self.wait_move = false;
         self.event_id = event_id;
         self.choices.clear();
+        self.call_stack.clear();
+        self.key_pending = false;
+        self.key_var = 0;
+        self.key_accept = KeyAccept::default();
         self.battle_pending = false;
         self.battle_outcome = None;
         self.shop_pending = false;
@@ -177,6 +136,10 @@ impl RunningEvent {
         self.wait_move = false;
         self.event_id = 0;
         self.choices.clear();
+        self.call_stack.clear();
+        self.key_pending = false;
+        self.key_var = 0;
+        self.key_accept = KeyAccept::default();
         self.battle_pending = false;
         self.battle_outcome = None;
         self.shop_pending = false;
@@ -223,7 +186,6 @@ impl Plugin for InterpreterPlugin {
 fn run_interpreter(
     time: Res<Time>,
     fade: Res<Fade>,
-    hero: Res<HeroName>,
     blockers: Blockers,
     mut running: ResMut<RunningEvent>,
     mut dialogue: ResMut<Dialogue>,
@@ -268,6 +230,7 @@ fn run_interpreter(
         || choice.active()
         || pending.0.is_some()
         || blockers.any()
+        || subsystems.flow.title.0
         || running.battle_pending
         || subsystems.gameover.0
         || subsystems.input_number.active()
@@ -300,6 +263,28 @@ fn run_interpreter(
         running.input_pending = false;
         running.ip += 1;
     }
+    // Resume a waiting KeyInputProc: poll the accepted keys and, once one is
+    // pressed, store its RM2000 code in the target variable and step past the
+    // command; otherwise keep the event paused for another frame.
+    if running.key_pending {
+        let keys = &subsystems.flow.keys;
+        let code = key_code(
+            &running.key_accept,
+            keys.just_pressed(KeyCode::ArrowUp),
+            keys.just_pressed(KeyCode::ArrowDown),
+            keys.just_pressed(KeyCode::ArrowLeft),
+            keys.just_pressed(KeyCode::ArrowRight),
+            keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space),
+            keys.just_pressed(KeyCode::Escape),
+            keys.just_pressed(KeyCode::ShiftLeft) || keys.just_pressed(KeyCode::ShiftRight),
+        );
+        if code == 0 {
+            return;
+        }
+        variables.set(running.key_var, code);
+        running.key_pending = false;
+        running.ip += 1;
+    }
     if running.wait > 0.0 {
         running.wait -= time.delta_secs();
         return;
@@ -310,6 +295,14 @@ fn run_interpreter(
     }
     for _ in 0..MAX_STEPS_PER_FRAME {
         let Some(command) = running.commands.get(running.ip).cloned() else {
+            // A callee finished: pop back to the caller frame and resume it; the
+            // run ends only when there is no caller left to return to.
+            if let Some(frame) = running.call_stack.pop() {
+                running.commands = frame.commands;
+                running.ip = frame.ip;
+                running.event_id = frame.event_id;
+                continue;
+            }
             running.stop();
             return;
         };
@@ -324,7 +317,11 @@ fn run_interpreter(
                 if !boxes.is_empty() {
                     for message in &mut boxes {
                         for line in &mut message.lines {
-                            *line = text::substitute(&crate::i18n::tr(line), &hero.0, &variables);
+                            *line = text::substitute(
+                                &crate::i18n::tr(line),
+                                &subsystems.actor_edits.hero_name.0,
+                                &variables,
+                            );
                         }
                     }
                     dialogue.open(boxes);
@@ -405,20 +402,22 @@ fn run_interpreter(
                 running.ip += 1;
             }
             MESSAGE_OPTIONS => {
-                *subsystems.message_position = match command.params.get(1).copied().unwrap_or(2) {
-                    0 => MessagePosition::Top,
-                    1 => MessagePosition::Middle,
-                    _ => MessagePosition::Bottom,
-                };
+                *subsystems.mapfx.message_position =
+                    match command.params.get(1).copied().unwrap_or(2) {
+                        0 => MessagePosition::Top,
+                        1 => MessagePosition::Middle,
+                        _ => MessagePosition::Bottom,
+                    };
                 running.ip += 1;
             }
             TIMER => {
                 match command.params.first().copied().unwrap_or(0) {
                     0 => subsystems
+                        .mapfx
                         .game_clock
                         .set_secs(command.params.get(2).copied().unwrap_or(0).max(0) as u32),
-                    1 => subsystems.game_clock.start(),
-                    2 => subsystems.game_clock.stop(),
+                    1 => subsystems.mapfx.game_clock.start(),
+                    2 => subsystems.mapfx.game_clock.stop(),
                     _ => {}
                 }
                 running.ip += 1;
@@ -427,7 +426,7 @@ fn run_interpreter(
                 // op 2 = pan by `dist` tiles in `dir`; op 3 = return; lock/unlock ignored.
                 let op = command.params.first().copied().unwrap_or(0);
                 if op == 3 {
-                    subsystems.camera_pan.target = Vec2::ZERO;
+                    subsystems.mapfx.camera_pan.target = Vec2::ZERO;
                 } else if op == 2 {
                     let dist = command.params.get(2).copied().unwrap_or(0).max(0) as f32
                         * crate::tiles::TILE;
@@ -438,13 +437,13 @@ fn run_interpreter(
                         2 => Vec2::new(0.0, -dist),
                         _ => Vec2::new(-dist, 0.0),
                     };
-                    subsystems.camera_pan.target += delta;
-                    subsystems.camera_pan.speed = speed * crate::tiles::TILE * 2.0;
+                    subsystems.mapfx.camera_pan.target += delta;
+                    subsystems.mapfx.camera_pan.speed = speed * crate::tiles::TILE * 2.0;
                 }
                 running.ip += 1;
             }
             WEATHER => {
-                *subsystems.weather = match command.params.first().copied().unwrap_or(0) {
+                *subsystems.mapfx.weather = match command.params.first().copied().unwrap_or(0) {
                     1 => Weather::Rain,
                     2 => Weather::Snow,
                     3 => Weather::Fog,
@@ -453,7 +452,7 @@ fn run_interpreter(
                 running.ip += 1;
             }
             PLAYER_TRANSPARENCY => {
-                subsystems.hero_transparency.0 =
+                subsystems.mapfx.hero_transparency.0 =
                     u8::from(command.params.first().copied().unwrap_or(0) != 0) * 7;
                 running.ip += 1;
             }
@@ -501,7 +500,7 @@ fn run_interpreter(
                 // are pure state checks in `branch_holds`.
                 let holds = if command.params.first().copied() == Some(2) {
                     let target = command.params.get(1).copied().unwrap_or(0).max(0) as u32;
-                    let secs = subsystems.game_clock.seconds();
+                    let secs = subsystems.mapfx.game_clock.seconds();
                     if command.params.get(2).copied().unwrap_or(0) == 0 {
                         secs >= target
                     } else {
@@ -540,7 +539,13 @@ fn run_interpreter(
                     let labels: Vec<String> =
                         choice_labels(&running.commands, running.ip, command.indent)
                             .iter()
-                            .map(|l| text::substitute(&crate::i18n::tr(l), &hero.0, &variables))
+                            .map(|l| {
+                                text::substitute(
+                                    &crate::i18n::tr(l),
+                                    &subsystems.actor_edits.hero_name.0,
+                                    &variables,
+                                )
+                            })
                             .collect();
                     if labels.is_empty() {
                         running.ip = skip_to_terminator(
@@ -690,8 +695,153 @@ fn run_interpreter(
                 subsystems.event_save.0 = true;
                 running.ip += 1;
             }
+            CHANGE_LEVEL => {
+                apply_change_level(
+                    &mut subsystems.actor_edits.progression,
+                    &subsystems.actor_edits.game_data,
+                    &command.params,
+                    &variables,
+                    &party,
+                );
+                running.ip += 1;
+            }
+            CHANGE_HERO_NAME => {
+                // Set the hero's (actor 1's) display name to `string`; the remake
+                // tracks no live name for other actors, so those are left as-is.
+                if command.params.first().copied() == Some(1) {
+                    subsystems.actor_edits.hero_name.0 = command.string.clone();
+                }
+                running.ip += 1;
+            }
+            MEMORIZE_LOCATION => {
+                // Store the current map id and the hero's tile into three variables.
+                if let [vm, vx, vy, ..] = command.params.as_slice()
+                    && let Some(map) = subsystems.flow.map_data.as_deref()
+                    && let Ok(player) = subsystems.flow.players.single()
+                {
+                    variables.set(*vm as u32, map.map_id as i32);
+                    variables.set(*vx as u32, player.tile_x);
+                    variables.set(*vy as u32, player.tile_y);
+                }
+                running.ip += 1;
+            }
+            RECALL_TO_LOCATION => {
+                // Teleport the hero to the map/tile memorized into these variables,
+                // pausing through the fade like TELEPORT.
+                if let [vm, vx, vy, ..] = command.params.as_slice() {
+                    let (map, x, y) = (
+                        variables.get(*vm as u32),
+                        variables.get(*vx as u32),
+                        variables.get(*vy as u32),
+                    );
+                    if map > 0 && x >= 0 && y >= 0 {
+                        pending.0 = Some((map as u32, x as u32, y as u32));
+                    }
+                }
+                running.ip += 1;
+                return;
+            }
+            HALT_ALL_MOVEMENT => {
+                // Cancel every character's pending forced movement.
+                if let Ok(mut queue) = hero_queue.single_mut() {
+                    *queue = MoveQueue::default();
+                }
+                for (_, mut queue) in &mut event_movers {
+                    *queue = MoveQueue::default();
+                }
+                running.wait_move = false;
+                running.ip += 1;
+            }
+            KEY_INPUT_PROC => {
+                let var_id = command.params.first().copied().unwrap_or(0).max(0) as u32;
+                let wait = command.params.get(1).copied().unwrap_or(0) != 0;
+                let accept = decode_key_accept(&command.params);
+                if wait {
+                    // Reset the target and pause; the resume block stores the pressed
+                    // key's code and advances once a key comes in.
+                    variables.set(var_id, 0);
+                    running.key_var = var_id;
+                    running.key_accept = accept;
+                    running.key_pending = true;
+                    return;
+                }
+                // No-wait: sample the accepted keys once (held counts) and store the
+                // code (0 when none is down), then continue.
+                let keys = &subsystems.flow.keys;
+                let code = key_code(
+                    &accept,
+                    keys.pressed(KeyCode::ArrowUp),
+                    keys.pressed(KeyCode::ArrowDown),
+                    keys.pressed(KeyCode::ArrowLeft),
+                    keys.pressed(KeyCode::ArrowRight),
+                    keys.pressed(KeyCode::Enter) || keys.pressed(KeyCode::Space),
+                    keys.pressed(KeyCode::Escape),
+                    keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight),
+                );
+                variables.set(var_id, code);
+                running.ip += 1;
+            }
+            CHANGE_SAVE_ACCESS => {
+                subsystems.access.save_access.0 = command.params.first().copied().unwrap_or(0) != 0;
+                running.ip += 1;
+            }
+            CHANGE_MENU_ACCESS => {
+                subsystems.access.menu_access.0 = command.params.first().copied().unwrap_or(0) != 0;
+                running.ip += 1;
+            }
+            CALL_EVENT => {
+                // Run the called page as a sub-frame; the caller resumes at ip+1
+                // when the callee ends. Depth-guarded against a self-calling cycle.
+                match subsystems
+                    .flow
+                    .map_events
+                    .as_ref()
+                    .and_then(|ev| call_event_page(&ev.events, &command.params, running.event_id))
+                {
+                    Some((commands, target)) if running.call_stack.len() < MAX_CALL_DEPTH => {
+                        let frame = CallFrame {
+                            commands: std::mem::take(&mut running.commands),
+                            ip: running.ip + 1,
+                            event_id: running.event_id,
+                        };
+                        running.call_stack.push(frame);
+                        running.commands = commands;
+                        running.ip = 0;
+                        running.event_id = target;
+                    }
+                    _ => running.ip += 1,
+                }
+            }
+            RETURN_TO_TITLE => {
+                // Hand the screen back to the title, mirroring the menu's End Game
+                // path; the run ends here.
+                subsystems.flow.title.0 = true;
+                running.stop();
+                return;
+            }
+            CHANGE_SKILLS
+            | CHANGE_EQUIPMENT
+            | CHANGE_CONDITION
+            | CHANGE_SYSTEM_BGM
+            | CHANGE_SCREEN_TRANSITIONS
+            | FLASH_SPRITE
+            | CHANGE_PBG
+            | ENTER_EXIT_VEHICLE
+            | SET_VEHICLE_LOCATION
+            | COMMENT
+            | COMMENT_2
+            | END_MARKER => {
+                // Faithfully decoded but deliberately inert in this remake (each
+                // rationale is on its constant in `opcodes`): the skill/equipment/
+                // condition commands have no per-actor state to mutate; the system
+                // BGM slots have no audio consumer; the transition/panorama/flash
+                // commands have no renderer; vehicles do not exist; Comment/END are
+                // structural markers.
+                running.ip += 1;
+            }
             _ => {
-                // Every not-yet-supported command (weather, pan, …) simply advances.
+                // Any remaining unmapped command (including the empty `code: 0`)
+                // simply advances.
                 running.ip += 1;
             }
         }
