@@ -57,8 +57,9 @@ fn converts_ldb_to_skills_ron() {
     std::fs::create_dir_all(&input).unwrap();
 
     // Name bytes are CP1250 "Tűzgolyó" (fireball): 0xFB = 'ű', 0xF3 = 'ó'.
-    // A single-enemy (scope 0) magical fire attack (attribute id 5) with damage
-    // variance 6 that damages HP and inflicts Poison (state id 3).
+    // A single-enemy (scope 0) magical fire attack (attribute id 5) that plays
+    // battle animation 12, with damage variance 6, damages HP, and inflicts
+    // Poison (state id 3).
     let fireball = element(
         1,
         &[
@@ -67,6 +68,7 @@ fn converts_ldb_to_skills_ron() {
             subchunk(0x08, &varint(0)),
             subchunk(0x0B, &varint(8)),
             subchunk(0x0C, &varint(0)),
+            subchunk(0x0E, &varint(12)),
             subchunk(0x16, &varint(10)),
             subchunk(0x17, &varint(6)),
             subchunk(0x18, &varint(35)),
@@ -96,6 +98,7 @@ fn converts_ldb_to_skills_ron() {
             hit: 90,
             skill_type: 0,
             scope: 0,
+            animation_id: 12,
             physical_rate: 0,
             magical_rate: 10,
             variance: 6,

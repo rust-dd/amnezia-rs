@@ -245,6 +245,16 @@ impl Battle {
         (ti as f32 - (count - 1.0) / 2.0) * PARTY_ANIM_SPREAD
     }
 
+    /// The screen offset for foe `ti`'s battle animation: its backdrop placement
+    /// re-centred on the RM2000 320×240 screen (minus the 160×120 half-extent, y
+    /// downward), matching the animation player's coordinates.
+    fn foe_anim_pos(&self, ti: usize) -> (f32, f32) {
+        (
+            self.enemies[ti].x as f32 - 160.0,
+            self.enemies[ti].y as f32 - 120.0,
+        )
+    }
+
     /// Resolve a party member's weapon strike on enemy `ti`, in RM2000 order: an
     /// agility-adjusted to-hit roll (bare hands default 90%), then on a hit the
     /// weapon's element against the foe's resistance ranks, a critical that
@@ -253,10 +263,7 @@ impl Battle {
     /// swing shows whether or not the blow lands.
     fn strike_enemy(&mut self, pi: usize, ti: usize) -> Strike {
         let anim = self.members[pi].attack_animation;
-        let (x, y) = (
-            self.enemies[ti].x as f32 - 160.0,
-            self.enemies[ti].y as f32 - 120.0,
-        );
+        let (x, y) = self.foe_anim_pos(ti);
         self.push_anim(anim, x, y);
         let base = logic::physical_damage(
             self.members[pi].stats.attack,
@@ -395,11 +402,14 @@ impl Battle {
         })
     }
 
-    /// Land `skill` from caster `pi` on enemy `ti`: elemental damage against the
-    /// foe's resistance ranks (SP drains find no pool on a foe), an optional
+    /// Land `skill` from caster `pi` on enemy `ti`: queue the skill's battle
+    /// animation on the struck foe, then elemental damage against the foe's
+    /// resistance ranks (SP drains find no pool on a foe), an optional
     /// life-absorb for the caster, and a status-infliction roll per affected
     /// state, weighted by the foe's affliction rank.
     fn skill_hit_enemy(&mut self, pi: usize, ti: usize, skill: &SkillDef) -> Vec<String> {
+        let (x, y) = self.foe_anim_pos(ti);
+        self.push_anim(skill.animation_id, x, y);
         let caster = self.members[pi].name.clone();
         let target = self.enemies[ti].name.clone();
         let base = logic::skill_effect(
@@ -441,9 +451,12 @@ impl Battle {
         lines
     }
 
-    /// Heal ally `ti` for caster `pi`'s `skill`: restore SP or HP (clamped to the
+    /// Heal ally `ti` for caster `pi`'s `skill`: queue the skill's battle
+    /// animation at that ally's party slot, then restore SP or HP (clamped to the
     /// maximum), then cure each of the skill's affected states from that ally.
     fn skill_heal_ally(&mut self, pi: usize, ti: usize, skill: &SkillDef) -> Vec<String> {
+        let x = self.party_anim_x(ti);
+        self.push_anim(skill.animation_id, x, PARTY_ANIM_Y);
         let caster = self.members[pi].name.clone();
         let target = self.members[ti].name.clone();
         let base = logic::skill_effect(
@@ -579,15 +592,19 @@ impl Battle {
         })
     }
 
-    /// Resolve enemy `ei`'s cast of `skill_id` at member `target`: an ally-scope
-    /// skill (scope 2/3/4) heals the caster itself (a foe keeps no ally list),
-    /// clamped to its max HP; any other scope damages the member (halved once if
-    /// the member's equipment guards one of the skill's elements, and again while
-    /// it defends, like a physical hit). `None` for an unknown skill id.
+    /// Resolve enemy `ei`'s cast of `skill_id` at member `target`, queuing the
+    /// skill's battle animation on whichever side it resolves against: an
+    /// ally-scope skill (scope 2/3/4) heals the caster itself (a foe keeps no
+    /// ally list) and animates on that foe, clamped to its max HP; any other
+    /// scope damages the member (halved once if the member's equipment guards one
+    /// of the skill's elements, and again while it defends, like a physical hit)
+    /// and animates at that member's party slot. `None` for an unknown skill id.
     fn enemy_cast(&mut self, ei: usize, skill_id: u32, target: usize) -> Option<String> {
         let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
         let name = self.enemies[ei].name.clone();
         if matches!(skill.scope, 2..=4) {
+            let (x, y) = self.foe_anim_pos(ei);
+            self.push_anim(skill.animation_id, x, y);
             let base = logic::skill_effect(
                 &skill,
                 &self.enemies[ei].stats,
@@ -601,6 +618,8 @@ impl Battle {
             return Some(format!("{name} varázsol: {name} +{amt}"));
         }
         let ti = self.retarget_member(target)?;
+        let x = self.party_anim_x(ti);
+        self.push_anim(skill.animation_id, x, PARTY_ANIM_Y);
         let base = logic::skill_effect(
             &skill,
             &self.enemies[ei].stats,
@@ -879,6 +898,7 @@ mod tests {
             hit: 0,
             skill_type: 0,
             scope: 0,
+            animation_id: 0,
             physical_rate: 0,
             magical_rate: 3,
             variance: 4,
@@ -1282,6 +1302,114 @@ mod tests {
         battle.enemies[0].hp = battle.enemies[0].max_hp - 5; // wounded, within one heal of full
         battle.enemy_cast(0, 2, 0);
         assert_eq!(battle.enemies[0].hp, battle.enemies[0].max_hp);
+    }
+
+    #[test]
+    fn a_single_target_skill_queues_one_animation_at_the_targeted_foe() {
+        let mut battle = build_1v2(); // foes at (100, 100) and (200, 100)
+        let mut s = damage_skill(1, 20, vec![], vec![]);
+        s.animation_id = 9;
+        battle.skills = vec![s];
+        battle.cast_skill(0, 1, 0); // scope 0 -> the targeted foe (index 0)
+        let hits: Vec<_> = battle
+            .pending_anims
+            .iter()
+            .filter(|a| a.anim_id == 9)
+            .collect();
+        assert_eq!(hits.len(), 1, "one animation for the one struck foe");
+        // foe 0 at (100, 100): x = 100 - 160 = -60, y = 100 - 120 = -20.
+        assert!((hits[0].x + 60.0).abs() < 1e-6, "x = {}", hits[0].x);
+        assert!((hits[0].y + 20.0).abs() < 1e-6, "y = {}", hits[0].y);
+    }
+
+    #[test]
+    fn an_all_enemy_skill_queues_one_animation_per_living_foe() {
+        let mut battle = build_1v2(); // two living foes, at x = 100 and x = 200
+        let mut s = damage_skill(1, 20, vec![], vec![]);
+        s.scope = 1; // all enemies
+        s.animation_id = 8;
+        battle.skills = vec![s];
+        battle.cast_skill(0, 1, 0);
+        let xs: Vec<f32> = battle
+            .pending_anims
+            .iter()
+            .filter(|a| a.anim_id == 8)
+            .map(|a| a.x)
+            .collect();
+        assert_eq!(xs.len(), 2, "one animation per living foe");
+        assert!(xs.iter().any(|x| (x + 60.0).abs() < 1e-6), "foe at x=100");
+        assert!(xs.iter().any(|x| (x - 40.0).abs() < 1e-6), "foe at x=200");
+    }
+
+    #[test]
+    fn an_all_ally_heal_queues_one_animation_per_living_member_at_the_party_area() {
+        let mut battle = build_party2(); // two living members
+        let mut s = heal_skill(2, 30);
+        s.scope = 4; // all allies
+        s.animation_id = 5;
+        battle.skills = vec![s];
+        battle.cast_skill(0, 2, 0);
+        let heals: Vec<_> = battle
+            .pending_anims
+            .iter()
+            .filter(|a| a.anim_id == 5)
+            .collect();
+        assert_eq!(heals.len(), 2, "one animation per living ally");
+        assert!(
+            heals.iter().all(|a| (a.y - 80.0).abs() < 1e-6),
+            "each plays at the party-area y"
+        );
+        assert!(
+            (heals[0].x - heals[1].x).abs() > 1e-6,
+            "the two members' slots are spread apart"
+        );
+    }
+
+    #[test]
+    fn a_zero_animation_skill_queues_nothing() {
+        let mut battle = build_1v2();
+        // damage_skill leaves animation_id at its 0 default.
+        battle.skills = vec![damage_skill(1, 20, vec![], vec![])];
+        battle.cast_skill(0, 1, 0);
+        assert!(
+            battle.pending_anims.is_empty(),
+            "a 0 animation id queues nothing"
+        );
+    }
+
+    #[test]
+    fn an_enemy_damage_cast_queues_the_animation_at_the_targeted_member_slot() {
+        let mut battle = build_1v2(); // one member
+        let mut s = damage_skill(1, 30, vec![], vec![]); // scope 0 -> hits a member
+        s.animation_id = 6;
+        battle.skills = vec![s];
+        battle.enemy_cast(0, 1, 0);
+        let hits: Vec<_> = battle
+            .pending_anims
+            .iter()
+            .filter(|a| a.anim_id == 6)
+            .collect();
+        assert_eq!(hits.len(), 1);
+        // The lone member's party slot: centred x, party-area y.
+        assert!((hits[0].x).abs() < 1e-6, "x = {}", hits[0].x);
+        assert!((hits[0].y - 80.0).abs() < 1e-6, "y = {}", hits[0].y);
+    }
+
+    #[test]
+    fn an_enemy_ally_scope_cast_queues_the_animation_on_the_casting_foe() {
+        let mut battle = build_1v2(); // caster foe 0 at (100, 100)
+        let mut s = heal_skill(2, 40); // scope 3 -> the foe heals itself
+        s.animation_id = 4;
+        battle.skills = vec![s];
+        battle.enemy_cast(0, 2, 0);
+        let hits: Vec<_> = battle
+            .pending_anims
+            .iter()
+            .filter(|a| a.anim_id == 4)
+            .collect();
+        assert_eq!(hits.len(), 1);
+        assert!((hits[0].x + 60.0).abs() < 1e-6, "x = {}", hits[0].x);
+        assert!((hits[0].y + 20.0).abs() < 1e-6, "y = {}", hits[0].y);
     }
 
     fn damage_release_state(id: u32) -> amnezia_data::StateDef {

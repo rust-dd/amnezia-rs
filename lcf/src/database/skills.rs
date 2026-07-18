@@ -14,7 +14,9 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// The battle fields describe how the skill resolves. `scope` picks its targets
 /// (`0` one enemy, `1` all enemies, `2` the caster, `3` one ally, `4` all
 /// allies) and `skill_type` its family (`0` normal — the only battle-relevant
-/// kind — `1` teleport, `2` escape, `3` switch). `physical_rate`/`magical_rate`
+/// kind — `1` teleport, `2` escape, `3` switch). `animation_id` is the battle
+/// animation the skill overlays on each target it resolves against (`0` shows
+/// none). `physical_rate`/`magical_rate`
 /// (0–10) weight how much the caster's attack versus spirit feeds the damage
 /// formula, and `variance` (0–10) is RM2000's damage-spread factor: the final
 /// effect is randomised around the computed amount by a band that widens with
@@ -34,6 +36,9 @@ pub struct Skill {
     pub hit: u32,
     pub skill_type: u32,
     pub scope: u32,
+    /// The battle-animation id this skill plays on each target it resolves
+    /// against (`ChunkSkill::animation_id`, `0x0E`); `0` shows no animation.
+    pub animation_id: u32,
     pub physical_rate: u32,
     pub magical_rate: u32,
     pub variance: u32,
@@ -50,6 +55,7 @@ const SKILL_DESCRIPTION: u32 = 0x02;
 const SKILL_TYPE: u32 = 0x08;
 const SKILL_SP_COST: u32 = 0x0B;
 const SKILL_SCOPE: u32 = 0x0C;
+const SKILL_ANIMATION_ID: u32 = 0x0E;
 const SKILL_PHYSICAL_RATE: u32 = 0x15;
 const SKILL_MAGICAL_RATE: u32 = 0x16;
 const SKILL_VARIANCE: u32 = 0x17;
@@ -79,7 +85,8 @@ fn decode_flag_ids(data: &[u8]) -> Vec<u32> {
 
 /// Parse the skill table (`ChunkData::skills` = `0x0C`) out of an LDB byte
 /// slice. Chunk ids (liblcf `ChunkSkill`): name `0x01`, description `0x02`, type
-/// `0x08`, sp_cost `0x0B`, scope `0x0C`, physical_rate `0x15`, magical_rate
+/// `0x08`, sp_cost `0x0B`, scope `0x0C`, animation_id `0x0E`, physical_rate
+/// `0x15`, magical_rate
 /// `0x16`, variance `0x17`, power `0x18`, hit `0x19`, affect_hp `0x1F`,
 /// affect_sp `0x20`, absorb_damage `0x25`, state_effects `0x2A`,
 /// attribute_effects `0x2C`. Scalar fields are integer chunks; the two effect
@@ -102,6 +109,7 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
             hit: 0,
             skill_type: 0,
             scope: 0,
+            animation_id: 0,
             physical_rate: 0,
             magical_rate: SKILL_DEFAULT_MAGICAL_RATE,
             variance: SKILL_DEFAULT_VARIANCE,
@@ -124,6 +132,7 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
                 SKILL_TYPE => skill.skill_type = Reader::new(sub_data).varint()?,
                 SKILL_SP_COST => skill.sp_cost = Reader::new(sub_data).varint()?,
                 SKILL_SCOPE => skill.scope = Reader::new(sub_data).varint()?,
+                SKILL_ANIMATION_ID => skill.animation_id = Reader::new(sub_data).varint()?,
                 SKILL_PHYSICAL_RATE => skill.physical_rate = Reader::new(sub_data).varint()?,
                 SKILL_MAGICAL_RATE => skill.magical_rate = Reader::new(sub_data).varint()?,
                 SKILL_VARIANCE => skill.variance = Reader::new(sub_data).varint()?,
@@ -184,6 +193,7 @@ mod tests {
                 hit: 90,
                 skill_type: 0,
                 scope: 0,
+                animation_id: 0,
                 physical_rate: 0,
                 magical_rate: 10,
                 variance: 4,
@@ -207,6 +217,7 @@ mod tests {
         assert_eq!(s.sp_cost, 4);
         assert_eq!((s.power, s.hit), (0, 0));
         assert_eq!((s.skill_type, s.scope, s.physical_rate), (0, 0, 0));
+        assert_eq!(s.animation_id, 0, "omitted animation_id defaults to 0");
         assert_eq!(s.magical_rate, 3, "omitted magical_rate defaults to 3");
         assert_eq!(s.variance, 4, "omitted variance defaults to 4");
         assert!(!s.affect_hp && !s.affect_sp && !s.absorb);
@@ -260,6 +271,16 @@ mod tests {
         let ldb = make_ldb(&[(0x0C, section(&[spread]))]);
         let s = &parse_skills(&ldb).unwrap()[0];
         assert_eq!(s.variance, 6, "explicit variance is parsed");
+    }
+
+    #[test]
+    fn parses_skill_animation_id() {
+        // The battle animation a skill plays (chunk 0x0E, between scope 0x0C and
+        // physical_rate 0x15).
+        let flashy = element(6, &[subchunk(0x0E, &varint(12))]);
+        let ldb = make_ldb(&[(0x0C, section(&[flashy]))]);
+        let s = &parse_skills(&ldb).unwrap()[0];
+        assert_eq!(s.animation_id, 12, "explicit animation_id is parsed");
     }
 
     #[test]

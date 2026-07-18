@@ -303,6 +303,7 @@ mod tests {
             hit: 0,
             skill_type: 0,
             scope,
+            animation_id: 0,
             physical_rate: 0,
             magical_rate: 3,
             variance: 4,

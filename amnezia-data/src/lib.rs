@@ -228,7 +228,9 @@ pub struct ItemDef {
 /// The remaining fields carry the RM2000 battle effect. `scope` picks its
 /// targets (`0` one enemy, `1` all enemies, `2` self, `3` one ally, `4` all
 /// allies) and `skill_type` its family (`0` normal — the only battle-relevant
-/// kind — `1` teleport, `2` escape, `3` switch). `physical_rate`/`magical_rate`
+/// kind — `1` teleport, `2` escape, `3` switch). `animation_id` is the battle
+/// animation the skill overlays on each target it resolves against (`0` shows
+/// none). `physical_rate`/`magical_rate`
 /// (0–10) weight the caster's attack versus spirit in the damage formula and
 /// `variance` (0–10) sets how widely the final damage is randomised around the
 /// computed amount (RM2000 editor default 4). `affect_hp`/`affect_sp` mark which
@@ -247,6 +249,10 @@ pub struct SkillDef {
     pub skill_type: u32,
     #[serde(default)]
     pub scope: u32,
+    /// The battle-animation id this skill plays on each target it resolves
+    /// against; `0` shows no animation.
+    #[serde(default)]
+    pub animation_id: u32,
     #[serde(default)]
     pub physical_rate: u32,
     #[serde(default)]
