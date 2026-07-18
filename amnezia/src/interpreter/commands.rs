@@ -3,6 +3,7 @@
 //! game state, and how a `ConditionalBranch` condition is evaluated. Kept free of
 //! Bevy so they unit-test directly against the plain state resources.
 
+use crate::animation::AnimTarget;
 use crate::state::{Inventory, Party, Switches, Variables};
 
 /// Apply a `ControlSwitches` command `[mode, start_id, end_id, op]` to the id
@@ -106,6 +107,19 @@ pub(super) fn apply_change_party(party: &mut Party, params: &[i32]) {
     }
 }
 
+/// Resolve an RM2000 character reference (as `ShowBattleAnimation` carries one)
+/// to an [`AnimTarget`], mirroring the 10860/11330 decode: 10001 = hero, 10005 =
+/// this event (resolved to `this_event`), any other positive value = that event
+/// id. A non-positive reference names no character and yields `None`.
+pub(super) fn resolve_anim_target(char_ref: i32, this_event: u32) -> Option<AnimTarget> {
+    match char_ref {
+        10001 => Some(AnimTarget::Hero),
+        10005 => Some(AnimTarget::Event(this_event)),
+        id if id > 0 => Some(AnimTarget::Event(id as u32)),
+        _ => None,
+    }
+}
+
 /// Whether a `ConditionalBranch`'s condition holds. Switch (0), variable (1),
 /// money (3), item (4), and hero-in-party (5) are evaluated; unsupported kinds
 /// (timer, …) return `true` so their body runs rather than the event stalling.
@@ -159,6 +173,15 @@ pub(super) fn branch_holds(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn anim_target_decodes_hero_this_event_and_ids() {
+        assert_eq!(resolve_anim_target(10001, 42), Some(AnimTarget::Hero));
+        assert_eq!(resolve_anim_target(10005, 42), Some(AnimTarget::Event(42)));
+        assert_eq!(resolve_anim_target(7, 42), Some(AnimTarget::Event(7)));
+        assert_eq!(resolve_anim_target(0, 42), None);
+        assert_eq!(resolve_anim_target(-3, 42), None);
+    }
 
     #[test]
     fn change_items_adds_and_removes() {

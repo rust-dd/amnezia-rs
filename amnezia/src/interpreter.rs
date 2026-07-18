@@ -4,6 +4,7 @@
 //! switches and variables. A page's commands are a flat list with a per-command
 //! `indent`; conditional branches use that indent to delimit their bodies.
 
+use crate::animation::ShowMapAnimation;
 use crate::appearance::SpriteChange;
 use crate::audio::AudioRequest;
 use crate::battle::{BattleActive, BattleOutcome, BattleRequest, BattleResult};
@@ -55,6 +56,17 @@ impl Blockers<'_> {
     }
 }
 
+/// The interpreter's character-visual output writers: an actor reskin
+/// ([`SpriteChange`], opcode 10630) and a map battle animation
+/// ([`ShowMapAnimation`], opcode 11210). Bundled into one nested `SystemParam` so
+/// [`SubsystemIo`] — and thus `run_interpreter` — keeps within Bevy's
+/// 16-parameter cap.
+#[derive(SystemParam)]
+struct CharacterVisuals<'w> {
+    sprite_writer: MessageWriter<'w, SpriteChange>,
+    anim_writer: MessageWriter<'w, ShowMapAnimation>,
+}
+
 /// The interpreter's channel to the shop and battle subsystems: the writers that
 /// open each screen and the finished-battle result it consumes to pick a handler
 /// branch. Bundled into one `SystemParam` so `run_interpreter` stays within
@@ -69,7 +81,7 @@ pub struct SubsystemIo<'w> {
     gameover: ResMut<'w, GameOverActive>,
     vitals: ResMut<'w, Vitals>,
     input_number: ResMut<'w, InputNumber>,
-    sprite_writer: MessageWriter<'w, SpriteChange>,
+    visuals: CharacterVisuals<'w>,
     relocate_writer: MessageWriter<'w, RelocateEvent>,
     camera_pan: ResMut<'w, CameraPan>,
     hero_transparency: ResMut<'w, HeroTransparency>,
@@ -346,7 +358,7 @@ fn run_interpreter(
                 // the target is the party lead. `string` = charset name.
                 let actor_id = command.params.first().copied().unwrap_or(0).max(0) as u32;
                 let index = command.params.get(1).copied().unwrap_or(0).max(0) as u32;
-                subsystems.sprite_writer.write(SpriteChange {
+                subsystems.visuals.sprite_writer.write(SpriteChange {
                     actor_id,
                     charset: command.string.clone(),
                     index,
@@ -431,6 +443,24 @@ fn run_interpreter(
             PLAYER_TRANSPARENCY => {
                 subsystems.hero_transparency.0 =
                     u8::from(command.params.first().copied().unwrap_or(0) != 0) * 7;
+                running.ip += 1;
+            }
+            SHOW_BATTLE_ANIMATION => {
+                // `params = [anim_id, target_char_ref, wait, global]`. Decode the
+                // id, resolve the char-ref exactly like 10860/11330, and emit the
+                // request; the animation resolver projects the target to a screen
+                // position, so no camera/transform query is needed here. The
+                // wait/global flags are ignored — the animation is fire-and-forget.
+                // A short `params` or an unresolvable target simply no-ops.
+                if let [anim_id, target_ref, ..] = command.params.as_slice()
+                    && *anim_id >= 0
+                    && let Some(target) = resolve_anim_target(*target_ref, running.event_id)
+                {
+                    subsystems.visuals.anim_writer.write(ShowMapAnimation {
+                        anim_id: *anim_id as u32,
+                        target,
+                    });
+                }
                 running.ip += 1;
             }
             TRANSACTION | INN_STAY => running.select_shop_handler(command.indent, true),

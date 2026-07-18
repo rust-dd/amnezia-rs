@@ -36,6 +36,11 @@ pub(super) const PAN_SCREEN: u32 = 11060;
 pub(super) const WEATHER: u32 = 11070;
 /// Hero transparency: `params = [flag]` (1 = transparent, 0 = opaque).
 pub(super) const PLAYER_TRANSPARENCY: u32 = 11310;
+/// Play a battle animation on a character (ShowBattleAnimation): `params =
+/// [anim_id, target_char_ref, wait, global]`. `target_char_ref` decodes like
+/// 10860/11330 — 10001 = hero, 10005 = this event, else event id — and the
+/// wait/global flags are ignored (the animation is fire-and-forget).
+pub(super) const SHOW_BATTLE_ANIMATION: u32 = 11210;
 /// Shop/inn outcome handlers, self-selected like the battle handlers (param-less).
 pub(super) const TRANSACTION: u32 = 20720;
 pub(super) const NO_TRANSACTION: u32 = 20721;

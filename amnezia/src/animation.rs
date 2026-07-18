@@ -5,8 +5,8 @@
 //! cells (see [`render`]) and firing that frame's sound-effect and flash
 //! timings. It owns the renderer plus the fixed overlay camera the effects draw
 //! on, so they composite over the battle UI; `battle` emits a [`PlayAnimation`]
-//! per physical hit. Wiring the interpreter's map animation (opcode 11210) is a
-//! separate follow-up.
+//! per physical hit, and the interpreter's [`ShowMapAnimation`] (opcode 11210)
+//! projects a target character to its screen position and plays one on the map.
 //!
 //! Positions are RM2000 screen coordinates measured from the screen centre
 //! (`0,0` = centre), y growing downward, matching the source data. `scope`
@@ -19,9 +19,11 @@ use crate::assets::{asset_root, load_ron};
 use crate::audio::AudioRequest;
 use crate::battle::BattleActive;
 use crate::menu::MenuOpen;
+use crate::player::Player;
 use crate::screenfx::ScreenEffect;
 use crate::shop::ShopOpen;
 use crate::title::TitleActive;
+use crate::world::{EventSprite, MainCamera};
 use amnezia_data::{AnimationDef, AnimationTimingDef};
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
@@ -50,6 +52,26 @@ pub struct PlayAnimation {
     pub y: f32,
 }
 
+/// The character a [`ShowMapAnimation`] plays on, already resolved from the
+/// RM2000 char-ref by the interpreter: the hero, or a map event by id (a
+/// this-event ref is resolved to a concrete id before it reaches here).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnimTarget {
+    Hero,
+    Event(u32),
+}
+
+/// The interpreter's request to play battle animation `anim_id` on a map
+/// character (RM2000 `ShowBattleAnimation`, opcode 11210). The interpreter only
+/// decodes the id and resolves the char-ref; [`resolve_map_animation`] looks the
+/// target's world position up against the main camera and emits the screen-space
+/// [`PlayAnimation`], so the interpreter itself needs no camera/transform queries.
+#[derive(Message)]
+pub struct ShowMapAnimation {
+    pub anim_id: u32,
+    pub target: AnimTarget,
+}
+
 /// Every converted battle animation, loaded once at plugin build.
 #[derive(Resource)]
 pub struct AnimationLibrary(pub Vec<AnimationDef>);
@@ -71,6 +93,7 @@ pub struct AnimationPlugin;
 impl Plugin for AnimationPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<PlayAnimation>()
+            .add_message::<ShowMapAnimation>()
             .insert_resource(AnimationLibrary(load_ron(&format!(
                 "{}/animations.ron",
                 asset_root()
@@ -79,7 +102,13 @@ impl Plugin for AnimationPlugin {
             .add_systems(
                 Update,
                 (
-                    (debug_preview, start_animations, step_animations).chain(),
+                    (
+                        resolve_map_animation,
+                        debug_preview,
+                        start_animations,
+                        step_animations,
+                    )
+                        .chain(),
                     fade_flashes,
                 ),
             );
@@ -273,6 +302,55 @@ fn debug_preview(
     }
 }
 
+/// Resolve each interpreter [`ShowMapAnimation`] to a screen-space
+/// [`PlayAnimation`]: find the target character's world position (the hero, or a
+/// map event by id) and the main camera's, project the target onto the fixed
+/// overlay with [`target_screen_offset`], and emit the play request. A target with
+/// no live entity on the current map (e.g. an event id not on this map) is
+/// dropped. This is where the camera/transform lookup lives, keeping the
+/// interpreter's own system params clear of it.
+fn resolve_map_animation(
+    mut requests: MessageReader<ShowMapAnimation>,
+    mut plays: MessageWriter<PlayAnimation>,
+    camera: Query<&Transform, With<MainCamera>>,
+    hero: Query<&Transform, With<Player>>,
+    events: Query<(&EventSprite, &Transform)>,
+) {
+    let Ok(camera) = camera.single() else {
+        return;
+    };
+    let camera_pos = camera.translation.truncate();
+    for request in requests.read() {
+        let target_pos = match request.target {
+            AnimTarget::Hero => hero.single().ok().map(|t| t.translation.truncate()),
+            AnimTarget::Event(id) => events
+                .iter()
+                .find(|(sprite, _)| sprite.id == id)
+                .map(|(_, transform)| transform.translation.truncate()),
+        };
+        let Some(target_pos) = target_pos else {
+            continue;
+        };
+        let offset = target_screen_offset(target_pos, camera_pos);
+        plays.write(PlayAnimation {
+            anim_id: request.anim_id,
+            x: offset.x,
+            y: offset.y,
+        });
+    }
+}
+
+/// The RM2000 screen offset (from centre, y-down) at which a character at world
+/// `target` appears when the main camera is centred at `camera`. The world and
+/// overlay cameras share the fixed 320×240 projection (1 unit = 1 px), so the
+/// on-screen offset is `target - camera`; RM2000 measures y downward while the
+/// world is y-up, so the y component is negated. [`PlayAnimation`] flips it back
+/// to world `(x, -y)` on the origin-fixed overlay, landing the animation on the
+/// target.
+fn target_screen_offset(target: Vec2, camera: Vec2) -> Vec2 {
+    Vec2::new(target.x - camera.x, camera.y - target.y)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -283,5 +361,81 @@ mod tests {
         assert_eq!(flash_channel(31), 1.0);
         assert_eq!(flash_channel(62), 1.0);
         assert!((flash_channel(15) - 15.0 / 31.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn target_screen_offset_centres_and_negates_y() {
+        // A target on the camera centre maps to the screen centre.
+        assert_eq!(
+            target_screen_offset(Vec2::new(50.0, -20.0), Vec2::new(50.0, -20.0)),
+            Vec2::ZERO
+        );
+        // A target +32 right and +16 *up* in world (y-up) reads as RM2000
+        // `(32, -16)` — right, and above centre (RM2000 y grows downward).
+        assert_eq!(
+            target_screen_offset(Vec2::new(32.0, 16.0), Vec2::ZERO),
+            Vec2::new(32.0, -16.0)
+        );
+        // A target below the camera has positive RM2000 y.
+        assert_eq!(
+            target_screen_offset(Vec2::new(0.0, -40.0), Vec2::ZERO),
+            Vec2::new(0.0, 40.0)
+        );
+    }
+
+    #[test]
+    fn resolver_projects_hero_and_event_onto_screen() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_message::<ShowMapAnimation>();
+        app.add_message::<PlayAnimation>();
+        app.add_systems(Update, resolve_map_animation);
+
+        // Main camera at world (100, 50). The hero sits 32 right / 16 up from it;
+        // event 7 sits 10 left / 20 down.
+        app.world_mut()
+            .spawn((MainCamera, Transform::from_xyz(100.0, 50.0, 0.0)));
+        app.world_mut().spawn((
+            Player {
+                tile_x: 0,
+                tile_y: 0,
+                dir: 0,
+                frame: 0,
+                charset: String::new(),
+                index: 0,
+            },
+            Transform::from_xyz(132.0, 66.0, 3.0),
+        ));
+        app.world_mut().spawn((
+            EventSprite {
+                id: 7,
+                tile_x: 0,
+                tile_y: 0,
+                dir: 0,
+                frame: 0,
+                charset: String::new(),
+                index: 0,
+            },
+            Transform::from_xyz(90.0, 30.0, 3.0),
+        ));
+
+        app.world_mut().write_message(ShowMapAnimation {
+            anim_id: 62,
+            target: AnimTarget::Hero,
+        });
+        app.world_mut().write_message(ShowMapAnimation {
+            anim_id: 63,
+            target: AnimTarget::Event(7),
+        });
+        app.update();
+
+        let messages = app.world().resource::<Messages<PlayAnimation>>();
+        let mut cursor = messages.get_cursor();
+        let plays: Vec<(u32, f32, f32)> = cursor
+            .read(messages)
+            .map(|p| (p.anim_id, p.x, p.y))
+            .collect();
+        // Hero: (132-100, 50-66) = (32, -16). Event 7: (90-100, 50-30) = (-10, 20).
+        assert_eq!(plays, vec![(62, 32.0, -16.0), (63, -10.0, 20.0)]);
     }
 }
