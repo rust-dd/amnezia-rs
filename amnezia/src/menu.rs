@@ -1,45 +1,60 @@
-//! The in-game menu: a windowskin overlay toggled with Escape that browses the
-//! party's status, the held items, and the known skills across three tabs. It is
-//! a read-only viewer in v1 — the left/right arrows switch tab and up/down move a
-//! row cursor through long lists; no actions are taken. The movement/interpreter
-//! pause guard that freezes the world while it is open (keyed on [`MenuOpen`]) is
-//! wired by the main session; this module owns the toggle and the UI.
+//! The in-game menu: a windowskin overlay toggled with Escape. It browses the
+//! party, the held items, and the known skills across three tabs, and drills into
+//! two interactive sub-screens: using a field item on a chosen party member, and
+//! a read-only status view of a member. Left/right switch tab, up/down move the
+//! row cursor, Enter/Space confirm, and Escape backs out of a sub-screen (or, from
+//! the browse view, closes the menu). The movement/interpreter pause guard that
+//! freezes the world while it is open (keyed on [`MenuOpen`]) is wired by the main
+//! session; this module owns the toggle and the UI.
+
+mod browse;
+mod derive;
+mod status;
+mod use_item;
+mod view;
+
+#[cfg(test)]
+mod testkit;
 
 use crate::battle::BattleActive;
-use crate::font::GameFont;
 use crate::gamedata::GameData;
-use crate::i18n;
+use crate::progression::Progression;
 use crate::save::SaveRequest;
 use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party};
 use crate::title::TitleActive;
+use crate::vitals::Vitals;
 use bevy::prelude::*;
-use bevy::text::FontSource;
+use view::{MenuPanel, MenuText};
 
 /// Whether the menu overlay is showing. The pause guard reads this; this module
 /// owns the toggle (Escape).
 #[derive(Resource, Default)]
 pub struct MenuOpen(pub bool);
 
-/// Which tab is shown (`0` party, `1` items, `2` skills) and where the row
-/// cursor sits within it.
+/// Which screen the menu is on: the three-tab browse viewer, the item-target
+/// picker (a held field item awaiting a recipient), or a member's status block.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+enum MenuScreen {
+    #[default]
+    Browse,
+    ItemTarget {
+        item_id: u32,
+        cursor: usize,
+    },
+    Status {
+        member: usize,
+    },
+}
+
+/// Which tab is shown (`0` party, `1` items, `2` skills), where the row cursor
+/// sits within it, and which sub-screen (if any) is open.
 #[derive(Resource, Default)]
 struct MenuState {
     tab: usize,
     cursor: usize,
+    screen: MenuScreen,
 }
-
-/// The tab titles, in order; the index into this is [`MenuState::tab`].
-const TABS: [&str; 3] = ["Party", "Items", "Skills"];
-
-/// How many content rows fit in the panel before it scrolls with the cursor.
-const VISIBLE_ROWS: usize = 12;
-
-#[derive(Component)]
-struct MenuPanel;
-
-#[derive(Component)]
-struct MenuText;
 
 pub struct MenuPlugin;
 
@@ -47,87 +62,57 @@ impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MenuOpen>()
             .init_resource::<MenuState>()
-            .add_systems(Startup, spawn_ui)
+            .add_systems(Startup, view::spawn_ui)
             .add_systems(Update, (menu_input, update_ui));
     }
 }
 
-/// Spawn the initially hidden, near-fullscreen menu panel, styled with the same
-/// RM2000 windowskin (`System.png`) as the dialogue box and sitting above it.
-fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<AssetServer>) {
-    let system: Handle<Image> = asset_server.load("graphics/System/System.png");
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(24.0),
-                right: Val::Px(24.0),
-                top: Val::Px(24.0),
-                bottom: Val::Px(24.0),
-                padding: UiRect::all(Val::Px(16.0)),
-                ..default()
-            },
-            Visibility::Hidden,
-            GlobalZIndex(100),
-            MenuPanel,
-        ))
-        .with_children(|panel| {
-            panel.spawn((
-                inset_node(0.0),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(32.0, 0.0, 64.0, 32.0)),
-                    image_mode: NodeImageMode::Sliced(TextureSlicer {
-                        border: BorderRect::all(8.0),
-                        center_scale_mode: SliceScaleMode::Stretch,
-                        sides_scale_mode: SliceScaleMode::Stretch,
-                        max_corner_scale: 1.0,
-                    }),
-                    ..default()
-                },
-            ));
-            panel.spawn((
-                inset_node(4.0),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
-                    image_mode: NodeImageMode::Stretch,
-                    ..default()
-                },
-            ));
-            panel.spawn((
-                Text::new(String::new()),
-                TextFont {
-                    font: FontSource::Handle(font.0.clone()),
-                    font_size: FontSize::Px(20.0),
-                    ..default()
-                },
-                TextColor(Color::WHITE),
-                MenuText,
-            ));
-        });
+/// Whether a confirm key (Space or Enter) was pressed this frame.
+fn confirm_pressed(keys: &ButtonInput<KeyCode>) -> bool {
+    keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter)
 }
 
-/// An absolutely-positioned node inset by `px` on every side of its parent.
-fn inset_node(px: f32) -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        left: Val::Px(px),
-        right: Val::Px(px),
-        top: Val::Px(px),
-        bottom: Val::Px(px),
-        ..default()
+/// The `(open, screen)` after Escape: from a sub-screen, back to Browse with the
+/// menu still open; from Browse, close the menu; from closed, open it on Browse.
+fn escape_transition(open: bool, screen: MenuScreen) -> (bool, MenuScreen) {
+    if open && screen != MenuScreen::Browse {
+        (true, MenuScreen::Browse)
+    } else {
+        (!open, MenuScreen::Browse)
     }
 }
 
-/// Toggle the menu on Escape; while open, switch tab with left/right and move
-/// the row cursor with up/down (clamped to the active tab's rows).
+/// The sub-screen a confirm on the browse `cursor` opens, or `None` when the
+/// selection takes no action (empty row, a non-field-usable item, the skills tab).
+fn browse_target(
+    tab: usize,
+    cursor: usize,
+    data: &GameData,
+    party: &Party,
+    inventory: &Inventory,
+) -> Option<MenuScreen> {
+    match tab {
+        0 => (cursor < party.snapshot().len()).then_some(MenuScreen::Status { member: cursor }),
+        1 => {
+            let &item_id = use_item::held_item_ids(data, inventory).get(cursor)?;
+            let item = data.item(item_id)?;
+            use_item::field_usable(item).then_some(MenuScreen::ItemTarget { item_id, cursor: 0 })
+        }
+        _ => None,
+    }
+}
+
+/// Toggle the menu on Escape (backing out of a sub-screen first), and drive the
+/// active screen: switch tab / move the cursor and confirm into a sub-screen on
+/// Browse, move the recipient cursor and apply on ItemTarget.
 #[allow(clippy::too_many_arguments)]
 fn menu_input(
     keys: Res<ButtonInput<KeyCode>>,
     data: Res<GameData>,
     party: Res<Party>,
-    inventory: Res<Inventory>,
+    progression: Res<Progression>,
+    mut inventory: ResMut<Inventory>,
+    mut vitals: ResMut<Vitals>,
     shop: Res<ShopOpen>,
     battle: Res<BattleActive>,
     title: Res<TitleActive>,
@@ -141,8 +126,11 @@ fn menu_input(
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {
-        open.0 = !open.0;
-        if open.0 {
+        let was_open = open.0;
+        let (next_open, next_screen) = escape_transition(open.0, state.screen);
+        open.0 = next_open;
+        state.screen = next_screen;
+        if next_open && !was_open {
             state.cursor = 0;
         }
         return;
@@ -154,37 +142,77 @@ fn menu_input(
     if keys.just_pressed(KeyCode::KeyS) {
         save_request.0 = true;
     }
-    if keys.just_pressed(KeyCode::ArrowRight) {
-        state.tab = (state.tab + 1) % TABS.len();
-        state.cursor = 0;
-    }
-    if keys.just_pressed(KeyCode::ArrowLeft) {
-        state.tab = (state.tab + TABS.len() - 1) % TABS.len();
-        state.cursor = 0;
-    }
-    let max = tab_rows(state.tab, &data, &party, &inventory)
-        .len()
-        .saturating_sub(1);
-    if keys.just_pressed(KeyCode::ArrowDown) {
-        state.cursor = (state.cursor + 1).min(max);
-    }
-    if keys.just_pressed(KeyCode::ArrowUp) {
-        state.cursor = state.cursor.saturating_sub(1);
+    let confirm = confirm_pressed(&keys);
+    match state.screen {
+        MenuScreen::Browse => {
+            if keys.just_pressed(KeyCode::ArrowRight) {
+                state.tab = (state.tab + 1) % browse::TABS.len();
+                state.cursor = 0;
+            }
+            if keys.just_pressed(KeyCode::ArrowLeft) {
+                state.tab = (state.tab + browse::TABS.len() - 1) % browse::TABS.len();
+                state.cursor = 0;
+            }
+            let max = browse::tab_rows(state.tab, &data, &party, &inventory)
+                .len()
+                .saturating_sub(1);
+            if keys.just_pressed(KeyCode::ArrowDown) {
+                state.cursor = (state.cursor + 1).min(max);
+            }
+            if keys.just_pressed(KeyCode::ArrowUp) {
+                state.cursor = state.cursor.saturating_sub(1);
+            }
+            if confirm
+                && let Some(screen) =
+                    browse_target(state.tab, state.cursor, &data, &party, &inventory)
+            {
+                state.screen = screen;
+            }
+        }
+        MenuScreen::ItemTarget { item_id, cursor } => {
+            let max = party.snapshot().len().saturating_sub(1);
+            if keys.just_pressed(KeyCode::ArrowDown) {
+                let cursor = (cursor + 1).min(max);
+                state.screen = MenuScreen::ItemTarget { item_id, cursor };
+            }
+            if keys.just_pressed(KeyCode::ArrowUp) {
+                let cursor = cursor.saturating_sub(1);
+                state.screen = MenuScreen::ItemTarget { item_id, cursor };
+            }
+            if confirm
+                && use_item::apply_field_item(
+                    item_id,
+                    cursor,
+                    &data,
+                    &party,
+                    &progression,
+                    &mut inventory,
+                    &mut vitals,
+                )
+            {
+                state.screen = MenuScreen::Browse;
+            }
+        }
+        MenuScreen::Status { .. } => {}
     }
 }
 
 /// Reflect the menu state into the panel: show or hide it, and recompose the
-/// header and the visible slice of the active tab whenever either changes.
+/// active screen whenever the state, the inventory, or the vitals change.
+#[allow(clippy::too_many_arguments)]
 fn update_ui(
     open: Res<MenuOpen>,
     state: Res<MenuState>,
     data: Res<GameData>,
     party: Res<Party>,
     inventory: Res<Inventory>,
+    progression: Res<Progression>,
+    vitals: Res<Vitals>,
     mut panels: Query<&mut Visibility, With<MenuPanel>>,
     mut texts: Query<&mut Text, With<MenuText>>,
 ) {
-    if !open.is_changed() && !state.is_changed() {
+    if !open.is_changed() && !state.is_changed() && !inventory.is_changed() && !vitals.is_changed()
+    {
         return;
     }
     if let Ok(mut visibility) = panels.single_mut() {
@@ -197,201 +225,62 @@ fn update_ui(
     if open.0
         && let Ok(mut text) = texts.single_mut()
     {
-        let rows = tab_rows(state.tab, &data, &party, &inventory);
-        **text = compose(state.tab, state.cursor, &rows);
-    }
-}
-
-/// The content rows of the active `tab` (no header, no cursor markers), built
-/// fresh from the live party, inventory, and database.
-fn tab_rows(tab: usize, data: &GameData, party: &Party, inventory: &Inventory) -> Vec<String> {
-    match tab {
-        0 => party_rows(data, party),
-        1 => item_rows(data, inventory),
-        _ => skill_rows(data),
-    }
-}
-
-fn party_rows(data: &GameData, party: &Party) -> Vec<String> {
-    party
-        .snapshot()
-        .iter()
-        .map(|&id| match data.actor(id) {
-            Some(a) => {
-                format!(
-                    "{} — {} — Lv{}   HP {}   SP {}",
-                    i18n::tr(&a.name),
-                    i18n::tr(&a.title),
-                    a.level,
-                    a.hp,
-                    a.sp
-                )
+        **text = match state.screen {
+            MenuScreen::Browse => {
+                let rows = browse::tab_rows(state.tab, &data, &party, &inventory);
+                browse::compose(state.tab, state.cursor, &rows)
             }
-            None => format!("#{id} (unknown)"),
-        })
-        .collect()
-}
-
-fn item_rows(data: &GameData, inventory: &Inventory) -> Vec<String> {
-    let mut rows: Vec<String> = data
-        .items
-        .iter()
-        .filter(|i| inventory.count(i.id) > 0)
-        .map(|i| format!("{} ×{}", i18n::tr(&i.name), inventory.count(i.id)))
-        .collect();
-    if rows.is_empty() {
-        rows.push("(no items)".to_string());
-    }
-    rows.push(String::new());
-    rows.push(format!("Gold: {}", inventory.gold()));
-    rows
-}
-
-fn skill_rows(data: &GameData) -> Vec<String> {
-    data.skills
-        .iter()
-        .map(|s| format!("{}   (SP {})", i18n::tr(&s.name), s.sp_cost))
-        .collect()
-}
-
-/// Render the tab header plus the visible window of `rows` around `cursor`,
-/// marking the cursor row.
-fn compose(tab: usize, cursor: usize, rows: &[String]) -> String {
-    let header = TABS
-        .iter()
-        .enumerate()
-        .map(|(i, name)| {
-            if i == tab {
-                format!("[{name}]")
-            } else {
-                format!(" {name} ")
+            MenuScreen::ItemTarget { item_id, cursor } => {
+                use_item::compose_target(item_id, cursor, &data, &party, &progression, &vitals)
             }
-        })
-        .collect::<Vec<_>>()
-        .join("   ");
-    let start = viewport_start(cursor, rows.len());
-    let mut out = format!("{header}          [S] Mentés\n\n");
-    for (i, row) in rows.iter().enumerate().skip(start).take(VISIBLE_ROWS) {
-        out.push_str(if i == cursor { "▶ " } else { "  " });
-        out.push_str(row);
-        out.push('\n');
-    }
-    out
-}
-
-/// The first row index of the scroll window that keeps `cursor` visible within
-/// [`VISIBLE_ROWS`], never scrolling past the end.
-fn viewport_start(cursor: usize, len: usize) -> usize {
-    if len <= VISIBLE_ROWS {
-        0
-    } else {
-        cursor
-            .saturating_sub(VISIBLE_ROWS - 1)
-            .min(len - VISIBLE_ROWS)
+            MenuScreen::Status { member } => {
+                status::compose_status(member, &data, &party, &progression, &vitals)
+            }
+        };
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use amnezia_data::{ActorDef, ItemDef, SkillDef};
+    use crate::menu::testkit::{self, ITEM_HERB};
 
-    fn data() -> GameData {
-        GameData {
-            actors: vec![ActorDef {
-                id: 1,
-                name: "Ron".into(),
-                title: "Zsoldos".into(),
-                level: 2,
-                max_level: 50,
-                hp: 63,
-                sp: 37,
-                curves: Default::default(),
-                exp_base: 30,
-                exp_inflation: 30,
-                exp_correction: 0,
-                weapon: 0,
-                shield: 0,
-                armor: 0,
-                helmet: 0,
-                accessory: 0,
-                two_weapons: false,
-                fix_equipment: false,
-                unarmed_animation: 0,
-            }],
-            items: vec![ItemDef {
-                id: 5,
-                name: "Gyógyfű".into(),
-                description: String::new(),
-                item_type: 6,
-                price: 100,
-                recover_hp: 0,
-                recover_hp_rate: 0,
-                recover_sp: 0,
-                recover_sp_rate: 0,
-                cure_states: vec![],
-                state_defense: vec![],
-                attribute_defense: vec![],
-                scope: 0,
-                only_field: false,
-                uses: 0,
-                atk: 0,
-                def: 0,
-                spi: 0,
-                agi: 0,
-                two_handed: false,
-                hit: 0,
-                crit: 0,
-                weapon_animation: 0,
-            }],
-            skills: vec![SkillDef {
-                id: 1,
-                name: "X-Csapás".into(),
-                description: String::new(),
-                sp_cost: 20,
-                power: 50,
-                hit: 0,
-                skill_type: 0,
-                scope: 0,
-                animation_id: 0,
-                physical_rate: 0,
-                magical_rate: 3,
-                variance: 4,
-                affect_hp: false,
-                affect_sp: false,
-                absorb: false,
-                attributes: vec![],
-                affected_states: vec![],
-            }],
-        }
+    #[test]
+    fn escape_backs_out_of_a_subscreen_then_closes_the_menu() {
+        let br = MenuScreen::Browse;
+        let status = MenuScreen::Status { member: 0 };
+        let target = MenuScreen::ItemTarget {
+            item_id: 5,
+            cursor: 1,
+        };
+        assert_eq!(escape_transition(false, br), (true, br)); // closed -> open
+        assert_eq!(escape_transition(true, status), (true, br)); // sub -> browse
+        assert_eq!(escape_transition(true, target), (true, br)); // sub -> browse
+        assert_eq!(escape_transition(true, br), (false, br)); // browse -> closed
     }
 
     #[test]
-    fn party_row_shows_name_title_level_and_stats() {
-        let rows = party_rows(&data(), &Party::default());
-        assert_eq!(
-            rows,
-            vec!["Ron — Zsoldos — Lv2   HP 63   SP 37".to_string()]
-        );
-    }
-
-    #[test]
-    fn item_rows_list_only_held_items_and_always_end_with_gold() {
+    fn confirm_opens_status_from_party_and_item_target_from_a_usable_item() {
+        let d = testkit::data();
+        let party = Party::default();
         let mut inv = Inventory::default();
-        inv.add_gold(250);
-        let empty = item_rows(&data(), &inv);
-        assert_eq!(empty.first().unwrap(), "(no items)");
-        assert_eq!(empty.last().unwrap(), "Gold: 250");
-        inv.add_item(5, 3);
-        let held = item_rows(&data(), &inv);
-        assert_eq!(held.first().unwrap(), "Gyógyfű ×3");
+        inv.add_item(ITEM_HERB, 1);
+        let status0 = Some(MenuScreen::Status { member: 0 });
+        let target = Some(MenuScreen::ItemTarget {
+            item_id: ITEM_HERB,
+            cursor: 0,
+        });
+        assert_eq!(browse_target(0, 0, &d, &party, &inv), status0);
+        assert_eq!(browse_target(1, 0, &d, &party, &inv), target);
     }
 
     #[test]
-    fn viewport_scrolls_to_keep_cursor_visible() {
-        assert_eq!(viewport_start(0, 5), 0);
-        assert_eq!(viewport_start(3, 40), 0);
-        assert_eq!(viewport_start(VISIBLE_ROWS, 40), 1);
-        assert_eq!(viewport_start(39, 40), 40 - VISIBLE_ROWS);
+    fn confirm_does_nothing_on_equipment_or_the_skills_tab() {
+        let mut d = testkit::data();
+        d.items = vec![testkit::weapon(5, "Kard", 4)]; // id 5 held, but equipment
+        let (party, mut inv) = (Party::default(), Inventory::default());
+        inv.add_item(5, 1);
+        assert_eq!(browse_target(1, 0, &d, &party, &inv), None); // equipment
+        assert_eq!(browse_target(2, 0, &d, &party, &inv), None); // skills tab
     }
 }
