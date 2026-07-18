@@ -147,19 +147,50 @@ pub fn effective_hit(weapon_hit: u32) -> u32 {
     if weapon_hit == 0 { 90 } else { weapon_hit }
 }
 
+/// Adjust a `base_hit` percentage by the agility gap between attacker and target
+/// (RM2000 / EasyRPG `CalcToHitAgiAdjustment`): a faster target lowers the chance,
+/// a slower one raises it, computed as
+/// `100 - (100 - base_hit) * (1 + (target_agi / source_agi - 1) / 2)`. EasyRPG
+/// runs this in `float` and truncates the result to an integer, so we mirror the
+/// `f32` arithmetic and `as i32` truncation exactly; `source_agi` is guarded to at
+/// least 1 to avoid a divide-by-zero. The result can dip below 0 (a certain miss)
+/// but never exceeds 100, and a `base_hit` of 100 always yields 100 whatever the
+/// agilities.
+pub fn to_hit(base_hit: u32, source_agi: u32, target_agi: u32) -> i32 {
+    let src = source_agi.max(1) as f32;
+    let tgt = target_agi as f32;
+    (100.0 - (100 - base_hit as i32) as f32 * (1.0 + (tgt / src - 1.0) / 2.0)) as i32
+}
+
 /// A critical hit's damage: RM2000 triples the blow.
 pub fn critical_damage(base: i32) -> i32 {
     base * 3
 }
 
-/// Skill damage: the skill's base `power` plus half the caster's spirit, less a
-/// quarter of the target's spirit. A powered skill always lands at least 1; a
-/// zero-power skill does nothing (its effect type is not modelled in v1).
-pub fn skill_damage(power: u32, spirit: u32, target_spirit: u32) -> i32 {
-    if power == 0 {
-        return 0;
+/// Skill effect magnitude (RM2000 / EasyRPG `Algo::CalcSkillEffect`, pre-variance):
+/// the skill's `power`, plus its physical/magical rates weighting the caster's
+/// attack and spirit — `physical_rate * atk / 20 + magical_rate * spi / 40` — and,
+/// when the skill targets enemies, less the target's defence and spirit —
+/// `physical_rate * def / 40 + magical_rate * spi / 80`. Floored at 0. The
+/// attribute (element) multiplier, an optional critical, and variance are applied
+/// on top by the caller, in that order. `targets_enemies` is true for the
+/// offensive scopes (one or all enemies) and false for the ally/heal scopes, which
+/// take no defensive subtraction (the RM2000 `ignore_defense` flag is not
+/// modelled, i.e. assumed false).
+pub fn skill_effect(
+    skill: &SkillDef,
+    source: &Stats,
+    target: &Stats,
+    targets_enemies: bool,
+) -> i32 {
+    let mut effect = skill.power as i32
+        + skill.physical_rate as i32 * source.attack as i32 / 20
+        + skill.magical_rate as i32 * source.spirit as i32 / 40;
+    if targets_enemies {
+        effect -= skill.physical_rate as i32 * target.defense as i32 / 40;
+        effect -= skill.magical_rate as i32 * target.spirit as i32 / 80;
     }
-    (power as i32 + spirit as i32 / 2 - target_spirit as i32 / 4).max(1)
+    effect.max(0)
 }
 
 /// The RM2000 damage percent for `rank` (0=A … 4=E) from an attribute's own A–E
@@ -199,15 +230,21 @@ pub fn elemental_damage(
     (base * attribute_percent(attr, rank) as i32 / 100).max(0)
 }
 
-/// Spread a base damage by ±10% from a `roll` in `0..=20` (10 = no change), so
-/// the pure formula stays deterministic and the caller owns the randomness.
-/// Positive damage stays at least 1; zero stays zero.
-pub fn with_variance(base: i32, roll: u32) -> i32 {
-    if base <= 0 {
-        return base;
+/// Apply RM2000 / EasyRPG damage variance (`Algo::VarianceAdjustEffect`): with a
+/// non-zero `var` and a positive `base`, the spread window is
+/// `adj = max(1, var * base / 10)` and the result is
+/// `base + rand(0..=adj) - adj / 2`, i.e. up to ±(var·10)% around `base`. The
+/// caller owns the randomness and passes a raw `roll`; we take `roll % (adj + 1)`
+/// for the inclusive `0..=adj` draw, keeping it one draw per hit. A `var` of 0 or
+/// a non-positive `base` returns `base` unchanged (an immune 0-damage hit stays
+/// 0). For a normal attack `var` is 4; for a skill it is [`SkillDef::variance`].
+pub fn variance_adjust(base: i32, var: i32, roll: u64) -> i32 {
+    if var > 0 && base > 0 {
+        let adj = (var * base / 10).max(1);
+        base + (roll % (adj as u64 + 1)) as i32 - adj / 2
+    } else {
+        base
     }
-    let pct = (roll % 21) as i32 - 10;
-    (base + base * pct / 100).max(1)
 }
 
 /// Halve incoming damage while defending (RM2000 Defend), rounding down.
@@ -371,6 +408,28 @@ pub fn release_on_damage(
         }
     });
     lifted
+}
+
+/// A state's per-turn HP change (RM2000 `hp_change`), returned already signed by
+/// its `hp_change_type`: a negative drain for type `0`, a positive regen for type
+/// `1`, and `0` for type `2` (nothing) or an unconfigured state. The magnitude is
+/// `hp_change_val + max_hp * hp_change_max / 100`; a state that is *configured* to
+/// change HP (either amount non-zero) always moves at least one point (RM2000
+/// floors an afflicted battler's loss/gain at 1), while a state with both amounts
+/// zero — every non-poison state, whose `hp_change_type` defaults to `0` — is left
+/// untouched. The map-only fields (`hp_change_map_*`) are out of scope here: they
+/// drain on the overworld, not per battle turn. Applied at the start of a
+/// battler's turn by [`super::resolve`].
+pub fn state_hp_delta(def: &StateDef, max_hp: i32) -> i32 {
+    if def.hp_change_val == 0 && def.hp_change_max == 0 {
+        return 0;
+    }
+    let magnitude = (def.hp_change_val as i32 + max_hp * def.hp_change_max as i32 / 100).max(1);
+    match def.hp_change_type {
+        0 => -magnitude,
+        1 => magnitude,
+        _ => 0,
+    }
 }
 
 /// The party level the enemy AI assumes: battle state tracks no per-member
@@ -538,26 +597,73 @@ mod tests {
     }
 
     #[test]
+    fn to_hit_adjusts_the_base_by_the_agility_gap() {
+        // Equal agility leaves the base hit unchanged.
+        assert_eq!(to_hit(90, 10, 10), 90);
+        assert_eq!(to_hit(100, 10, 10), 100);
+        // A faster target lowers the chance; a slower target raises it.
+        assert!(to_hit(90, 10, 20) < 90); // 100 - 10*(1 + 0.5) = 85
+        assert!(to_hit(90, 20, 10) > 90); // 100 - 10*(1 - 0.25) = 92
+        assert_eq!(to_hit(90, 10, 20), 85);
+        assert_eq!(to_hit(90, 20, 10), 92);
+        // A perfect base always lands, whatever the agilities.
+        assert_eq!(to_hit(100, 5, 50), 100);
+        // Source agility is guarded against zero — no divide-by-zero, no panic.
+        assert_eq!(to_hit(90, 0, 10), 45); // src clamps to 1: 100 - 10*(1 + 4.5)
+    }
+
+    #[test]
     fn critical_triples_the_base() {
         assert_eq!(critical_damage(12), 36);
         assert_eq!(critical_damage(0), 0);
     }
 
     #[test]
-    fn skill_damage_adds_spirit_and_floors_positive_at_one() {
-        assert_eq!(skill_damage(50, 20, 8), 58); // 50 + 10 - 2
-        assert_eq!(skill_damage(10, 0, 400), 1); // reduced below 1, floored to 1
-        assert_eq!(skill_damage(0, 999, 0), 0); // zero-power skill does nothing
+    fn skill_effect_matches_the_easyrpg_formula() {
+        let mut s = skill(1, "X", 10, 50); // power 50, physical_rate 0, magical_rate 3
+        s.physical_rate = 2;
+        let src = Stats {
+            attack: 40,
+            defense: 10,
+            spirit: 20,
+            agility: 8,
+        };
+        let tgt = Stats {
+            attack: 30,
+            defense: 20,
+            spirit: 12,
+            agility: 6,
+        };
+        // Enemy scope: 50 + 2*40/20 + 3*20/40 - 2*20/40 - 3*12/80
+        //            = 50 + 4 + 1 - 1 - 0 = 54.
+        assert_eq!(skill_effect(&s, &src, &tgt, true), 54);
+        // Ally/heal scope: no defensive subtraction -> 50 + 4 + 1 = 55.
+        assert_eq!(skill_effect(&s, &src, &tgt, false), 55);
+        // Overwhelming defence floors the effect at 0.
+        let weak = skill(2, "w", 0, 1); // power 1, magical_rate 3
+        let tanky = Stats {
+            attack: 0,
+            defense: 400,
+            spirit: 400,
+            agility: 0,
+        };
+        assert_eq!(skill_effect(&weak, &src, &tanky, true), 0);
     }
 
     #[test]
-    fn variance_spans_plus_minus_ten_percent_deterministically() {
-        assert_eq!(with_variance(100, 0), 90); // -10%
-        assert_eq!(with_variance(100, 10), 100); // centre
-        assert_eq!(with_variance(100, 20), 110); // +10%
-        assert_eq!(with_variance(0, 5), 0); // zero stays zero
-        assert_eq!(with_variance(3, 0), 3); // small hit rounds to no reduction
-        assert_eq!(with_variance(1, 0), 1); // positive damage never drops below 1
+    fn variance_adjust_matches_easyrpg_for_known_rolls() {
+        // var=4, base=100: adj = max(1, 400/10) = 40, window [base-20, base+20].
+        assert_eq!(variance_adjust(100, 4, 0), 80); // 100 + (0 % 41 = 0) - 20
+        assert_eq!(variance_adjust(100, 4, 20), 100); // centre: 100 + 20 - 20
+        assert_eq!(variance_adjust(100, 4, 40), 120); // 100 + 40 - 20
+        assert_eq!(variance_adjust(100, 4, 41), 80); // roll wraps: 41 % 41 = 0
+        // var=0 leaves the base untouched.
+        assert_eq!(variance_adjust(100, 0, 999), 100);
+        // A non-positive base is returned unchanged (an immune hit stays 0).
+        assert_eq!(variance_adjust(0, 4, 999), 0);
+        // A tiny base still gets a floor-1 window: adj = max(1, 4/10 = 0) = 1.
+        assert_eq!(variance_adjust(1, 4, 0), 1); // 1 + 0 - 0
+        assert_eq!(variance_adjust(1, 4, 1), 2); // 1 + 1 - 0
     }
 
     #[test]
@@ -788,6 +894,38 @@ mod tests {
         let mut s = vec![(4, 0)];
         assert!(release_on_damage(&mut s, &defs, || 100).is_empty());
         assert_eq!(s, vec![(4, 0)]);
+    }
+
+    fn state_hp(id: u32, hp_change_type: u32, hp_change_max: u32, hp_change_val: u32) -> StateDef {
+        StateDef {
+            id,
+            name: format!("S{id}"),
+            restriction: 0,
+            priority: 0,
+            hold_turn: 0,
+            auto_release_prob: 0,
+            release_by_damage: 0,
+            hp_change_type,
+            hp_change_max,
+            hp_change_val,
+            hp_change_map_steps: 0,
+            hp_change_map_val: 0,
+        }
+    }
+
+    #[test]
+    fn state_hp_delta_signs_by_type_and_floors_a_configured_change_at_one() {
+        // Poison (type 0): 5% of a 100-max battler plus 1 flat drains 6.
+        assert_eq!(state_hp_delta(&state_hp(2, 0, 5, 1), 100), -6);
+        // The same amounts as a type-1 regen gain 6.
+        assert_eq!(state_hp_delta(&state_hp(2, 1, 5, 1), 100), 6);
+        // Type 2 does nothing, whatever the amounts.
+        assert_eq!(state_hp_delta(&state_hp(2, 2, 5, 1), 100), 0);
+        // An unconfigured state never moves HP, even at the default type 0 — so a
+        // plain restriction state (confusion, KO) does not bleed.
+        assert_eq!(state_hp_delta(&state_hp(2, 0, 0, 0), 100), 0);
+        // A configured drain that rounds to zero still bleeds the RM2000 minimum 1.
+        assert_eq!(state_hp_delta(&state_hp(2, 0, 1, 0), 50), -1); // 50 * 1 / 100 = 0 -> 1
     }
 
     fn action(

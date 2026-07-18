@@ -25,7 +25,13 @@ impl Battle {
         };
         self.queue_at += 1;
         if self.source_alive(action.source) {
-            self.apply(action);
+            // RM2000 applies an HP-changing state (poison drain, regen) at the
+            // start of the battler's turn, before it acts; a drain that fells the
+            // battler cancels its action through the HP-based death path.
+            self.tick_state_hp(action.source);
+            if self.source_alive(action.source) {
+                self.apply(action);
+            }
         }
         true
     }
@@ -34,6 +40,55 @@ impl Battle {
         match source {
             Source::Party(i) => self.members.get(i).is_some_and(|f| f.alive()),
             Source::Enemy(i) => self.enemies.get(i).is_some_and(|e| e.alive()),
+        }
+    }
+
+    /// Apply every active HP-changing state to `source` at the start of its turn
+    /// (RM2000 timing, before it acts): a type-0 state drains and a type-1 state
+    /// regenerates [`logic::state_hp_delta`]'s per-turn amount, a type-2 (and any
+    /// unconfigured) state does nothing. A drain floors HP at 0 — from there the
+    /// battler is defeated by the existing HP-based death path — and a regen caps
+    /// at max HP. Each change is logged in the state-line style. Map/field HP
+    /// change (`hp_change_map_*`) is deliberately skipped: it needs persistent
+    /// overworld states, which battle state does not carry.
+    fn tick_state_hp(&mut self, source: Source) {
+        let (active, max_hp): (Vec<u32>, i32) = match source {
+            Source::Party(i) => (
+                self.members[i].states.iter().map(|&(id, _)| id).collect(),
+                self.members[i].max_hp,
+            ),
+            Source::Enemy(i) => (
+                self.enemies[i].states.iter().map(|&(id, _)| id).collect(),
+                self.enemies[i].max_hp,
+            ),
+        };
+        let mut changes: Vec<(i32, String)> = Vec::new();
+        for sid in active {
+            if let Some(def) = self.states.iter().find(|d| d.id == sid) {
+                let delta = logic::state_hp_delta(def, max_hp);
+                if delta != 0 {
+                    changes.push((delta, def.name.clone()));
+                }
+            }
+        }
+        for (delta, state_name) in changes {
+            let name = match source {
+                Source::Party(i) => {
+                    let f = &mut self.members[i];
+                    f.hp = (f.hp + delta).clamp(0, max_hp);
+                    f.name.clone()
+                }
+                Source::Enemy(i) => {
+                    let e = &mut self.enemies[i];
+                    e.hp = (e.hp + delta).clamp(0, max_hp);
+                    e.name.clone()
+                }
+            };
+            self.log.push(if delta < 0 {
+                format!("{name}: {state_name} -{}", -delta)
+            } else {
+                format!("{name}: {state_name} +{delta}")
+            });
         }
     }
 
@@ -48,7 +103,7 @@ impl Battle {
                         self.members[pi].stats.attack,
                         self.members[ti].stats.defense,
                     );
-                    let dmg = self.hit_member(ti, base);
+                    let dmg = self.hit_member(ti, base, 4);
                     format!(
                         "{} zavartan lesújt: {} -{}",
                         self.members[pi].name, self.members[ti].name, dmg
@@ -96,7 +151,7 @@ impl Battle {
                         self.enemies[ei].stats.attack,
                         self.enemies[ti].stats.defense,
                     );
-                    let dmg = self.hit_enemy(ti, base);
+                    let dmg = self.hit_enemy(ti, base, 4);
                     format!(
                         "{} zavartan lesújt: {} -{}",
                         self.enemies[ei].name, self.enemies[ti].name, dmg
@@ -105,11 +160,12 @@ impl Battle {
                     let Some(ti) = self.retarget_member(target) else {
                         return;
                     };
-                    let dmg = self.enemy_strike_member(ei, ti);
-                    format!(
-                        "{} támad: {} -{}",
-                        self.enemies[ei].name, self.members[ti].name, dmg
-                    )
+                    let enemy = self.enemies[ei].name.clone();
+                    let member = self.members[ti].name.clone();
+                    match self.enemy_strike_member(ei, ti) {
+                        Some(dmg) => format!("{enemy} támad: {member} -{dmg}"),
+                        None => format!("{enemy} támad: {member} elkerülte"),
+                    }
                 }
             }
             (Source::Enemy(ei), Command::Skill { skill_id, target }) => {
@@ -124,10 +180,11 @@ impl Battle {
                 };
                 let d1 = self.enemy_strike_member(ei, ti);
                 let d2 = self.enemy_strike_member(ei, ti);
-                format!(
-                    "{} kétszer támad: {} -{d1}, -{d2}",
-                    self.enemies[ei].name, self.members[ti].name
-                )
+                let enemy = self.enemies[ei].name.clone();
+                let member = self.members[ti].name.clone();
+                let show =
+                    |d: Option<i32>| d.map_or_else(|| "elkerülte".to_string(), |v| format!("-{v}"));
+                format!("{enemy} kétszer támad: {member} {}, {}", show(d1), show(d2))
             }
             (Source::Enemy(ei), Command::Defend) => {
                 self.enemies[ei].defending = true;
@@ -137,7 +194,7 @@ impl Battle {
                 let damage = self.enemies[ei].stats.attack as i32;
                 let name = self.enemies[ei].name.clone();
                 for ti in self.living_members() {
-                    self.hit_member(ti, damage);
+                    self.hit_member(ti, damage, 4);
                 }
                 self.enemies[ei].hp = 0;
                 format!("{name} felrobban!")
@@ -158,16 +215,21 @@ impl Battle {
         self.log.push(line);
     }
 
-    /// Resolve a party member's weapon strike on enemy `ti`: a to-hit roll (bare
-    /// hands default 90%), then on a hit the weapon's element against the foe's
-    /// resistance ranks, a critical that triples, and finally ±10% variance.
+    /// Resolve a party member's weapon strike on enemy `ti`, in RM2000 order: an
+    /// agility-adjusted to-hit roll (bare hands default 90%), then on a hit the
+    /// weapon's element against the foe's resistance ranks, a critical that
+    /// triples, the `var=4` variance, and finally the defending-foe halving.
     fn strike_enemy(&mut self, pi: usize, ti: usize) -> Strike {
         let base = logic::physical_damage(
             self.members[pi].stats.attack,
             self.enemies[ti].stats.defense,
         );
-        let hit_rate = logic::effective_hit(self.members[pi].weapon_hit);
-        if (rng_next(&mut self.rng) % 100) as u32 >= hit_rate {
+        let hit = logic::to_hit(
+            logic::effective_hit(self.members[pi].weapon_hit),
+            self.members[pi].stats.agility,
+            self.enemies[ti].stats.agility,
+        );
+        if (rng_next(&mut self.rng) % 100) as i32 >= hit {
             return Strike::Miss;
         }
         let element = self.members[pi].weapon_element.unwrap_or(0);
@@ -183,10 +245,11 @@ impl Battle {
         } else {
             base
         };
-        let roll = (rng_next(&mut self.rng) % 21) as u32;
-        let mut dmg = logic::with_variance(base, roll).max(0);
+        let roll = rng_next(&mut self.rng);
+        let mut dmg = logic::variance_adjust(base, 4, roll).max(0);
         // A defending foe halves the final result (min 1 on a landed hit),
-        // matching the member Defend, applied after element/crit/variance.
+        // matching the member Defend and EasyRPG `AdjustDamageForDefend`, applied
+        // after element/crit/variance.
         if self.enemies[ti].defending && dmg > 0 {
             dmg = logic::defended(dmg).max(1);
         }
@@ -195,9 +258,12 @@ impl Battle {
         Strike::Hit { dmg, crit }
     }
 
-    fn hit_enemy(&mut self, ti: usize, base: i32) -> i32 {
-        let roll = (rng_next(&mut self.rng) % 21) as u32;
-        let mut dmg = logic::with_variance(base, roll).max(0);
+    /// Apply `base` damage to enemy `ti` with `var` variance (4 for a physical
+    /// blow, the skill's variance for a cast), one draw per hit, then the
+    /// defending-foe halving (min 1). Returns the damage dealt.
+    fn hit_enemy(&mut self, ti: usize, base: i32, var: i32) -> i32 {
+        let roll = rng_next(&mut self.rng);
+        let mut dmg = logic::variance_adjust(base, var, roll).max(0);
         if self.enemies[ti].defending && dmg > 0 {
             dmg = logic::defended(dmg).max(1);
         }
@@ -206,9 +272,12 @@ impl Battle {
         dmg
     }
 
-    fn hit_member(&mut self, ti: usize, base: i32) -> i32 {
-        let roll = (rng_next(&mut self.rng) % 21) as u32;
-        let mut dmg = logic::with_variance(base, roll).max(0);
+    /// Apply `base` damage to member `ti` with `var` variance (4 for a physical
+    /// blow, the skill's variance for a cast), one draw per hit, then the member's
+    /// own defend halving. Returns the damage dealt.
+    fn hit_member(&mut self, ti: usize, base: i32, var: i32) -> i32 {
+        let roll = rng_next(&mut self.rng);
+        let mut dmg = logic::variance_adjust(base, var, roll).max(0);
         if self.members[ti].defending {
             dmg = logic::defended(dmg);
         }
@@ -217,20 +286,30 @@ impl Battle {
         dmg
     }
 
-    /// One enemy `ei` physical strike on member `ti`, reusing `hit_member` (its
-    /// ±10% variance and the member's own defend halving). A pending charge-up
-    /// doubles the blow and is consumed here, so the foe's *next* strike — this
-    /// one — lands double and later strikes are normal again.
-    fn enemy_strike_member(&mut self, ei: usize, ti: usize) -> i32 {
+    /// One enemy `ei` physical strike on member `ti`: an agility-adjusted to-hit
+    /// roll off the RM2000 90% bare-hands base that returns `None` on a miss, else
+    /// the dealt damage via `hit_member` (its variance and the member's own defend
+    /// halving). A pending charge-up doubles the blow; it is spent on the swing
+    /// whether or not the blow lands, so the foe's next strike is normal again.
+    fn enemy_strike_member(&mut self, ei: usize, ti: usize) -> Option<i32> {
+        let charged = self.enemies[ei].charging;
+        self.enemies[ei].charging = false;
+        let hit = logic::to_hit(
+            logic::effective_hit(0),
+            self.enemies[ei].stats.agility,
+            self.members[ti].stats.agility,
+        );
+        if (rng_next(&mut self.rng) % 100) as i32 >= hit {
+            return None;
+        }
         let mut base = logic::physical_damage(
             self.enemies[ei].stats.attack,
             self.members[ti].stats.defense,
         );
-        if self.enemies[ei].charging {
+        if charged {
             base *= 2;
-            self.enemies[ei].charging = false;
         }
-        self.hit_member(ti, base)
+        Some(self.hit_member(ti, base, 4))
     }
 
     /// Resolve member `pi`'s cast of skill `skill_id` at `target`: deduct SP, then
@@ -281,10 +360,11 @@ impl Battle {
     fn skill_hit_enemy(&mut self, pi: usize, ti: usize, skill: &SkillDef) -> Vec<String> {
         let caster = self.members[pi].name.clone();
         let target = self.enemies[ti].name.clone();
-        let base = logic::skill_damage(
-            skill.power,
-            self.members[pi].stats.spirit,
-            self.enemies[ti].stats.spirit,
+        let base = logic::skill_effect(
+            skill,
+            &self.members[pi].stats,
+            &self.enemies[ti].stats,
+            true,
         );
         let element = skill.attributes.first().copied().unwrap_or(0);
         let base = logic::elemental_damage(
@@ -297,7 +377,7 @@ impl Battle {
         let dealt = if skill.affect_sp {
             0
         } else {
-            self.hit_enemy(ti, base)
+            self.hit_enemy(ti, base, skill.variance as i32)
         };
         if skill.absorb && dealt > 0 {
             let f = &mut self.members[pi];
@@ -324,13 +404,14 @@ impl Battle {
     fn skill_heal_ally(&mut self, pi: usize, ti: usize, skill: &SkillDef) -> Vec<String> {
         let caster = self.members[pi].name.clone();
         let target = self.members[ti].name.clone();
-        let base = logic::skill_damage(
-            skill.power,
-            self.members[pi].stats.spirit,
-            self.members[ti].stats.spirit,
+        let base = logic::skill_effect(
+            skill,
+            &self.members[pi].stats,
+            &self.members[ti].stats,
+            false,
         );
-        let roll = (rng_next(&mut self.rng) % 21) as u32;
-        let amt = logic::with_variance(base, roll).max(0);
+        let roll = rng_next(&mut self.rng);
+        let amt = logic::variance_adjust(base, skill.variance as i32, roll).max(0);
         let f = &mut self.members[ti];
         if skill.affect_sp {
             f.sp = (f.sp + amt).min(f.max_sp);
@@ -463,18 +544,27 @@ impl Battle {
     /// it defends, like a physical hit). `None` for an unknown skill id.
     fn enemy_cast(&mut self, ei: usize, skill_id: u32, target: usize) -> Option<String> {
         let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
-        let spirit = self.enemies[ei].stats.spirit;
         let name = self.enemies[ei].name.clone();
         if matches!(skill.scope, 2..=4) {
-            let base = logic::skill_damage(skill.power, spirit, 0);
-            let roll = (rng_next(&mut self.rng) % 21) as u32;
-            let amt = logic::with_variance(base, roll).max(0);
+            let base = logic::skill_effect(
+                &skill,
+                &self.enemies[ei].stats,
+                &self.enemies[ei].stats,
+                false,
+            );
+            let roll = rng_next(&mut self.rng);
+            let amt = logic::variance_adjust(base, skill.variance as i32, roll).max(0);
             let e = &mut self.enemies[ei];
             e.hp = (e.hp + amt).min(e.max_hp);
             return Some(format!("{name} varázsol: {name} +{amt}"));
         }
         let ti = self.retarget_member(target)?;
-        let base = logic::skill_damage(skill.power, spirit, self.members[ti].stats.spirit);
+        let base = logic::skill_effect(
+            &skill,
+            &self.enemies[ei].stats,
+            &self.members[ti].stats,
+            true,
+        );
         // Members carry no A–E element ranks, so an enemy skill's element bites
         // only through the target's equipment: one guarded element halves it
         // (min 1). Only skills that actually carry an attribute can be resisted.
@@ -484,7 +574,7 @@ impl Battle {
                 .iter()
                 .any(|a| self.members[ti].resist_attributes.contains(a));
         let base = if resisted { (base / 2).max(1) } else { base };
-        let dmg = self.hit_member(ti, base);
+        let dmg = self.hit_member(ti, base, skill.variance as i32);
         Some(format!("{name} varázsol: {} -{dmg}", self.members[ti].name))
     }
 
@@ -579,11 +669,9 @@ impl Battle {
 
     /// Wear off timed states at the top of a round: for every combatant advance
     /// each active state's held-turn count and roll its auto-release once past its
-    /// hold turns (the death state is exempt), logging whatever lifts.
-    ///
-    // TODO: per-turn HP effects (e.g. poison drain) are not applied — `StateDef`
-    // carries no HP-change fields in the converted data yet, so there is nothing
-    // to drain from here. Revisit once those fields are parsed.
+    /// hold turns (the death state is exempt), logging whatever lifts. Per-turn HP
+    /// change (poison drain, regen) is applied separately, at the start of each
+    /// battler's turn, by [`Battle::tick_state_hp`].
     pub(super) fn run_recovery(&mut self) {
         let Battle {
             members,
@@ -784,6 +872,77 @@ mod tests {
         }
     }
 
+    fn hp_change_state(
+        id: u32,
+        hp_change_type: u32,
+        hp_change_max: u32,
+        hp_change_val: u32,
+    ) -> amnezia_data::StateDef {
+        amnezia_data::StateDef {
+            id,
+            name: "Méreg".into(),
+            restriction: 0,
+            priority: 50,
+            hold_turn: 99,
+            auto_release_prob: 0,
+            release_by_damage: 0,
+            hp_change_type,
+            hp_change_max,
+            hp_change_val,
+            hp_change_map_steps: 0,
+            hp_change_map_val: 0,
+        }
+    }
+
+    #[test]
+    fn poison_drains_a_fighter_and_a_foe_by_val_plus_max_percent_at_turn_start() {
+        let mut battle = build_1v2();
+        // Méreg (state 2): type 0 lose, 5% of max HP + 1 flat, each turn.
+        battle.states = vec![hp_change_state(2, 0, 5, 1)];
+        battle.members[0].states = vec![(2, 0)];
+        battle.enemies[0].states = vec![(2, 0)];
+        let (m_max, f_max) = (battle.members[0].max_hp, battle.enemies[0].max_hp);
+        let (m_before, f_before) = (battle.members[0].hp, battle.enemies[0].hp);
+        battle.tick_state_hp(Source::Party(0));
+        battle.tick_state_hp(Source::Enemy(0));
+        assert_eq!(m_before - battle.members[0].hp, 1 + m_max * 5 / 100);
+        assert_eq!(f_before - battle.enemies[0].hp, 1 + f_max * 5 / 100);
+        assert!(battle.log.iter().any(|l| l.contains("Méreg -")));
+    }
+
+    #[test]
+    fn a_type_2_hp_change_state_drains_nothing() {
+        let mut battle = build_1v2();
+        // Type 2 = nothing, even with a large configured amount.
+        battle.states = vec![hp_change_state(2, 2, 50, 10)];
+        battle.members[0].states = vec![(2, 0)];
+        let before = battle.members[0].hp;
+        battle.tick_state_hp(Source::Party(0));
+        assert_eq!(battle.members[0].hp, before);
+    }
+
+    #[test]
+    fn poison_can_reduce_a_battler_to_zero_and_kill_it() {
+        let mut battle = build_1v2();
+        // A 100%-of-max drain empties the fighter's HP outright.
+        battle.states = vec![hp_change_state(2, 0, 100, 0)];
+        battle.members[0].states = vec![(2, 0)];
+        battle.tick_state_hp(Source::Party(0));
+        assert_eq!(battle.members[0].hp, 0);
+        assert!(!battle.members[0].alive());
+    }
+
+    #[test]
+    fn a_type_1_hp_change_state_regenerates_capped_at_max() {
+        let mut battle = build_1v2();
+        battle.states = vec![hp_change_state(2, 1, 10, 5)]; // gain 5 + 10% of max
+        let max = battle.members[0].max_hp;
+        battle.members[0].hp = 10;
+        battle.members[0].states = vec![(2, 0)];
+        battle.tick_state_hp(Source::Party(0));
+        assert_eq!(battle.members[0].hp, (10 + 5 + max * 10 / 100).min(max));
+    }
+
     #[test]
     fn a_party_attack_wounds_its_target_and_logs() {
         let mut battle = build_1v2();
@@ -810,21 +969,27 @@ mod tests {
             panic!("a forced-hit strike missed");
         };
         assert!(crit);
-        // ±10% variance around the tripled base leaves it in this band, and it
-        // clearly beats a plain blow either way.
+        // var=4 spreads the tripled base by up to ±20%; the crit clearly beats a
+        // plain blow either way.
         let tripled = base * 3;
-        assert!(dmg >= tripled - tripled / 10 && dmg <= tripled + tripled / 10);
+        assert!(dmg >= tripled - tripled * 2 / 10 && dmg <= tripled + tripled * 2 / 10 + 1);
         assert!(dmg > base);
     }
 
     #[test]
     fn a_missed_strike_deals_no_damage() {
         let mut battle = build_1v2();
-        battle.members[0].weapon_hit = 90; // bare-hands default: misses 10% of rolls
-        // Wind the rng to a state whose next to-hit roll falls in the miss band.
+        battle.members[0].weapon_hit = 90; // bare-hands default
+        // The effective chance is the base hit adjusted by the agility gap; wind
+        // the rng to a state whose next to-hit roll falls in that miss band.
+        let hit = logic::to_hit(
+            logic::effective_hit(battle.members[0].weapon_hit),
+            battle.members[0].stats.agility,
+            battle.enemies[0].stats.agility,
+        );
         loop {
             let mut probe = battle.rng;
-            if rng_next(&mut probe) % 100 >= 90 {
+            if (rng_next(&mut probe) % 100) as i32 >= hit {
                 break;
             }
             rng_next(&mut battle.rng);
@@ -897,8 +1062,10 @@ mod tests {
         let mut battle = build_1v2();
         battle.members[0].defending = true;
         let full = battle.members[0].hp;
-        battle.hit_member(0, 8); // base 8, halved by defence to ~4
-        assert!(full - battle.members[0].hp <= 4);
+        // base 8 with var=4 spreads to [7,10], halved by defence to [3,5].
+        battle.hit_member(0, 8, 4);
+        let taken = full - battle.members[0].hp;
+        assert!((3..=5).contains(&taken));
     }
 
     #[test]
@@ -916,10 +1083,11 @@ mod tests {
         battle.attributes = vec![fire_attr()]; // element id 5
         battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 0]; // attr 5 -> rank A (weak)
         battle.skills = vec![damage_skill(1, 50, vec![5], vec![])];
-        let plain = logic::skill_damage(
-            50,
-            battle.members[0].stats.spirit,
-            battle.enemies[0].stats.spirit,
+        let plain = logic::skill_effect(
+            &battle.skills[0],
+            &battle.members[0].stats,
+            &battle.enemies[0].stats,
+            true,
         );
         let before = battle.enemies[0].hp;
         battle.commit(Command::Skill {
@@ -1014,7 +1182,7 @@ mod tests {
         // id 1 is the death state (exempt); id 2 shakes off on any hit.
         battle.states = vec![poison_state(1), damage_release_state(2)];
         battle.members[0].states = vec![(1, 0), (2, 0)];
-        battle.hit_member(0, 8);
+        battle.hit_member(0, 8, 4);
         assert!(logic::has_state(&battle.members[0].states, 1)); // KO exempt
         assert!(!logic::has_state(&battle.members[0].states, 2)); // lifted by the blow
     }
@@ -1179,10 +1347,28 @@ mod tests {
         assert!(battle.log.iter().any(|l| l.contains("védekezik")));
     }
 
+    /// Advance `battle.rng` until the enemy to-hit rolls at the given draw
+    /// `offsets` all land (roll % 100 < 50, comfortably under the agility-adjusted
+    /// enemy hit here), so a strike-count comparison is not spoiled by a miss.
+    fn wind_enemy_hits(battle: &mut Battle, offsets: &[usize]) {
+        let span = offsets.iter().copied().max().map_or(0, |m| m + 1);
+        loop {
+            let mut probe = battle.rng;
+            let draws: Vec<u64> = (0..span).map(|_| rng_next(&mut probe)).collect();
+            if offsets.iter().all(|&o| draws[o] % 100 < 50) {
+                return;
+            }
+            rng_next(&mut battle.rng);
+        }
+    }
+
     #[test]
     fn a_double_attack_strikes_the_target_twice() {
         let mut battle = build_1v2();
         let hp0 = battle.members[0].hp;
+        // Land both to-hit rolls (draw 0 for the single blow, draws 0 and 2 for
+        // the double) so the comparison reflects strike count, not a chance miss.
+        wind_enemy_hits(&mut battle, &[0, 2]);
         let rng_save = battle.rng;
         // Baseline: a single enemy strike from this RNG state.
         battle.apply(Action {
@@ -1246,6 +1432,7 @@ mod tests {
     fn a_charged_foe_doubles_its_next_strike_then_clears() {
         let mut battle = build_1v2();
         let hp0 = battle.members[0].hp;
+        wind_enemy_hits(&mut battle, &[0]); // land the single to-hit roll
         let rng_save = battle.rng;
         battle.apply(Action {
             source: Source::Enemy(0),
@@ -1296,25 +1483,21 @@ mod tests {
             5,
         );
         assert!(battle.members[0].resist_attributes.contains(&5));
-        // Wind to a no-spread variance roll so the halving is exact and the two
-        // casts compare cleanly.
-        loop {
-            let mut probe = battle.rng;
-            if rng_next(&mut probe) % 21 == 10 {
-                break;
-            }
-            rng_next(&mut battle.rng);
-        }
-        let rng_save = battle.rng;
+        // With the skill's variance set to 0 the halving is exact: the guarded
+        // cast deals base/2 and the unguarded cast deals the full base, so the two
+        // compare cleanly without depending on the variance draw.
         let before = battle.members[0].hp;
-        // A guarded (attribute 5) enemy skill is halved.
-        battle.skills = vec![damage_skill(1, 40, vec![5], vec![])];
+        // A guarded (attribute 5) enemy skill is halved (before variance).
+        let mut guarded = damage_skill(1, 40, vec![5], vec![]);
+        guarded.variance = 0;
+        battle.skills = vec![guarded];
         battle.enemy_cast(0, 1, 0);
         let resisted = before - battle.members[0].hp;
-        // The same skill on an unguarded element (6) lands full, same RNG.
-        battle.rng = rng_save;
+        // The same skill on an unguarded element (6) lands full.
         battle.members[0].hp = before;
-        battle.skills = vec![damage_skill(1, 40, vec![6], vec![])];
+        let mut unguarded = damage_skill(1, 40, vec![6], vec![]);
+        unguarded.variance = 0;
+        battle.skills = vec![unguarded];
         battle.enemy_cast(0, 1, 0);
         let full = before - battle.members[0].hp;
         assert!(resisted < full);
