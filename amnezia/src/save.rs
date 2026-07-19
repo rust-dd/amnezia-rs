@@ -24,8 +24,9 @@ const SAVE_DIR: &str = "saves";
 const SAVE_PATH: &str = "saves/slot1.ron";
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
-/// frame exactly as if `F9` had been pressed. The title screen's "Folytatás" sets
-/// it so a resume reuses the same restore path without duplicating the load body.
+/// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
+/// (Continue) sets it so a resume reuses the same restore path without duplicating
+/// the load body.
 #[derive(Resource, Default)]
 pub struct LoadRequest(pub bool);
 

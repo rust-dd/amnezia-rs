@@ -1,16 +1,21 @@
 //! The title screen: the opaque overlay shown the instant the game opens, so the
-//! player picks "Új játék" (New Game) or "Folytatás" (Continue) before the intro
-//! ever runs. The whole world spawns behind it at startup but stays frozen —
-//! [`TitleActive`] folds into the same pause set as the menu, shop, and battle —
-//! until a choice dismisses it. New Game fades the title to black and then
-//! unfreezes so the intro autorun fires; Continue asks [`crate::save`] to restore
-//! the slot, then unfreezes onto the saved map. Continue is disabled (greyed,
-//! no-op) when no save slot exists.
+//! player picks a command before the intro ever runs. The menu mirrors RM2000's
+//! `Scene_Title` — three rows, "Új játék" (New Game) / "Betöltés" (Continue) /
+//! "Kilépés" (Shutdown), the game's own terms. The whole world spawns behind the
+//! overlay at startup but stays frozen — [`TitleActive`] folds into the same pause
+//! set as the menu, shop, and battle — until a choice dismisses it. New Game fades
+//! the title BGM and the screen to black together, then unfreezes so the intro
+//! autorun fires; Continue asks [`crate::save`] to restore the slot and holds the
+//! overlay up until the loaded map is swapped in, so the frozen intro map never
+//! flashes; Shutdown exits the app. The cursor opens on Continue when a save slot
+//! exists (else New Game), and Continue is disabled (greyed, buzzer) with no save.
 
 use crate::assets::resolve_png;
 use crate::audio::{AudioRequest, SystemMusic, SystemSounds, play_system_se};
 use crate::font::GameFont;
 use crate::save::{LoadRequest, save_slot_exists};
+use crate::teleport::{Fade, PendingTeleport};
+use crate::world::MapChanged;
 use amnezia_data::SoundDef;
 use bevy::prelude::*;
 use bevy::text::FontSource;
@@ -28,9 +33,10 @@ impl Default for TitleActive {
 }
 
 /// The title's row cursor and the two dismissal handshakes. While `continuing`,
-/// the overlay stays up (and the world frozen) until [`crate::save`] applies the
-/// restore; while `starting`, it fades to black over a New Game before releasing
-/// the world. Both hold the overlay so nothing behind it runs early.
+/// the overlay stays up (and the world frozen) until [`crate::save`]'s restore has
+/// swapped the saved map in; while `starting`, it fades to black over a New Game
+/// before releasing the world. Both hold the overlay so nothing behind it runs
+/// early. Reset to the opening state on every (re-)entry by [`on_title_entered`].
 #[derive(Resource, Default)]
 struct TitleState {
     cursor: usize,
@@ -39,14 +45,24 @@ struct TitleState {
     start_alpha: f32,
 }
 
-/// The two menu rows, in cursor order.
-const ROWS: [&str; 2] = ["Új játék", "Folytatás"];
-/// Cursor index of the "Folytatás" (Continue) row.
+/// The three menu rows, in cursor order, using the game's own RM2000 vocabulary
+/// (verified against the original `Terms`): New Game / Continue (Load) / Shutdown.
+const ROWS: [&str; 3] = ["Új játék", "Betöltés", "Kilépés"];
+/// Cursor index of the "Új játék" (New Game) row.
+const NEW_GAME: usize = 0;
+/// Cursor index of the "Betöltés" (Continue) row.
 const CONTINUE: usize = 1;
+/// Cursor index of the "Kilépés" (Shutdown) row.
+const SHUTDOWN: usize = 2;
 
 /// Alpha per second for the New Game fade-out, matching the teleport fade's
 /// cadence so the whole intro transition reads as one motion.
 const FADE_SPEED: f32 = 4.0;
+
+/// Seconds the New Game transition lasts: the black cover ramps 0→1 at
+/// [`FADE_SPEED`], and the title BGM fades out over the same span so the picture
+/// and the music darken as one motion into the (black) intro map.
+const START_FADE_SECS: f32 = 1.0 / FADE_SPEED;
 
 /// White for a selectable row, grey for a disabled one (Continue with no save).
 const ENABLED: Color = Color::WHITE;
@@ -63,6 +79,37 @@ struct TitleRow(usize);
 #[derive(Component)]
 struct TitleFadeCover;
 
+/// What confirming the current row does, resolved as a pure mapping from the
+/// cursor and whether a save exists so the command wiring stays unit-testable.
+#[derive(Debug, PartialEq, Eq)]
+enum TitleAction {
+    /// Start a fresh game: fade the title and its BGM out, then run the intro.
+    NewGame,
+    /// Load the save slot and resume on the saved map.
+    Continue,
+    /// Continue chosen with no save slot: a disabled buzz that stays on the title.
+    ContinueDisabled,
+    /// Quit the application (RM2000 `CommandShutdown`).
+    Shutdown,
+}
+
+/// Map the confirmed `cursor` row to its [`TitleAction`], greying Continue into a
+/// buzzer when `has_save` is false — RM2000's `continue_enabled` gate.
+fn action_for(cursor: usize, has_save: bool) -> TitleAction {
+    match cursor {
+        CONTINUE if has_save => TitleAction::Continue,
+        CONTINUE => TitleAction::ContinueDisabled,
+        SHUTDOWN => TitleAction::Shutdown,
+        _ => TitleAction::NewGame,
+    }
+}
+
+/// Where the cursor opens: Continue when a save slot exists, else New Game —
+/// RM2000 `Scene_Title::Refresh` (`command_window->SetIndex(1)` with a save).
+fn default_cursor(has_save: bool) -> usize {
+    if has_save { CONTINUE } else { NEW_GAME }
+}
+
 pub struct TitlePlugin;
 
 impl Plugin for TitlePlugin {
@@ -72,15 +119,25 @@ impl Plugin for TitlePlugin {
             .add_systems(Startup, spawn_ui)
             .add_systems(
                 Update,
-                (title_input, drive_start_fade, drive_title_music, update_ui),
+                (
+                    on_title_entered,
+                    drive_continue,
+                    title_input,
+                    drive_start_fade,
+                    update_ui,
+                )
+                    .chain(),
             );
     }
 }
 
 /// Spawn the fullscreen title overlay above every other layer (fade is 1000, the
-/// menu 100): the `Title` background image with the two menu rows near the bottom.
+/// menu 100): the `Title` background image with the three menu rows near the
+/// bottom, the cursor already on its opening row.
 fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<AssetServer>) {
     let background: Handle<Image> = asset_server.load(resolve_png("Title", "Title"));
+    let has_save = save_slot_exists();
+    let cursor = default_cursor(has_save);
     commands
         .spawn((
             fill_node(),
@@ -109,14 +166,15 @@ fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<Asset
             })
             .with_children(|menu| {
                 for (i, label) in ROWS.iter().enumerate() {
+                    let enabled = i != CONTINUE || has_save;
                     menu.spawn((
-                        Text::new(row_text(label, i == 0)),
+                        Text::new(row_text(label, i == cursor)),
                         TextFont {
                             font: FontSource::Handle(font.0.clone()),
                             font_size: FontSize::Px(20.0),
                             ..default()
                         },
-                        TextColor(ENABLED),
+                        TextColor(if enabled { ENABLED } else { DISABLED }),
                         TitleRow(i),
                     ));
                 }
@@ -142,25 +200,21 @@ fn fill_node() -> Node {
 }
 
 /// Drive the title while it owns the screen: move the cursor with up/down and
-/// confirm with Enter/Space. New Game begins the fade-out (`starting`); Continue
-/// (only with a save) asks [`crate::save`] to restore, holding the overlay up via
-/// `continuing` until the request clears so the restore lands first.
+/// confirm with Enter/Space, dispatching the confirmed row through [`action_for`].
+/// New Game begins the fade-out (`starting`); Continue (only with a save) asks
+/// [`crate::save`] to restore and raises `continuing` so [`drive_continue`] holds
+/// the overlay until the saved map lands; Shutdown quits the app. Input is skipped
+/// while a New Game fade or a Continue restore is already resolving.
 fn title_input(
     keys: Res<ButtonInput<KeyCode>>,
-    mut title: ResMut<TitleActive>,
+    title: Res<TitleActive>,
     mut state: ResMut<TitleState>,
     mut load_request: ResMut<LoadRequest>,
     mut audio: MessageWriter<AudioRequest>,
+    mut exit: MessageWriter<AppExit>,
     sounds: Option<Res<SystemSounds>>,
 ) {
-    if state.continuing {
-        if !load_request.0 {
-            state.continuing = false;
-            title.0 = false;
-        }
-        return;
-    }
-    if state.starting || !title.0 {
+    if !title.0 || state.starting || state.continuing {
         return;
     }
     let sounds = sounds.as_deref();
@@ -173,21 +227,29 @@ fn title_input(
         play_se(&mut audio, sounds, |s| &s.cursor);
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
-        match state.cursor {
-            CONTINUE if save_slot_exists() => {
+        match action_for(state.cursor, save_slot_exists()) {
+            TitleAction::NewGame => {
+                play_se(&mut audio, sounds, |s| &s.decision);
+                // Fade the title theme out over the same span as the screen cover
+                // rather than cutting it, so New Game reads as a single motion.
+                audio.write(AudioRequest::FadeOutBgm {
+                    duration: START_FADE_SECS,
+                });
+                state.starting = true;
+            }
+            TitleAction::Continue => {
                 play_se(&mut audio, sounds, |s| &s.decision);
                 // Stop the title theme now, while the world is still frozen, so the
-                // restored map takes over cleanly with no same-frame stop race.
+                // restored map's own BGM takes over cleanly with no stop race.
                 audio.write(AudioRequest::StopBgm);
                 load_request.0 = true;
                 state.continuing = true;
             }
             // Continue with no save is disabled: buzz and stay on the title.
-            CONTINUE => play_se(&mut audio, sounds, |s| &s.buzzer),
-            _ => {
+            TitleAction::ContinueDisabled => play_se(&mut audio, sounds, |s| &s.buzzer),
+            TitleAction::Shutdown => {
                 play_se(&mut audio, sounds, |s| &s.decision);
-                audio.write(AudioRequest::StopBgm);
-                state.starting = true;
+                exit.write(AppExit::Success);
             }
         }
     }
@@ -205,21 +267,64 @@ fn play_se(
     }
 }
 
-/// Play the title theme whenever the title takes the screen (startup, and every
-/// return from End Game or Game Over), tracked by a one-shot transition so it is
-/// not re-issued each frame. Leaving the title stops the theme from
-/// [`title_input`] directly, so this system only ever starts it.
-fn drive_title_music(
+/// Re-open the menu on every (re-)entry to the title — startup, and each return
+/// from End Game or Game Over — the way RM2000 `Scene_Title` re-runs `Refresh` and
+/// `PlayTitleMusic`: cursor on Continue when a save exists (else New Game), the
+/// dismissal handshakes cleared, the New Game fade cover wiped so a prior fade-out
+/// never leaves the title black, and the title theme (re)started. Tracked by a
+/// one-shot transition so it fires once per entry, not every frame.
+fn on_title_entered(
     title: Res<TitleActive>,
     music: Option<Res<SystemMusic>>,
+    mut state: ResMut<TitleState>,
     mut audio: MessageWriter<AudioRequest>,
+    mut covers: Query<&mut BackgroundColor, With<TitleFadeCover>>,
     mut was_active: Local<bool>,
 ) {
     let active = title.0;
     let just_entered = active && !*was_active;
     *was_active = active;
-    if just_entered && let Some(music) = music {
+    if !just_entered {
+        return;
+    }
+    state.cursor = default_cursor(save_slot_exists());
+    state.continuing = false;
+    state.starting = false;
+    state.start_alpha = 0.0;
+    if let Ok(mut cover) = covers.single_mut() {
+        cover.0 = Color::srgba(0.0, 0.0, 0.0, 0.0);
+    }
+    if let Some(music) = music {
         audio.write(AudioRequest::from_music(&music.title));
+    }
+}
+
+/// While a Continue is resolving, hold the overlay up until the loaded map has
+/// actually been swapped in, then drop the title. The restore reuses the teleport
+/// fade, which emits [`MapChanged`] at the black peak once the saved map is in
+/// place — the one moment it is safe to reveal what is behind the overlay (black,
+/// then the saved map fading in) instead of the frozen intro map. A slot that
+/// fails to read produces no teleport at all, so an idle fallback still releases
+/// the overlay and a corrupt save can never wedge it.
+fn drive_continue(
+    mut title: ResMut<TitleActive>,
+    mut state: ResMut<TitleState>,
+    load_request: Res<LoadRequest>,
+    fade: Res<Fade>,
+    pending: Res<PendingTeleport>,
+    mut map_changed: MessageReader<MapChanged>,
+) {
+    if !state.continuing {
+        // Stay current so the load's own MapChanged is the first one we read.
+        map_changed.clear();
+        return;
+    }
+    let swapped = !map_changed.is_empty();
+    map_changed.clear();
+    let stalled = !load_request.0 && !fade.busy() && pending.0.is_none();
+    if swapped || stalled {
+        state.continuing = false;
+        title.0 = false;
     }
 }
 
@@ -294,16 +399,63 @@ mod tests {
     }
 
     #[test]
-    fn cursor_wraps_around_both_ends() {
-        assert_eq!(wrap_cursor(0, 1, 2), 1);
-        assert_eq!(wrap_cursor(1, 1, 2), 0);
-        assert_eq!(wrap_cursor(1, -1, 2), 0);
-        assert_eq!(wrap_cursor(0, -1, 2), 1);
+    fn title_menu_has_three_commands_ending_in_shutdown() {
+        assert_eq!(ROWS.len(), 3);
+        assert_eq!(ROWS, ["Új játék", "Betöltés", "Kilépés"]);
+        assert_eq!(ROWS[SHUTDOWN], "Kilépés");
+    }
+
+    #[test]
+    fn cursor_opens_on_continue_only_when_a_save_exists() {
+        assert_eq!(default_cursor(true), CONTINUE);
+        assert_eq!(default_cursor(false), NEW_GAME);
+    }
+
+    #[test]
+    fn action_for_maps_every_row_and_disables_continue_without_a_save() {
+        assert_eq!(action_for(NEW_GAME, false), TitleAction::NewGame);
+        assert_eq!(action_for(NEW_GAME, true), TitleAction::NewGame);
+        assert_eq!(action_for(CONTINUE, true), TitleAction::Continue);
+        assert_eq!(action_for(CONTINUE, false), TitleAction::ContinueDisabled);
+        assert_eq!(action_for(SHUTDOWN, false), TitleAction::Shutdown);
+        assert_eq!(action_for(SHUTDOWN, true), TitleAction::Shutdown);
+    }
+
+    #[test]
+    fn cursor_wraps_around_all_three_rows() {
+        assert_eq!(wrap_cursor(NEW_GAME, -1, ROWS.len()), SHUTDOWN);
+        assert_eq!(wrap_cursor(SHUTDOWN, 1, ROWS.len()), NEW_GAME);
+        assert_eq!(wrap_cursor(CONTINUE, 1, ROWS.len()), SHUTDOWN);
+        assert_eq!(wrap_cursor(CONTINUE, -1, ROWS.len()), NEW_GAME);
     }
 
     #[test]
     fn row_text_marks_only_the_selected_row() {
         assert_eq!(row_text("Új játék", true), "▶ Új játék");
-        assert_eq!(row_text("Folytatás", false), "  Folytatás");
+        assert_eq!(row_text("Betöltés", false), "  Betöltés");
+    }
+
+    #[test]
+    fn selecting_shutdown_requests_app_exit() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .add_message::<AudioRequest>()
+            .add_message::<AppExit>()
+            .init_resource::<ButtonInput<KeyCode>>()
+            .insert_resource(TitleActive(true))
+            .insert_resource(TitleState {
+                cursor: SHUTDOWN,
+                ..default()
+            })
+            .init_resource::<LoadRequest>()
+            .add_systems(Update, title_input);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Enter);
+        app.update();
+        assert!(
+            app.should_exit().is_some(),
+            "confirming Kilépés must request an app exit"
+        );
     }
 }
