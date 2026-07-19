@@ -33,12 +33,13 @@ fn main() -> Result<()> {
     let start_map = amnezia_convert::convert_start(&args.input, &args.output)?;
     let hero = amnezia_convert::convert_hero(&args.input, &args.output)?;
     let (effects, music) = amnezia_convert::convert_audio(&args.input, &args.output)?;
+    amnezia_convert::convert_system(&args.input, &args.output)?;
     println!(
         "converted {images} images, {maps} maps, {chipsets} chipsets, {actors} actors, \
          {items} items, {skills} skills, {states} states, {attributes} attributes, \
          {animations} animations, {monsters} monsters, {troops} troops, \
-         {common_events} common events, {effects} sfx, {music} music; start map {start_map}; \
-         hero {hero}"
+         {common_events} common events, {effects} sfx, {music} music, system audio; \
+         start map {start_map}; hero {hero}"
     );
     Ok(())
 }

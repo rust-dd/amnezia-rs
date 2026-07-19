@@ -5,7 +5,7 @@
 
 use super::BattleOutcome;
 use super::logic::usable_skills;
-use super::model::{Battle, Command, MenuLevel, Phase};
+use super::model::{Battle, BattleSe, Command, MenuLevel, Phase};
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::state::Inventory;
@@ -217,6 +217,9 @@ fn enter(battle: &mut Battle, level: MenuLevel) {
 }
 
 fn flee(battle: &mut Battle) {
+    // The escape SE plays on the attempt (RM2000 `SFX_Escape`), drained like the
+    // per-hit effects.
+    battle.pending_se.push(BattleSe::Escape);
     if battle.attempt_flee() {
         battle.finish(BattleOutcome::Escape);
     } else {

@@ -15,6 +15,7 @@ mod items;
 mod monsters;
 mod skills;
 mod states;
+mod system;
 mod troops;
 
 pub use actors::{Actor, StatCurves, parse_actors};
@@ -25,6 +26,7 @@ pub use items::{Item, parse_items};
 pub use monsters::{EnemyAction, Monster, parse_monsters};
 pub use skills::{Skill, parse_skills};
 pub use states::{State, parse_states};
+pub use system::{Music, Sound, System, parse_system};
 pub use troops::{Troop, TroopMember, parse_troops};
 
 /// Locate one top-level LDB section (`ChunkData`) by id, returning its raw

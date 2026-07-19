@@ -16,9 +16,10 @@ mod map;
 
 pub use database::{
     Actor, Animation, AnimationCell, AnimationFrame, AnimationTiming, Attribute, Chipset,
-    CommonEvent, EnemyAction, Item, Monster, Skill, StatCurves, State, Troop, TroopMember,
-    parse_actors, parse_animations, parse_attributes, parse_chipsets, parse_common_events,
-    parse_items, parse_monsters, parse_skills, parse_states, parse_troops,
+    CommonEvent, EnemyAction, Item, Monster, Music, Skill, Sound, StatCurves, State, System, Troop,
+    TroopMember, parse_actors, parse_animations, parse_attributes, parse_chipsets,
+    parse_common_events, parse_items, parse_monsters, parse_skills, parse_states, parse_system,
+    parse_troops,
 };
 pub use map::{
     Event, EventCommand, EventCondition, EventPage, MapUnit, Start, parse_map, parse_start,
@@ -59,6 +60,8 @@ pub enum LcfError {
     MissingAnimations,
     #[error("LCF database has no common event section (chunk 0x19)")]
     MissingCommonEvents,
+    #[error("LCF database has no system section (chunk 0x16)")]
+    MissingSystem,
 }
 
 /// A cursor over an LCF byte stream, shared by every parser in the crate.

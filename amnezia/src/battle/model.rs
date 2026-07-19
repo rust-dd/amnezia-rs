@@ -248,6 +248,25 @@ pub(super) struct PendingNumber {
     pub kind: NumberKind,
 }
 
+/// A System-defined battle sound effect queued as an action resolves, drained by
+/// `battle.rs`'s `drain_pending_se` into an `AudioRequest` whose asset name comes
+/// from the loaded `SystemDef`. The resolution stays Bevy- and data-free by
+/// naming only the effect's *role* here; the drain maps it to the configured
+/// sound. Mirrors the EasyRPG `SePlay(GetSystemSE(...))` sites.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum BattleSe {
+    /// A blow landed on a foe (RM2000 `SFX_EnemyDamage`).
+    EnemyDamaged,
+    /// A blow landed on a party member (RM2000 `SFX_AllyDamage`).
+    ActorDamaged,
+    /// An attack was evaded (RM2000 `SFX_Evasion`).
+    Dodge,
+    /// A foe was felled (RM2000 `SFX_EnemyKill`).
+    EnemyDefeated,
+    /// The party attempted to flee (RM2000 `SFX_Escape`).
+    Escape,
+}
+
 /// The whole live battle, held as a Bevy resource and reset to `default()` (the
 /// `Inactive` phase) between fights.
 #[derive(Resource, Default)]
@@ -297,6 +316,11 @@ pub struct Battle {
     /// `battle::scene` into a blink on each struck sprite. Every landed blow
     /// enqueues one, independent of the played animation's own flash timings.
     pub(super) pending_blinks: Vec<(f32, f32)>,
+    /// Battle sound effects owed as the current tick's actions resolve (a hit
+    /// landed, a foe felled, an attack evaded), drained each frame by `battle.rs`
+    /// into `AudioRequest`s named from the loaded `SystemDef` and cleared by
+    /// [`Battle::new_round`] (a fresh [`Battle::build`] starts empty).
+    pub(super) pending_se: Vec<BattleSe>,
     /// Sub-steps the action currently resolving still owes, drained one per
     /// resolve tick (see [`Step`]) so a multi-target cast staggers its numbers
     /// and a critical announces on its own beat. Cleared by [`Battle::new_round`]
@@ -552,6 +576,7 @@ impl Battle {
         self.pending_anims.clear();
         self.pending_numbers.clear();
         self.pending_blinks.clear();
+        self.pending_se.clear();
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;

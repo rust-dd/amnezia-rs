@@ -24,14 +24,15 @@ mod scene;
 
 use crate::animation::{AnimAnchor, PlayAnimation};
 use crate::assets::{asset_root, load_ron};
+use crate::audio::{AudioRequest, BgmTrack, CurrentBgm};
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 use crate::vitals::Vitals;
-use amnezia_data::{ActorDef, AttributeDef, MonsterDef, StateDef, TroopDef};
+use amnezia_data::{ActorDef, AttributeDef, MonsterDef, StateDef, SystemDef, TroopDef};
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
-use model::{Battle, Phase};
+use model::{Battle, BattleSe, Phase};
 
 /// The troop the debug key spawns: troop 2 "Rablo2x", two bandits.
 const DEBUG_TROOP: u32 = 2;
@@ -87,6 +88,36 @@ struct BattleData {
     attributes: Vec<AttributeDef>,
     #[allow(dead_code)]
     states: Vec<StateDef>,
+    /// The system audio definition: the battle / victory / game-over music and the
+    /// per-hit sound effects the battle system plays.
+    system: SystemDef,
+}
+
+/// The map BGM that was playing when the fight began, remembered so it restores
+/// when the battle tears down. A battle-scoped memorize/restore (the general
+/// `MemorizeBGM` opcode is #37); `None` means the map was silent, so teardown
+/// stops the BGM rather than replaying anything.
+#[derive(Resource, Default)]
+struct MapBgm(Option<BgmTrack>);
+
+impl MapBgm {
+    /// Remember `track` (the pre-battle map BGM) so it can be restored later.
+    fn memorize(&mut self, track: Option<BgmTrack>) {
+        self.0 = track;
+    }
+
+    /// The request that restores the memorized BGM: replay the remembered track,
+    /// or stop the BGM when the map was silent.
+    fn restore(&self) -> AudioRequest {
+        match &self.0 {
+            Some(track) => AudioRequest::Bgm {
+                name: track.name.clone(),
+                volume: track.volume,
+                speed: track.speed,
+            },
+            None => AudioRequest::StopBgm,
+        }
+    }
 }
 
 pub struct BattlePlugin;
@@ -98,11 +129,13 @@ impl Plugin for BattlePlugin {
             .init_resource::<BattleResult>()
             .init_resource::<Battle>()
             .init_resource::<Vitals>()
+            .init_resource::<MapBgm>()
             .insert_resource(BattleData {
                 monsters: load_ron(&format!("{}/monsters.ron", asset_root())),
                 troops: load_ron(&format!("{}/troops.ron", asset_root())),
                 attributes: load_ron(&format!("{}/attributes.ron", asset_root())),
                 states: load_ron(&format!("{}/states.ron", asset_root())),
+                system: load_ron(&format!("{}/system.ron", asset_root())),
             })
             .add_systems(Startup, spawn_hud_camera)
             .add_systems(
@@ -117,6 +150,7 @@ impl Plugin for BattlePlugin {
                         .before(outcome_input),
                     outcome_input,
                     drain_pending_anims.after(resolve_tick),
+                    drain_pending_se.after(resolve_tick),
                 ),
             );
         scene::register(app);
@@ -158,6 +192,9 @@ fn start_on_request(
     party: Res<Party>,
     vitals: Res<Vitals>,
     progression: Res<Progression>,
+    current_bgm: Res<CurrentBgm>,
+    mut map_bgm: ResMut<MapBgm>,
+    mut audio: MessageWriter<AudioRequest>,
     mut battle: ResMut<Battle>,
     mut active: ResMut<BattleActive>,
     mut result: ResMut<BattleResult>,
@@ -195,6 +232,22 @@ fn start_on_request(
     );
     active.0 = true;
     result.0 = None;
+    // Remember the map BGM (read before the battle track replaces it this frame),
+    // sound the battle-start SE, then start the looping battle BGM.
+    let system = &battle_data.system;
+    map_bgm.memorize(current_bgm.track());
+    if let Some(se) = AudioRequest::se(
+        &system.battle_se.name,
+        system.battle_se.volume,
+        system.battle_se.tempo,
+    ) {
+        audio.write(se);
+    }
+    audio.write(AudioRequest::bgm(
+        &system.battle_music.name,
+        system.battle_music.volume,
+        system.battle_music.tempo,
+    ));
 }
 
 /// Debug-only: F6 starts a sample fight so the battle can be exercised before the
@@ -212,8 +265,15 @@ fn debug_trigger(
 }
 
 /// Step the resolution phase: apply one queued action per timer tick, then end
-/// the fight or open a fresh command round once the queue is spent.
-fn resolve_tick(time: Res<Time>, mut battle: ResMut<Battle>) {
+/// the fight or open a fresh command round once the queue is spent. On the end,
+/// the victory/game-over fanfare interrupts the battle BGM (the map BGM restores
+/// on teardown).
+fn resolve_tick(
+    time: Res<Time>,
+    battle_data: Res<BattleData>,
+    mut audio: MessageWriter<AudioRequest>,
+    mut battle: ResMut<Battle>,
+) {
     if battle.phase != Phase::Resolve {
         return;
     }
@@ -228,8 +288,54 @@ fn resolve_tick(time: Res<Time>, mut battle: ResMut<Battle>) {
     let more = battle.resolve_next();
     if let Some(outcome) = battle.end_state() {
         battle.finish(outcome);
+        play_outcome_music(&mut audio, &battle_data.system, outcome);
     } else if !more {
         battle.new_round();
+    }
+}
+
+/// Play the fanfare for a finished fight: the victory ME on a win, the game-over
+/// music on a defeat. Both are sent as the looping BGM so they interrupt the
+/// battle track under the outcome screen; the map BGM restores on teardown. A
+/// successful escape has no fanfare (only its SE, played at the flee attempt).
+fn play_outcome_music(
+    audio: &mut MessageWriter<AudioRequest>,
+    system: &SystemDef,
+    outcome: BattleOutcome,
+) {
+    let music = match outcome {
+        BattleOutcome::Victory => &system.battle_end_music,
+        BattleOutcome::Defeat => &system.gameover_music,
+        BattleOutcome::Escape => return,
+    };
+    audio.write(AudioRequest::bgm(&music.name, music.volume, music.tempo));
+}
+
+/// Drain the battle's per-hit sound-effect queue into [`AudioRequest`]s, naming
+/// each effect from the loaded [`SystemDef`] (a hit landed, a foe felled, an
+/// attack evaded, an escape attempt). Guarded on non-empty so an idle fight never
+/// marks [`Battle`] changed (which would re-run the UI every frame); an
+/// `(OFF)`/absent effect is skipped.
+fn drain_pending_se(
+    battle_data: Res<BattleData>,
+    mut audio: MessageWriter<AudioRequest>,
+    mut battle: ResMut<Battle>,
+) {
+    if battle.pending_se.is_empty() {
+        return;
+    }
+    let system = &battle_data.system;
+    for kind in battle.pending_se.drain(..) {
+        let sound = match kind {
+            BattleSe::EnemyDamaged => &system.enemy_damaged_se,
+            BattleSe::ActorDamaged => &system.actor_damaged_se,
+            BattleSe::Dodge => &system.dodge_se,
+            BattleSe::EnemyDefeated => &system.enemy_defeated_se,
+            BattleSe::Escape => &system.escape_se,
+        };
+        if let Some(req) = AudioRequest::se(&sound.name, sound.volume, sound.tempo) {
+            audio.write(req);
+        }
     }
 }
 
@@ -311,6 +417,8 @@ fn apply_victory_rewards(
 /// outcome, so it is not applied again here.
 fn outcome_input(
     keys: Res<ButtonInput<KeyCode>>,
+    map_bgm: Res<MapBgm>,
+    mut audio: MessageWriter<AudioRequest>,
     mut battle: ResMut<Battle>,
     mut active: ResMut<BattleActive>,
     mut result: ResMut<BattleResult>,
@@ -329,6 +437,8 @@ fn outcome_input(
     result.0 = Some(outcome);
     active.0 = false;
     *battle = Battle::default();
+    // Restore the map BGM that the battle (and any fanfare) replaced.
+    audio.write(map_bgm.restore());
 }
 
 /// A time-derived battle seed; the low bit is forced set by [`Battle::build`].
@@ -342,8 +452,37 @@ fn seed_now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use amnezia_data::TroopMemberDef;
+    use amnezia_data::{MusicDef, SoundDef, TroopMemberDef};
     use bevy::input::ButtonInput;
+
+    /// A System audio def with a battle track, start SE, and the per-hit effects
+    /// set, so the battle-audio systems have names to play.
+    fn test_system() -> SystemDef {
+        let music = |name: &str| MusicDef {
+            name: name.into(),
+            volume: 90,
+            tempo: 100,
+            ..default()
+        };
+        let sound = |name: &str| SoundDef {
+            name: name.into(),
+            volume: 90,
+            tempo: 100,
+            ..default()
+        };
+        SystemDef {
+            battle_music: music("Battle"),
+            battle_end_music: music("Victory"),
+            gameover_music: music("Gameover"),
+            battle_se: sound("Start"),
+            enemy_damaged_se: sound("Damage"),
+            actor_damaged_se: sound("Bite"),
+            dodge_se: sound("Evasion"),
+            enemy_defeated_se: sound("Die"),
+            escape_se: sound("Escape"),
+            ..default()
+        }
+    }
 
     /// A headless app wired with just the battle logic systems (no UI, which
     /// needs an asset server) plus the resources they read.
@@ -351,6 +490,7 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
         app.add_message::<BattleRequest>();
+        app.add_message::<AudioRequest>();
         app.insert_resource(GameData {
             actors: vec![ActorDef {
                 id: 1,
@@ -406,6 +546,7 @@ mod tests {
             }],
             attributes: vec![],
             states: vec![],
+            system: test_system(),
         });
         app.init_resource::<Party>();
         app.init_resource::<Inventory>();
@@ -414,6 +555,8 @@ mod tests {
         app.init_resource::<Battle>();
         app.init_resource::<BattleActive>();
         app.init_resource::<BattleResult>();
+        app.init_resource::<MapBgm>();
+        app.init_resource::<CurrentBgm>();
         app.init_resource::<ButtonInput<KeyCode>>();
         app.add_systems(
             Update,
@@ -511,6 +654,8 @@ mod tests {
         app.init_resource::<Progression>();
         app.init_resource::<BattleResult>();
         app.init_resource::<BattleActive>();
+        app.init_resource::<MapBgm>();
+        app.add_message::<AudioRequest>();
         app.init_resource::<ButtonInput<KeyCode>>();
         // A foe worth exactly 30 exp — enough to lift Ron from level 1 to 2 — and
         // 30 gold.
@@ -597,6 +742,66 @@ mod tests {
             app.world().resource::<Progression>().total(&ron),
             total_once,
             "experience is not double-applied on confirm"
+        );
+    }
+
+    #[test]
+    fn memorize_and_restore_round_trips_the_map_bgm() {
+        let mut memory = MapBgm::default();
+        // A silent map restores to a stop, not a phantom track.
+        assert_eq!(memory.restore(), AudioRequest::StopBgm);
+        memory.memorize(Some(BgmTrack {
+            name: "Field".into(),
+            volume: 0.8,
+            speed: 1.0,
+        }));
+        assert_eq!(
+            memory.restore(),
+            AudioRequest::Bgm {
+                name: "Field".into(),
+                volume: 0.8,
+                speed: 1.0
+            }
+        );
+        // Memorizing "nothing playing" restores to a stop.
+        memory.memorize(None);
+        assert_eq!(memory.restore(), AudioRequest::StopBgm);
+    }
+
+    #[test]
+    fn battle_start_plays_battle_music_and_stores_the_prior_bgm() {
+        let mut app = logic_app();
+        // A map track is playing when the fight starts.
+        app.insert_resource(CurrentBgm::with_track("Field", 0.7, 1.0));
+        // Request the fight directly (avoids the debug-key intra-frame ordering).
+        app.world_mut().write_message(BattleRequest {
+            troop_id: DEBUG_TROOP,
+        });
+        app.update();
+        // The pre-battle map BGM is remembered for the teardown restore.
+        assert_eq!(
+            app.world().resource::<MapBgm>().0,
+            Some(BgmTrack {
+                name: "Field".into(),
+                volume: 0.7,
+                speed: 1.0
+            })
+        );
+        // The battle BGM and the battle-start SE were requested on build.
+        let messages = app.world().resource::<Messages<AudioRequest>>();
+        let mut cursor = messages.get_cursor();
+        let played: Vec<AudioRequest> = cursor.read(messages).cloned().collect();
+        assert!(
+            played
+                .iter()
+                .any(|r| matches!(r, AudioRequest::Bgm { name, .. } if name.as_str() == "Battle")),
+            "battle BGM should start on battle build: {played:?}"
+        );
+        assert!(
+            played
+                .iter()
+                .any(|r| matches!(r, AudioRequest::Sound { name, .. } if name.as_str() == "Start")),
+            "battle-start SE should sound"
         );
     }
 }

@@ -62,6 +62,46 @@ impl AudioRequest {
             speed: playback_speed(params.get(2).copied().unwrap_or(100)),
         }
     }
+
+    /// A looping BGM request from a System `Music` entry: its track `name`, its
+    /// `0..=100` `volume`, and its percent `tempo`. An `(OFF)`/empty name stops
+    /// the BGM. Used by the battle system for the battle / victory / game-over
+    /// music.
+    pub fn bgm(name: &str, volume: u32, tempo: u32) -> Self {
+        if name.is_empty() || name == BGM_OFF {
+            return Self::StopBgm;
+        }
+        Self::Bgm {
+            name: name.to_string(),
+            volume: linear_volume(volume as i32),
+            speed: playback_speed(tempo as i32),
+        }
+    }
+
+    /// A one-shot SE request from a System `Sound` entry, or `None` for an
+    /// `(OFF)`/empty name (a disabled effect plays nothing). Used by the battle
+    /// system for its per-hit sound effects.
+    pub fn se(name: &str, volume: u32, tempo: u32) -> Option<Self> {
+        if name.is_empty() || name == BGM_OFF {
+            return None;
+        }
+        Some(Self::Sound {
+            name: name.to_string(),
+            volume: linear_volume(volume as i32),
+            speed: playback_speed(tempo as i32),
+        })
+    }
+}
+
+/// A snapshot of a looping BGM — its track `name` and already-mapped linear
+/// `volume` and playback `speed` — enough to replay it. The battle system
+/// memorizes the map BGM at [`AudioRequest::bgm`] granularity when a fight starts
+/// and restores it when the fight ends.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BgmTrack {
+    pub name: String,
+    pub volume: f32,
+    pub speed: f32,
 }
 
 /// Convert an RM2000 0..100 volume to a linear 0..1 gain.
@@ -80,13 +120,46 @@ fn playback_speed(tempo_percent: i32) -> f32 {
 }
 
 /// The single active BGM: its entity (present only while a playable file loops)
-/// and the requested track name. The name keeps a re-requested track — an
-/// autorun page replays it every cycle — from restarting, and a MIDI-only track
-/// from being re-logged.
+/// and the requested track name, volume, and speed. The name keeps a re-requested
+/// track — an autorun page replays it every cycle — from restarting, and a
+/// MIDI-only track from being re-logged. The volume/speed are kept so a consumer
+/// (the battle system) can memorize and later replay the exact track.
 #[derive(Resource, Default)]
-struct CurrentBgm {
+pub(crate) struct CurrentBgm {
     entity: Option<Entity>,
     name: String,
+    volume: f32,
+    speed: f32,
+}
+
+impl CurrentBgm {
+    /// The currently-playing track as a replayable [`BgmTrack`], or `None` when
+    /// nothing is playing (the name is cleared on stop). A MIDI-only track still
+    /// reports here — its name is remembered even without a playable file — so a
+    /// memorize/restore round-trip preserves the map's silence too.
+    pub(crate) fn track(&self) -> Option<BgmTrack> {
+        if self.name.is_empty() {
+            return None;
+        }
+        Some(BgmTrack {
+            name: self.name.clone(),
+            volume: self.volume,
+            speed: self.speed,
+        })
+    }
+
+    /// Construct a `CurrentBgm` reporting `name` (with `volume`/`speed`) as the
+    /// playing track, for tests that memorize the map BGM without spinning up the
+    /// audio player.
+    #[cfg(test)]
+    pub(crate) fn with_track(name: &str, volume: f32, speed: f32) -> Self {
+        Self {
+            entity: None,
+            name: name.to_string(),
+            volume,
+            speed,
+        }
+    }
 }
 
 pub struct AudioPlugin;
@@ -161,6 +234,8 @@ fn start_bgm(
         commands.entity(entity).despawn();
     }
     current.name = name.to_string();
+    current.volume = volume;
+    current.speed = speed;
     match resolve_audio("Music", name, &["ogg", "wav"]) {
         Some(path) => {
             let entity = commands
@@ -273,6 +348,36 @@ mod tests {
             AudioRequest::play_bgm("", &[0, 0, 0, 0]),
             AudioRequest::StopBgm
         );
+    }
+
+    #[test]
+    fn bgm_maps_system_music_volume_and_tempo() {
+        assert_eq!(
+            AudioRequest::bgm("Battle", 90, 100),
+            AudioRequest::Bgm {
+                name: "Battle".into(),
+                volume: 0.9,
+                speed: 1.0
+            }
+        );
+        // An (OFF) or empty track stops the BGM rather than playing silence.
+        assert_eq!(AudioRequest::bgm("(OFF)", 100, 100), AudioRequest::StopBgm);
+        assert_eq!(AudioRequest::bgm("", 100, 100), AudioRequest::StopBgm);
+    }
+
+    #[test]
+    fn se_maps_sound_and_skips_off() {
+        assert_eq!(
+            AudioRequest::se("Bite", 80, 100),
+            Some(AudioRequest::Sound {
+                name: "Bite".into(),
+                volume: 0.8,
+                speed: 1.0
+            })
+        );
+        // A disabled effect plays nothing.
+        assert_eq!(AudioRequest::se("(OFF)", 100, 100), None);
+        assert_eq!(AudioRequest::se("", 100, 100), None);
     }
 
     #[test]

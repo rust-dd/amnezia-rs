@@ -7,8 +7,8 @@
 use super::BattleOutcome;
 use super::logic;
 use super::model::{
-    Action, Battle, Command, Dying, NumberKind, PendingAnim, PendingNumber, Phase, Source, Step,
-    rng_next,
+    Action, Battle, BattleSe, Command, Dying, NumberKind, PendingAnim, PendingNumber, Phase,
+    Source, Step, rng_next,
 };
 use amnezia_data::SkillDef;
 
@@ -335,22 +335,28 @@ impl Battle {
         self.pending_numbers.push(PendingNumber { pos, text, kind });
     }
 
-    /// Register a landed blow of `dmg` on foe `ti`: pop its damage number, owe it a
-    /// guaranteed whitening blink (RM2000 blinks a struck sprite every hit,
-    /// animation-flash or not), and start its death-out if the blow felled it.
+    /// Register a landed blow of `dmg` on foe `ti`: play the enemy-damaged SE, pop
+    /// its damage number, owe it a guaranteed whitening blink (RM2000 blinks a
+    /// struck sprite every hit, animation-flash or not), and start its death-out if
+    /// the blow felled it. The SE fires on any landed blow (even a blocked 0), like
+    /// EasyRPG's damage-message substate; a felled foe then adds the kill SE via
+    /// [`Battle::start_foe_death`].
     fn after_foe_hit(&mut self, ti: usize, dmg: i32) {
         let pos = self.foe_anim_pos(ti);
+        self.pending_se.push(BattleSe::EnemyDamaged);
         let (text, kind) = number_for(dmg);
         self.push_number(pos, text, kind);
         self.pending_blinks.push(pos);
         self.start_foe_death(ti, false);
     }
 
-    /// Register a landed blow of `dmg` on member `ti`: pop its damage number at the
-    /// party slot. Party members have no front-view sprite, so the number is their
-    /// whole feedback (no blink, no death-out).
+    /// Register a landed blow of `dmg` on member `ti`: play the actor-damaged SE
+    /// and pop its damage number at the party slot. Party members have no
+    /// front-view sprite, so the number is their whole visual feedback (no blink,
+    /// no death-out).
     fn after_member_hit(&mut self, ti: usize, dmg: i32) {
         let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
+        self.pending_se.push(BattleSe::ActorDamaged);
         let (text, kind) = number_for(dmg);
         self.push_number(pos, text, kind);
     }
@@ -367,6 +373,9 @@ impl Battle {
                 secs: if explode { EXPLODE_SECS } else { DEATH_SECS },
                 explode,
             });
+            // The kill SE fires once, guarded by the same transition that starts
+            // the death-out (EasyRPG `ProcessBattleActionDeath`).
+            self.pending_se.push(BattleSe::EnemyDefeated);
         }
     }
 
@@ -413,6 +422,7 @@ impl Battle {
         );
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
             let pos = self.foe_anim_pos(ti);
+            self.pending_se.push(BattleSe::Dodge);
             self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
             return Strike::Miss;
         }
@@ -509,6 +519,7 @@ impl Battle {
         );
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
             let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
+            self.pending_se.push(BattleSe::Dodge);
             self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
             return None;
         }

@@ -1090,3 +1090,60 @@ fn a_critical_announces_on_its_own_line_before_the_damage_line() {
         "the damage line is a separate beat: {damage_line}"
     );
 }
+
+#[test]
+fn a_landed_foe_hit_enqueues_the_enemy_damaged_se() {
+    let mut battle = build_1v2();
+    battle.members[0].weapon_hit = 100; // never miss
+    assert!(matches!(battle.strike_enemy(0, 0), Strike::Hit { .. }));
+    assert!(
+        battle.pending_se.contains(&BattleSe::EnemyDamaged),
+        "a landed blow queues the enemy-damaged SE: {:?}",
+        battle.pending_se
+    );
+    // A 30-HP foe survives one blow, so no kill SE yet.
+    assert!(!battle.pending_se.contains(&BattleSe::EnemyDefeated));
+}
+
+#[test]
+fn felling_a_foe_enqueues_the_enemy_defeated_se() {
+    let mut battle = build_1v2();
+    battle.members[0].weapon_hit = 100; // never miss
+    battle.enemies[0].hp = 1; // one blow from death
+    battle.strike_enemy(0, 0);
+    assert!(!battle.enemies[0].alive());
+    assert!(
+        battle.pending_se.contains(&BattleSe::EnemyDefeated),
+        "felling a foe queues the kill SE: {:?}",
+        battle.pending_se
+    );
+    // The damage SE still fires for the killing blow itself.
+    assert!(battle.pending_se.contains(&BattleSe::EnemyDamaged));
+}
+
+#[test]
+fn a_missed_strike_enqueues_the_dodge_se() {
+    let mut battle = build_1v2();
+    battle.members[0].weapon_hit = 90; // bare-hands default
+    let hit = logic::to_hit(
+        logic::effective_hit(battle.members[0].weapon_hit),
+        battle.members[0].stats.agility,
+        battle.enemies[0].stats.agility,
+    );
+    // Wind the rng to a state whose next to-hit roll lands in the miss band.
+    loop {
+        let mut probe = battle.rng;
+        if (rng_next(&mut probe) % 100) as i32 >= hit {
+            break;
+        }
+        rng_next(&mut battle.rng);
+    }
+    assert!(matches!(battle.strike_enemy(0, 0), Strike::Miss));
+    assert!(
+        battle.pending_se.contains(&BattleSe::Dodge),
+        "an evaded blow queues the dodge SE: {:?}",
+        battle.pending_se
+    );
+    // A pure miss lands nothing, so no damage SE.
+    assert!(!battle.pending_se.contains(&BattleSe::EnemyDamaged));
+}
