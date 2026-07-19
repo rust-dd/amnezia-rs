@@ -138,6 +138,10 @@ pub struct ActorCurves {
 /// actor (the shield slot holds a second weapon); `fix_equipment` an actor whose
 /// gear can't be changed; and `unarmed_animation` the attack animation id used
 /// with no weapon equipped.
+///
+/// `face_name` names the actor's FaceSet graphic and `face_index` selects its
+/// 48×48 portrait cell in that sheet's 4×4 grid (`col = index % 4`,
+/// `row = index / 4`); the menu status window draws it beside the member's stats.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorDef {
     pub id: u32,
@@ -171,6 +175,10 @@ pub struct ActorDef {
     pub fix_equipment: bool,
     #[serde(default)]
     pub unarmed_animation: u32,
+    #[serde(default)]
+    pub face_name: String,
+    #[serde(default)]
+    pub face_index: u32,
 }
 
 /// An item's definition, read by the shop, item, and equip menus and the

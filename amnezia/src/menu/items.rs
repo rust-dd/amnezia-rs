@@ -45,25 +45,30 @@ fn rows(data: &GameData, inventory: &Inventory) -> Vec<String> {
     rows
 }
 
-/// Compose the item list, marking the cursor row within the scrolling viewport.
-/// The spacer and gold rows are never marked (the cursor can't reach them).
-pub(super) fn compose_list(cursor: usize, data: &GameData, inventory: &Inventory) -> String {
+/// Compose the item list and the composed-text line its windowskin cursor sits
+/// on (`None` for an empty bag). The held items scroll within a viewport; the
+/// line indexes into the returned text — header included — so [`super::view`] can
+/// place the cursor rectangle over the selected row. The spacer and gold rows are
+/// never highlighted (the cursor can't reach them).
+pub(super) fn compose_list(
+    cursor: usize,
+    data: &GameData,
+    inventory: &Inventory,
+) -> (String, Option<usize>) {
     let rows = rows(data, inventory);
     let selectable = selectable(data, inventory);
     let start = viewport_start(cursor, rows.len(), VISIBLE_ROWS);
-    let mut out = String::from("- Tárgyak -\n\n");
+    let mut lines = vec![String::from("- Tárgyak -"), String::new()];
+    let mut cursor_line = None;
     for (i, row) in rows.iter().enumerate().skip(start).take(VISIBLE_ROWS) {
-        let marker = if i == cursor && i < selectable {
-            "▶ "
-        } else {
-            "  "
-        };
-        out.push_str(marker);
-        out.push_str(row);
-        out.push('\n');
+        if i == cursor && i < selectable {
+            cursor_line = Some(lines.len());
+        }
+        lines.push(row.clone());
     }
-    out.push_str("\n[Esc] vissza");
-    out
+    lines.push(String::new());
+    lines.push(String::from("[Esc] vissza"));
+    (lines.join("\n"), cursor_line)
 }
 
 /// The first row of the scroll window that keeps `cursor` visible within
@@ -91,21 +96,24 @@ mod tests {
     }
 
     #[test]
-    fn list_shows_held_items_with_counts_and_a_gold_line() {
+    fn list_shows_held_items_with_counts_a_gold_line_and_the_cursor_row() {
         let mut inv = Inventory::default();
         inv.add_item(ITEM_HERB, 3);
         inv.add_gold(250);
-        let text = compose_list(0, &data(), &inv);
-        assert!(text.contains("▶ Gyógyfű ×3"), "held item + cursor: {text}");
+        let (text, cursor_line) = compose_list(0, &data(), &inv);
+        assert!(text.contains("Gyógyfű ×3"), "held item: {text}");
         assert!(text.contains("Arany: 250"), "gold line: {text}");
+        // Line 0 is the header, line 1 blank, so the first item is on line 2.
+        assert_eq!(cursor_line, Some(2), "cursor over the first item: {text}");
     }
 
     #[test]
     fn empty_bag_shows_a_placeholder_and_selects_nothing() {
         let inv = Inventory::default();
         assert_eq!(selectable(&data(), &inv), 0);
-        let text = compose_list(0, &data(), &inv);
+        let (text, cursor_line) = compose_list(0, &data(), &inv);
         assert!(text.contains("(nincs tárgy)"), "placeholder: {text}");
+        assert_eq!(cursor_line, None, "nothing to highlight: {text}");
     }
 
     #[test]

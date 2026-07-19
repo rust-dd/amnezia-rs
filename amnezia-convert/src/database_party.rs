@@ -29,10 +29,11 @@ pub fn convert_hero(input: &Path, output: &Path) -> Result<String> {
 }
 
 /// Convert the actor table in `input/RPG_RT.ldb` into `output/actors.ron` (each
-/// actor's id, name, class title, levels, starting HP/SP, per-level stat curves,
-/// experience-curve parameters, initial equipment ids, and the dual-wield /
-/// fixed-equipment / unarmed-animation flags), returning the number of actors
-/// written. The status and equip menus and the level-up system read it.
+/// actor's id, name, class title, FaceSet portrait, levels, starting HP/SP,
+/// per-level stat curves, experience-curve parameters, initial equipment ids,
+/// and the dual-wield / fixed-equipment / unarmed-animation flags), returning the
+/// number of actors written. The status and equip menus and the level-up system
+/// read it.
 pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -99,6 +100,8 @@ pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
             two_weapons: a.two_weapons,
             fix_equipment: a.fix_equipment,
             unarmed_animation: a.unarmed_animation,
+            face_name: a.face_name,
+            face_index: a.face_index,
         })
         .collect();
     let count = actors.len();

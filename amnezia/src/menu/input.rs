@@ -5,23 +5,57 @@
 //! the world (inventory, vitals, save request, title).
 
 use crate::battle::BattleActive;
+use crate::choice::Choice;
+use crate::dialogue::Dialogue;
 use crate::gamedata::GameData;
+use crate::gameover::GameOverActive;
+use crate::inputnumber::InputNumber;
+use crate::interpreter::RunningEvent;
 use crate::progression::Progression;
 use crate::save::{SaveAccess, SaveRequest};
 use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party};
+use crate::teleport::Fade;
 use crate::title::TitleActive;
 use crate::vitals::Vitals;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use super::nav::{
     confirm_pressed, end_game_transition, escape_transition, item_target, skill_target, step,
 };
-use super::view::{MenuAux, MenuAuxPanel, MenuPanel, MenuText};
 use super::{
     MemberAction, MenuAccess, MenuOpen, MenuScreen, MenuState, command, items, render, skills,
     use_item,
 };
+
+/// The transient overlays and flows that must not be interrupted by *opening* the
+/// menu: a message box, a running event, a choice or number prompt, a teleport
+/// fade, or the game-over hand-off. Mirrors the open-guard lists in
+/// [`crate::dialogue`]'s `interact` and [`crate::interpreter`]'s autorun reader;
+/// bundled into one `SystemParam` so [`menu_input`] stays within Bevy's
+/// 16-parameter cap. A menu already up ignores these — only opening is gated.
+#[derive(SystemParam)]
+pub(super) struct OpenBlockers<'w> {
+    dialogue: Res<'w, Dialogue>,
+    running: Res<'w, RunningEvent>,
+    choice: Res<'w, Choice>,
+    input_number: Res<'w, InputNumber>,
+    fade: Res<'w, Fade>,
+    gameover: Res<'w, GameOverActive>,
+}
+
+impl OpenBlockers<'_> {
+    /// Whether any transient flow is live, so the menu must refuse to open.
+    fn any(&self) -> bool {
+        self.dialogue.active
+            || self.running.active()
+            || self.choice.active()
+            || self.input_number.active()
+            || self.fade.busy()
+            || self.gameover.0
+    }
+}
 
 /// Toggle the menu on Escape (backing out of a sub-screen first) and drive the
 /// active screen: move the cursor and confirm into the next screen, apply a field
@@ -42,10 +76,13 @@ pub(super) fn menu_input(
     mut open: ResMut<MenuOpen>,
     mut state: ResMut<MenuState>,
     mut save_request: ResMut<SaveRequest>,
+    blockers: OpenBlockers,
 ) {
-    // A shop, battle, the title screen, or a cutscene that locked menu access
-    // (opcode 11960) owns the input while up, so the menu can't open over it.
-    if !open.0 && (shop.0 || battle.0 || title.0 || !menu_access.0) {
+    // A shop, battle, the title screen, a cutscene that locked menu access (opcode
+    // 11960), or any live overlay/flow (message box, event, choice, number prompt,
+    // fade, game over) owns the input, so the menu can't open over it. Only opening
+    // is gated — a menu already up stays usable and closable.
+    if !open.0 && (shop.0 || battle.0 || title.0 || !menu_access.0 || blockers.any()) {
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {
@@ -174,61 +211,6 @@ pub(super) fn menu_input(
     }
 }
 
-/// Reflect the menu state into the two windows: show or hide the overlay, recompose
-/// the active screen, and hide the right (party) window on sub-screens where its
-/// column is empty.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn update_ui(
-    open: Res<MenuOpen>,
-    state: Res<MenuState>,
-    data: Res<GameData>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
-    progression: Res<Progression>,
-    vitals: Res<Vitals>,
-    mut panels: Query<&mut Visibility, (With<MenuPanel>, Without<MenuAuxPanel>)>,
-    mut aux_panels: Query<&mut Visibility, With<MenuAuxPanel>>,
-    mut left: Query<&mut Text, (With<MenuText>, Without<MenuAux>)>,
-    mut right: Query<&mut Text, With<MenuAux>>,
-) {
-    if !open.is_changed() && !state.is_changed() && !inventory.is_changed() && !vitals.is_changed()
-    {
-        return;
-    }
-    if let Ok(mut visibility) = panels.single_mut() {
-        *visibility = if open.0 {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    if !open.0 {
-        return;
-    }
-    let (left_text, right_text) = render::compose(
-        state.screen,
-        state.cursor,
-        &data,
-        &party,
-        &progression,
-        &inventory,
-        &vitals,
-    );
-    if let Ok(mut aux) = aux_panels.single_mut() {
-        *aux = if right_text.is_empty() {
-            Visibility::Hidden
-        } else {
-            Visibility::Visible
-        };
-    }
-    if let Ok(mut text) = left.single_mut() {
-        **text = left_text;
-    }
-    if let Ok(mut text) = right.single_mut() {
-        **text = right_text;
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -251,6 +233,12 @@ mod tests {
             .insert_resource(MenuOpen(true))
             .insert_resource(MenuState { cursor, screen })
             .init_resource::<SaveRequest>()
+            .init_resource::<Dialogue>()
+            .init_resource::<RunningEvent>()
+            .init_resource::<Choice>()
+            .init_resource::<InputNumber>()
+            .init_resource::<Fade>()
+            .init_resource::<GameOverActive>()
             .init_resource::<ButtonInput<KeyCode>>()
             .add_systems(Update, menu_input);
         app
@@ -290,6 +278,32 @@ mod tests {
         assert!(
             !app.world().resource::<MenuOpen>().0,
             "the menu must stay closed while access is disabled"
+        );
+    }
+
+    #[test]
+    fn menu_will_not_open_while_a_dialogue_is_active() {
+        // A message box owns the input: Escape must not pop the menu open over it.
+        let mut app = app_on(0, MenuScreen::Command);
+        app.world_mut().insert_resource(MenuOpen(false));
+        app.world_mut().resource_mut::<Dialogue>().active = true;
+        confirm(&mut app, KeyCode::Escape);
+        assert!(
+            !app.world().resource::<MenuOpen>().0,
+            "the menu must refuse to open while a dialogue is showing"
+        );
+    }
+
+    #[test]
+    fn open_menu_still_closes_while_a_blocker_would_forbid_opening() {
+        // The guard gates opening only: an already-open menu closes on Escape even
+        // if a transient flow (here a running event) is flagged active.
+        let mut app = app_on(0, MenuScreen::Command);
+        app.world_mut().resource_mut::<Dialogue>().active = true;
+        confirm(&mut app, KeyCode::Escape);
+        assert!(
+            !app.world().resource::<MenuOpen>().0,
+            "an open menu must still close despite an active blocker"
         );
     }
 

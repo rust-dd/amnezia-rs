@@ -444,6 +444,8 @@ mod tests {
             two_weapons: false,
             fix_equipment: false,
             unarmed_animation: 0,
+            face_name: String::new(),
+            face_index: 0,
         }
     }
 

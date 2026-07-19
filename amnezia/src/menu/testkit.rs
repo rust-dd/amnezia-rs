@@ -31,6 +31,8 @@ pub(super) fn actor() -> ActorDef {
         two_weapons: false,
         fix_equipment: false,
         unarmed_animation: 0,
+        face_name: "Ron".into(),
+        face_index: 6,
     }
 }
 

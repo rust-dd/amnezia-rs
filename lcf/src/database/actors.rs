@@ -34,11 +34,16 @@ pub struct StatCurves {
 /// dual-wielding actor (the shield slot holds a second weapon), `fix_equipment`
 /// an actor whose gear can't be changed, and `unarmed_animation` the battle
 /// animation id used when the actor attacks with no weapon.
+///
+/// `face_name` names the actor's FaceSet graphic and `face_index` selects its
+/// 48×48 portrait cell within that sheet's 4×4 grid.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Actor {
     pub id: u32,
     pub name: String,
     pub title: String,
+    pub face_name: String,
+    pub face_index: u32,
     pub initial_level: u32,
     pub max_level: u32,
     pub initial_hp: u32,
@@ -62,6 +67,8 @@ const ACTOR_NAME: u32 = 0x01;
 const ACTOR_TITLE: u32 = 0x02;
 const ACTOR_INITIAL_LEVEL: u32 = 0x07;
 const ACTOR_FINAL_LEVEL: u32 = 0x08;
+const ACTOR_FACE_NAME: u32 = 0x0F;
+const ACTOR_FACE_INDEX: u32 = 0x10;
 const ACTOR_TWO_WEAPON: u32 = 0x15;
 const ACTOR_LOCK_EQUIPMENT: u32 = 0x16;
 const ACTOR_PARAMETERS: u32 = 0x1F;
@@ -132,10 +139,10 @@ fn read_equipment(data: &[u8]) -> [u32; EQUIPMENT_SLOTS] {
 
 /// Parse the actor table (`ChunkData::actors` = `0x0B`) out of an LDB byte
 /// slice. Chunk ids (liblcf `ChunkActor`): name `0x01`, title `0x02`,
-/// initial_level `0x07`, final_level `0x08`, two_weapon `0x15`, lock_equipment
-/// `0x16`, parameters `0x1F`, exp_base `0x29`, exp_inflation `0x2A`,
-/// exp_correction `0x2B`, initial_equipment `0x33` (five Int16 item ids),
-/// unarmed_animation `0x38`.
+/// face_name `0x0F`, face_index `0x10`, initial_level `0x07`, final_level
+/// `0x08`, two_weapon `0x15`, lock_equipment `0x16`, parameters `0x1F`, exp_base
+/// `0x29`, exp_inflation `0x2A`, exp_correction `0x2B`, initial_equipment `0x33`
+/// (five Int16 item ids), unarmed_animation `0x38`.
 pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
     let section = find_section(bytes, ACTOR_SECTION, LcfError::MissingActors)?;
     let mut reader = Reader::new(section);
@@ -145,6 +152,8 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
         let id = reader.varint()?;
         let mut name = String::new();
         let mut title = String::new();
+        let mut face_name = String::new();
+        let mut face_index = 0;
         let mut initial_level = ACTOR_DEFAULT_LEVEL;
         let mut final_level: Option<u32> = None;
         let mut parameters: &[u8] = &[];
@@ -165,6 +174,8 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
             match sub_id {
                 ACTOR_NAME => name = decode_cp1250(sub_data),
                 ACTOR_TITLE => title = decode_cp1250(sub_data),
+                ACTOR_FACE_NAME => face_name = decode_cp1250(sub_data),
+                ACTOR_FACE_INDEX => face_index = Reader::new(sub_data).varint()?,
                 ACTOR_INITIAL_LEVEL => initial_level = Reader::new(sub_data).varint()?,
                 ACTOR_FINAL_LEVEL => final_level = Some(Reader::new(sub_data).varint()?),
                 ACTOR_TWO_WEAPON => two_weapons = Reader::new(sub_data).varint()? != 0,
@@ -192,6 +203,8 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
             id,
             name,
             title,
+            face_name,
+            face_index,
             initial_level,
             max_level,
             initial_hp,
@@ -380,6 +393,24 @@ mod tests {
         assert!(actor.two_weapons, "dual wielding");
         assert!(actor.fix_equipment, "equipment locked");
         assert_eq!(actor.unarmed_animation, 9);
+    }
+
+    #[test]
+    fn parses_face_graphic() {
+        // face_name (0x0F) is a CP1250 string; face_index (0x10) a varint cell.
+        let hero = element(1, &[subchunk(0x0F, b"Ron"), subchunk(0x10, &varint(3))]);
+        let ldb = make_ldb(&[(0x0B, section(&[hero]))]);
+        let actor = &parse_actors(&ldb).unwrap()[0];
+        assert_eq!(actor.face_name, "Ron");
+        assert_eq!(actor.face_index, 3);
+    }
+
+    #[test]
+    fn face_graphic_defaults_when_omitted() {
+        let ldb = make_ldb(&[(0x0B, section(&[element(2, &[])]))]);
+        let actor = &parse_actors(&ldb).unwrap()[0];
+        assert!(actor.face_name.is_empty());
+        assert_eq!(actor.face_index, 0);
     }
 
     #[test]

@@ -118,6 +118,6 @@ impl Plugin for MenuPlugin {
             .init_resource::<MenuAccess>()
             .init_resource::<MenuState>()
             .add_systems(Startup, view::spawn_ui)
-            .add_systems(Update, (input::menu_input, input::update_ui));
+            .add_systems(Update, (input::menu_input, view::update_ui));
     }
 }

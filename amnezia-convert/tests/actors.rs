@@ -73,6 +73,8 @@ fn converts_ldb_to_actors_ron() {
         &[
             subchunk(0x01, b"Ron"),
             subchunk(0x02, b"Zsoldos"),
+            subchunk(0x0F, b"Ron"),
+            subchunk(0x10, &varint(0)),
             subchunk(0x07, &varint(2)),
             subchunk(0x15, &varint(1)),
             subchunk(0x1F, &params),
@@ -120,6 +122,8 @@ fn converts_ldb_to_actors_ron() {
             two_weapons: true,
             fix_equipment: false,
             unarmed_animation: 9,
+            face_name: "Ron".to_string(),
+            face_index: 0,
         }
     );
 }

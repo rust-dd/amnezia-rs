@@ -95,20 +95,31 @@ pub(super) fn apply_field_skill(
     true
 }
 
-/// Compose the caster's skill list, marking the cursor row within the scrolling
-/// viewport. Battle-only skills are tagged "(harc)" to read as greyed/inert.
-pub(super) fn compose_list(member: usize, cursor: usize, data: &GameData, party: &Party) -> String {
+/// Compose the caster's skill list and the composed-text line its windowskin
+/// cursor sits on (`None` when the caster knows no skills). Battle-only skills are
+/// tagged "(harc)" to read as inert; the list scrolls within a viewport and the
+/// line indexes into the returned text so [`super::view`] can place the cursor.
+pub(super) fn compose_list(
+    member: usize,
+    cursor: usize,
+    data: &GameData,
+    party: &Party,
+) -> (String, Option<usize>) {
     let caster = party
         .snapshot()
         .get(member)
         .and_then(|&id| data.actor(id))
         .map(|def| i18n::tr(&def.name))
         .unwrap_or_default();
-    let mut out = format!("- Képességek -  {caster}\n\n");
+    let mut lines = vec![format!("- Képességek -  {caster}"), String::new()];
     if data.skills.is_empty() {
-        out.push_str("  (nincs képesség)\n");
+        lines.push(String::from("(nincs képesség)"));
+        lines.push(String::new());
+        lines.push(String::from("[Esc] vissza"));
+        return (lines.join("\n"), None);
     }
     let start = viewport_start(cursor, data.skills.len(), VISIBLE_ROWS);
+    let mut cursor_line = None;
     for (i, skill) in data
         .skills
         .iter()
@@ -116,16 +127,19 @@ pub(super) fn compose_list(member: usize, cursor: usize, data: &GameData, party:
         .skip(start)
         .take(VISIBLE_ROWS)
     {
-        let marker = if i == cursor { "▶ " } else { "  " };
+        if i == cursor {
+            cursor_line = Some(lines.len());
+        }
         let tag = if field_usable(skill) { "" } else { "  (harc)" };
-        out.push_str(&format!(
-            "{marker}{}  SP {}{tag}\n",
+        lines.push(format!(
+            "{}  SP {}{tag}",
             i18n::tr(&skill.name),
             skill.sp_cost
         ));
     }
-    out.push_str("\n[Esc] vissza");
-    out
+    lines.push(String::new());
+    lines.push(String::from("[Esc] vissza"));
+    (lines.join("\n"), cursor_line)
 }
 
 /// Compose the ally-target picker for a field skill: the skill being cast plus the
@@ -189,12 +203,14 @@ mod tests {
             testkit::heal_skill(2, "Gyógyítás", 8, 40),
             testkit::skill(3, "Tűzgolyó", 12),
         ];
-        let text = compose_list(0, 0, &d, &Party::default());
-        assert!(text.contains("▶ Gyógyítás  SP 8"), "heal, no tag: {text}");
+        let (text, cursor_line) = compose_list(0, 0, &d, &Party::default());
+        assert!(text.contains("Gyógyítás  SP 8"), "heal, no tag: {text}");
         assert!(
             text.contains("Tűzgolyó  SP 12  (harc)"),
             "attack tagged battle-only: {text}"
         );
+        // Header line 0, blank line 1, first skill on line 2.
+        assert_eq!(cursor_line, Some(2), "cursor over the first skill: {text}");
     }
 
     #[test]
