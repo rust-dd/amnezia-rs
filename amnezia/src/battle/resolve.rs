@@ -10,6 +10,7 @@ use super::model::{
     Action, Battle, BattleSe, Command, Dying, NumberKind, PendingAnim, PendingNumber, Phase,
     Source, Step, rng_next,
 };
+use crate::i18n;
 use amnezia_data::SkillDef;
 
 /// RM2000 front-view draws no party sprites, so a hit a member takes animates at
@@ -1330,16 +1331,30 @@ impl Battle {
                 let (exp, gold) = self.victory_rewards();
                 self.reward_exp = exp;
                 self.reward_gold = gold;
-                self.log.push("Győzelem!".to_string());
+                self.log.push(i18n::tr(&self.text.victory));
                 if exp > 0 {
-                    self.log.push(format!("+{exp} EXP"));
+                    // RM2000 (2000) message order: "<value><exp_received>".
+                    self.log
+                        .push(format!("{exp}{}", i18n::tr(&self.text.exp_received)));
                 }
                 if gold > 0 {
-                    self.log.push(format!("+{gold} arany"));
+                    // RM2000 (2000): "<received_a> <value><gold><received_b>".
+                    self.log.push(format!(
+                        "{} {gold}{}{}",
+                        i18n::tr(&self.text.gold_received_a),
+                        i18n::tr(&self.text.gold),
+                        i18n::tr(&self.text.gold_received_b),
+                    ));
                 }
             }
-            BattleOutcome::Escape => self.log.push("Sikeres menekülés!".to_string()),
-            BattleOutcome::Defeat => self.log.push("Vereség...".to_string()),
+            BattleOutcome::Escape => {
+                let line = i18n::tr(&self.text.escape_success);
+                self.log.push(line);
+            }
+            BattleOutcome::Defeat => {
+                let line = i18n::tr(&self.text.defeat);
+                self.log.push(line);
+            }
         }
     }
 }

@@ -12,6 +12,7 @@ use crate::font::GameFont;
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
+use crate::terms::Terms;
 use crate::vitals::Vitals;
 use bevy::prelude::*;
 use bevy::text::{FontSource, Justify, LineHeight, TextLayout};
@@ -374,6 +375,7 @@ pub(super) fn update_ui(
     progression: Res<Progression>,
     inventory: Res<Inventory>,
     vitals: Res<Vitals>,
+    terms: Res<Terms>,
     asset_server: Res<AssetServer>,
     mut windows: Query<
         (&MenuWindow, &mut Visibility),
@@ -410,7 +412,7 @@ pub(super) fn update_ui(
     }
 
     let members = render::members(&data, &party, &progression, &vitals);
-    let gold = render::gold(&inventory);
+    let gold = render::gold(&inventory, &terms);
     let content = render::content(
         state.screen,
         &data,
@@ -418,6 +420,7 @@ pub(super) fn update_ui(
         &progression,
         &inventory,
         &vitals,
+        &terms,
     );
 
     for (slot, mut text, mut visibility, mut color) in &mut texts {
@@ -425,13 +428,13 @@ pub(super) fn update_ui(
         *visibility = Visibility::Inherited;
         match slot.0 {
             TextSlot::Command(i) => {
-                **text = command::label(command::COMMANDS[i]).to_string();
+                **text = command::label(command::COMMANDS[i], &terms);
             }
             TextSlot::Gold => **text = gold.clone(),
             TextSlot::Content => **text = content.text.clone(),
             TextSlot::Member { slot, field } => match members.get(slot) {
                 Some(member) => {
-                    let (value, tint) = member_field(member, field);
+                    let (value, tint) = member_field(member, field, &terms);
                     **text = value;
                     *color = TextColor(tint);
                 }
@@ -486,21 +489,37 @@ pub(super) fn update_ui(
     }
 }
 
-/// The text and RM2000 font tint for one status field. HP/SP low-value tints
-/// mirror `Window_Base::GetValueFontColor` (knockout when empty, critical at ≤¼).
-fn member_field(member: &render::MemberView, field: MemberField) -> (String, Color) {
+/// The text and RM2000 font tint for one status field. The Lv / HP / SP prefixes
+/// come from the real RM2000 short terms (`lvl_short` / `hp_short` / `sp_short`),
+/// falling back to the abbreviations when blank. HP/SP low-value tints mirror
+/// `Window_Base::GetValueFontColor` (knockout when empty, critical at ≤¼).
+fn member_field(member: &render::MemberView, field: MemberField, terms: &Terms) -> (String, Color) {
+    let t = &terms.0;
     match field {
         MemberField::Name => (member.name.clone(), Color::WHITE),
         MemberField::Title => (member.title.clone(), Color::WHITE),
-        MemberField::Level => (format!("Lv {}", member.level), Color::WHITE),
+        MemberField::Level => (
+            format!("{} {}", terms.label(&t.lvl_short, "Lv"), member.level),
+            Color::WHITE,
+        ),
         MemberField::Condition => (member.condition.clone(), Color::WHITE),
         MemberField::Hp => (
-            format!("HP {}/{}", member.hp, member.max_hp),
+            format!(
+                "{} {}/{}",
+                terms.label(&t.hp_short, "HP"),
+                member.hp,
+                member.max_hp
+            ),
             value_color(member.hp, member.max_hp, true),
         ),
         MemberField::Exp => (member.exp.clone(), Color::WHITE),
         MemberField::Sp => (
-            format!("SP {}/{}", member.sp, member.max_sp),
+            format!(
+                "{} {}/{}",
+                terms.label(&t.sp_short, "SP"),
+                member.sp,
+                member.max_sp
+            ),
             value_color(member.sp, member.max_sp, false),
         ),
     }

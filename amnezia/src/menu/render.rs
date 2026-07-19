@@ -10,6 +10,7 @@ use crate::gamedata::GameData;
 use crate::i18n;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
+use crate::terms::Terms;
 use crate::vitals::Vitals;
 
 use super::{MenuScreen, derive, equip, items, skills, status, use_item};
@@ -94,9 +95,14 @@ pub(super) fn members(
 }
 
 /// The gold window's `<amount> <currency-term>` line (right-aligned by the view,
-/// mirroring `Window_Gold::Refresh` → `DrawCurrencyValue`).
-pub(super) fn gold(inventory: &Inventory) -> String {
-    format!("{} Arany", inventory.gold())
+/// mirroring `Window_Gold::Refresh` → `DrawCurrencyValue`). The currency word is
+/// the real RM2000 `gold` term, falling back to `Arany` when blank.
+pub(super) fn gold(inventory: &Inventory, terms: &Terms) -> String {
+    format!(
+        "{} {}",
+        inventory.gold(),
+        terms.label(&terms.0.gold, "Arany")
+    )
 }
 
 /// A content screen's text plus — for the scrolling item and skill lists — the
@@ -118,6 +124,7 @@ pub(super) fn content(
     progression: &Progression,
     inventory: &Inventory,
     vitals: &Vitals,
+    terms: &Terms,
 ) -> ContentView {
     match screen {
         MenuScreen::Command | MenuScreen::MemberSelect { .. } => ContentView {
@@ -158,7 +165,7 @@ pub(super) fn content(
             cursor_line: None,
         },
         MenuScreen::Status { member } => ContentView {
-            text: status::compose_status(member, data, party, progression, vitals),
+            text: status::compose_status(member, data, party, progression, vitals, terms),
             cursor_line: None,
         },
         MenuScreen::Saved => ContentView {
@@ -217,7 +224,12 @@ mod tests {
     fn gold_line_shows_amount_then_currency_term() {
         let mut inv = Inventory::default();
         inv.add_gold(250);
-        assert_eq!(gold(&inv), "250 Arany");
+        // A blank term falls back to the Hungarian currency word.
+        assert_eq!(gold(&inv, &Terms::default()), "250 Arany");
+        // The parsed currency term wins when present.
+        let mut terms = Terms::default();
+        terms.0.gold = "Gold".into();
+        assert_eq!(gold(&inv, &terms), "250 Gold");
     }
 
     #[test]
@@ -231,6 +243,7 @@ mod tests {
             &Progression::default(),
             &inv,
             &Vitals::default(),
+            &Terms::default(),
         );
         assert!(view.text.contains("Gyógyfű ×3"), "item row: {}", view.text);
         assert_eq!(view.cursor_line, Some(2), "windowskin cursor line");
@@ -245,6 +258,7 @@ mod tests {
             &Progression::default(),
             &Inventory::default(),
             &Vitals::default(),
+            &Terms::default(),
         );
         assert!(
             view.text.contains("▶ Nem"),
@@ -268,6 +282,7 @@ mod tests {
             &Progression::default(),
             &Inventory::default(),
             &Vitals::default(),
+            &Terms::default(),
         );
         assert!(
             view.text.contains("[Enter] vissza"),

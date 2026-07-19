@@ -6,11 +6,12 @@ use crate::font::GameFont;
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::state::Inventory;
+use crate::terms::Terms;
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
 use super::logic;
-use super::messages::{self, GOLD_LABEL, GOLD_UNIT};
+use super::messages;
 use super::{Mode, Phase, Screen, ShopState};
 
 #[derive(Component)]
@@ -24,6 +25,7 @@ pub fn update_ui(
     screen: Res<Screen>,
     data: Res<GameData>,
     inventory: Res<Inventory>,
+    terms: Res<Terms>,
     mut panels: Query<&mut Visibility, With<ShopPanel>>,
     mut texts: Query<&mut Text, With<ShopText>>,
 ) {
@@ -39,52 +41,54 @@ pub fn update_ui(
         };
     }
     if showing && let Ok(mut text) = texts.single_mut() {
-        **text = render(&screen, &data, &inventory);
+        **text = render(&screen, &data, &inventory, &terms);
     }
 }
 
 /// Compose the panel text for the current screen.
-fn render(screen: &Screen, data: &GameData, inventory: &Inventory) -> String {
+fn render(screen: &Screen, data: &GameData, inventory: &Inventory, terms: &Terms) -> String {
     match screen {
         Screen::Closed => String::new(),
-        Screen::Shop(state) => render_shop(state, data, inventory),
-        Screen::Inn { cost, yes, done } => render_inn(*cost, *yes, *done, inventory),
+        Screen::Shop(state) => render_shop(state, data, inventory, terms),
+        Screen::Inn { cost, yes, done } => render_inn(*cost, *yes, *done, inventory, terms),
     }
 }
 
-fn render_shop(state: &ShopState, data: &GameData, inventory: &Inventory) -> String {
-    let vocab = messages::shop_vocab(state.shop_type);
-    let gold = format!("{GOLD_LABEL}: {}", inventory.gold());
+fn render_shop(state: &ShopState, data: &GameData, inventory: &Inventory, terms: &Terms) -> String {
+    let vocab = messages::shop_vocab(state.shop_type, terms);
+    let unit = messages::currency(terms);
+    // RM2000 `Window_Gold` shows the amount then the currency term.
+    let gold = format!("{} {unit}", inventory.gold());
     let mut out = String::new();
     match &state.phase {
         Phase::Command { cursor, regreet } => {
             let header = if *regreet {
-                vocab.regreeting
+                &vocab.regreeting
             } else {
-                vocab.greeting
+                &vocab.greeting
             };
             out.push_str(header);
             out.push_str("\n\n");
-            for (i, label) in [vocab.buy, vocab.sell, vocab.leave].iter().enumerate() {
+            for (i, label) in [&vocab.buy, &vocab.sell, &vocab.leave].iter().enumerate() {
                 out.push_str(cursor_mark(i == *cursor));
                 out.push_str(label);
                 out.push('\n');
             }
         }
         Phase::Buy { cursor } => {
-            out.push_str(vocab.buy_select);
+            out.push_str(&vocab.buy_select);
             out.push_str("\n\n");
             let ids = logic::buyable_ids(data, &state.items);
-            list_rows(&mut out, &ids, *cursor, data, inventory, Mode::Buy);
+            list_rows(&mut out, &ids, *cursor, data, inventory, Mode::Buy, &unit);
         }
         Phase::Sell { cursor } => {
-            out.push_str(vocab.sell_select);
+            out.push_str(&vocab.sell_select);
             out.push_str("\n\n");
             let ids = logic::sellable_ids(data, inventory);
-            list_rows(&mut out, &ids, *cursor, data, inventory, Mode::Sell);
+            list_rows(&mut out, &ids, *cursor, data, inventory, Mode::Sell, &unit);
         }
         Phase::Number(num) => {
-            out.push_str(vocab.number);
+            out.push_str(&vocab.number);
             out.push_str("\n\n");
             let name = data
                 .item(num.item_id)
@@ -92,16 +96,16 @@ fn render_shop(state: &ShopState, data: &GameData, inventory: &Inventory) -> Str
                 .unwrap_or_default();
             let total = num.unit_price * num.count as i32;
             out.push_str(&format!(
-                "{name}   × {}\n\nÖsszesen: {total}{GOLD_UNIT}\n",
+                "{name}   × {}\n\nÖsszesen: {total} {unit}\n",
                 num.count
             ));
         }
         Phase::Bought { .. } => {
-            out.push_str(vocab.purchased);
+            out.push_str(&vocab.purchased);
             out.push('\n');
         }
         Phase::Sold { .. } => {
-            out.push_str(vocab.sold);
+            out.push_str(&vocab.sold);
             out.push('\n');
         }
     }
@@ -119,6 +123,7 @@ fn list_rows(
     data: &GameData,
     inventory: &Inventory,
     mode: Mode,
+    unit: &str,
 ) {
     if ids.is_empty() {
         out.push_str("  (nincs áru)\n");
@@ -130,9 +135,9 @@ fn list_rows(
         };
         let name = i18n::tr(&item.name);
         let row = match mode {
-            Mode::Buy => format!("{name}   {}{GOLD_UNIT}", item.price),
+            Mode::Buy => format!("{name}   {} {unit}", item.price),
             Mode::Sell => format!(
-                "{name}   {}{GOLD_UNIT}   ×{}",
+                "{name}   {} {unit}   ×{}",
                 logic::sell_price(item.price),
                 inventory.count(id)
             ),
@@ -143,21 +148,22 @@ fn list_rows(
     }
 }
 
-fn render_inn(cost: i32, yes: bool, done: bool, inventory: &Inventory) -> String {
-    let inn = messages::inn_vocab();
+fn render_inn(cost: i32, yes: bool, done: bool, inventory: &Inventory, terms: &Terms) -> String {
+    let inn = messages::inn_vocab(terms);
+    let unit = messages::currency(terms);
     let cost = cost.max(0);
-    let gold = format!("{GOLD_LABEL}: {}", inventory.gold());
+    let gold = format!("{} {unit}", inventory.gold());
     if done {
-        return format!("{}\n\n(-{cost}{GOLD_UNIT})\n\n{gold}", inn.rested);
+        return format!("{}\n\n(-{cost} {unit})\n\n{gold}", inn.rested);
     }
     let affordable = logic::inn_afford(cost, inventory.gold()).is_some();
     let accept = if affordable {
-        inn.accept.to_string()
+        inn.accept.clone()
     } else {
         format!("{} {}", inn.accept, inn.broke)
     };
     format!(
-        "Egy szoba {cost}{GOLD_UNIT}.\nKipihened magad?\n\n{}{accept}\n{}{}\n\n{gold}",
+        "Egy szoba {cost} {unit}.\nKipihened magad?\n\n{}{accept}\n{}{}\n\n{gold}",
         cursor_mark(yes),
         cursor_mark(!yes),
         inn.cancel,

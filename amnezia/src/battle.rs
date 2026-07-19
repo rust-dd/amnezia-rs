@@ -17,6 +17,7 @@
 mod floaters;
 mod hud;
 mod input;
+mod log_terms;
 mod logic;
 mod model;
 mod resolve;
@@ -30,6 +31,7 @@ use crate::audio::{AudioRequest, BgmTrack, CurrentBgm};
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
+use crate::terms::Terms;
 use crate::vitals::Vitals;
 use amnezia_data::{ActorDef, AttributeDef, MonsterDef, StateDef, SystemDef, TroopDef};
 use bevy::camera::visibility::RenderLayers;
@@ -190,6 +192,7 @@ fn start_on_request(
     party: Res<Party>,
     vitals: Res<Vitals>,
     progression: Res<Progression>,
+    terms: Res<Terms>,
     current_bgm: Res<CurrentBgm>,
     mut map_bgm: ResMut<MapBgm>,
     mut audio: MessageWriter<AudioRequest>,
@@ -228,6 +231,9 @@ fn start_on_request(
         BACKDROP.to_string(),
         seed,
     );
+    // Capture the real RM2000 battle-end message terms for the outcome/reward
+    // log lines the resolution code (which has no resources) composes.
+    battle.text.apply(&terms.0);
     active.0 = true;
     result.0 = None;
     // Remember the map BGM (read before the battle track replaces it this frame),
@@ -586,6 +592,7 @@ mod tests {
         app.init_resource::<BattleResult>();
         app.init_resource::<MapBgm>();
         app.init_resource::<CurrentBgm>();
+        app.init_resource::<Terms>();
         app.init_resource::<ButtonInput<KeyCode>>();
         app.add_systems(
             Update,

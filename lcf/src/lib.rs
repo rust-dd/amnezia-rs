@@ -18,9 +18,9 @@ mod map_tree;
 pub use database::{
     Actor, Animation, AnimationCell, AnimationFrame, AnimationTiming, Attribute, Chipset,
     CommonEvent, EnemyAction, Item, Learning, Monster, Music, Skill, Sound, StatCurves, State,
-    System, Troop, TroopMember, parse_actors, parse_animations, parse_attributes, parse_chipsets,
-    parse_common_events, parse_items, parse_monsters, parse_skills, parse_states, parse_system,
-    parse_troops,
+    System, Terms, Troop, TroopMember, parse_actors, parse_animations, parse_attributes,
+    parse_chipsets, parse_common_events, parse_items, parse_monsters, parse_skills, parse_states,
+    parse_system, parse_terms, parse_troops,
 };
 pub use map::{Event, EventCommand, EventCondition, EventPage, MapUnit, parse_map};
 pub use map_tree::{MapInfo, Start, parse_map_infos, parse_start};
@@ -62,6 +62,8 @@ pub enum LcfError {
     MissingCommonEvents,
     #[error("LCF database has no system section (chunk 0x16)")]
     MissingSystem,
+    #[error("LCF database has no terms section (chunk 0x15)")]
+    MissingTerms,
 }
 
 /// A cursor over an LCF byte stream, shared by every parser in the crate.

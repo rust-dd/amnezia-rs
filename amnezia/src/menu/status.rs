@@ -8,21 +8,27 @@ use crate::gamedata::GameData;
 use crate::i18n;
 use crate::progression::Progression;
 use crate::state::Party;
+use crate::terms::Terms;
 use crate::vitals::Vitals;
 
 use super::derive;
 
-/// The five equipment slot labels, in `ActorDef` slot order.
-const SLOT_LABELS: [&str; 5] = ["Fegyver", "Pajzs", "Vért", "Sisak", "Kiegészítő"];
+/// The five equipment slot labels, in `ActorDef` slot order — the faithful
+/// Hungarian fallbacks used when the real `weapon`/`shield`/`armor`/`helmet`/
+/// `accessory` terms are blank.
+const SLOT_FALLBACKS: [&str; 5] = ["Fegyver", "Pajzs", "Vért", "Sisak", "Kiegészítő"];
 
 /// Compose the status block for the `member`-th roster entry. Falls back to a
-/// short placeholder when the member index or actor id is unknown.
+/// short placeholder when the member index or actor id is unknown. The field
+/// labels (level, HP/SP, the four battle stats, the five equipment slots) come
+/// from the real RM2000 Terms, each falling back to its Hungarian placeholder.
 pub(super) fn compose_status(
     member: usize,
     data: &GameData,
     party: &Party,
     progression: &Progression,
     vitals: &Vitals,
+    terms: &Terms,
 ) -> String {
     let roster = party.snapshot();
     let Some(&id) = roster.get(member) else {
@@ -32,26 +38,48 @@ pub(super) fn compose_status(
         return format!("#{id} (ismeretlen)\n");
     };
 
+    let t = &terms.0;
     let level = progression.level(def);
     let (max_hp, max_sp) = derive::max_hp_sp(def, level);
     let (hp, sp) = vitals.get_stored(id).unwrap_or((max_hp, max_sp));
     let stats = derive::stats_at(def, level, &data.items);
     let total = progression.total(def);
+    let exp_label = terms.label(&t.exp_short, "EXP");
     let exp = match derive::exp_to_next(def, total, level) {
-        Some(rem) => format!("EXP {total} (köv: {rem})"),
-        None => format!("EXP {total} (max)"),
+        Some(rem) => format!("{exp_label} {total} (köv: {rem})"),
+        None => format!("{exp_label} {total} (max)"),
     };
 
     let mut out = format!("{} — {}\n", i18n::tr(&def.name), i18n::tr(&def.title));
-    out.push_str(&format!("Szint {level}   {exp}\n\n"));
-    out.push_str(&format!("HP {hp}/{max_hp}   SP {sp}/{max_sp}\n\n"));
     out.push_str(&format!(
-        "Támadás {}   Védelem {}\nSzellem {}   Gyorsaság {}\n\n",
-        stats[0], stats[1], stats[2], stats[3]
+        "{} {level}   {exp}\n\n",
+        terms.label(&t.level, "Szint")
+    ));
+    out.push_str(&format!(
+        "{} {hp}/{max_hp}   {} {sp}/{max_sp}\n\n",
+        terms.label(&t.hp_short, "HP"),
+        terms.label(&t.sp_short, "SP")
+    ));
+    out.push_str(&format!(
+        "{} {}   {} {}\n{} {}   {} {}\n\n",
+        terms.label(&t.attack, "Támadás"),
+        stats[0],
+        terms.label(&t.defense, "Védelem"),
+        stats[1],
+        terms.label(&t.spirit, "Szellem"),
+        stats[2],
+        terms.label(&t.agility, "Gyorsaság"),
+        stats[3],
     ));
 
+    let slot_terms = [&t.weapon, &t.shield, &t.armor, &t.helmet, &t.accessory];
+    let slot_labels: Vec<String> = slot_terms
+        .iter()
+        .zip(SLOT_FALLBACKS.iter())
+        .map(|(term, fallback)| terms.label(term, fallback))
+        .collect();
     let slots = [def.weapon, def.shield, def.armor, def.helmet, def.accessory];
-    for (label, &slot) in SLOT_LABELS.iter().zip(slots.iter()) {
+    for (label, &slot) in slot_labels.iter().zip(slots.iter()) {
         let gear = if slot == 0 {
             "—".to_string()
         } else {
@@ -85,7 +113,14 @@ mod tests {
         let mut vitals = Vitals::default();
         vitals.set(1, 20, 5);
 
-        let text = compose_status(0, &d, &Party::default(), &Progression::default(), &vitals);
+        let text = compose_status(
+            0,
+            &d,
+            &Party::default(),
+            &Progression::default(),
+            &vitals,
+            &Terms::default(),
+        );
 
         assert!(text.contains("Szint 2"), "level: {text}");
         assert!(text.contains("HP 20/63"), "hp cur/max: {text}");
@@ -106,6 +141,7 @@ mod tests {
             &Party::default(),
             &Progression::default(),
             &Vitals::default(),
+            &Terms::default(),
         );
         assert!(text.contains("HP 63/63"), "defaults to full: {text}");
     }

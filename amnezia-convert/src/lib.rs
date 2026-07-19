@@ -10,6 +10,7 @@ mod database_party;
 mod graphics;
 mod maps;
 mod system;
+mod terms;
 
 pub use animations::convert_animations;
 pub use audio::convert_audio;
@@ -20,3 +21,4 @@ pub use maps::{
     convert_chipsets, convert_common_events, convert_map_info, convert_maps, convert_start,
 };
 pub use system::convert_system;
+pub use terms::convert_terms;

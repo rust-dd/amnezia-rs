@@ -5,6 +5,7 @@
 //! each confirm drills into.
 
 use super::{MemberAction, MenuScreen};
+use crate::terms::Terms;
 
 /// The RM2000 default main-menu commands, in cursor order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,14 +26,19 @@ pub(super) const COMMANDS: [Command; 5] = [
     Command::EndGame,
 ];
 
-/// The Hungarian label shown for a command.
-pub(super) fn label(command: Command) -> &'static str {
+/// The localised label for a command, sourced from the real RM2000 Terms (the
+/// main-menu commands reuse the battle `command_item` / `command_skill` terms and
+/// the `menu_equipment` / `menu_save` / `menu_quit` terms — EasyRPG
+/// `Scene_Menu::CreateCommandWindow`). Each falls back to its faithful Hungarian
+/// placeholder when the term is blank, and routes through `i18n::tr` for English.
+pub(super) fn label(command: Command, terms: &Terms) -> String {
+    let t = &terms.0;
     match command {
-        Command::Item => "Tárgy",
-        Command::Skill => "Képesség",
-        Command::Equipment => "Felszerelés",
-        Command::Save => "Mentés",
-        Command::EndGame => "Kilépés",
+        Command::Item => terms.label(&t.command_item, "Tárgy"),
+        Command::Skill => terms.label(&t.command_skill, "Képesség"),
+        Command::Equipment => terms.label(&t.menu_equipment, "Felszerelés"),
+        Command::Save => terms.label(&t.menu_save, "Mentés"),
+        Command::EndGame => terms.label(&t.menu_quit, "Kilépés"),
     }
 }
 
@@ -79,14 +85,29 @@ mod tests {
     use super::*;
 
     #[test]
-    fn commands_are_the_five_rm2000_entries_in_order_including_kilepes() {
-        let labels: Vec<&str> = COMMANDS.iter().map(|&c| label(c)).collect();
+    fn commands_resolve_to_the_parsed_terms_in_rm2000_order() {
+        // The five commands map onto the real RM2000 command / menu terms.
+        let mut terms = Terms::default();
+        terms.0.command_item = "Item".into();
+        terms.0.command_skill = "Skill".into();
+        terms.0.menu_equipment = "Equip".into();
+        terms.0.menu_save = "Save".into();
+        terms.0.menu_quit = "Quit".into();
+        let labels: Vec<String> = COMMANDS.iter().map(|&c| label(c, &terms)).collect();
+        assert_eq!(labels, vec!["Item", "Skill", "Equip", "Save", "Quit"]);
+        // The last command is the "End Game" the rework restores.
+        assert_eq!(COMMANDS.last(), Some(&Command::EndGame));
+    }
+
+    #[test]
+    fn a_blank_term_falls_back_to_the_hungarian_placeholder() {
+        // With no parsed terms the chrome still reads naturally in Hungarian.
+        let terms = Terms::default();
+        let labels: Vec<String> = COMMANDS.iter().map(|&c| label(c, &terms)).collect();
         assert_eq!(
             labels,
             vec!["Tárgy", "Képesség", "Felszerelés", "Mentés", "Kilépés"]
         );
-        // The last command is the "End Game" the rework restores.
-        assert_eq!(COMMANDS.last(), Some(&Command::EndGame));
     }
 
     #[test]

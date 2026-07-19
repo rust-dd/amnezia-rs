@@ -6,12 +6,13 @@
 //! the front camera owns the default UI. The panels are hidden until a fight runs
 //! and their text is recomposed whenever the [`Battle`] changes.
 
-use super::input::{COMMAND_LABELS, PARTY_LABELS, item_choices, skill_choices};
+use super::input::{command_labels, item_choices, party_labels, skill_choices};
 use super::model::{Battle, MenuLevel, Phase};
 use crate::font::GameFont;
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::state::Inventory;
+use crate::terms::Terms;
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
@@ -61,6 +62,7 @@ fn update_hud(
     battle: Res<Battle>,
     data: Res<GameData>,
     inventory: Res<Inventory>,
+    terms: Res<Terms>,
     mut root: Query<&mut Visibility, With<HudRoot>>,
     mut texts: ParamSet<(
         Query<&mut Text, With<LogText>>,
@@ -86,7 +88,7 @@ fn update_hud(
         **text = battle.log_tail();
     }
     if let Ok(mut text) = texts.p1().single_mut() {
-        **text = compose_command(&battle, &data, &inventory);
+        **text = compose_command(&battle, &data, &inventory, &terms);
     }
     if let Ok(mut text) = texts.p2().single_mut() {
         **text = compose_status(&battle);
@@ -95,10 +97,15 @@ fn update_hud(
 
 /// The command panel body: the active member's menu (or a phase note when not
 /// choosing), with the cursor marking the current row.
-fn compose_command(battle: &Battle, data: &GameData, inventory: &Inventory) -> String {
+fn compose_command(
+    battle: &Battle,
+    data: &GameData,
+    inventory: &Inventory,
+    terms: &Terms,
+) -> String {
     if battle.phase == Phase::PartyCommand {
         let mut out = "Parancs:\n".to_string();
-        for (i, row) in PARTY_LABELS.iter().enumerate() {
+        for (i, row) in party_labels(terms).iter().enumerate() {
             out.push_str(if i == battle.cursor { "▶ " } else { "  " });
             out.push_str(row);
             out.push('\n');
@@ -115,7 +122,7 @@ fn compose_command(battle: &Battle, data: &GameData, inventory: &Inventory) -> S
         return String::new();
     };
     let rows: Vec<String> = match battle.menu {
-        MenuLevel::Command => COMMAND_LABELS.iter().map(|s| s.to_string()).collect(),
+        MenuLevel::Command => command_labels(terms).to_vec(),
         MenuLevel::Skill => or_empty(
             skill_choices(data, &actor.known_skills, actor.sp)
                 .into_iter()

@@ -9,18 +9,43 @@ use super::model::{Battle, BattleSe, Command, MenuLevel, Phase};
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::state::Inventory;
+use crate::terms::Terms;
 use bevy::prelude::*;
 
 /// The medicine category in the converted `ItemDef::item_type`.
 const MEDICINE: u32 = 6;
 
-/// The per-actor command options, in cursor order — RM2000 order, Defend before
-/// Item and no per-actor flee (escape is a party-level option, see [`PARTY_LABELS`]).
-pub const COMMAND_LABELS: [&str; 4] = ["Támadás", "Képesség", "Védekezés", "Tárgy"];
+/// The number of per-actor command options (RM2000 Attack / Skill / Defend /
+/// Item, in cursor order) and party-level options (Fight / Auto / Escape). The
+/// labels themselves come from the real terms via [`command_labels`] /
+/// [`party_labels`]; the counts drive the cursor bounds.
+pub const COMMAND_COUNT: usize = 4;
+pub const PARTY_COUNT: usize = 3;
 
-/// The party-level option window shown at the top of each round (RM2000
-/// Fight / Auto / Escape), in cursor order.
-pub const PARTY_LABELS: [&str; 3] = ["Harc", "Auto", "Menekülés"];
+/// The per-actor command labels in cursor order, from the real RM2000 terms
+/// (`command_attack` / `command_skill` / `command_defend` / `command_item` —
+/// EasyRPG `Scene_Battle_Rpg2k`), each falling back to its Hungarian placeholder.
+/// Defend precedes Item and there is no per-actor flee (escape is a party option).
+pub fn command_labels(terms: &Terms) -> [String; COMMAND_COUNT] {
+    let t = &terms.0;
+    [
+        terms.label(&t.command_attack, "Támadás"),
+        terms.label(&t.command_skill, "Képesség"),
+        terms.label(&t.command_defend, "Védekezés"),
+        terms.label(&t.command_item, "Tárgy"),
+    ]
+}
+
+/// The party-level option labels in cursor order (RM2000 `battle_fight` /
+/// `battle_auto` / `battle_escape`), each falling back to its Hungarian placeholder.
+pub fn party_labels(terms: &Terms) -> [String; PARTY_COUNT] {
+    let t = &terms.0;
+    [
+        terms.label(&t.battle_fight, "Harc"),
+        terms.label(&t.battle_auto, "Auto"),
+        terms.label(&t.battle_escape, "Menekülés"),
+    ]
+}
 
 /// Drive the command phases: the party-option window at round start, then the
 /// per-actor menu levels once the player picks Fight.
@@ -50,7 +75,7 @@ pub fn command_input(
 /// per-actor command entry, Auto orders the whole party a basic attack and
 /// resolves, Escape attempts to flee now.
 fn party_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
-    move_cursor(keys, &mut battle.cursor, PARTY_LABELS.len());
+    move_cursor(keys, &mut battle.cursor, PARTY_COUNT);
     if !confirm(keys) {
         return;
     }
@@ -98,7 +123,7 @@ fn command_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
         battle.undo_choice();
         return;
     }
-    move_cursor(keys, &mut battle.cursor, COMMAND_LABELS.len());
+    move_cursor(keys, &mut battle.cursor, COMMAND_COUNT);
     if !confirm(keys) {
         return;
     }
@@ -254,7 +279,8 @@ fn escape(battle: &mut Battle) {
     if battle.attempt_escape() {
         battle.finish(BattleOutcome::Escape);
     } else {
-        battle.log.push("Menekülés sikertelen!".to_string());
+        let line = i18n::tr(&battle.text.escape_failure);
+        battle.log.push(line);
         battle.begin_resolve();
     }
 }
@@ -452,15 +478,35 @@ mod tests {
     }
 
     #[test]
-    fn the_actor_command_list_is_attack_skill_defend_item_without_flee() {
-        // RM2000 order — Defend before Item — and no per-actor flee row.
+    fn the_actor_command_list_resolves_to_the_parsed_terms_without_flee() {
+        // With parsed terms the labels resolve to the real RM2000 command terms,
+        // in RM2000 order — Defend before Item — and no per-actor flee row.
+        let mut terms = Terms::default();
+        terms.0.command_attack = "Attack".into();
+        terms.0.command_skill = "Skill".into();
+        terms.0.command_defend = "Defend".into();
+        terms.0.command_item = "Item".into();
+        terms.0.battle_fight = "Fight".into();
+        terms.0.battle_auto = "Auto".into();
+        terms.0.battle_escape = "Escape".into();
         assert_eq!(
-            COMMAND_LABELS,
+            command_labels(&terms),
+            ["Attack", "Skill", "Defend", "Item"]
+        );
+        assert!(!command_labels(&terms).contains(&"Escape".to_string()));
+        // Escape lives on the party-level window instead.
+        assert_eq!(party_labels(&terms), ["Fight", "Auto", "Escape"]);
+    }
+
+    #[test]
+    fn command_labels_fall_back_to_the_hungarian_placeholders() {
+        // No parsed terms: the chrome still reads naturally in Hungarian.
+        let terms = Terms::default();
+        assert_eq!(
+            command_labels(&terms),
             ["Támadás", "Képesség", "Védekezés", "Tárgy"]
         );
-        assert!(!COMMAND_LABELS.contains(&"Menekülés"));
-        // Escape lives on the party-level window instead.
-        assert_eq!(PARTY_LABELS, ["Harc", "Auto", "Menekülés"]);
+        assert_eq!(party_labels(&terms), ["Harc", "Auto", "Menekülés"]);
     }
 
     #[test]

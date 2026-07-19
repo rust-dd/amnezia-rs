@@ -400,6 +400,10 @@ pub struct Battle {
     /// paid on entering the outcome, so `battle::apply_victory_rewards` pays out
     /// exactly once while the outcome screen waits for the player.
     pub(super) rewarded: bool,
+    /// The real RM2000 battle-end message terms (victory / defeat / escape and the
+    /// reward lines), captured from the loaded vocabulary at battle start; the
+    /// invented Hungarian defaults stand in until then (see [`super::log_terms`]).
+    pub(super) text: super::log_terms::BattleText,
     pub(super) rng: u64,
 }
 

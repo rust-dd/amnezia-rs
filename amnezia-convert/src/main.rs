@@ -35,6 +35,7 @@ fn main() -> Result<()> {
     let hero = amnezia_convert::convert_hero(&args.input, &args.output)?;
     let (effects, music) = amnezia_convert::convert_audio(&args.input, &args.output)?;
     amnezia_convert::convert_system(&args.input, &args.output)?;
+    amnezia_convert::convert_terms(&args.input, &args.output)?;
     println!(
         "converted {images} images, {maps} maps, {map_info} map-info nodes, {chipsets} chipsets, \
          {actors} actors, {items} items, {skills} skills, {states} states, \
