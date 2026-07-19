@@ -198,6 +198,22 @@ pub struct Action {
     pub agility: u32,
 }
 
+/// A deferred sub-step of the action currently resolving, drained one per
+/// resolve tick so a multi-target cast staggers its per-target beats and a
+/// critical shows its announcement on its own beat before the damage lands.
+/// Mirrors RM2000's `ProcessBattleAction` walking its substates each behind its
+/// own `SetWait`, without the full substate machine.
+#[derive(Clone, Copy)]
+pub(super) enum Step {
+    /// Land caster `pi`'s multi-target skill on one more enemy `ti`.
+    HitEnemy { pi: usize, ti: usize, skill_id: u32 },
+    /// Apply caster `pi`'s multi-target heal to one more ally `ti`.
+    HealAlly { pi: usize, ti: usize, skill_id: u32 },
+    /// The damage beat after a "Kritikus!" announcement: land the precomputed
+    /// `dmg` of member `pi`'s critical strike on enemy `ti`.
+    CritDamage { pi: usize, ti: usize, dmg: i32 },
+}
+
 /// One queued battle animation, produced as an action resolves and drained by
 /// `battle.rs`'s `drain_pending_anims` into a single `PlayAnimation` overlay
 /// message. `anim_id` is the effect id; `targets` are the RM2000 screen offsets
@@ -281,6 +297,15 @@ pub struct Battle {
     /// `battle::scene` into a blink on each struck sprite. Every landed blow
     /// enqueues one, independent of the played animation's own flash timings.
     pub(super) pending_blinks: Vec<(f32, f32)>,
+    /// Sub-steps the action currently resolving still owes, drained one per
+    /// resolve tick (see [`Step`]) so a multi-target cast staggers its numbers
+    /// and a critical announces on its own beat. Cleared by [`Battle::new_round`]
+    /// and [`Battle::begin_resolve`].
+    pub(super) steps: std::collections::VecDeque<Step>,
+    /// Set once the victory reward (gold, experience, and any level-ups) has been
+    /// paid on entering the outcome, so `battle::apply_victory_rewards` pays out
+    /// exactly once while the outcome screen waits for the player.
+    pub(super) rewarded: bool,
     pub(super) rng: u64,
 }
 
@@ -484,12 +509,24 @@ impl Battle {
                 actions.push(action);
             }
         }
-        let agilities: Vec<u32> = actions.iter().map(|a| a.agility).collect();
-        self.queue = logic::turn_order(&agilities)
+        // RM2000 `CreateExecutionOrder`: each battler's sort key is its agility
+        // plus a fresh jitter of `Rand::GetRandomNumber(0, agi/4 + 3)`, re-rolled
+        // every round, sorted fastest-first. The stable `turn_order` keeps the
+        // given order on equal keys. (First-strike's +9999 preemptive bonus is
+        // unused here — there is no preemptive-attack path yet.)
+        let keys: Vec<u32> = actions
+            .iter()
+            .map(|a| {
+                let jitter = (rng_next(&mut self.rng) % (a.agility as u64 / 4 + 4)) as u32;
+                a.agility.saturating_add(jitter)
+            })
+            .collect();
+        self.queue = logic::turn_order(&keys)
             .into_iter()
             .map(|i| actions[i])
             .collect();
         self.queue_at = 0;
+        self.steps.clear();
         self.timer.reset();
         self.phase = Phase::Resolve;
     }
@@ -511,6 +548,7 @@ impl Battle {
         self.run_recovery();
         self.queue.clear();
         self.queue_at = 0;
+        self.steps.clear();
         self.pending_anims.clear();
         self.pending_numbers.clear();
         self.pending_blinks.clear();
@@ -663,184 +701,4 @@ pub(super) mod testkit {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::testkit::build_1v2;
-    use super::*;
-
-    #[test]
-    fn build_instantiates_both_sides_into_the_command_phase() {
-        let battle = build_1v2();
-        assert_eq!(battle.members.len(), 1);
-        assert_eq!(battle.enemies.len(), 2);
-        assert_eq!(battle.members[0].hp, 63);
-        assert_eq!(battle.enemies[0].hp, 30);
-        assert!(battle.phase == Phase::Command);
-        assert_eq!(battle.next_chooser(), Some(0));
-    }
-
-    #[test]
-    fn committing_all_orders_enters_resolution_with_a_full_queue() {
-        let mut battle = build_1v2();
-        battle.commit(Command::Attack { target: 0 });
-        // one party action + two enemy actions, ordered by agility.
-        assert!(battle.phase == Phase::Resolve);
-        assert_eq!(battle.queue.len(), 3);
-    }
-
-    #[test]
-    fn undo_choice_steps_back_to_the_previous_committed_member() {
-        let ron = super::testkit::actor(1, 2, 63, 37);
-        let tiff = super::testkit::actor(2, 3, 38, 75);
-        let actors = vec![&ron, &tiff];
-        let monsters = vec![super::testkit::monster(1, 30, 10, 30)];
-        let troop = super::testkit::troop(&[(1, 100, 100)]);
-        let mut battle = Battle::build(
-            &troop,
-            &monsters,
-            &actors,
-            &[],
-            &[],
-            &[],
-            &[],
-            &Vitals::default(),
-            &Progression::default(),
-            "Cave1".into(),
-            7,
-        );
-        battle.commit(Command::Defend); // member 0 acts, turn moves to member 1
-        assert_eq!(battle.turn, 1);
-        battle.undo_choice();
-        assert_eq!(battle.turn, 0);
-        assert!(battle.members[0].command.is_none());
-    }
-
-    #[test]
-    fn new_round_clears_orders_and_defence() {
-        let mut battle = build_1v2();
-        battle.members[0].command = Some(Command::Defend);
-        battle.members[0].defending = true;
-        battle.new_round();
-        assert!(battle.members[0].command.is_none());
-        assert!(!battle.members[0].defending);
-        assert!(battle.phase == Phase::Command);
-    }
-
-    #[test]
-    fn new_round_clears_every_foe_defence() {
-        let mut battle = build_1v2();
-        for e in &mut battle.enemies {
-            e.defending = true;
-        }
-        battle.new_round();
-        assert!(battle.enemies.iter().all(|e| !e.defending));
-    }
-
-    #[test]
-    fn build_adds_equipment_bonuses_and_captures_the_weapon() {
-        let mut ron = testkit::actor(1, 1, 50, 10);
-        ron.weapon = 1;
-        ron.armor = 2;
-        let actors = vec![&ron];
-        let items = vec![
-            testkit::item(1, 10, 0, 85, 5, 4), // weapon: +10 atk, hit 85, crit 5, element 4
-            testkit::item(2, 0, 20, 0, 0, 0),  // armor: +20 def, no weapon fields
-        ];
-        let monsters = vec![testkit::monster(1, 30, 10, 30)];
-        let troop = testkit::troop(&[(1, 100, 100)]);
-        let prog = Progression::default();
-        let base = logic::actor_stats_at(&ron.curves, prog.level(&ron));
-        let battle = Battle::build(
-            &troop,
-            &monsters,
-            &actors,
-            &items,
-            &[],
-            &[],
-            &[],
-            &Vitals::default(),
-            &prog,
-            "Cave1".into(),
-            1,
-        );
-        let f = &battle.members[0];
-        assert_eq!(f.stats.attack, base.attack + 10);
-        assert_eq!(f.stats.defense, base.defense + 20);
-        assert_eq!(f.weapon_hit, 85);
-        assert_eq!(f.weapon_crit, 5);
-        assert_eq!(f.weapon_element, Some(4));
-    }
-
-    #[test]
-    fn foe_attribute_rank_reads_the_vector_then_defaults_to_neutral_c() {
-        let mut battle = build_1v2();
-        battle.enemies[0].attribute_ranks = vec![0, 2, 4]; // attrs 1,2,3 -> A, C, E
-        let foe = &battle.enemies[0];
-        assert_eq!(foe.attribute_rank(1), 0); // A
-        assert_eq!(foe.attribute_rank(2), 2); // C
-        assert_eq!(foe.attribute_rank(3), 4); // E
-        assert_eq!(foe.attribute_rank(4), 2); // past the truncated vector -> C
-        assert_eq!(foe.attribute_rank(0), 2); // non-elemental id -> C
-    }
-
-    fn state_def(id: u32, restriction: u32, auto_release_prob: u32) -> StateDef {
-        StateDef {
-            id,
-            name: format!("S{id}"),
-            restriction,
-            priority: 0,
-            hold_turn: 0,
-            auto_release_prob,
-            release_by_damage: 0,
-            hp_change_type: 0,
-            hp_change_max: 0,
-            hp_change_val: 0,
-            hp_change_map_steps: 0,
-            hp_change_map_val: 0,
-        }
-    }
-
-    fn build_2v1(seed: u64) -> Battle {
-        let ron = testkit::actor(1, 2, 63, 37);
-        let tiff = testkit::actor(2, 3, 38, 75);
-        let actors = vec![&ron, &tiff];
-        let monsters = vec![testkit::monster(1, 30, 10, 30)];
-        let troop = testkit::troop(&[(1, 100, 100)]);
-        Battle::build(
-            &troop,
-            &monsters,
-            &actors,
-            &[],
-            &[],
-            &[],
-            &[],
-            &Vitals::default(),
-            &Progression::default(),
-            "Cave1".into(),
-            seed,
-        )
-    }
-
-    #[test]
-    fn a_cant_act_member_is_auto_skipped_in_the_command_flow() {
-        let mut battle = build_2v1(7);
-        // Afflict member 1 with a can't-act (restriction 1) state.
-        battle.states = vec![state_def(7, 1, 0)];
-        battle.members[1].states = vec![(7, 0)];
-        // Member 0 chooses; the flow must auto-order the sleeping member 1 and
-        // enter resolution rather than stop for its input.
-        battle.commit(Command::Defend);
-        assert!(matches!(battle.members[1].command, Some(Command::Nothing)));
-        assert!(battle.phase == Phase::Resolve);
-    }
-
-    #[test]
-    fn new_round_wears_off_a_timed_state_but_never_the_death_state() {
-        let mut battle = build_1v2();
-        // Death (id 1) is exempt; state 2 lifts at once (hold 0, 100% release).
-        battle.states = vec![state_def(1, 0, 100), state_def(2, 0, 100)];
-        battle.members[0].states = vec![(1, 0), (2, 0)];
-        battle.new_round();
-        assert!(logic::has_state(&battle.members[0].states, 1)); // KO status endures
-        assert!(!logic::has_state(&battle.members[0].states, 2)); // timed state worn off
-    }
-}
+mod tests;

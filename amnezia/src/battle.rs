@@ -112,6 +112,9 @@ impl Plugin for BattlePlugin {
                     debug_trigger,
                     input::command_input,
                     resolve_tick,
+                    apply_victory_rewards
+                        .after(resolve_tick)
+                        .before(outcome_input),
                     outcome_input,
                     drain_pending_anims.after(resolve_tick),
                 ),
@@ -267,18 +270,51 @@ fn drain_pending_anims(
     }
 }
 
-/// On the confirm key at the outcome screen: persist party HP/SP, pay out gold on
-/// a win, publish the [`BattleResult`], and tear the battle down.
-#[allow(clippy::too_many_arguments)]
+/// On entering the victory outcome, pay the fight's reward exactly once (before
+/// the outcome screen, so a level-up shows now rather than next fight): add the
+/// gold, award the experience to every member — raising their persistent level —
+/// and append a level-up line for each actor whose level rose. This is the RM2000
+/// `ProcessSceneActionVictory` per-actor `ChangeExp` beat; `rewarded` guards it so
+/// it never double-pays while the outcome screen waits for the player.
+fn apply_victory_rewards(
+    mut battle: ResMut<Battle>,
+    data: Res<GameData>,
+    mut inventory: ResMut<Inventory>,
+    mut progression: ResMut<Progression>,
+) {
+    if battle.phase != Phase::Outcome
+        || battle.outcome != Some(BattleOutcome::Victory)
+        || battle.rewarded
+    {
+        return;
+    }
+    battle.rewarded = true;
+    inventory.add_gold(battle.reward_gold as i32);
+    let exp = battle.reward_exp;
+    let mut level_ups: Vec<String> = Vec::new();
+    for fighter in &battle.members {
+        if let Some(def) = data.actor(fighter.actor_id) {
+            let before = progression.level(def);
+            progression.add(def, exp);
+            let after = progression.level(def);
+            if after > before {
+                level_ups.push(format!("{} elérte a(z) {after}. szintet!", fighter.name));
+            }
+        }
+    }
+    battle.log.extend(level_ups);
+}
+
+/// On the confirm key at the outcome screen: persist party HP/SP, publish the
+/// [`BattleResult`], and tear the battle down. The victory reward (gold and
+/// experience) was already paid by [`apply_victory_rewards`] on entering the
+/// outcome, so it is not applied again here.
 fn outcome_input(
     keys: Res<ButtonInput<KeyCode>>,
     mut battle: ResMut<Battle>,
     mut active: ResMut<BattleActive>,
     mut result: ResMut<BattleResult>,
-    mut inventory: ResMut<Inventory>,
     mut vitals: ResMut<Vitals>,
-    data: Res<GameData>,
-    mut progression: ResMut<Progression>,
 ) {
     if battle.phase != Phase::Outcome {
         return;
@@ -289,16 +325,6 @@ fn outcome_input(
     let outcome = battle.outcome.unwrap_or(BattleOutcome::Escape);
     for fighter in &battle.members {
         vitals.set(fighter.actor_id, fighter.hp.max(0), fighter.sp);
-    }
-    if outcome == BattleOutcome::Victory {
-        inventory.add_gold(battle.reward_gold as i32);
-        // Award the fight's experience to every member; a crossed threshold
-        // raises their level (and, next fight, their curve-derived stats).
-        for fighter in &battle.members {
-            if let Some(def) = data.actor(fighter.actor_id) {
-                progression.add(def, battle.reward_exp);
-            }
-        }
     }
     result.0 = Some(outcome);
     active.0 = false;
@@ -389,7 +415,15 @@ mod tests {
         app.init_resource::<BattleActive>();
         app.init_resource::<BattleResult>();
         app.init_resource::<ButtonInput<KeyCode>>();
-        app.add_systems(Update, (debug_trigger, start_on_request, outcome_input));
+        app.add_systems(
+            Update,
+            (
+                debug_trigger,
+                start_on_request,
+                apply_victory_rewards.before(outcome_input),
+                outcome_input,
+            ),
+        );
         app
     }
 
@@ -437,5 +471,132 @@ mod tests {
             "gold reward paid out"
         );
         assert!(app.world().resource::<Battle>().phase == Phase::Inactive);
+    }
+
+    #[test]
+    fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        // Ron at level 1: reaching level 2 needs exp_for_level(2) = exp_base = 30.
+        let ron = ActorDef {
+            id: 1,
+            name: "Ron".into(),
+            title: String::new(),
+            level: 1,
+            max_level: 50,
+            hp: 40,
+            sp: 10,
+            curves: Default::default(),
+            exp_base: 30,
+            exp_inflation: 30,
+            exp_correction: 0,
+            weapon: 0,
+            shield: 0,
+            armor: 0,
+            helmet: 0,
+            accessory: 0,
+            two_weapons: false,
+            fix_equipment: false,
+            unarmed_animation: 0,
+            face_name: String::new(),
+            face_index: 0,
+        };
+        app.insert_resource(GameData {
+            actors: vec![ron.clone()],
+            items: vec![],
+            skills: vec![],
+        });
+        app.init_resource::<Inventory>();
+        app.init_resource::<Vitals>();
+        app.init_resource::<Progression>();
+        app.init_resource::<BattleResult>();
+        app.init_resource::<BattleActive>();
+        app.init_resource::<ButtonInput<KeyCode>>();
+        // A foe worth exactly 30 exp — enough to lift Ron from level 1 to 2 — and
+        // 30 gold.
+        let monsters = vec![MonsterDef {
+            id: 1,
+            name: "Rabló".into(),
+            battler: String::new(),
+            max_hp: 30,
+            max_sp: 0,
+            attack: 20,
+            defense: 8,
+            spirit: 0,
+            agility: 8,
+            exp: 30,
+            gold: 30,
+            attribute_ranks: vec![],
+            state_ranks: vec![],
+            actions: vec![],
+        }];
+        let troop = TroopDef {
+            id: 1,
+            name: "T".into(),
+            members: vec![TroopMemberDef {
+                enemy_id: 1,
+                x: 100,
+                y: 100,
+            }],
+        };
+        let battle = Battle::build(
+            &troop,
+            &monsters,
+            &[&ron],
+            &[],
+            &[],
+            &[],
+            &[],
+            &Vitals::default(),
+            &Progression::default(),
+            "Cave1".into(),
+            1,
+        );
+        app.insert_resource(battle);
+        app.add_systems(
+            Update,
+            (apply_victory_rewards.before(outcome_input), outcome_input),
+        );
+        // Win the fight, then enter the outcome without confirming: the reward must
+        // pay and the level rise now, before the outcome screen.
+        app.world_mut()
+            .resource_mut::<Battle>()
+            .finish(BattleOutcome::Victory);
+        app.update();
+        assert_eq!(
+            app.world().resource::<Progression>().level(&ron),
+            2,
+            "the level rises on entering the outcome, not next fight"
+        );
+        assert_eq!(
+            app.world().resource::<Inventory>().gold(),
+            30,
+            "gold is paid once, at victory time"
+        );
+        assert!(
+            app.world()
+                .resource::<Battle>()
+                .log
+                .iter()
+                .any(|l| l.contains("szintet")),
+            "a level-up line is staged into the battle log"
+        );
+        let total_once = app.world().resource::<Progression>().total(&ron);
+        // Confirm at the outcome screen: gold and exp must not be applied a second
+        // time.
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Enter);
+        app.update();
+        assert_eq!(
+            app.world().resource::<Inventory>().gold(),
+            30,
+            "gold is not double-paid on confirm"
+        );
+        assert_eq!(
+            app.world().resource::<Progression>().total(&ron),
+            total_once,
+            "experience is not double-applied on confirm"
+        );
     }
 }
