@@ -8,8 +8,10 @@
 //! no-op) when no save slot exists.
 
 use crate::assets::resolve_png;
+use crate::audio::{AudioRequest, SystemMusic, SystemSounds, play_system_se};
 use crate::font::GameFont;
 use crate::save::{LoadRequest, save_slot_exists};
+use amnezia_data::SoundDef;
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
@@ -68,7 +70,10 @@ impl Plugin for TitlePlugin {
         app.init_resource::<TitleActive>()
             .init_resource::<TitleState>()
             .add_systems(Startup, spawn_ui)
-            .add_systems(Update, (title_input, drive_start_fade, update_ui));
+            .add_systems(
+                Update,
+                (title_input, drive_start_fade, drive_title_music, update_ui),
+            );
     }
 }
 
@@ -145,6 +150,8 @@ fn title_input(
     mut title: ResMut<TitleActive>,
     mut state: ResMut<TitleState>,
     mut load_request: ResMut<LoadRequest>,
+    mut audio: MessageWriter<AudioRequest>,
+    sounds: Option<Res<SystemSounds>>,
 ) {
     if state.continuing {
         if !load_request.0 {
@@ -156,21 +163,63 @@ fn title_input(
     if state.starting || !title.0 {
         return;
     }
+    let sounds = sounds.as_deref();
     if keys.just_pressed(KeyCode::ArrowUp) {
         state.cursor = wrap_cursor(state.cursor, -1, ROWS.len());
+        play_se(&mut audio, sounds, |s| &s.cursor);
     }
     if keys.just_pressed(KeyCode::ArrowDown) {
         state.cursor = wrap_cursor(state.cursor, 1, ROWS.len());
+        play_se(&mut audio, sounds, |s| &s.cursor);
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
         match state.cursor {
             CONTINUE if save_slot_exists() => {
+                play_se(&mut audio, sounds, |s| &s.decision);
+                // Stop the title theme now, while the world is still frozen, so the
+                // restored map takes over cleanly with no same-frame stop race.
+                audio.write(AudioRequest::StopBgm);
                 load_request.0 = true;
                 state.continuing = true;
             }
-            CONTINUE => {}
-            _ => state.starting = true,
+            // Continue with no save is disabled: buzz and stay on the title.
+            CONTINUE => play_se(&mut audio, sounds, |s| &s.buzzer),
+            _ => {
+                play_se(&mut audio, sounds, |s| &s.decision);
+                audio.write(AudioRequest::StopBgm);
+                state.starting = true;
+            }
         }
+    }
+}
+
+/// Play a [`SystemSounds`] effect if the resource is loaded; a small helper so
+/// each navigation branch reads as one line.
+fn play_se(
+    audio: &mut MessageWriter<AudioRequest>,
+    sounds: Option<&SystemSounds>,
+    pick: impl FnOnce(&SystemSounds) -> &SoundDef,
+) {
+    if let Some(sounds) = sounds {
+        play_system_se(audio, pick(sounds));
+    }
+}
+
+/// Play the title theme whenever the title takes the screen (startup, and every
+/// return from End Game or Game Over), tracked by a one-shot transition so it is
+/// not re-issued each frame. Leaving the title stops the theme from
+/// [`title_input`] directly, so this system only ever starts it.
+fn drive_title_music(
+    title: Res<TitleActive>,
+    music: Option<Res<SystemMusic>>,
+    mut audio: MessageWriter<AudioRequest>,
+    mut was_active: Local<bool>,
+) {
+    let active = title.0;
+    let just_entered = active && !*was_active;
+    *was_active = active;
+    if just_entered && let Some(music) = music {
+        audio.write(AudioRequest::from_music(&music.title));
     }
 }
 

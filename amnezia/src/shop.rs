@@ -5,6 +5,7 @@
 //! (guard wired by the main session). A buffered [`ShopRequest`] message is the
 //! interpreter→consumer channel, matching the audio module's pattern.
 
+use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::font::GameFont;
 use crate::gamedata::GameData;
 use crate::i18n;
@@ -12,6 +13,8 @@ use crate::state::Inventory;
 use crate::vitals::Vitals;
 use bevy::prelude::*;
 use bevy::text::FontSource;
+
+mod inn_music;
 
 /// A request from the interpreter to open a merchant screen. The main session
 /// wires the interpreter to emit this instead of skipping the opcodes.
@@ -83,6 +86,7 @@ impl Plugin for ShopPlugin {
                 Update,
                 (open_requests, shop_input, debug_triggers, update_ui),
             );
+        inn_music::register(app);
     }
 }
 
@@ -124,6 +128,7 @@ fn open_requests(
 
 /// Drive the open screen from the keyboard: move the cursor, toggle buy/sell,
 /// transact against the live inventory, and close on Escape.
+#[allow(clippy::too_many_arguments)]
 fn shop_input(
     keys: Res<ButtonInput<KeyCode>>,
     data: Res<GameData>,
@@ -132,9 +137,22 @@ fn shop_input(
     mut screen: ResMut<Screen>,
     mut open: ResMut<ShopOpen>,
     mut outcome: ResMut<ShopOutcome>,
+    mut audio: MessageWriter<AudioRequest>,
+    sounds: Option<Res<SystemSounds>>,
 ) {
     if matches!(*screen, Screen::Closed) || !any_menu_key(&keys) {
         return;
+    }
+    // Merchant navigation SE, like the choice/menu boxes: cancel on leave, decision
+    // on a confirm, cursor on any move.
+    if let Some(sounds) = sounds.as_deref() {
+        if keys.just_pressed(KeyCode::Escape) {
+            play_system_se(&mut audio, &sounds.cancel);
+        } else if confirm(&keys) {
+            play_system_se(&mut audio, &sounds.decision);
+        } else {
+            play_system_se(&mut audio, &sounds.cursor);
+        }
     }
     let mut current = std::mem::take(&mut *screen);
     let keep = match &mut current {

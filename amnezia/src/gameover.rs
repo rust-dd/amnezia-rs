@@ -11,6 +11,7 @@
 //! consume that same press.
 
 use crate::assets::resolve_png;
+use crate::audio::{AudioRequest, SystemMusic};
 use crate::font::GameFont;
 use crate::title::TitleActive;
 use bevy::prelude::*;
@@ -113,11 +114,18 @@ fn drive(
     mut active: ResMut<GameOverActive>,
     mut phase: ResMut<Phase>,
     mut title: ResMut<TitleActive>,
+    mut audio: MessageWriter<AudioRequest>,
+    music: Option<Res<SystemMusic>>,
 ) {
     match *phase {
         Phase::Inactive => {
             if active.0 {
                 *phase = Phase::Showing;
+                // The game-over dirge takes over from the map/battle BGM as the
+                // screen appears; the return to the title later swaps in the theme.
+                if let Some(music) = music {
+                    audio.write(AudioRequest::from_music(&music.gameover));
+                }
             }
         }
         Phase::Showing => {
@@ -159,6 +167,9 @@ mod tests {
         app.init_resource::<Phase>();
         app.insert_resource(TitleActive(false));
         app.init_resource::<ButtonInput<KeyCode>>();
+        // `drive` writes the game-over BGM; register the channel (the SystemMusic
+        // resource is optional, so the flow runs without it).
+        app.add_message::<AudioRequest>();
         app.add_systems(Update, drive);
         app
     }

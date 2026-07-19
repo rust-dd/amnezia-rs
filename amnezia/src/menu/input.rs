@@ -4,6 +4,7 @@
 //! navigation math lives in [`super::nav`]; these systems only apply it and touch
 //! the world (inventory, vitals, save request, title).
 
+use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::battle::BattleActive;
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
@@ -18,6 +19,7 @@ use crate::state::{Inventory, Party};
 use crate::teleport::Fade;
 use crate::title::TitleActive;
 use crate::vitals::Vitals;
+use amnezia_data::SoundDef;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
@@ -57,6 +59,39 @@ impl OpenBlockers<'_> {
     }
 }
 
+/// The menu's navigation sound-effect channel: the audio writer and the loaded
+/// [`SystemSounds`]. Bundled into one `SystemParam` so [`menu_input`] stays within
+/// Bevy's 16-parameter cap. Each helper plays a system SE (a no-op until the
+/// sounds load), mirroring the choice/number boxes' cursor/decision/cancel cues.
+#[derive(SystemParam)]
+pub(super) struct MenuSfx<'w> {
+    audio: MessageWriter<'w, AudioRequest>,
+    sounds: Option<Res<'w, SystemSounds>>,
+}
+
+impl MenuSfx<'_> {
+    fn play(&mut self, pick: impl FnOnce(&SystemSounds) -> &SoundDef) {
+        if let Some(sounds) = &self.sounds {
+            play_system_se(&mut self.audio, pick(sounds));
+        }
+    }
+
+    /// The cursor-move cue, played on any up/down/right navigation.
+    fn cursor(&mut self) {
+        self.play(|s| &s.cursor);
+    }
+
+    /// The confirm cue, played when a selection is entered.
+    fn decision(&mut self) {
+        self.play(|s| &s.decision);
+    }
+
+    /// The back/close cue, played when Escape backs out of or shuts the menu.
+    fn cancel(&mut self) {
+        self.play(|s| &s.cancel);
+    }
+}
+
 /// Toggle the menu on Escape (backing out of a sub-screen first) and drive the
 /// active screen: move the cursor and confirm into the next screen, apply a field
 /// item or skill, request a save, or return to the title on End Game.
@@ -77,6 +112,7 @@ pub(super) fn menu_input(
     mut state: ResMut<MenuState>,
     mut save_request: ResMut<SaveRequest>,
     blockers: OpenBlockers,
+    mut sfx: MenuSfx,
 ) {
     // A shop, battle, the title screen, a cutscene that locked menu access (opcode
     // 11960), or any live overlay/flow (message box, event, choice, number prompt,
@@ -88,6 +124,13 @@ pub(super) fn menu_input(
     if keys.just_pressed(KeyCode::Escape) {
         let was_open = open.0;
         let (next_open, next_screen) = escape_transition(open.0, state.screen);
+        // Opening the menu is a decision cue; backing out of a sub-screen or
+        // closing it is a cancel cue.
+        if next_open && !was_open {
+            sfx.decision();
+        } else {
+            sfx.cancel();
+        }
         open.0 = next_open;
         state.screen = next_screen;
         if next_open && !was_open {
@@ -107,10 +150,19 @@ pub(super) fn menu_input(
     let up = keys.just_pressed(KeyCode::ArrowUp);
     let down = keys.just_pressed(KeyCode::ArrowDown);
     let members = party.snapshot().len().saturating_sub(1);
+    // Cursor cue on any vertical move, decision cue on a confirm; the Escape
+    // (cancel) cue is played in its own branch above.
+    if up || down {
+        sfx.cursor();
+    }
+    if confirm {
+        sfx.decision();
+    }
     match state.screen {
         MenuScreen::Command => {
             state.cursor = step(state.cursor, up, down, command::COMMANDS.len() - 1);
             if keys.just_pressed(KeyCode::ArrowRight) {
+                sfx.cursor();
                 state.screen = MenuScreen::MemberSelect {
                     action: MemberAction::Status,
                     cursor: 0,
@@ -240,6 +292,9 @@ mod tests {
             .init_resource::<Fade>()
             .init_resource::<GameOverActive>()
             .init_resource::<ButtonInput<KeyCode>>()
+            // `menu_input` writes navigation SE; register the channel (SystemSounds
+            // is optional, so the tests run without loading the effects).
+            .add_message::<AudioRequest>()
             .add_systems(Update, menu_input);
         app
     }

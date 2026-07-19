@@ -658,7 +658,17 @@ fn run_interpreter(
                 running.ip += 1;
             }
             FADE_OUT_BGM => {
-                audio.write(AudioRequest::StopBgm);
+                // params[0] is the fade time in ms: ramp the BGM to silence over
+                // it rather than cutting instantly.
+                audio.write(AudioRequest::fade_out(&command.params));
+                running.ip += 1;
+            }
+            MEMORIZE_BGM => {
+                audio.write(AudioRequest::MemorizeBgm);
+                running.ip += 1;
+            }
+            PLAY_MEMORIZED_BGM => {
+                audio.write(AudioRequest::PlayMemorizedBgm);
                 running.ip += 1;
             }
             ERASE_SCREEN | SHOW_SCREEN | TINT_SCREEN | FLASH_SCREEN | SHAKE_SCREEN

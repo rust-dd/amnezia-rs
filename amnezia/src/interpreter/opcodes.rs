@@ -69,6 +69,8 @@ pub(super) const SHOW_CHOICE_END: u32 = 20141;
 pub(super) const MOVE_EVENT: u32 = 11330;
 pub(super) const PLAY_BGM: u32 = 11510;
 pub(super) const FADE_OUT_BGM: u32 = 11520;
+pub(super) const MEMORIZE_BGM: u32 = 11530;
+pub(super) const PLAY_MEMORIZED_BGM: u32 = 11540;
 pub(super) const PLAY_SOUND: u32 = 11550;
 
 /// The presentation commands: screen effects and on-screen pictures.

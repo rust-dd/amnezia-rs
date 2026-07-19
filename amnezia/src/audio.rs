@@ -1,7 +1,8 @@
 //! Game audio: sound effects and background music, driven by the event
 //! interpreter. The interpreter stays decoupled from Bevy's audio types by
-//! emitting an [`AudioRequest`] message; this plugin consumes it and spawns the
-//! actual players. A buffered message is chosen over a shared resource queue
+//! emitting an [`AudioRequest`] (defined in [`request`]); this plugin consumes it
+//! and spawns the actual players, ramps BGM fade-in/out, and remembers a
+//! memorized track. A buffered message is chosen over a shared resource queue
 //! because it is the idiomatic Bevy 0.19 producer/consumer channel and needs no
 //! manual draining or clearing.
 //!
@@ -11,126 +12,28 @@
 //! MIDI-only track is skipped without an error or per-frame logging.
 
 use crate::assets::{asset_root, load_ron};
-use amnezia_data::{SoundDef, SystemDef};
-use bevy::audio::Volume;
+use amnezia_data::{MusicDef, SoundDef, SystemDef};
+use bevy::audio::{AudioSink, AudioSinkPlayback, Volume};
 use bevy::prelude::*;
 
-/// RM2000's sentinel BGM name meaning "silence": stop whatever is playing.
-const BGM_OFF: &str = "(OFF)";
+mod request;
 
-/// A playback request emitted by the interpreter. Volume is linear (0..1) and
-/// speed a rate multiplier (1.0 = normal), already mapped from the command's
-/// 0..100 volume and percent tempo so the player system stays a thin spawn step.
-#[derive(Message, Debug, Clone, PartialEq)]
-pub enum AudioRequest {
-    /// Play a one-shot sound effect; the entity despawns when it finishes.
-    Sound {
-        name: String,
-        volume: f32,
-        speed: f32,
-    },
-    /// Start looping background music, replacing any current track.
-    Bgm {
-        name: String,
-        volume: f32,
-        speed: f32,
-    },
-    /// Stop the current background music.
-    StopBgm,
-}
+use request::BgmFade;
+pub use request::{AudioRequest, BgmTrack};
 
-impl AudioRequest {
-    /// Map a `PlaySound` (11550): `.string` is the SE name, params are
-    /// `[volume, tempo, balance]` (volume 0..100, tempo a percent).
-    pub fn play_sound(name: &str, params: &[i32]) -> Self {
-        Self::Sound {
-            name: name.to_string(),
-            volume: linear_volume(params.first().copied().unwrap_or(100)),
-            speed: playback_speed(params.get(1).copied().unwrap_or(100)),
-        }
-    }
-
-    /// Map a `PlayBgm` (11510): `.string` is the track, params are
-    /// `[fade_ms, volume, tempo, balance]`. The `(OFF)` sentinel and an empty
-    /// name mean silence.
-    pub fn play_bgm(name: &str, params: &[i32]) -> Self {
-        if name.is_empty() || name == BGM_OFF {
-            return Self::StopBgm;
-        }
-        Self::Bgm {
-            name: name.to_string(),
-            volume: linear_volume(params.get(1).copied().unwrap_or(100)),
-            speed: playback_speed(params.get(2).copied().unwrap_or(100)),
-        }
-    }
-
-    /// A looping BGM request from a System `Music` entry: its track `name`, its
-    /// `0..=100` `volume`, and its percent `tempo`. An `(OFF)`/empty name stops
-    /// the BGM. Used by the battle system for the battle / victory / game-over
-    /// music.
-    pub fn bgm(name: &str, volume: u32, tempo: u32) -> Self {
-        if name.is_empty() || name == BGM_OFF {
-            return Self::StopBgm;
-        }
-        Self::Bgm {
-            name: name.to_string(),
-            volume: linear_volume(volume as i32),
-            speed: playback_speed(tempo as i32),
-        }
-    }
-
-    /// A one-shot SE request from a System `Sound` entry, or `None` for an
-    /// `(OFF)`/empty name (a disabled effect plays nothing). Used by the battle
-    /// system for its per-hit sound effects.
-    pub fn se(name: &str, volume: u32, tempo: u32) -> Option<Self> {
-        if name.is_empty() || name == BGM_OFF {
-            return None;
-        }
-        Some(Self::Sound {
-            name: name.to_string(),
-            volume: linear_volume(volume as i32),
-            speed: playback_speed(tempo as i32),
-        })
-    }
-}
-
-/// A snapshot of a looping BGM — its track `name` and already-mapped linear
-/// `volume` and playback `speed` — enough to replay it. The battle system
-/// memorizes the map BGM at [`AudioRequest::bgm`] granularity when a fight starts
-/// and restores it when the fight ends.
-#[derive(Clone, Debug, PartialEq)]
-pub struct BgmTrack {
-    pub name: String,
-    pub volume: f32,
-    pub speed: f32,
-}
-
-/// Convert an RM2000 0..100 volume to a linear 0..1 gain.
-fn linear_volume(percent: i32) -> f32 {
-    percent.clamp(0, 100) as f32 / 100.0
-}
-
-/// Convert an RM2000 percent tempo (100 = normal) to a rate multiplier, guarding
-/// a zero or negative that would otherwise stall playback.
-fn playback_speed(tempo_percent: i32) -> f32 {
-    if tempo_percent <= 0 {
-        1.0
-    } else {
-        tempo_percent as f32 / 100.0
-    }
-}
-
-/// The single active BGM: its entity (present only while a playable file loops)
-/// and the requested track name, volume, and speed. The name keeps a re-requested
-/// track — an autorun page replays it every cycle — from restarting, and a
-/// MIDI-only track from being re-logged. The volume/speed are kept so a consumer
-/// (the battle system) can memorize and later replay the exact track.
+/// The single active BGM: its entity (present only while a playable file loops),
+/// the requested track name, its target volume and speed, and any in-progress
+/// fade. The name keeps a re-requested track — an autorun page replays it every
+/// cycle — from restarting, and a MIDI-only track from being re-logged. The
+/// volume/speed are the *target* (full) values, so a memorize captures the track
+/// as if not mid-fade.
 #[derive(Resource, Default)]
 pub(crate) struct CurrentBgm {
     entity: Option<Entity>,
     name: String,
     volume: f32,
     speed: f32,
+    fade: Option<BgmFade>,
 }
 
 impl CurrentBgm {
@@ -149,6 +52,43 @@ impl CurrentBgm {
         })
     }
 
+    /// Whether the BGM is fading out (about to stop). A same-name replay during a
+    /// fade-out restarts the track rather than adjusting it, mirroring RPG_RT's
+    /// `music_stopping` guard.
+    fn stopping(&self) -> bool {
+        self.fade.as_ref().is_some_and(|fade| fade.stop_at_end)
+    }
+
+    /// What a `PlayBgm` for `name` (at `volume`/`speed`) should do against the
+    /// current state, mirroring `BgmPlay`'s name compare: ignore a seamless replay
+    /// of the same track, adjust volume/tempo in place when only those changed, or
+    /// restart for a new track (or one that is fading out).
+    fn action_for(&self, name: &str, volume: f32, speed: f32) -> BgmAction {
+        if self.name == name && !self.stopping() {
+            if self.volume != volume || self.speed != speed {
+                BgmAction::UpdateParams
+            } else {
+                BgmAction::Ignore
+            }
+        } else {
+            BgmAction::Restart
+        }
+    }
+
+    /// Begin a fade-out to silence over `duration` seconds. A playable track is
+    /// ramped by [`drive_bgm_fade`] (from its current gain) and stopped at the
+    /// end; a silent or MIDI-only track has nothing to ramp, so it just goes
+    /// silent at once.
+    fn start_fade_out(&mut self, duration: f32) {
+        if self.entity.is_none() {
+            self.name.clear();
+            self.fade = None;
+            return;
+        }
+        let start = self.fade.as_ref().map_or(self.volume, BgmFade::volume);
+        self.fade = Some(BgmFade::fade_out(start, duration));
+    }
+
     /// Construct a `CurrentBgm` reporting `name` (with `volume`/`speed`) as the
     /// playing track, for tests that memorize the map BGM without spinning up the
     /// audio player.
@@ -159,19 +99,39 @@ impl CurrentBgm {
             name: name.to_string(),
             volume,
             speed,
+            fade: None,
         }
     }
 }
 
+/// The BGM remembered by `MemorizeBGM` (11530) for `PlayMemorizedBGM` (11540) to
+/// restore. Distinct from the battle's map-BGM memory and the inn's: an event
+/// saves the current track here and replays it later, e.g. across a temporary
+/// music change.
+#[derive(Resource, Default)]
+pub struct MemorizedBgm(Option<BgmTrack>);
+
 /// The RM2000 system sound effects the UI plays: the cursor move, the confirm
-/// (decision), and the cancel. Loaded once from `system.ron` so the choice and
-/// number-input boxes can play them like RPG_RT. (The disabled-choice buzzer is
-/// omitted: this game has no disabled choices.)
+/// (decision), the cancel, and the buzzer (an invalid/disabled selection). Loaded
+/// once from `system.ron` so the menu, choice, number-input, shop, and title
+/// screens can play them like RPG_RT.
 #[derive(Resource, Default)]
 pub struct SystemSounds {
     pub cursor: SoundDef,
     pub decision: SoundDef,
     pub cancel: SoundDef,
+    pub buzzer: SoundDef,
+}
+
+/// The RM2000 scene BGM the non-map screens play, read from `system.ron`: the
+/// title theme, the inn's overnight jingle, and the game-over dirge. Loaded once
+/// so [`crate::title`], [`crate::shop`], and [`crate::gameover`] can start them
+/// without re-reading the system definition.
+#[derive(Resource, Default)]
+pub struct SystemMusic {
+    pub title: MusicDef,
+    pub inn: MusicDef,
+    pub gameover: MusicDef,
 }
 
 /// Queue a system sound effect (a [`SoundDef`] from [`SystemSounds`]); an
@@ -189,22 +149,31 @@ impl Plugin for AudioPlugin {
         let system: SystemDef = load_ron(&format!("{}/system.ron", asset_root()));
         app.add_message::<AudioRequest>()
             .init_resource::<CurrentBgm>()
+            .init_resource::<MemorizedBgm>()
             .insert_resource(SystemSounds {
                 cursor: system.cursor_se,
                 decision: system.decision_se,
                 cancel: system.cancel_se,
+                buzzer: system.buzzer_se,
             })
-            .add_systems(Update, play_requests);
+            .insert_resource(SystemMusic {
+                title: system.title_music,
+                inn: system.inn_music,
+                gameover: system.gameover_music,
+            })
+            .add_systems(Update, (play_requests, drive_bgm_fade).chain());
     }
 }
 
 /// Drain queued [`AudioRequest`]s: spawn a self-despawning player per sound
-/// effect, and start or stop the looping BGM.
+/// effect, and start / fade / stop / memorize the looping BGM.
 fn play_requests(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     mut requests: MessageReader<AudioRequest>,
     mut current: ResMut<CurrentBgm>,
+    mut memorized: ResMut<MemorizedBgm>,
+    mut sinks: Query<&mut AudioSink>,
 ) {
     for request in requests.read() {
         match request {
@@ -213,6 +182,10 @@ fn play_requests(
                 volume,
                 speed,
             } => {
+                // RPG_RT opens no channel for a 0-volume SE; skip the spawn.
+                if *volume <= 0.0 {
+                    continue;
+                }
                 if let Some(path) = resolve_audio("Sound", name, &["wav"]) {
                     commands.spawn((
                         AudioPlayer::new(asset_server.load(path)),
@@ -226,65 +199,144 @@ fn play_requests(
                 name,
                 volume,
                 speed,
-            } => {
-                start_bgm(
+                fade_in,
+            } => start_bgm(
+                &mut commands,
+                &asset_server,
+                &mut current,
+                &mut sinks,
+                name,
+                *volume,
+                *speed,
+                *fade_in,
+            ),
+            AudioRequest::FadeOutBgm { duration } => current.start_fade_out(*duration),
+            AudioRequest::StopBgm => stop_bgm(&mut commands, &mut current),
+            AudioRequest::MemorizeBgm => memorized.0 = current.track(),
+            AudioRequest::PlayMemorizedBgm => match memorized.0.clone() {
+                Some(track) => start_bgm(
                     &mut commands,
                     &asset_server,
                     &mut current,
-                    name,
-                    *volume,
-                    *speed,
-                );
-            }
-            AudioRequest::StopBgm => stop_bgm(&mut commands, &mut current),
+                    &mut sinks,
+                    &track.name,
+                    track.volume,
+                    track.speed,
+                    0.0,
+                ),
+                None => stop_bgm(&mut commands, &mut current),
+            },
         }
     }
 }
 
+/// What [`start_bgm`] does with a `PlayBgm` request, decided by
+/// [`CurrentBgm::action_for`].
+#[derive(Debug, PartialEq, Eq)]
+enum BgmAction {
+    /// Same track, same params: a seamless replay — leave it (and any fade) alone.
+    Ignore,
+    /// Same track, changed volume/tempo: adjust the live sink without restarting.
+    UpdateParams,
+    /// A new track (or one that is fading out): stop the old and start fresh.
+    Restart,
+}
+
 /// Switch the looping BGM to `name`. A request for the already-playing track is
-/// ignored so RM2000's per-cycle replays stay seamless. Switching stops the old
-/// track first; a MIDI-only track has no playable file, so it stops the old one
-/// and stays silent until an `.ogg`/`.wav` for it exists.
+/// not restarted — RM2000's per-cycle replays stay seamless — but its volume and
+/// tempo are adjusted in place when they changed, mirroring `BgmPlay`. Switching
+/// to a new track (or restarting one that is fading out) stops the old first;
+/// `fade_in > 0` ramps the new track up from silence.
+#[allow(clippy::too_many_arguments)]
 fn start_bgm(
     commands: &mut Commands,
     asset_server: &AssetServer,
     current: &mut CurrentBgm,
+    sinks: &mut Query<&mut AudioSink>,
     name: &str,
     volume: f32,
     speed: f32,
+    fade_in: f32,
 ) {
-    if current.name == name {
-        return;
-    }
-    if let Some(entity) = current.entity.take() {
-        commands.entity(entity).despawn();
-    }
-    current.name = name.to_string();
-    current.volume = volume;
-    current.speed = speed;
-    match resolve_audio("Music", name, &["ogg", "wav"]) {
-        Some(path) => {
-            let entity = commands
-                .spawn((
-                    AudioPlayer::new(asset_server.load(path)),
-                    PlaybackSettings::LOOP
-                        .with_volume(Volume::Linear(volume))
-                        .with_speed(speed),
-                ))
-                .id();
-            current.entity = Some(entity);
+    match current.action_for(name, volume, speed) {
+        // A plain replay is a no-op, so any in-progress fade-in keeps running.
+        BgmAction::Ignore => {}
+        BgmAction::UpdateParams => {
+            current.volume = volume;
+            current.speed = speed;
+            current.fade = None;
+            if let Some(entity) = current.entity
+                && let Ok(mut sink) = sinks.get_mut(entity)
+            {
+                sink.set_volume(Volume::Linear(volume));
+                sink.set_speed(speed);
+            }
         }
-        None => debug!("bgm '{name}' has no playable audio (MIDI only); skipping"),
+        BgmAction::Restart => {
+            if let Some(entity) = current.entity.take() {
+                commands.entity(entity).despawn();
+            }
+            current.name = name.to_string();
+            current.volume = volume;
+            current.speed = speed;
+            current.fade = None;
+            let initial = if fade_in > 0.0 { 0.0 } else { volume };
+            match resolve_audio("Music", name, &["ogg", "wav"]) {
+                Some(path) => {
+                    let entity = commands
+                        .spawn((
+                            AudioPlayer::new(asset_server.load(path)),
+                            PlaybackSettings::LOOP
+                                .with_volume(Volume::Linear(initial))
+                                .with_speed(speed),
+                        ))
+                        .id();
+                    current.entity = Some(entity);
+                    if fade_in > 0.0 {
+                        current.fade = Some(BgmFade::fade_in(volume, fade_in));
+                    }
+                }
+                None => debug!("bgm '{name}' has no playable audio (MIDI only); skipping"),
+            }
+        }
     }
 }
 
-/// Stop and forget the current BGM. Bevy has no built-in audio fade, so a
-/// `FadeOutBGM` is honoured as an immediate stop.
+/// Advance an in-progress BGM fade each frame: write the interpolated gain to the
+/// sink and, when a fade-out completes, stop the track. A fade-in simply reaches
+/// its target and clears.
+fn drive_bgm_fade(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut current: ResMut<CurrentBgm>,
+    mut sinks: Query<&mut AudioSink>,
+) {
+    let Some((volume, finished, stop)) = current.fade.as_mut().map(|fade| {
+        let volume = fade.advance(time.delta_secs());
+        (volume, fade.finished(), fade.stop_at_end)
+    }) else {
+        return;
+    };
+    if let Some(entity) = current.entity
+        && let Ok(mut sink) = sinks.get_mut(entity)
+    {
+        sink.set_volume(Volume::Linear(volume));
+    }
+    if finished {
+        current.fade = None;
+        if stop {
+            stop_bgm(&mut commands, &mut current);
+        }
+    }
+}
+
+/// Stop and forget the current BGM at once.
 fn stop_bgm(commands: &mut Commands, current: &mut CurrentBgm) {
     if let Some(entity) = current.entity.take() {
         commands.entity(entity).despawn();
     }
     current.name.clear();
+    current.fade = None;
 }
 
 /// Resolve an audio `name` (no extension) to its asset-relative path under
@@ -312,111 +364,94 @@ mod tests {
     use super::*;
 
     #[test]
-    fn play_sound_maps_name_volume_and_speed() {
-        let request = AudioRequest::play_sound("Bird1", &[90, 100, 50]);
+    fn same_name_request_updates_params_without_restarting() {
+        let current = CurrentBgm::with_track("Field", 0.8, 1.0);
+        // An autorun page re-issues the same PlayBgm every cycle: unchanged params
+        // are ignored, so the track is never restarted.
+        assert_eq!(current.action_for("Field", 0.8, 1.0), BgmAction::Ignore);
+        // A changed volume (or tempo) adjusts in place — still no restart.
         assert_eq!(
-            request,
-            AudioRequest::Sound {
-                name: "Bird1".into(),
-                volume: 0.9,
-                speed: 1.0
-            }
+            current.action_for("Field", 0.5, 1.0),
+            BgmAction::UpdateParams
+        );
+        assert_eq!(
+            current.action_for("Field", 0.8, 1.5),
+            BgmAction::UpdateParams
+        );
+        // A different track restarts.
+        assert_eq!(current.action_for("House", 0.8, 1.0), BgmAction::Restart);
+    }
+
+    #[test]
+    fn a_fading_out_track_restarts_on_a_same_name_request() {
+        let mut current = CurrentBgm {
+            entity: Some(Entity::PLACEHOLDER),
+            name: "Elven".into(),
+            volume: 0.8,
+            speed: 1.0,
+            fade: None,
+        };
+        current.start_fade_out(3.0);
+        // While stopping, even the same name restarts (RPG_RT's music_stopping).
+        assert_eq!(current.action_for("Elven", 0.8, 1.0), BgmAction::Restart);
+    }
+
+    #[test]
+    fn fade_out_without_a_playable_track_goes_silent_at_once() {
+        // A MIDI-only track has no entity to ramp, so a fade-out clears it now.
+        let mut current = CurrentBgm::with_track("MidiOnly", 1.0, 1.0);
+        current.start_fade_out(2.0);
+        assert!(current.track().is_none());
+        assert!(current.fade.is_none());
+    }
+
+    #[test]
+    fn fade_out_ramps_a_playing_track_then_marks_it_stopping() {
+        let mut current = CurrentBgm {
+            entity: Some(Entity::PLACEHOLDER),
+            name: "Elven".into(),
+            volume: 0.8,
+            speed: 1.0,
+            fade: None,
+        };
+        current.start_fade_out(3.0);
+        assert!(current.stopping(), "a fading-out track reports stopping");
+        assert_eq!(
+            current.fade.as_ref().map(BgmFade::volume),
+            Some(0.8),
+            "the fade begins from the track's current gain"
         );
     }
 
     #[test]
-    fn play_sound_tempo_becomes_speed() {
-        // Door2 plays at half tempo in the game data.
-        let request = AudioRequest::play_sound("Door2", &[90, 50, 50]);
+    fn memorize_round_trips_the_current_track() {
+        // MemorizeBGM stores the current track; PlayMemorizedBGM replays it.
+        let current = CurrentBgm::with_track("Elven", 0.66, 1.0);
+        let memorized = MemorizedBgm(current.track());
         assert_eq!(
-            request,
-            AudioRequest::Sound {
-                name: "Door2".into(),
-                volume: 0.9,
-                speed: 0.5
-            }
-        );
-    }
-
-    #[test]
-    fn play_sound_defaults_when_params_missing() {
-        let request = AudioRequest::play_sound("Attack", &[]);
-        assert_eq!(
-            request,
-            AudioRequest::Sound {
-                name: "Attack".into(),
-                volume: 1.0,
-                speed: 1.0
-            }
-        );
-    }
-
-    #[test]
-    fn play_bgm_reads_volume_from_second_param() {
-        let request = AudioRequest::play_bgm("Morning", &[5000, 80, 100, 50]);
-        assert_eq!(
-            request,
-            AudioRequest::Bgm {
-                name: "Morning".into(),
-                volume: 0.8,
-                speed: 1.0
-            }
-        );
-    }
-
-    #[test]
-    fn play_bgm_off_sentinel_and_empty_are_stop() {
-        assert_eq!(
-            AudioRequest::play_bgm("(OFF)", &[0, 100, 100, 50]),
-            AudioRequest::StopBgm
-        );
-        assert_eq!(
-            AudioRequest::play_bgm("", &[0, 0, 0, 0]),
-            AudioRequest::StopBgm
-        );
-    }
-
-    #[test]
-    fn bgm_maps_system_music_volume_and_tempo() {
-        assert_eq!(
-            AudioRequest::bgm("Battle", 90, 100),
-            AudioRequest::Bgm {
-                name: "Battle".into(),
-                volume: 0.9,
-                speed: 1.0
-            }
-        );
-        // An (OFF) or empty track stops the BGM rather than playing silence.
-        assert_eq!(AudioRequest::bgm("(OFF)", 100, 100), AudioRequest::StopBgm);
-        assert_eq!(AudioRequest::bgm("", 100, 100), AudioRequest::StopBgm);
-    }
-
-    #[test]
-    fn se_maps_sound_and_skips_off() {
-        assert_eq!(
-            AudioRequest::se("Bite", 80, 100),
-            Some(AudioRequest::Sound {
-                name: "Bite".into(),
-                volume: 0.8,
+            memorized.0,
+            Some(BgmTrack {
+                name: "Elven".into(),
+                volume: 0.66,
                 speed: 1.0
             })
         );
-        // A disabled effect plays nothing.
-        assert_eq!(AudioRequest::se("(OFF)", 100, 100), None);
-        assert_eq!(AudioRequest::se("", 100, 100), None);
+        assert_eq!(
+            memorized.0.as_ref().map(BgmTrack::replay),
+            Some(AudioRequest::Bgm {
+                name: "Elven".into(),
+                volume: 0.66,
+                speed: 1.0,
+                fade_in: 0.0,
+            })
+        );
     }
 
     #[test]
-    fn volume_clamps_out_of_range() {
-        assert_eq!(linear_volume(-10), 0.0);
-        assert_eq!(linear_volume(150), 1.0);
-        assert_eq!(linear_volume(50), 0.5);
-    }
-
-    #[test]
-    fn speed_guards_zero_and_negative_tempo() {
-        assert_eq!(playback_speed(0), 1.0);
-        assert_eq!(playback_speed(-5), 1.0);
-        assert_eq!(playback_speed(200), 2.0);
+    fn memorize_of_silence_round_trips_to_nothing() {
+        // Memorizing while silent stores None, so a later restore plays nothing.
+        let silent = CurrentBgm::default();
+        let memorized = MemorizedBgm(silent.track());
+        assert!(memorized.0.is_none());
     }
 }

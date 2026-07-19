@@ -110,11 +110,7 @@ impl MapBgm {
     /// or stop the BGM when the map was silent.
     fn restore(&self) -> AudioRequest {
         match &self.0 {
-            Some(track) => AudioRequest::Bgm {
-                name: track.name.clone(),
-                volume: track.volume,
-                speed: track.speed,
-            },
+            Some(track) => track.replay(),
             None => AudioRequest::StopBgm,
         }
     }
@@ -775,7 +771,8 @@ mod tests {
             AudioRequest::Bgm {
                 name: "Field".into(),
                 volume: 0.8,
-                speed: 1.0
+                speed: 1.0,
+                fade_in: 0.0,
             }
         );
         // Memorizing "nothing playing" restores to a stop.
