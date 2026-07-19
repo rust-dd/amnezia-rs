@@ -19,6 +19,7 @@ mod gameover;
 mod i18n;
 mod inputnumber;
 mod interpreter;
+mod map_bgm;
 mod menu;
 mod picture;
 mod player;
@@ -82,6 +83,7 @@ fn main() -> AppExit {
             battle::BattlePlugin,
             title::TitlePlugin,
         ))
+        .add_plugins(map_bgm::MapBgmPlugin)
         .add_plugins((
             screenfx::ScreenFxPlugin,
             picture::PicturePlugin,

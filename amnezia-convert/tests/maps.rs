@@ -1,4 +1,4 @@
-use amnezia_data::Map;
+use amnezia_data::{Map, MapBgm, MapInfoDef, MusicDef, resolve_map_bgm};
 use std::path::Path;
 
 fn varint(mut v: u32) -> Vec<u8> {
@@ -73,6 +73,68 @@ fn converts_lmu_to_map_ron() {
             upper: vec![10, 11],
             events: vec![]
         }
+    );
+}
+
+#[test]
+fn convert_map_info_round_trips_through_ron() {
+    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR")).join("convert_map_info");
+    let input = tmp.join("in");
+    let output = tmp.join("out");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&input).unwrap();
+
+    // Map 1: a type-2 town with its own track "Town" (volume 70). Map 2: a type-0
+    // child inheriting from map 1 (its music_type chunk omitted → default 0).
+    let town_music = {
+        let mut m = sub(0x01, b"Town");
+        m.extend(sub(0x03, &varint(70)));
+        m.push(0);
+        m
+    };
+    let mut map1 = varint(1);
+    map1.extend(sub(0x02, &varint(0)));
+    map1.extend(sub(0x0B, &varint(2)));
+    map1.extend(sub(0x0C, &town_music));
+    map1.push(0);
+    let mut map2 = varint(2);
+    map2.extend(sub(0x02, &varint(1)));
+    map2.push(0);
+
+    let mut body = varint(2);
+    body.extend_from_slice(&map1);
+    body.extend_from_slice(&map2);
+    let sig = b"LcfMapTree";
+    let mut lmt = vec![sig.len() as u8];
+    lmt.extend_from_slice(sig);
+    lmt.extend_from_slice(&body);
+    std::fs::write(input.join("RPG_RT.lmt"), lmt).unwrap();
+
+    let count = amnezia_convert::convert_map_info(&input, &output).unwrap();
+    assert_eq!(count, 2);
+
+    let ron = std::fs::read_to_string(output.join("map_info.ron")).unwrap();
+    let maps: Vec<MapInfoDef> = ron::from_str(&ron).unwrap();
+    assert_eq!(
+        maps[0],
+        MapInfoDef {
+            id: 1,
+            parent: 0,
+            music_type: 2,
+            music: MusicDef {
+                name: "Town".into(),
+                volume: 70,
+                tempo: 100,
+                balance: 50,
+                fadein: 0,
+            },
+        }
+    );
+    assert_eq!((maps[1].id, maps[1].parent, maps[1].music_type), (2, 1, 0));
+    // The resolver both crates share: map 2 inherits the town's BGM up the chain.
+    assert_eq!(
+        resolve_map_bgm(&maps, 2),
+        MapBgm::Play(maps[0].music.clone())
     );
 }
 

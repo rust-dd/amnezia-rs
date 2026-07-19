@@ -7,12 +7,13 @@
 //! defaults. This crate is dev-time tooling for the asset converter and is
 //! never linked into the shipped game binary.
 //!
-//! Parsing is split by file: [`map`] handles map units and the map tree, and
-//! [`database`] handles the `RPG_RT.ldb` chipset, actor, skill, item, monster,
-//! troop, attribute, and state tables.
+//! Parsing is split by file: [`map`] handles map units, [`map_tree`] the map
+//! tree (party start + map-info music), and [`database`] the `RPG_RT.ldb`
+//! chipset, actor, skill, item, monster, troop, attribute, and state tables.
 
 mod database;
 mod map;
+mod map_tree;
 
 pub use database::{
     Actor, Animation, AnimationCell, AnimationFrame, AnimationTiming, Attribute, Chipset,
@@ -21,9 +22,8 @@ pub use database::{
     parse_common_events, parse_items, parse_monsters, parse_skills, parse_states, parse_system,
     parse_troops,
 };
-pub use map::{
-    Event, EventCommand, EventCondition, EventPage, MapUnit, Start, parse_map, parse_start,
-};
+pub use map::{Event, EventCommand, EventCondition, EventPage, MapUnit, parse_map};
+pub use map_tree::{MapInfo, Start, parse_map_infos, parse_start};
 
 /// Errors returned while parsing an LCF file.
 #[derive(Debug, thiserror::Error)]

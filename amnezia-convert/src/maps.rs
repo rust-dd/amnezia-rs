@@ -1,7 +1,9 @@
 //! Conversion of the map and world-scope tables (maps, party start, chipsets,
 //! common events) into their clean RON assets.
 
-use amnezia_data::{Chipset, CommonEvent, Event, EventCommand, EventPage, Map, Start};
+use amnezia_data::{
+    Chipset, CommonEvent, Event, EventCommand, EventPage, Map, MapInfoDef, MusicDef, Start,
+};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -111,6 +113,41 @@ pub fn convert_start(input: &Path, output: &Path) -> Result<u32> {
     std::fs::write(output.join("start.ron"), serialised)
         .with_context(|| format!("writing {}", output.join("start.ron").display()))?;
     Ok(start.map_id)
+}
+
+/// Convert the map-info tree in `input/RPG_RT.lmt` into `output/map_info.ron`
+/// (each map's id, parent, `music_type`, and `music` track), returning the
+/// number of nodes written. The game resolves each map's effective background
+/// music from it on map load and teleport.
+pub fn convert_map_info(input: &Path, output: &Path) -> Result<usize> {
+    if !input.is_dir() {
+        anyhow::bail!("input directory not found: {}", input.display());
+    }
+    let lmt = input.join("RPG_RT.lmt");
+    let bytes = std::fs::read(&lmt).with_context(|| format!("reading {}", lmt.display()))?;
+    let parsed =
+        lcf::parse_map_infos(&bytes).with_context(|| format!("parsing {}", lmt.display()))?;
+    let infos: Vec<MapInfoDef> = parsed
+        .into_iter()
+        .map(|m| MapInfoDef {
+            id: m.id,
+            parent: m.parent_map,
+            music_type: m.music_type,
+            music: MusicDef {
+                name: m.music.name,
+                volume: m.music.volume,
+                tempo: m.music.tempo,
+                balance: m.music.balance,
+                fadein: m.music.fadein,
+            },
+        })
+        .collect();
+    let count = infos.len();
+    let serialised = ron::to_string(&infos).context("serialising map info to RON")?;
+    std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
+    std::fs::write(output.join("map_info.ron"), serialised)
+        .with_context(|| format!("writing {}", output.join("map_info.ron").display()))?;
+    Ok(count)
 }
 
 /// Convert the chipset table in `input/RPG_RT.ldb` into `output/chipsets.ron`

@@ -20,6 +20,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let images = amnezia_convert::convert_graphics(&args.input, &args.output)?;
     let maps = amnezia_convert::convert_maps(&args.input, &args.output)?;
+    let map_info = amnezia_convert::convert_map_info(&args.input, &args.output)?;
     let chipsets = amnezia_convert::convert_chipsets(&args.input, &args.output)?;
     let actors = amnezia_convert::convert_actors(&args.input, &args.output)?;
     let items = amnezia_convert::convert_items(&args.input, &args.output)?;
@@ -35,9 +36,9 @@ fn main() -> Result<()> {
     let (effects, music) = amnezia_convert::convert_audio(&args.input, &args.output)?;
     amnezia_convert::convert_system(&args.input, &args.output)?;
     println!(
-        "converted {images} images, {maps} maps, {chipsets} chipsets, {actors} actors, \
-         {items} items, {skills} skills, {states} states, {attributes} attributes, \
-         {animations} animations, {monsters} monsters, {troops} troops, \
+        "converted {images} images, {maps} maps, {map_info} map-info nodes, {chipsets} chipsets, \
+         {actors} actors, {items} items, {skills} skills, {states} states, \
+         {attributes} attributes, {animations} animations, {monsters} monsters, {troops} troops, \
          {common_events} common events, {effects} sfx, {music} music, system audio; \
          start map {start_map}; hero {hero}"
     );

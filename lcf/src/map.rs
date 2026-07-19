@@ -1,5 +1,6 @@
-//! Map-unit (`MapXXXX.lmu`) and map-tree (`RPG_RT.lmt`) parsing: the geometry,
-//! tile layers, events, and the party's starting position.
+//! Map-unit (`MapXXXX.lmu`) parsing: the geometry, tile layers, and events. The
+//! map-tree (`RPG_RT.lmt`) — the party start and the map-info music tree — is
+//! parsed by the sibling `map_tree` module.
 
 use crate::LcfError;
 use crate::{Reader, decode_cp1250};
@@ -87,74 +88,6 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
         upper_layer,
         events,
     })
-}
-
-/// The starting party position from the map tree (`RPG_RT.lmt`).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Start {
-    pub map_id: u32,
-    pub x: u32,
-    pub y: u32,
-}
-
-/// Skip a chunk stream (`[id][size][data]*` terminated by id 0).
-fn skip_chunk_stream(reader: &mut Reader) -> Result<(), LcfError> {
-    loop {
-        let id = reader.varint()?;
-        if id == 0 {
-            return Ok(());
-        }
-        let size = reader.varint()? as usize;
-        reader.take(size)?;
-    }
-}
-
-/// Parse the starting party position out of an LMT (`RPG_RT.lmt`). The tree
-/// begins with the map-info list (`[count]` then per entry a bare map id + a
-/// chunk stream), then the tree order (`[count]` + ids), the active node, and
-/// finally the `Start` struct (`party_map_id` 0x01, `party_x` 0x02,
-/// `party_y` 0x03; omitted fields default to 0).
-pub fn parse_start(bytes: &[u8]) -> Result<Start, LcfError> {
-    let mut reader = Reader::new(bytes);
-    let signature_len = reader.byte()? as usize;
-    let signature = reader.take(signature_len)?;
-    if signature != b"LcfMapTree" {
-        return Err(LcfError::BadSignature {
-            expected: "LcfMapTree",
-        });
-    }
-
-    let map_count = reader.varint()?;
-    for _ in 0..map_count {
-        let _map_id = reader.varint()?;
-        skip_chunk_stream(&mut reader)?;
-    }
-    let order_count = reader.varint()?;
-    for _ in 0..order_count {
-        reader.varint()?;
-    }
-    let _active_node = reader.varint()?;
-
-    let mut start = Start {
-        map_id: 0,
-        x: 0,
-        y: 0,
-    };
-    loop {
-        let id = reader.varint()?;
-        if id == 0 {
-            break;
-        }
-        let size = reader.varint()? as usize;
-        let data = reader.take(size)?;
-        match id {
-            0x01 => start.map_id = Reader::new(data).varint()?,
-            0x02 => start.x = Reader::new(data).varint()?,
-            0x03 => start.y = Reader::new(data).varint()?,
-            _ => {}
-        }
-    }
-    Ok(start)
 }
 
 /// A map event: its id, tile position, name, and pages.
@@ -350,7 +283,7 @@ pub(crate) fn parse_commands(data: &[u8]) -> Result<Vec<EventCommand>, LcfError>
 #[cfg(test)]
 mod tests {
     use crate::test_util::{subchunk, varint};
-    use crate::{LcfError, Start, parse_map, parse_start};
+    use crate::{LcfError, parse_map};
 
     fn layer_bytes(tiles: &[u16]) -> Vec<u8> {
         tiles.iter().flat_map(|t| t.to_le_bytes()).collect()
@@ -632,30 +565,6 @@ mod tests {
                 pages[1].move_speed
             ),
             (1, 3, 3)
-        );
-    }
-
-    #[test]
-    fn parses_party_start() {
-        let mut body = varint(1); // map-info count
-        body.extend(varint(1)); // map id
-        body.extend(varint(0)); // its chunk-stream terminator
-        body.extend(varint(1)); // tree-order count
-        body.extend(varint(1)); // node id
-        body.extend(varint(0)); // active node
-        body.extend(subchunk(0x01, &varint(5))); // party_map_id = 5
-        body.extend(varint(0)); // Start struct terminator
-        let signature = b"LcfMapTree";
-        let mut file = vec![signature.len() as u8];
-        file.extend_from_slice(signature);
-        file.extend_from_slice(&body);
-        assert_eq!(
-            parse_start(&file).unwrap(),
-            Start {
-                map_id: 5,
-                x: 0,
-                y: 0
-            }
         );
     }
 

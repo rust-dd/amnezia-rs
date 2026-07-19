@@ -8,6 +8,10 @@
 
 use serde::{Deserialize, Serialize};
 
+mod map_info;
+
+pub use map_info::{MapBgm, MapInfoDef, resolve_map_bgm};
+
 /// A converted map: the chipset it uses, its dimensions in tiles, and the two
 /// tile layers (each `width * height` tile ids, row-major). `lower` is the
 /// ground layer, `upper` the overlay layer.
