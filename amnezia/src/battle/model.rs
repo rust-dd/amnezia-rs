@@ -20,6 +20,13 @@ use bevy::prelude::*;
 /// pace rather than flashing past in one frame.
 pub const RESOLVE_STEP_SECS: f32 = 0.7;
 
+/// Frames [`Battle::tick_anim_hold`] waits for a just-queued battle animation to
+/// appear before giving up and applying its impact anyway. Comfortably longer
+/// than the one or two frames the overlay needs to spawn the `LiveAnimation`, so
+/// it only ever fires for an unknown animation id that spawns nothing (rather
+/// than wedging resolution forever).
+const ANIM_HOLD_GRACE_TICKS: u32 = 12;
+
 /// How many trailing log lines the battle keeps for display.
 pub const LOG_TAIL: usize = 5;
 
@@ -216,6 +223,34 @@ pub(super) enum Step {
     /// The damage beat after a "Kritikus!" announcement: land the precomputed
     /// `dmg` of member `pi`'s critical strike on enemy `ti`.
     CritDamage { pi: usize, ti: usize, dmg: i32 },
+    /// Apply member `pi`'s planned normal-strike outcome on foe `ti` once its
+    /// attack animation has played out: pop the dodge when `miss`, else land
+    /// `dmg` — taking the critical announcement beat first when `crit`. RM2000
+    /// sequences the swing animation, its wait, then the damage; this is the
+    /// deferred damage half (see `resolve::resolve_strike_impact`).
+    StrikeImpact {
+        pi: usize,
+        ti: usize,
+        dmg: i32,
+        crit: bool,
+        miss: bool,
+    },
+    /// Apply member `pi`'s skill `skill_id` at `target` once its cast animation
+    /// has played. The animation was queued up front; this re-runs the cast with
+    /// [`Battle::suppress_anim`] set so its effect (and RNG draws) resolve now
+    /// without queuing the animation a second time.
+    CastSkill {
+        pi: usize,
+        skill_id: u32,
+        target: usize,
+    },
+    /// Apply enemy `ei`'s skill `skill_id` at member `target` once its cast
+    /// animation has played — the enemy-side counterpart of [`Step::CastSkill`].
+    EnemyCast {
+        ei: usize,
+        skill_id: u32,
+        target: usize,
+    },
 }
 
 /// One queued battle animation, produced as an action resolves and drained by
@@ -340,6 +375,23 @@ pub struct Battle {
     /// and a critical announces on its own beat. Cleared by [`Battle::new_round`]
     /// and [`Battle::begin_resolve`].
     pub(super) steps: std::collections::VecDeque<Step>,
+    /// While a queued battle animation plays, resolution pauses and the pending
+    /// strike/cast impact is held so its damage number lands only once the
+    /// animation has finished (RM2000 sequences the animation, its `SetWait`,
+    /// then the damage). Set when the animation is queued; `battle::resolve_tick`
+    /// drives it down through [`Battle::tick_anim_hold`].
+    pub(super) anim_hold: bool,
+    /// Whether the held animation has been observed live at least once, so the
+    /// hold releases on its disappearance rather than the one-tick lag between
+    /// queuing the animation and its `LiveAnimation` overlay appearing.
+    pub(super) anim_seen: bool,
+    /// Frames the current hold has waited without the animation ever appearing,
+    /// bounding the wait for an unknown/absent animation id (see
+    /// [`ANIM_HOLD_GRACE_TICKS`]) so resolution can never wedge.
+    pub(super) anim_hold_ticks: u32,
+    /// Set while a deferred skill/enemy cast re-runs after its animation, so the
+    /// shared cast helper skips re-queuing the already-played animation.
+    pub(super) suppress_anim: bool,
     /// Set once the victory reward (gold, experience, and any level-ups) has been
     /// paid on entering the outcome, so `battle::apply_victory_rewards` pays out
     /// exactly once while the outcome screen waits for the player.
@@ -598,8 +650,56 @@ impl Battle {
             .collect();
         self.queue_at = 0;
         self.steps.clear();
+        self.clear_anim_hold();
         self.timer.reset();
         self.phase = Phase::Resolve;
+    }
+
+    /// Begin holding resolution until the just-queued battle animation has played
+    /// out, so the deferred strike/cast impact lands only once the swing/cast is
+    /// seen (see [`Battle::anim_hold`]).
+    pub(super) fn begin_anim_hold(&mut self) {
+        self.anim_hold = true;
+        self.anim_seen = false;
+        self.anim_hold_ticks = 0;
+    }
+
+    /// Whether resolution is currently paused waiting on a battle animation.
+    pub(super) fn anim_hold_active(&self) -> bool {
+        self.anim_hold
+    }
+
+    /// Clear any in-progress animation hold and the cast-suppression flag.
+    fn clear_anim_hold(&mut self) {
+        self.anim_hold = false;
+        self.anim_seen = false;
+        self.anim_hold_ticks = 0;
+        self.suppress_anim = false;
+    }
+
+    /// Advance the animation hold given whether any battle animation is live this
+    /// frame, returning `true` while resolution must keep waiting. The hold clears
+    /// once an observed animation has ended; as a safety net for an animation id
+    /// that spawns nothing, it also clears once the grace window
+    /// ([`ANIM_HOLD_GRACE_TICKS`]) elapses without one ever appearing.
+    pub(super) fn tick_anim_hold(&mut self, anim_live: bool) -> bool {
+        if !self.anim_hold {
+            return false;
+        }
+        if anim_live {
+            self.anim_seen = true;
+            return true;
+        }
+        if self.anim_seen {
+            self.anim_hold = false;
+            return false;
+        }
+        self.anim_hold_ticks += 1;
+        if self.anim_hold_ticks >= ANIM_HOLD_GRACE_TICKS {
+            self.anim_hold = false;
+            return false;
+        }
+        true
     }
 
     /// Open a fresh command round: bump the round, clear each order and defence,
@@ -620,6 +720,7 @@ impl Battle {
         self.queue.clear();
         self.queue_at = 0;
         self.steps.clear();
+        self.clear_anim_hold();
         self.pending_anims.clear();
         self.pending_numbers.clear();
         self.pending_blinks.clear();

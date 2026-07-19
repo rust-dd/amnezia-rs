@@ -22,7 +22,7 @@ mod model;
 mod resolve;
 mod scene;
 
-use crate::animation::{AnimAnchor, PlayAnimation};
+use crate::animation::{ActiveAnimations, AnimAnchor, PlayAnimation};
 use crate::assets::{asset_root, load_ron};
 use crate::audio::{AudioRequest, BgmTrack, CurrentBgm};
 use crate::gamedata::GameData;
@@ -271,6 +271,7 @@ fn debug_trigger(
 fn resolve_tick(
     time: Res<Time>,
     battle_data: Res<BattleData>,
+    active_anims: Res<ActiveAnimations>,
     mut audio: MessageWriter<AudioRequest>,
     mut battle: ResMut<Battle>,
 ) {
@@ -282,7 +283,21 @@ fn resolve_tick(
     if battle.death_in_progress() {
         return;
     }
-    if !battle.timer.tick(time.delta()).just_finished() {
+    // Hold while a queued attack animation plays out, so a strike/cast's damage
+    // number lands only once the swing/cast finishes (RM2000 sequences the
+    // animation, its wait, then the damage). Once it clears, apply the deferred
+    // impact at once and re-pace the timer for the next beat; otherwise keep the
+    // normal per-action cadence.
+    let advance = if battle.anim_hold_active() {
+        if battle.tick_anim_hold(active_anims.0 > 0) {
+            return;
+        }
+        battle.timer.reset();
+        true
+    } else {
+        battle.timer.tick(time.delta()).just_finished()
+    };
+    if !advance {
         return;
     }
     let more = battle.resolve_next();

@@ -30,6 +30,7 @@ const EXPLODE_SECS: f32 = 20.0 / 60.0;
 
 /// The outcome of a party member's weapon strike: a clean miss, or a landed hit
 /// carrying the damage dealt and whether it critical'd (for the log line).
+#[derive(Clone, Copy)]
 enum Strike {
     Miss,
     Hit { dmg: i32, crit: bool },
@@ -106,6 +107,46 @@ impl Battle {
                     self.members[pi].name, self.enemies[ti].name, dmg
                 );
                 self.log.push(line);
+            }
+            Step::StrikeImpact {
+                pi,
+                ti,
+                dmg,
+                crit,
+                miss,
+            } => {
+                let outcome = if miss {
+                    Strike::Miss
+                } else {
+                    Strike::Hit { dmg, crit }
+                };
+                self.resolve_strike_impact(pi, ti, outcome);
+            }
+            Step::CastSkill {
+                pi,
+                skill_id,
+                target,
+            } => {
+                // Re-run the cast with the animation suppressed (it was queued when
+                // the action began); its effect, numbers, and RNG resolve now.
+                self.suppress_anim = true;
+                let line = self.cast_skill(pi, skill_id, target);
+                self.suppress_anim = false;
+                if let Some(line) = line {
+                    self.log.push(line);
+                }
+            }
+            Step::EnemyCast {
+                ei,
+                skill_id,
+                target,
+            } => {
+                self.suppress_anim = true;
+                let line = self.enemy_cast(ei, skill_id, target);
+                self.suppress_anim = false;
+                if let Some(line) = line {
+                    self.log.push(line);
+                }
             }
         }
     }
@@ -191,25 +232,49 @@ impl Battle {
                         return;
                     };
                     let outcome = self.plan_strike(pi, ti);
-                    let member = self.members[pi].name.clone();
-                    let enemy = self.enemies[ti].name.clone();
-                    match outcome {
-                        Strike::Miss => format!("{member} rácsap: {enemy} elkerülte"),
-                        Strike::Hit { dmg, crit: false } => {
-                            self.land_strike(ti, dmg);
-                            format!("{member} rácsap: {enemy} -{dmg}")
-                        }
-                        Strike::Hit { dmg, crit: true } => {
-                            // RM2000 `ProcessBattleActionCritical`: announce the
-                            // critical on its own beat, then land the (already
-                            // rolled) blow and print the damage line next tick.
-                            self.steps.push_back(Step::CritDamage { pi, ti, dmg });
-                            "Kritikus!".to_string()
-                        }
+                    // RM2000 plays the swing animation and waits for it before the
+                    // damage. When the strike animates, defer its impact behind the
+                    // animation hold so the number lands as the swing finishes; a
+                    // member with no attack animation has nothing to wait for and
+                    // applies it at once.
+                    if self.members[pi].attack_animation != 0 {
+                        let (dmg, crit, miss) = match outcome {
+                            Strike::Miss => (0, false, true),
+                            Strike::Hit { dmg, crit } => (dmg, crit, false),
+                        };
+                        self.steps.push_back(Step::StrikeImpact {
+                            pi,
+                            ti,
+                            dmg,
+                            crit,
+                            miss,
+                        });
+                        self.begin_anim_hold();
+                    } else {
+                        self.resolve_strike_impact(pi, ti, outcome);
                     }
+                    return;
                 }
             }
             (Source::Party(pi), Command::Skill { skill_id, target }) => {
+                // A skill with a battle animation waits for it before its effect
+                // lands (RM2000). Queue the animation up front, then defer the cast
+                // behind the hold so its numbers land as the cast finishes; an
+                // animation-less skill resolves at once.
+                let Some(skill) = self.skills.iter().find(|s| s.id == skill_id).cloned() else {
+                    return;
+                };
+                let anchors = self.skill_anim_anchors(pi, &skill, target);
+                if skill.animation_id != 0 && !anchors.is_empty() {
+                    self.push_anim(skill.animation_id, anchors);
+                    self.steps.push_back(Step::CastSkill {
+                        pi,
+                        skill_id,
+                        target,
+                    });
+                    self.begin_anim_hold();
+                    return;
+                }
                 match self.cast_skill(pi, skill_id, target) {
                     Some(line) => line,
                     None => return,
@@ -252,6 +317,22 @@ impl Battle {
                 }
             }
             (Source::Enemy(ei), Command::Skill { skill_id, target }) => {
+                // As for a party cast: an animated enemy skill waits for its
+                // animation before the effect lands; queue it, then defer.
+                let Some(skill) = self.skills.iter().find(|s| s.id == skill_id).cloned() else {
+                    return;
+                };
+                let anchors = self.enemy_skill_anim_anchors(ei, &skill, target);
+                if skill.animation_id != 0 && !anchors.is_empty() {
+                    self.push_anim(skill.animation_id, anchors);
+                    self.steps.push_back(Step::EnemyCast {
+                        ei,
+                        skill_id,
+                        target,
+                    });
+                    self.begin_anim_hold();
+                    return;
+                }
                 match self.enemy_cast(ei, skill_id, target) {
                     Some(line) => line,
                     None => return,
@@ -406,11 +487,11 @@ impl Battle {
     /// critical flag, in RM2000 order — an agility-adjusted to-hit roll (bare hands
     /// default 90%), then on a hit the weapon's element against the foe's
     /// resistance ranks, a critical that triples, the `var=4` variance, and the
-    /// defending-foe halving — *without applying it*. The attack animation is
-    /// queued on the struck foe up front (the swing shows whether the blow lands),
-    /// and a miss pops its "Miss" number here; the landing is deferred to
-    /// [`Battle::land_strike`] so a critical can take its own announcement beat
-    /// first. The RNG draw order is identical to a single-shot strike.
+    /// defending-foe halving — *without applying it or showing anything yet*. The
+    /// attack animation is queued on the struck foe up front (the swing shows
+    /// whether the blow lands); both the "Miss" pop and the landing are deferred
+    /// to [`Battle::resolve_strike_impact`], which runs only once the animation
+    /// has played. The RNG draw order is identical to a single-shot strike.
     fn plan_strike(&mut self, pi: usize, ti: usize) -> Strike {
         let anim = self.members[pi].attack_animation;
         self.push_anim(anim, vec![self.foe_anim_pos(ti)]);
@@ -428,9 +509,6 @@ impl Battle {
             can_act,
         );
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
-            let pos = self.foe_anim_pos(ti);
-            self.pending_se.push(BattleSe::Dodge);
-            self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
             return Strike::Miss;
         }
         let element = self.members[pi].weapon_element.unwrap_or(0);
@@ -466,16 +544,43 @@ impl Battle {
         self.after_foe_hit(ti, dmg);
     }
 
+    /// Apply a member's planned strike `outcome` on foe `ti` once its swing
+    /// animation has played (RM2000 `ProcessBattleActionApply`/`Damage`): a miss
+    /// pops the dodge SE and "Miss" number, a critical announces on its own beat
+    /// and lands its precomputed `dmg` on the next tick ([`Step::CritDamage`]),
+    /// and a plain hit lands at once — each logging its line. Draws no RNG, so the
+    /// order is unchanged whether this runs inline or deferred behind the hold.
+    fn resolve_strike_impact(&mut self, pi: usize, ti: usize, outcome: Strike) {
+        let member = self.members[pi].name.clone();
+        let enemy = self.enemies[ti].name.clone();
+        match outcome {
+            Strike::Miss => {
+                let pos = self.foe_anim_pos(ti);
+                self.pending_se.push(BattleSe::Dodge);
+                self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
+                self.log.push(format!("{member} rácsap: {enemy} elkerülte"));
+            }
+            Strike::Hit { dmg, crit: false } => {
+                self.land_strike(ti, dmg);
+                self.log.push(format!("{member} rácsap: {enemy} -{dmg}"));
+            }
+            Strike::Hit { dmg, crit: true } => {
+                // RM2000 `ProcessBattleActionCritical`: announce the critical on
+                // its own beat, then land the (already rolled) blow next tick.
+                self.steps.push_back(Step::CritDamage { pi, ti, dmg });
+                self.log.push("Kritikus!".to_string());
+            }
+        }
+    }
+
     /// Resolve a member's weapon strike on enemy `ti` in one shot: plan it, then
-    /// land it on a hit. The [`Battle::apply`] attack path plans and lands
-    /// separately so a critical gets its own announcement beat, so this atomic form
-    /// only serves the strike unit tests.
+    /// apply its impact at once. The [`Battle::apply`] attack path defers the
+    /// impact behind the swing animation instead, so this atomic form only serves
+    /// the strike unit tests.
     #[cfg(test)]
     fn strike_enemy(&mut self, pi: usize, ti: usize) -> Strike {
         let outcome = self.plan_strike(pi, ti);
-        if let Strike::Hit { dmg, .. } = outcome {
-            self.land_strike(ti, dmg);
-        }
+        self.resolve_strike_impact(pi, ti, outcome);
         outcome
     }
 
@@ -552,17 +657,19 @@ impl Battle {
     fn cast_skill(&mut self, pi: usize, skill_id: u32, target: usize) -> Option<String> {
         let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
         self.members[pi].sp = (self.members[pi].sp - skill.sp_cost as i32).max(0);
-        let mut lines: Vec<String> = Vec::new();
         // Queue the skill's battle animation once, over every target it resolves
         // against, so its sound plays once for the cast while its cells and
-        // flashes land on each target (see `push_anim`). The per-target effect
-        // helpers below no longer queue it themselves.
+        // flashes land on each target. Suppressed when the cast is replayed behind
+        // its animation hold (`apply` already queued it) so it is never queued
+        // twice; the per-target effect helpers below never queue it themselves.
+        if !self.suppress_anim {
+            let anchors = self.skill_anim_anchors(pi, &skill, target);
+            self.push_anim(skill.animation_id, anchors);
+        }
+        let mut lines: Vec<String> = Vec::new();
         match skill.scope {
             1 => {
                 let foes = self.living_enemies();
-                let anchors: Vec<(f32, f32)> =
-                    foes.iter().map(|&ti| self.foe_anim_pos(ti)).collect();
-                self.push_anim(skill.animation_id, anchors);
                 // Resolve the first target now and stagger the rest one per tick,
                 // so an all-enemy cast's damage numbers appear in sequence rather
                 // than all at once. The RNG draw order is unchanged (targets still
@@ -580,28 +687,15 @@ impl Battle {
                 }
             }
             2 => {
-                self.push_anim(
-                    skill.animation_id,
-                    vec![(self.party_anim_x(pi), PARTY_ANIM_Y)],
-                );
                 lines.extend(self.skill_heal_ally(pi, pi, &skill));
             }
             3 => {
                 if self.members.get(target).is_some_and(|m| m.alive()) {
-                    self.push_anim(
-                        skill.animation_id,
-                        vec![(self.party_anim_x(target), PARTY_ANIM_Y)],
-                    );
                     lines.extend(self.skill_heal_ally(pi, target, &skill));
                 }
             }
             4 => {
                 let allies = self.living_members();
-                let anchors: Vec<(f32, f32)> = allies
-                    .iter()
-                    .map(|&ti| (self.party_anim_x(ti), PARTY_ANIM_Y))
-                    .collect();
-                self.push_anim(skill.animation_id, anchors);
                 // As for scope 1, heal the first ally now and stagger the rest one
                 // per tick so the restore numbers appear in sequence.
                 let mut targets = allies.into_iter();
@@ -618,7 +712,6 @@ impl Battle {
             }
             _ => {
                 if let Some(ti) = self.retarget_enemy(target) {
-                    self.push_anim(skill.animation_id, vec![self.foe_anim_pos(ti)]);
                     lines.extend(self.skill_hit_enemy(pi, ti, &skill));
                 }
             }
@@ -629,6 +722,44 @@ impl Battle {
         } else {
             lines.join("\n")
         })
+    }
+
+    /// The screen anchors party member `pi`'s cast of `skill` at `target`
+    /// animates over: every living foe for an all-enemy skill (scope 1), the
+    /// caster's own party slot for a self-heal (scope 2), the chosen ally's slot
+    /// for a single-ally heal (scope 3, empty if that ally is down), every living
+    /// ally for an all-ally heal (scope 4), or the single targeted foe otherwise
+    /// (falling back to any living foe if that one has fallen). Draws no RNG, so it
+    /// can be computed up front to queue the animation before the hold.
+    fn skill_anim_anchors(&self, pi: usize, skill: &SkillDef, target: usize) -> Vec<(f32, f32)> {
+        match skill.scope {
+            1 => self
+                .living_enemies()
+                .iter()
+                .map(|&ti| self.foe_anim_pos(ti))
+                .collect(),
+            2 => vec![(self.party_anim_x(pi), PARTY_ANIM_Y)],
+            3 => {
+                if self.members.get(target).is_some_and(|m| m.alive()) {
+                    vec![(self.party_anim_x(target), PARTY_ANIM_Y)]
+                } else {
+                    Vec::new()
+                }
+            }
+            4 => self
+                .living_members()
+                .iter()
+                .map(|&ti| (self.party_anim_x(ti), PARTY_ANIM_Y))
+                .collect(),
+            _ => {
+                let ti = if self.enemies.get(target).is_some_and(|e| e.alive()) {
+                    Some(target)
+                } else {
+                    self.living_enemies().first().copied()
+                };
+                ti.map(|ti| vec![self.foe_anim_pos(ti)]).unwrap_or_default()
+            }
+        }
     }
 
     /// Land `skill` from caster `pi` on enemy `ti`: elemental damage against the
@@ -869,8 +1000,14 @@ impl Battle {
     fn enemy_cast(&mut self, ei: usize, skill_id: u32, target: usize) -> Option<String> {
         let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
         let name = self.enemies[ei].name.clone();
+        // Queue the cast's animation once (suppressed on the deferred replay, when
+        // `apply` already queued it before the hold); it draws no RNG, so the
+        // effect rolls below keep their order whichever path runs this.
+        if !self.suppress_anim {
+            let anchors = self.enemy_skill_anim_anchors(ei, &skill, target);
+            self.push_anim(skill.animation_id, anchors);
+        }
         if matches!(skill.scope, 2..=4) {
-            self.push_anim(skill.animation_id, vec![self.foe_anim_pos(ei)]);
             let base = logic::skill_effect(
                 &skill,
                 &self.enemies[ei].stats,
@@ -888,10 +1025,6 @@ impl Battle {
             return Some(format!("{name} varázsol: {name} +{amt}"));
         }
         let ti = self.retarget_member(target)?;
-        self.push_anim(
-            skill.animation_id,
-            vec![(self.party_anim_x(ti), PARTY_ANIM_Y)],
-        );
         // Roll the skill's to-hit (EasyRPG `CalcSkillToHit`), certain against a
         // member that cannot act. An enemy skill carries no crit stat in our model,
         // so it never critical's (a documented simplification).
@@ -928,6 +1061,29 @@ impl Battle {
         let base = if resisted { (base / 2).max(1) } else { base };
         let dmg = self.hit_member(ti, base, skill.variance as i32);
         Some(format!("{name} varázsol: {} -{dmg}", self.members[ti].name))
+    }
+
+    /// The screen anchors an enemy `ei`'s cast of `skill` at member `target`
+    /// animates over: the casting foe itself for an ally-scope skill (scope 2–4,
+    /// which a foe turns on itself), else the targeted member's party slot
+    /// (falling back to any living member). Draws no RNG.
+    fn enemy_skill_anim_anchors(
+        &self,
+        ei: usize,
+        skill: &SkillDef,
+        target: usize,
+    ) -> Vec<(f32, f32)> {
+        if matches!(skill.scope, 2..=4) {
+            vec![self.foe_anim_pos(ei)]
+        } else {
+            let ti = if self.members.get(target).is_some_and(|m| m.alive()) {
+                Some(target)
+            } else {
+                self.living_members().first().copied()
+            };
+            ti.map(|ti| vec![(self.party_anim_x(ti), PARTY_ANIM_Y)])
+                .unwrap_or_default()
+        }
     }
 
     /// Keep `target` if that enemy still lives, else pick another living enemy.

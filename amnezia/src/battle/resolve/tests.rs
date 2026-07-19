@@ -1245,3 +1245,136 @@ fn a_failed_escape_raises_the_next_chance_by_ten_and_a_first_strike_is_certain()
     assert!(battle.attempt_escape());
     assert_eq!(battle.escape_chance, 10);
 }
+
+#[test]
+fn an_animated_strike_defers_its_damage_number_until_after_the_animation() {
+    // A member wielding a weapon whose attack animation is 7: RM2000 plays the
+    // swing, waits for it, and only then shows the damage.
+    let mut battle = build_weapon_anim(7);
+    battle.apply(Action {
+        source: Source::Party(0),
+        kind: Command::Attack { target: 0 },
+        agility: 0,
+    });
+    // The swing animation is queued now, up front...
+    assert!(
+        battle.pending_anims.iter().any(|a| a.anim_id == 7),
+        "the attack animation is queued when the action begins"
+    );
+    // ...but no damage number lands on the same tick as the animation — it is
+    // held behind the animation as a deferred impact step, and resolution holds.
+    assert!(
+        battle.pending_numbers.is_empty(),
+        "no number pops on the same tick as the animation"
+    );
+    assert!(
+        battle.anim_hold_active(),
+        "resolution holds while the swing plays"
+    );
+    assert!(
+        matches!(battle.steps.front(), Some(Step::StrikeImpact { .. })),
+        "the impact is queued as a deferred step: {:?}",
+        battle.steps.front().is_some()
+    );
+    // Draining the deferred step (what `resolve_tick` does once the animation has
+    // played out) is what finally pops the number.
+    battle.resolve_next();
+    assert!(
+        !battle.pending_numbers.is_empty(),
+        "the number pops only once the deferred impact resolves"
+    );
+}
+
+#[test]
+fn a_zero_animation_strike_applies_immediately_without_holding() {
+    // build_1v2's hero is bare-handed (unarmed_animation 0), so there is no swing
+    // to wait for: the impact must land at once with no hold (never wedging).
+    let mut battle = build_1v2();
+    battle.members[0].weapon_hit = 100; // land the blow deterministically
+    let before = battle.enemies[0].hp;
+    battle.apply(Action {
+        source: Source::Party(0),
+        kind: Command::Attack { target: 0 },
+        agility: 0,
+    });
+    assert!(
+        !battle.anim_hold_active(),
+        "a 0-animation strike never holds"
+    );
+    assert!(battle.enemies[0].hp < before, "the blow lands on this tick");
+    assert!(
+        !battle.pending_numbers.is_empty(),
+        "its damage number pops immediately"
+    );
+}
+
+#[test]
+fn an_enemy_normal_attack_applies_and_pops_a_number_without_holding() {
+    // An rpg2k enemy normal attack plays no animation, so it applies immediately
+    // (paced only by the step timer), queues no animation, and never holds.
+    let mut battle = build_1v2();
+    wind_enemy_hits(&mut battle, &[0]); // land the enemy to-hit roll
+    let before = battle.members[0].hp;
+    battle.apply(Action {
+        source: Source::Enemy(0),
+        kind: Command::Attack { target: 0 },
+        agility: 0,
+    });
+    assert!(
+        !battle.anim_hold_active(),
+        "an enemy normal attack plays no animation, so no hold"
+    );
+    assert!(
+        battle.members[0].hp < before,
+        "the member takes the hit at once"
+    );
+    assert!(
+        battle.pending_anims.is_empty(),
+        "no animation is queued for an enemy normal attack"
+    );
+    assert!(
+        !battle.pending_numbers.is_empty(),
+        "the damage number pops on this tick"
+    );
+}
+
+#[test]
+fn the_animation_hold_waits_for_the_animation_to_appear_then_finish() {
+    let mut battle = build_1v2();
+    battle.begin_anim_hold();
+    assert!(battle.anim_hold_active());
+    // The `LiveAnimation` is spawned by `drain_pending_anims`, which runs after
+    // `resolve_tick`, so it isn't live on the first hold frame — the hold must
+    // persist through that spawn lag rather than clear on the first empty reading.
+    assert!(
+        battle.tick_anim_hold(false),
+        "holds through the one-tick spawn lag"
+    );
+    // Once it appears it plays for its duration.
+    assert!(battle.tick_anim_hold(true), "holds while it plays");
+    assert!(battle.tick_anim_hold(true));
+    // When the seen animation is gone, the hold releases.
+    assert!(
+        !battle.tick_anim_hold(false),
+        "releases once the seen animation has finished"
+    );
+    assert!(!battle.anim_hold_active());
+}
+
+#[test]
+fn the_animation_hold_gives_up_if_the_animation_never_appears() {
+    // An unknown animation id spawns no `LiveAnimation`; the grace window must
+    // bound the wait so resolution can never wedge.
+    let mut battle = build_1v2();
+    battle.begin_anim_hold();
+    let mut ticks = 0;
+    while battle.tick_anim_hold(false) {
+        ticks += 1;
+        assert!(
+            ticks < 1000,
+            "the hold must not wedge on a missing animation"
+        );
+    }
+    assert!(!battle.anim_hold_active());
+    assert!(ticks > 0, "it holds briefly before giving up");
+}

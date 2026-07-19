@@ -138,6 +138,13 @@ pub struct ShowMapAnimation {
 #[derive(Resource)]
 pub struct AnimationLibrary(pub Vec<AnimationDef>);
 
+/// How many effect animations are live this frame. `battle::resolve_tick` reads
+/// it to hold resolution while a strike/cast animation plays out before the
+/// damage lands (during a fight only battle animations play, so any live
+/// animation is the attack animation). Kept in step by [`track_active_animations`].
+#[derive(Resource, Default)]
+pub struct ActiveAnimations(pub usize);
+
 /// A playing animation: which library entry it is, the screen points its cells
 /// draw at (`draw_anchors` — one per target, or a single centred point for a
 /// screen-scope animation), the target centres its flashes fire at
@@ -166,6 +173,7 @@ impl Plugin for AnimationPlugin {
                 "{}/animations.ron",
                 asset_root()
             ))))
+            .init_resource::<ActiveAnimations>()
             .add_systems(Startup, spawn_overlay_camera)
             .add_systems(
                 Update,
@@ -178,6 +186,7 @@ impl Plugin for AnimationPlugin {
                     )
                         .chain(),
                     fade_flashes,
+                    track_active_animations,
                 ),
             );
     }
@@ -317,6 +326,20 @@ fn step_animations(
             }
             None => commands.entity(entity).despawn(),
         }
+    }
+}
+
+/// Keep [`ActiveAnimations`] in step with the live [`LiveAnimation`] count, so the
+/// battle resolver can tell whether a strike/cast animation is still playing. A
+/// just-finished animation's despawn applies a frame later, so the count trails
+/// its end by a frame — harmless for the hold, which only needs "has it gone".
+fn track_active_animations(
+    animations: Query<(), With<LiveAnimation>>,
+    mut active: ResMut<ActiveAnimations>,
+) {
+    let count = animations.iter().count();
+    if active.0 != count {
+        active.0 = count;
     }
 }
 
