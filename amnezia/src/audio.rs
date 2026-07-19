@@ -10,7 +10,8 @@
 //! converted `.ogg` or an ambient `.wav` exists under `audio/Music/`; a
 //! MIDI-only track is skipped without an error or per-frame logging.
 
-use crate::assets::asset_root;
+use crate::assets::{asset_root, load_ron};
+use amnezia_data::{SoundDef, SystemDef};
 use bevy::audio::Volume;
 use bevy::prelude::*;
 
@@ -162,12 +163,37 @@ impl CurrentBgm {
     }
 }
 
+/// The RM2000 system sound effects the UI plays: the cursor move, the confirm
+/// (decision), and the cancel. Loaded once from `system.ron` so the choice and
+/// number-input boxes can play them like RPG_RT. (The disabled-choice buzzer is
+/// omitted: this game has no disabled choices.)
+#[derive(Resource, Default)]
+pub struct SystemSounds {
+    pub cursor: SoundDef,
+    pub decision: SoundDef,
+    pub cancel: SoundDef,
+}
+
+/// Queue a system sound effect (a [`SoundDef`] from [`SystemSounds`]); an
+/// `(OFF)`/empty effect plays nothing.
+pub fn play_system_se(audio: &mut MessageWriter<AudioRequest>, sound: &SoundDef) {
+    if let Some(request) = AudioRequest::se(&sound.name, sound.volume, sound.tempo) {
+        audio.write(request);
+    }
+}
+
 pub struct AudioPlugin;
 
 impl Plugin for AudioPlugin {
     fn build(&self, app: &mut App) {
+        let system: SystemDef = load_ron(&format!("{}/system.ron", asset_root()));
         app.add_message::<AudioRequest>()
             .init_resource::<CurrentBgm>()
+            .insert_resource(SystemSounds {
+                cursor: system.cursor_se,
+                decision: system.decision_se,
+                cancel: system.cancel_se,
+            })
             .add_systems(Update, play_requests);
     }
 }

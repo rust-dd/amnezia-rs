@@ -1,12 +1,14 @@
 //! Dialogue: the message-box UI, plus the action-key interaction that starts an
 //! event's interpreter run when the player presses it facing that event. The
-//! interpreter opens boxes via [`Dialogue::open`]; this module renders them and
-//! advances/closes them on the action key.
+//! interpreter opens boxes via [`Dialogue::open`]; the [`typewriter`] reveals
+//! each page letter by letter, [`view`] draws it, and the confirm key here
+//! fast-forwards the reveal or advances/closes the box.
 
-use crate::assets::resolve_png;
+mod typewriter;
+mod view;
+
 use crate::battle::BattleActive;
 use crate::events::MessageBox;
-use crate::font::GameFont;
 use crate::interpreter::RunningEvent;
 use crate::menu::MenuOpen;
 use crate::player::{Player, facing_tile};
@@ -16,14 +18,16 @@ use crate::teleport::Fade;
 use crate::title::TitleActive;
 use crate::world::MapEvents;
 use bevy::prelude::*;
-use bevy::text::FontSource;
+use typewriter::Typewriter;
 
-/// The active dialogue: the sequence of boxes and which one is showing.
+/// The active dialogue: the sequence of boxes, which one is showing, and the
+/// current page's letter-by-letter reveal (rebuilt when the box changes).
 #[derive(Resource, Default)]
 pub struct Dialogue {
     pub boxes: Vec<MessageBox>,
     pub index: usize,
     pub active: bool,
+    reveal: Option<Typewriter>,
 }
 
 impl Dialogue {
@@ -33,13 +37,26 @@ impl Dialogue {
         self.boxes = boxes;
         self.index = 0;
         self.active = true;
+        self.reveal = None;
+    }
+
+    /// Advance past the current box to the next one, closing the dialogue when
+    /// the last box is dismissed. Clears the reveal so the next box types afresh.
+    fn advance(&mut self) {
+        self.index += 1;
+        self.reveal = None;
+        if self.index >= self.boxes.len() {
+            self.active = false;
+            self.boxes.clear();
+            self.index = 0;
+        }
     }
 }
 
 /// Where the message box sits vertically (`MessageOptions` 10120). The default
-/// [`MessagePosition::Bottom`] is RM2000's usual placement; [`update_position`]
-/// moves the box when the interpreter changes this. `Top`/`Middle` are only
-/// produced by the interpreter's MessageOptions arm, which lands separately.
+/// [`MessagePosition::Bottom`] is RM2000's usual placement; [`view`] moves the
+/// box when the interpreter changes this. `Top`/`Middle` are only produced by
+/// the interpreter's MessageOptions arm, which lands separately.
 #[derive(Resource, Default, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
 pub enum MessagePosition {
@@ -49,17 +66,10 @@ pub enum MessagePosition {
     Bottom,
 }
 
-#[derive(Component)]
-struct DialoguePanel;
-
-#[derive(Component)]
-struct DialogueText;
-
-#[derive(Component)]
-struct DialogueFace;
-
-/// One RM2000 FaceSet face is 48×48 pixels, laid out in a 4×4 grid.
-const FACE_SIZE: f32 = 48.0;
+/// The `MessageOptions` (10120) transparent-box flag: when set, the message text
+/// draws without the windowskin fill/frame behind it.
+#[derive(Resource, Default)]
+pub struct MessageTransparent(pub bool);
 
 pub struct DialoguePlugin;
 
@@ -67,100 +77,28 @@ impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Dialogue>()
             .init_resource::<MessagePosition>()
-            .add_systems(Startup, spawn_ui)
-            .add_systems(Update, (interact, update_ui, update_position));
-    }
-}
-
-/// Spawn the initially hidden dialogue box pinned to the bottom of the screen,
-/// styled with the original RM2000 windowskin from `System.png`: a 9-sliced
-/// frame behind an opaque blue fill, with the text on top.
-fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<AssetServer>) {
-    let system: Handle<Image> = asset_server.load("graphics/System/System.png");
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(16.0),
-                right: Val::Px(16.0),
-                bottom: Val::Px(16.0),
-                min_height: Val::Px(96.0),
-                padding: UiRect::all(Val::Px(14.0)),
-                ..default()
-            },
-            Visibility::Hidden,
-            DialoguePanel,
-        ))
-        .with_children(|panel| {
-            panel.spawn((
-                fill_node(),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(32.0, 0.0, 64.0, 32.0)),
-                    image_mode: NodeImageMode::Sliced(TextureSlicer {
-                        border: BorderRect::all(8.0),
-                        center_scale_mode: SliceScaleMode::Stretch,
-                        sides_scale_mode: SliceScaleMode::Stretch,
-                        max_corner_scale: 1.0,
-                    }),
-                    ..default()
-                },
-            ));
-            panel.spawn((
-                inset_node(4.0),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
-                    image_mode: NodeImageMode::Stretch,
-                    ..default()
-                },
-            ));
-            panel.spawn((
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(4.0),
-                    top: Val::Px(4.0),
-                    width: Val::Px(FACE_SIZE),
-                    height: Val::Px(FACE_SIZE),
-                    ..default()
-                },
-                ImageNode::default(),
-                Visibility::Hidden,
-                DialogueFace,
-            ));
-            panel.spawn((
-                Text::new(String::new()),
-                TextFont {
-                    font: FontSource::Handle(font.0.clone()),
-                    font_size: FontSize::Px(20.0),
-                    ..default()
-                },
-                TextColor(Color::WHITE),
-                Node { ..default() },
-                DialogueText,
-            ));
-        });
-}
-
-/// An absolutely-positioned node filling its parent (the windowskin frame).
-fn fill_node() -> Node {
-    inset_node(0.0)
-}
-
-/// An absolutely-positioned node inset by `px` on every side.
-fn inset_node(px: f32) -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        left: Val::Px(px),
-        right: Val::Px(px),
-        top: Val::Px(px),
-        bottom: Val::Px(px),
-        ..default()
+            .init_resource::<MessageTransparent>()
+            .add_systems(Startup, view::spawn_ui)
+            .add_systems(
+                Update,
+                (
+                    interact,
+                    typewriter::drive_reveal,
+                    view::render_box,
+                    view::render_reveal,
+                    view::update_position,
+                )
+                    .chain(),
+            );
     }
 }
 
 /// Advance an open message box on the action key, or — when idle — start the
 /// interpreter for an action-key (trigger 0) event on the tile the player faces.
+///
+/// While a page is still revealing, the action key fast-forwards it to the full
+/// page; on a `\!` mid-text pause it resumes the reveal; only once the page is
+/// fully shown does the key advance to the next box (or close the dialogue).
 #[allow(clippy::too_many_arguments)]
 fn interact(
     keys: Res<ButtonInput<KeyCode>>,
@@ -185,11 +123,15 @@ fn interact(
         return;
     }
     if dialogue.active {
-        dialogue.index += 1;
-        if dialogue.index >= dialogue.boxes.len() {
-            dialogue.active = false;
-            dialogue.boxes.clear();
-            dialogue.index = 0;
+        match dialogue.reveal.as_mut() {
+            // A `\!` mid-text pause: resume typing the rest of the page.
+            Some(reveal) if reveal.waiting_for_key() => reveal.resume(),
+            // Still typing: fast-forward to the fully-revealed page.
+            Some(reveal) if !reveal.is_complete() => reveal.fast_forward(),
+            // Page fully shown: advance to the next box (or close the dialogue).
+            Some(_) => dialogue.advance(),
+            // The reveal has not been built yet this frame; ignore the press.
+            None => {}
         }
         return;
     }
@@ -228,95 +170,6 @@ fn interact(
         {
             running.start(event.id, page.commands.clone());
             return;
-        }
-    }
-}
-
-#[allow(clippy::type_complexity)]
-fn update_ui(
-    dialogue: Res<Dialogue>,
-    asset_server: Res<AssetServer>,
-    mut panels: Query<&mut Visibility, (With<DialoguePanel>, Without<DialogueFace>)>,
-    mut texts: Query<(&mut Text, &mut Node), With<DialogueText>>,
-    mut faces: Query<
-        (&mut ImageNode, &mut Visibility),
-        (With<DialogueFace>, Without<DialoguePanel>),
-    >,
-) {
-    if !dialogue.is_changed() {
-        return;
-    }
-    let showing = dialogue.active && dialogue.index < dialogue.boxes.len();
-    if let Ok(mut visibility) = panels.single_mut() {
-        *visibility = if showing {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    let current = if showing {
-        dialogue.boxes.get(dialogue.index)
-    } else {
-        None
-    };
-    let face = current.and_then(|b| b.face.as_ref().map(|name| (name.clone(), b.face_index)));
-    if let Ok((mut image, mut visibility)) = faces.single_mut() {
-        match &face {
-            Some((name, index)) => {
-                image.image = asset_server.load(resolve_png("FaceSet", name));
-                let (col, row) = ((index % 4) as f32, (index / 4) as f32);
-                image.rect = Some(Rect::new(
-                    col * FACE_SIZE,
-                    row * FACE_SIZE,
-                    col * FACE_SIZE + FACE_SIZE,
-                    row * FACE_SIZE + FACE_SIZE,
-                ));
-                *visibility = Visibility::Visible;
-            }
-            None => *visibility = Visibility::Hidden,
-        }
-    }
-    if let Some(box_) = current
-        && let Ok((mut text, mut node)) = texts.single_mut()
-    {
-        **text = box_.lines.join("\n");
-        node.margin.left = if face.is_some() {
-            Val::Px(FACE_SIZE + 8.0)
-        } else {
-            Val::Px(0.0)
-        };
-    }
-}
-
-/// Anchor the dialogue box to the top, middle, or bottom of the screen when
-/// [`MessagePosition`] changes. Bottom (the spawn default) pins it to the
-/// bottom; Top pins it to the top; Middle centres it, nudged up by half the
-/// box's min height so the box straddles the centre line.
-fn update_position(
-    position: Res<MessagePosition>,
-    mut panels: Query<&mut Node, With<DialoguePanel>>,
-) {
-    if !position.is_changed() {
-        return;
-    }
-    let Ok(mut node) = panels.single_mut() else {
-        return;
-    };
-    match *position {
-        MessagePosition::Top => {
-            node.top = Val::Px(16.0);
-            node.bottom = Val::Auto;
-            node.margin.top = Val::Px(0.0);
-        }
-        MessagePosition::Middle => {
-            node.top = Val::Percent(50.0);
-            node.bottom = Val::Auto;
-            node.margin.top = Val::Px(-48.0);
-        }
-        MessagePosition::Bottom => {
-            node.top = Val::Auto;
-            node.bottom = Val::Px(16.0);
-            node.margin.top = Val::Px(0.0);
         }
     }
 }

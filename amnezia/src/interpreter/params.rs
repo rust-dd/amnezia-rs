@@ -6,7 +6,7 @@
 use crate::animation::ShowMapAnimation;
 use crate::appearance::SpriteChange;
 use crate::battle::{BattleActive, BattleRequest, BattleResult};
-use crate::dialogue::MessagePosition;
+use crate::dialogue::{MessagePosition, MessageTransparent};
 use crate::gamedata::GameData;
 use crate::gameover::GameOverActive;
 use crate::inputnumber::InputNumber;
@@ -52,6 +52,7 @@ pub(super) struct MapFx<'w> {
     pub(super) hero_transparency: ResMut<'w, HeroTransparency>,
     pub(super) weather: ResMut<'w, Weather>,
     pub(super) message_position: ResMut<'w, MessagePosition>,
+    pub(super) message_transparent: ResMut<'w, MessageTransparent>,
     pub(super) game_clock: ResMut<'w, GameClock>,
 }
 

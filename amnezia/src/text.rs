@@ -1,30 +1,55 @@
-//! Expansion of RM2000 message control codes into display text. Message
-//! strings embed codes like `\N[1]` (insert an actor's name) or `\V[3]` (insert
-//! a variable's value); this module turns them into the text the box shows.
+//! Expansion of RM2000 message control codes. Message strings embed codes like
+//! `\N[1]` (insert an actor's name), `\V[3]` (insert a variable's value), or the
+//! reveal-timing codes `\s`/`\|`/`\.`/`\!`/`\^` the typewriter honours. This
+//! module parses a raw line into a flat [`Segment`] stream: one entry per printed
+//! character, plus a marker per timing code. [`substitute`] is the plain-text
+//! projection (characters only) used where no typewriter runs, e.g. choice labels.
 
 use crate::state::Variables;
 use bevy::prelude::Resource;
 
 /// The hero's name, loaded from `hero.ron` at startup and inserted into the
-/// `\N[k]` control code by [`substitute`].
+/// `\N[k]` control code by [`parse_segments`].
 #[derive(Resource)]
 pub struct HeroName(pub String);
 
-/// Expand RM2000 message control codes in `raw` into display text.
-///
-/// `\N[k]` inserts the hero's name (the game has only actor 1, so every `k`
-/// yields `hero`); `\V[k]` inserts variable `k`'s current value; `\\` becomes a
-/// single backslash. The text-speed (`\S[..]`) and full-second pause (`\|`)
-/// codes have no analogue in this remake and are stripped, as is any other
-/// unrecognised `\X` or `\X[..]`.
-pub fn substitute(raw: &str, hero: &str, variables: &Variables) -> String {
+/// One unit of a parsed message: a printable character, or a control marker the
+/// [`Typewriter`](crate::dialogue) acts on while revealing the page. `\N`/`\V`
+/// are already expanded into [`Segment::Char`] runs, and colour (`\C`) plus
+/// unknown codes are dropped during parsing, matching RM2000's message renderer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Segment {
+    /// A glyph to reveal (a literal char, or one expanded from `\N`/`\V`/`\_`).
+    Char(char),
+    /// `\s[n]`: set the reveal speed (clamped to RM2000's `1..=20`).
+    Speed(u8),
+    /// `\.`: pause the reveal for a quarter second (RM2000 waits 16 frames).
+    QuarterPause,
+    /// `\|`: pause the reveal for one second (RM2000 waits 61 frames).
+    FullPause,
+    /// `\!`: pause mid-text until the player presses the confirm key.
+    WaitKey,
+    /// `\^`: close the page automatically once revealed, without waiting for a key.
+    KillPage,
+    /// `\>`: reveal the following text instantly until [`Segment::InstantOff`].
+    InstantOn,
+    /// `\<`: end an instant-speed run started by [`Segment::InstantOn`].
+    InstantOff,
+}
+
+/// Parse `raw` into its [`Segment`] stream, expanding `\N[k]` to `hero` and
+/// `\V[k]` to variable `k`'s value. `\\` becomes a single backslash; `\_` a
+/// space; the reveal-timing codes become their markers. `\C[..]` (colour) and any
+/// other unrecognised `\X`/`\X[..]` are consumed and dropped. A dangling trailing
+/// backslash is dropped.
+pub fn parse_segments(raw: &str, hero: &str, variables: &Variables) -> Vec<Segment> {
     let chars: Vec<char> = raw.chars().collect();
-    let mut out = String::with_capacity(raw.len());
+    let mut out = Vec::with_capacity(chars.len());
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
         if c != '\\' {
-            out.push(c);
+            out.push(Segment::Char(c));
             i += 1;
             continue;
         }
@@ -32,22 +57,57 @@ pub fn substitute(raw: &str, hero: &str, variables: &Variables) -> String {
             break;
         };
         if code == '\\' {
-            out.push('\\');
+            out.push(Segment::Char('\\'));
             i += 2;
             continue;
         }
         i += 2;
-        let arg = read_bracket(&chars, &mut i);
-        match code.to_ascii_uppercase() {
-            'N' => out.push_str(hero),
-            'V' => {
-                let id = arg.and_then(|a| a.trim().parse::<u32>().ok()).unwrap_or(0);
-                out.push_str(&variables.get(id).to_string());
+        match code {
+            'N' | 'n' => {
+                let _ = read_bracket(&chars, &mut i);
+                out.extend(hero.chars().map(Segment::Char));
             }
-            _ => {}
+            'V' | 'v' => {
+                let arg = read_bracket(&chars, &mut i);
+                let id = arg.and_then(|a| a.trim().parse::<u32>().ok()).unwrap_or(0);
+                out.extend(variables.get(id).to_string().chars().map(Segment::Char));
+            }
+            'S' | 's' => {
+                let arg = read_bracket(&chars, &mut i);
+                let n = arg.and_then(|a| a.trim().parse::<u8>().ok()).unwrap_or(1);
+                out.push(Segment::Speed(n.clamp(1, 20)));
+            }
+            'C' | 'c' => {
+                // Colour: consume the argument and drop it (single-colour text).
+                let _ = read_bracket(&chars, &mut i);
+            }
+            '.' => out.push(Segment::QuarterPause),
+            '|' => out.push(Segment::FullPause),
+            '!' => out.push(Segment::WaitKey),
+            '^' => out.push(Segment::KillPage),
+            '>' => out.push(Segment::InstantOn),
+            '<' => out.push(Segment::InstantOff),
+            '_' => out.push(Segment::Char(' ')),
+            _ => {
+                // Unknown code: drop it, plus a bracket argument if one follows.
+                let _ = read_bracket(&chars, &mut i);
+            }
         }
     }
     out
+}
+
+/// Expand `raw`'s control codes to plain display text: [`parse_segments`] keeping
+/// only its [`Segment::Char`]s. Used where text is shown without the typewriter
+/// (choice labels), so the timing codes collapse away and `\N`/`\V` still expand.
+pub fn substitute(raw: &str, hero: &str, variables: &Variables) -> String {
+    parse_segments(raw, hero, variables)
+        .into_iter()
+        .filter_map(|s| match s {
+            Segment::Char(c) => Some(c),
+            _ => None,
+        })
+        .collect()
 }
 
 /// If a `[...]` group begins at `*i`, consume it (advancing `*i` past the
@@ -141,5 +201,68 @@ mod tests {
     #[test]
     fn drops_dangling_backslash() {
         assert_eq!(substitute("done\\", "Ron", &vars(&[])), "done");
+    }
+
+    #[test]
+    fn parses_full_pause_between_characters() {
+        assert_eq!(
+            parse_segments("a\\|b", "Ron", &vars(&[])),
+            vec![Segment::Char('a'), Segment::FullPause, Segment::Char('b')]
+        );
+    }
+
+    #[test]
+    fn parses_quarter_pause() {
+        assert_eq!(
+            parse_segments("a\\.b", "Ron", &vars(&[])),
+            vec![
+                Segment::Char('a'),
+                Segment::QuarterPause,
+                Segment::Char('b')
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_speed_and_kill_page() {
+        assert_eq!(
+            parse_segments("\\s[5]x\\^", "Ron", &vars(&[])),
+            vec![Segment::Speed(5), Segment::Char('x'), Segment::KillPage]
+        );
+    }
+
+    #[test]
+    fn speed_clamps_into_range() {
+        assert_eq!(
+            parse_segments("\\s[99]", "Ron", &vars(&[])),
+            vec![Segment::Speed(20)]
+        );
+    }
+
+    #[test]
+    fn parses_wait_key_and_instant_run() {
+        assert_eq!(
+            parse_segments("\\>hi\\<\\!", "Ron", &vars(&[])),
+            vec![
+                Segment::InstantOn,
+                Segment::Char('h'),
+                Segment::Char('i'),
+                Segment::InstantOff,
+                Segment::WaitKey,
+            ]
+        );
+    }
+
+    #[test]
+    fn expands_name_into_char_segments() {
+        assert_eq!(
+            parse_segments("\\N[1]!", "Ron", &vars(&[])),
+            vec![
+                Segment::Char('R'),
+                Segment::Char('o'),
+                Segment::Char('n'),
+                Segment::Char('!'),
+            ]
+        );
     }
 }

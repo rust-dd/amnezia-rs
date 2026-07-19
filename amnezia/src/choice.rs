@@ -1,31 +1,41 @@
 //! Dialogue choices: the windowskin menu the interpreter opens for a
-//! `ShowChoice` command. It lists the options with a cursor the player moves
-//! with the arrow keys and confirms with the action key; the interpreter reads
-//! the chosen index back and runs the matching branch.
+//! `ShowChoice` command. It renders at the message box's position with the
+//! options listed under a cursor the player moves with the arrow keys and
+//! confirms with the action key; the cancel key selects the choice's configured
+//! cancel option (or is refused when the choice disallows cancelling). The
+//! interpreter reads the chosen index back and runs the matching branch.
 
+use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::font::GameFont;
 use bevy::prelude::*;
 use bevy::text::FontSource;
 
 /// The active choice menu: the option labels, the cursor row, which event
-/// `indent` this choice belongs to, whether it's showing, and — once the player
-/// confirms — the chosen option index the interpreter consumes.
+/// `indent` this choice belongs to, its RM2000 cancel type, whether it's showing,
+/// and — once the player confirms or cancels — the chosen option index the
+/// interpreter consumes.
 #[derive(Resource, Default)]
 pub struct Choice {
     pub options: Vec<String>,
     pub cursor: usize,
     pub indent: u32,
+    /// RM2000 `ShowChoices` cancel type (`parameters[0]`): `0` disallows cancel,
+    /// otherwise the cancel key picks option `cancel_type - 1` (the special cancel
+    /// branch when it exceeds the listed options).
+    pub cancel_type: i32,
     pub active: bool,
     pub result: Option<i32>,
 }
 
 impl Choice {
-    /// Show `options` for the choice at event `indent`. The interpreter pauses
-    /// until the player confirms (`active` clears and `result` is set).
-    pub fn open(&mut self, options: Vec<String>, indent: u32) {
+    /// Show `options` for the choice at event `indent` with the given RM2000
+    /// `cancel_type`. The interpreter pauses until the player confirms or cancels
+    /// (`active` clears and `result` is set).
+    pub fn open(&mut self, options: Vec<String>, indent: u32, cancel_type: i32) {
         self.options = options;
         self.cursor = 0;
         self.indent = indent;
+        self.cancel_type = cancel_type;
         self.active = true;
         self.result = None;
     }
@@ -52,17 +62,19 @@ impl Plugin for ChoicePlugin {
     }
 }
 
-/// Spawn the initially hidden choice box, bottom-right, styled with the same
-/// RM2000 windowskin (`System.png`) as the dialogue box.
+/// Spawn the initially hidden choice box at the bottom message-box position,
+/// styled with the same RM2000 windowskin (`System.png`) as the dialogue box, so
+/// the options read as continuing below the message they follow.
 fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<AssetServer>) {
     let system: Handle<Image> = asset_server.load("graphics/System/System.png");
     commands
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
+                left: Val::Px(16.0),
                 right: Val::Px(16.0),
                 bottom: Val::Px(16.0),
-                min_width: Val::Px(160.0),
+                min_height: Val::Px(96.0),
                 padding: UiRect::all(Val::Px(14.0)),
                 ..default()
             },
@@ -124,9 +136,16 @@ fn inset_node(px: f32) -> Node {
     }
 }
 
-/// Move the cursor with the arrow keys (wrapping); confirm with the action key,
-/// storing the chosen index in `result` and closing the menu.
-fn choice_input(keys: Res<ButtonInput<KeyCode>>, mut choice: ResMut<Choice>) {
+/// Move the cursor with the arrow keys (wrapping, cursor SE); confirm with the
+/// action key (decision SE) storing the chosen index; or cancel with the cancel
+/// key, which — unless the choice disallows it (`cancel_type == 0`) — picks the
+/// configured cancel option (cancel SE). Each closes the menu with a `result`.
+fn choice_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut choice: ResMut<Choice>,
+    mut audio: MessageWriter<AudioRequest>,
+    sounds: Option<Res<SystemSounds>>,
+) {
     if !choice.active {
         return;
     }
@@ -134,13 +153,33 @@ fn choice_input(keys: Res<ButtonInput<KeyCode>>, mut choice: ResMut<Choice>) {
     if count == 0 {
         return;
     }
+    let sounds = sounds.as_deref();
     if keys.just_pressed(KeyCode::ArrowDown) {
         choice.cursor = (choice.cursor + 1) % count;
+        if let Some(s) = sounds {
+            play_system_se(&mut audio, &s.cursor);
+        }
     }
     if keys.just_pressed(KeyCode::ArrowUp) {
         choice.cursor = (choice.cursor + count - 1) % count;
+        if let Some(s) = sounds {
+            play_system_se(&mut audio, &s.cursor);
+        }
+    }
+    if keys.just_pressed(KeyCode::Escape) {
+        if choice.cancel_type > 0 {
+            if let Some(s) = sounds {
+                play_system_se(&mut audio, &s.cancel);
+            }
+            choice.result = Some(choice.cancel_type - 1);
+            choice.active = false;
+        }
+        return;
     }
     if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) {
+        if let Some(s) = sounds {
+            play_system_se(&mut audio, &s.decision);
+        }
         choice.result = Some(choice.cursor as i32);
         choice.active = false;
     }

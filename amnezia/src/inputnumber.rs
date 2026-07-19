@@ -3,6 +3,7 @@
 //! edits with the arrow keys and confirms with the action key; the interpreter
 //! reads the assembled number back and stores it in the target variable.
 
+use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::font::GameFont;
 use bevy::prelude::*;
 use bevy::text::FontSource;
@@ -163,33 +164,54 @@ fn inset_node(px: f32) -> Node {
 
 /// Edit the current digit with ↑/↓ (wrapping `0..=9`), move between slots with
 /// ←/→, and confirm with the action key, storing the assembled number in
-/// `result` and closing the box.
-fn input_number_input(keys: Res<ButtonInput<KeyCode>>, mut input: ResMut<InputNumber>) {
+/// `result` and closing the box. Cursor moves play the RM2000 cursor SE and
+/// confirming plays the decision SE, like RPG_RT's number-input window.
+fn input_number_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut input: ResMut<InputNumber>,
+    mut audio: MessageWriter<AudioRequest>,
+    sounds: Option<Res<SystemSounds>>,
+) {
     if !input.active {
         return;
     }
+    let sounds = sounds.as_deref();
     let confirm = keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter);
     let count = input.slots.len();
     if count == 0 {
         if confirm {
+            if let Some(s) = sounds {
+                play_system_se(&mut audio, &s.decision);
+            }
             input.result = Some(0);
             input.active = false;
         }
         return;
     }
+    let mut moved = false;
     if keys.just_pressed(KeyCode::ArrowUp) {
         input.adjust(1);
+        moved = true;
     }
     if keys.just_pressed(KeyCode::ArrowDown) {
         input.adjust(-1);
+        moved = true;
     }
     if keys.just_pressed(KeyCode::ArrowRight) {
         input.cursor = (input.cursor + 1) % count;
+        moved = true;
     }
     if keys.just_pressed(KeyCode::ArrowLeft) {
         input.cursor = (input.cursor + count - 1) % count;
+        moved = true;
+    }
+    if moved && let Some(s) = sounds {
+        play_system_se(&mut audio, &s.cursor);
     }
     if confirm {
+        if let Some(s) = sounds {
+            play_system_se(&mut audio, &s.decision);
+        }
         input.result = Some(input.value);
         input.active = false;
     }
@@ -251,6 +273,7 @@ mod tests {
         app.add_plugins(MinimalPlugins);
         app.init_resource::<ButtonInput<KeyCode>>();
         app.init_resource::<InputNumber>();
+        app.add_message::<AudioRequest>();
         app.add_systems(Update, input_number_input);
         app
     }

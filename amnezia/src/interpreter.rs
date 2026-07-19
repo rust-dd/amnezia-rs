@@ -315,13 +315,12 @@ fn run_interpreter(
                 let mut boxes = message_boxes(&running.commands[running.ip..running.ip + run_len]);
                 running.ip += run_len;
                 if !boxes.is_empty() {
+                    // Translate each line but keep its RM2000 control codes intact:
+                    // the dialogue typewriter expands `\N`/`\V` and acts on the
+                    // reveal-timing codes (`\s`, `\|`, `\^`, …) as it types the page.
                     for message in &mut boxes {
                         for line in &mut message.lines {
-                            *line = text::substitute(
-                                &crate::i18n::tr(line),
-                                &subsystems.actor_edits.hero_name.0,
-                                &variables,
-                            );
+                            *line = crate::i18n::tr(line);
                         }
                     }
                     dialogue.open(boxes);
@@ -402,6 +401,8 @@ fn run_interpreter(
                 running.ip += 1;
             }
             MESSAGE_OPTIONS => {
+                subsystems.mapfx.message_transparent.0 =
+                    command.params.first().copied().unwrap_or(0) != 0;
                 *subsystems.mapfx.message_position =
                     match command.params.get(1).copied().unwrap_or(2) {
                         0 => MessagePosition::Top,
@@ -555,7 +556,9 @@ fn run_interpreter(
                             SHOW_CHOICE_END,
                         );
                     } else {
-                        choice.open(labels, command.indent);
+                        // RM2000 `ShowChoices` cancel type is `parameters[0]`.
+                        let cancel_type = command.params.first().copied().unwrap_or(0);
+                        choice.open(labels, command.indent, cancel_type);
                         return;
                     }
                 }
