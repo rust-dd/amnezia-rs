@@ -6,7 +6,9 @@
 
 use super::BattleOutcome;
 use super::logic;
-use super::model::{Action, Battle, Command, PendingAnim, Phase, Source, rng_next};
+use super::model::{
+    Action, Battle, Command, Dying, NumberKind, PendingAnim, PendingNumber, Phase, Source, rng_next,
+};
 use amnezia_data::SkillDef;
 
 /// RM2000 front-view draws no party sprites, so a hit a member takes animates at
@@ -17,11 +19,30 @@ const PARTY_ANIM_Y: f32 = 80.0;
 /// multi-member party doesn't stack every hit at the exact centre.
 const PARTY_ANIM_SPREAD: f32 = 16.0;
 
+/// Seconds a slain foe blinks and fades out before it is cleared (RM2000
+/// `SetDeathTimer(36)` counted down at 60 fps).
+const DEATH_SECS: f32 = 36.0 / 60.0;
+
+/// Seconds a self-destructing foe zoom-fades before it is cleared (RM2000
+/// `SetExplodeTimer(20)` at 60 fps) — a shorter, punchier burst than a plain death.
+const EXPLODE_SECS: f32 = 20.0 / 60.0;
+
 /// The outcome of a party member's weapon strike: a clean miss, or a landed hit
 /// carrying the damage dealt and whether it critical'd (for the log line).
 enum Strike {
     Miss,
     Hit { dmg: i32, crit: bool },
+}
+
+/// The floating-number text and colour for a landed blow of `dmg`: the digits in
+/// white for a real hit, or a pale "0" for a blocked/immune blow (RM2000 pops "0"
+/// on an undamaged hit — distinct from a dodge, which pops "Miss").
+fn number_for(dmg: i32) -> (String, NumberKind) {
+    if dmg > 0 {
+        (dmg.to_string(), NumberKind::Damage)
+    } else {
+        ("0".to_string(), NumberKind::Miss)
+    }
 }
 
 impl Battle {
@@ -97,6 +118,10 @@ impl Battle {
             } else {
                 format!("{name}: {state_name} +{delta}")
             });
+        }
+        // A drain that emptied a foe's HP starts its death-out like any other kill.
+        if let Source::Enemy(i) = source {
+            self.start_foe_death(i, false);
         }
     }
 
@@ -205,6 +230,7 @@ impl Battle {
                     self.hit_member(ti, damage, 4);
                 }
                 self.enemies[ei].hp = 0;
+                self.start_foe_death(ei, true);
                 format!("{name} felrobban!")
             }
             (Source::Enemy(ei), Command::Escape) => {
@@ -253,6 +279,67 @@ impl Battle {
         )
     }
 
+    /// Queue a floating number to pop on a battler at `pos` as this action
+    /// resolves; `battle::floaters` spawns and rises it. Bevy-free.
+    fn push_number(&mut self, pos: (f32, f32), text: String, kind: NumberKind) {
+        self.pending_numbers.push(PendingNumber { pos, text, kind });
+    }
+
+    /// Register a landed blow of `dmg` on foe `ti`: pop its damage number, owe it a
+    /// guaranteed whitening blink (RM2000 blinks a struck sprite every hit,
+    /// animation-flash or not), and start its death-out if the blow felled it.
+    fn after_foe_hit(&mut self, ti: usize, dmg: i32) {
+        let pos = self.foe_anim_pos(ti);
+        let (text, kind) = number_for(dmg);
+        self.push_number(pos, text, kind);
+        self.pending_blinks.push(pos);
+        self.start_foe_death(ti, false);
+    }
+
+    /// Register a landed blow of `dmg` on member `ti`: pop its damage number at the
+    /// party slot. Party members have no front-view sprite, so the number is their
+    /// whole feedback (no blink, no death-out).
+    fn after_member_hit(&mut self, ti: usize, dmg: i32) {
+        let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
+        let (text, kind) = number_for(dmg);
+        self.push_number(pos, text, kind);
+    }
+
+    /// Start foe `ti`'s death-out if it was just reduced to 0 HP and isn't already
+    /// leaving: a zoom-fade explosion for a self-destruct (`explode`), else the
+    /// RM2000 blink-and-fade. A fled foe (it kept its HP) and an already-dying foe
+    /// are left alone. `resolve_tick` then holds until it elapses.
+    fn start_foe_death(&mut self, ti: usize, explode: bool) {
+        let foe = &mut self.enemies[ti];
+        if foe.hp <= 0 && !foe.fled && foe.dying.is_none() {
+            foe.dying = Some(Dying {
+                elapsed: 0.0,
+                secs: if explode { EXPLODE_SECS } else { DEATH_SECS },
+                explode,
+            });
+        }
+    }
+
+    /// Whether any foe is mid death-out; `resolve_tick` holds the step while so.
+    pub(super) fn death_in_progress(&self) -> bool {
+        self.enemies
+            .iter()
+            .any(|e| e.dying.as_ref().is_some_and(|d| d.elapsed < d.secs))
+    }
+
+    /// Advance every in-progress death-out by `dt` real seconds (driven each frame
+    /// by `battle::scene`), clamped at its length so [`Battle::death_in_progress`]
+    /// eventually clears and resolution resumes.
+    pub(super) fn advance_deaths(&mut self, dt: f32) {
+        for foe in &mut self.enemies {
+            if let Some(d) = &mut foe.dying
+                && d.elapsed < d.secs
+            {
+                d.elapsed = (d.elapsed + dt).min(d.secs);
+            }
+        }
+    }
+
     /// Resolve a party member's weapon strike on enemy `ti`, in RM2000 order: an
     /// agility-adjusted to-hit roll (bare hands default 90%), then on a hit the
     /// weapon's element against the foe's resistance ranks, a critical that
@@ -272,6 +359,8 @@ impl Battle {
             self.enemies[ti].stats.agility,
         );
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
+            let pos = self.foe_anim_pos(ti);
+            self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
             return Strike::Miss;
         }
         let element = self.members[pi].weapon_element.unwrap_or(0);
@@ -297,6 +386,7 @@ impl Battle {
         }
         self.enemies[ti].hp -= dmg;
         self.release_states_on_enemy(ti);
+        self.after_foe_hit(ti, dmg);
         Strike::Hit { dmg, crit }
     }
 
@@ -311,6 +401,7 @@ impl Battle {
         }
         self.enemies[ti].hp -= dmg;
         self.release_states_on_enemy(ti);
+        self.after_foe_hit(ti, dmg);
         dmg
     }
 
@@ -325,6 +416,7 @@ impl Battle {
         }
         self.members[ti].hp -= dmg;
         self.release_states_on_member(ti);
+        self.after_member_hit(ti, dmg);
         dmg
     }
 
@@ -344,6 +436,8 @@ impl Battle {
             self.members[ti].stats.agility,
         );
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
+            let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
+            self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
             return None;
         }
         let mut base = logic::physical_damage(
@@ -450,6 +544,8 @@ impl Battle {
         if skill.absorb && dealt > 0 {
             let f = &mut self.members[pi];
             f.hp = (f.hp + dealt).min(f.max_hp);
+            let pos = (self.party_anim_x(pi), PARTY_ANIM_Y);
+            self.push_number(pos, dealt.to_string(), NumberKind::Heal);
         }
         let mut lines = vec![format!("{caster} varázsol: {target} -{dealt}")];
         for &sid in &skill.affected_states {
@@ -488,6 +584,10 @@ impl Battle {
         } else {
             f.hp = (f.hp + amt).min(f.max_hp);
         }
+        if amt > 0 {
+            let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
+            self.push_number(pos, amt.to_string(), NumberKind::Heal);
+        }
         let mut lines = vec![format!("{caster} varázsol: {target} +{amt}")];
         for &sid in &skill.affected_states {
             if logic::has_state(&self.members[ti].states, sid) {
@@ -524,6 +624,11 @@ impl Battle {
         }
         if sp_gain > 0 {
             self.members[ti].sp = (self.members[ti].sp + sp_gain).min(max_sp);
+        }
+        let shown = hp_gain.max(sp_gain);
+        if shown > 0 {
+            let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
+            self.push_number(pos, shown.to_string(), NumberKind::Heal);
         }
         let mut cured: Vec<String> = Vec::new();
         for &sid in &item.cure_states {
@@ -629,6 +734,10 @@ impl Battle {
             let amt = logic::variance_adjust(base, skill.variance as i32, roll).max(0);
             let e = &mut self.enemies[ei];
             e.hp = (e.hp + amt).min(e.max_hp);
+            if amt > 0 {
+                let pos = self.foe_anim_pos(ei);
+                self.push_number(pos, amt.to_string(), NumberKind::Heal);
+            }
             return Some(format!("{name} varázsol: {name} +{amt}"));
         }
         let ti = self.retarget_member(target)?;
@@ -1813,5 +1922,102 @@ mod tests {
         let full = before - battle.members[0].hp;
         assert!(resisted < full);
         assert_eq!(resisted, (full / 2).max(1));
+    }
+
+    #[test]
+    fn a_landed_strike_pops_a_damage_number_at_the_foe() {
+        let mut battle = build_1v2(); // foe 0 at (100, 100)
+        battle.members[0].weapon_hit = 100; // never miss
+        let Strike::Hit { dmg, .. } = battle.strike_enemy(0, 0) else {
+            panic!("a forced-hit strike missed");
+        };
+        let pos = battle.foe_anim_pos(0);
+        let (text, kind) = number_for(dmg);
+        let number = battle
+            .pending_numbers
+            .last()
+            .expect("a landed hit pops a floating number");
+        assert_eq!(number.pos, pos);
+        assert_eq!(number.text, text);
+        assert!(number.kind == kind);
+    }
+
+    #[test]
+    fn a_heal_pops_a_heal_coloured_number() {
+        let mut battle = build_1v2();
+        battle.skills = vec![heal_skill(2, 40)]; // scope 3 HP heal
+        battle.members[0].hp = 10;
+        battle.cast_skill(0, 2, 0);
+        assert!(
+            battle
+                .pending_numbers
+                .iter()
+                .any(|n| n.kind == NumberKind::Heal),
+            "a heal enqueues a heal-coloured number"
+        );
+    }
+
+    #[test]
+    fn a_missed_strike_pops_a_miss_number() {
+        let mut battle = build_1v2();
+        battle.members[0].weapon_hit = 90;
+        let hit = logic::to_hit(
+            logic::effective_hit(battle.members[0].weapon_hit),
+            battle.members[0].stats.agility,
+            battle.enemies[0].stats.agility,
+        );
+        loop {
+            let mut probe = battle.rng;
+            if (rng_next(&mut probe) % 100) as i32 >= hit {
+                break;
+            }
+            rng_next(&mut battle.rng);
+        }
+        assert!(matches!(battle.strike_enemy(0, 0), Strike::Miss));
+        let number = battle.pending_numbers.last().expect("a miss pops a number");
+        assert_eq!(number.text, "Miss");
+        assert!(number.kind == NumberKind::Miss);
+    }
+
+    #[test]
+    fn a_foe_hit_enqueues_a_guaranteed_blink_without_any_animation_flash() {
+        // build_1v2's hero is bare-handed (unarmed_animation 0), so its swing plays
+        // no animation and carries no flash timing — yet the struck foe blinks.
+        let mut battle = build_1v2();
+        battle.members[0].weapon_hit = 100; // never miss
+        assert!(battle.pending_blinks.is_empty());
+        battle.strike_enemy(0, 0);
+        let pos = battle.foe_anim_pos(0);
+        assert_eq!(battle.pending_blinks.first().copied(), Some(pos));
+    }
+
+    #[test]
+    fn felling_a_foe_starts_a_death_that_holds_resolve_then_clears() {
+        let mut battle = build_1v2();
+        battle.members[0].weapon_hit = 100; // never miss
+        battle.enemies[0].hp = 1; // one blow from death
+        battle.strike_enemy(0, 0);
+        assert!(!battle.enemies[0].alive());
+        assert!(battle.enemies[0].dying.is_some());
+        assert!(battle.death_in_progress()); // resolve_tick holds while this is true
+        battle.advance_deaths(DEATH_SECS + 0.1); // let the beat play out
+        assert!(!battle.death_in_progress()); // hold released
+        assert!(!battle.enemies[0].alive()); // and the foe is gone for good
+    }
+
+    #[test]
+    fn self_destruct_starts_an_explosion_death_out() {
+        let mut battle = build_party2(); // one foe
+        battle.apply(Action {
+            source: Source::Enemy(0),
+            kind: Command::SelfDestruct,
+            agility: 0,
+        });
+        let dying = battle.enemies[0]
+            .dying
+            .as_ref()
+            .expect("a self-destruct explodes");
+        assert!(dying.explode);
+        assert!(battle.death_in_progress());
     }
 }

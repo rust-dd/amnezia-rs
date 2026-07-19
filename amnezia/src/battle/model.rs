@@ -82,6 +82,17 @@ impl Fighter {
     }
 }
 
+/// A death (`SetDeathTimer`) or self-destruct explosion (`SetExplodeTimer`)
+/// playing out on a foe's sprite before it leaves the field: `elapsed` advances in
+/// real time toward `secs`, and `explode` drives the RM2000 zoom-and-fade rather
+/// than the plain fade. While any foe's [`Dying`] runs, `resolve_tick` holds so the
+/// beat is seen; `battle::scene` reads it to drive the sprite's alpha and zoom.
+pub(super) struct Dying {
+    pub elapsed: f32,
+    pub secs: f32,
+    pub explode: bool,
+}
+
 /// A live enemy in the fight: current HP, stats, reward, and its position on the
 /// battle backdrop (RM2000 320×240 pixel space).
 pub struct Foe {
@@ -116,6 +127,9 @@ pub struct Foe {
     /// This foe's RM2000 battle-AI action list, consulted each round to choose
     /// its command (cast a skill, defend, or attack on turn/HP conditions).
     pub actions: Vec<EnemyActionDef>,
+    /// A death or self-destruct fade playing out on this foe's sprite before it
+    /// is cleared from view (see [`Dying`]); `None` until the foe is slain.
+    pub(super) dying: Option<Dying>,
 }
 
 impl Foe {
@@ -197,6 +211,27 @@ pub(super) struct PendingAnim {
     pub targets: Vec<(f32, f32)>,
 }
 
+/// What a floating battle number represents, which tints it: white HP `Damage`,
+/// green `Heal` (an HP or SP restore), and a pale `Miss` for a dodge or a blocked
+/// (0-damage) blow. Mirrors RM2000's damage-pop colouring.
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum NumberKind {
+    Damage,
+    Heal,
+    Miss,
+}
+
+/// A floating number queued as an action resolves — the RM2000 damage/heal pop —
+/// drained by `battle::floaters` into rising, fading overlay text. `pos` is the
+/// target's RM2000 screen offset from centre (y downward): a foe's anim pos or a
+/// member's party slot. `text` is the digits (or "Miss") and `kind` its colour.
+#[derive(Clone)]
+pub(super) struct PendingNumber {
+    pub pos: (f32, f32),
+    pub text: String,
+    pub kind: NumberKind,
+}
+
 /// The whole live battle, held as a Bevy resource and reset to `default()` (the
 /// `Inactive` phase) between fights.
 #[derive(Resource, Default)]
@@ -238,6 +273,14 @@ pub struct Battle {
     /// each frame by `battle.rs` into `PlayAnimation` overlays and cleared by
     /// [`Battle::new_round`] (a fresh [`Battle::build`] starts it empty).
     pub(super) pending_anims: Vec<PendingAnim>,
+    /// Floating damage/heal numbers queued as the current tick's actions resolve,
+    /// drained each frame by `battle::floaters` into rising overlay text and
+    /// cleared by [`Battle::new_round`] (a fresh [`Battle::build`] starts empty).
+    pub(super) pending_numbers: Vec<PendingNumber>,
+    /// Foe screen positions owed a guaranteed per-hit whitening blink, drained by
+    /// `battle::scene` into a blink on each struck sprite. Every landed blow
+    /// enqueues one, independent of the played animation's own flash timings.
+    pub(super) pending_blinks: Vec<(f32, f32)>,
     pub(super) rng: u64,
 }
 
@@ -289,6 +332,7 @@ impl Battle {
                     fled: false,
                     charging: false,
                     actions: d.actions.clone(),
+                    dying: None,
                 })
             })
             .collect();
@@ -468,6 +512,8 @@ impl Battle {
         self.queue.clear();
         self.queue_at = 0;
         self.pending_anims.clear();
+        self.pending_numbers.clear();
+        self.pending_blinks.clear();
         self.menu = MenuLevel::Command;
         self.cursor = 0;
         self.pending_skill = None;

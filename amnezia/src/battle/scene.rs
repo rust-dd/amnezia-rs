@@ -6,7 +6,7 @@
 //! [`Battle::generation`]) and despawned when the fight ends. The HUD windows live
 //! in the sibling [`super::hud`] on a higher-order camera above this overlay.
 
-use super::model::{Battle, MenuLevel, Phase};
+use super::model::{Battle, Dying, MenuLevel, Phase};
 use crate::animation::{BattlerFlash, overlay_layer, overlay_translation};
 use crate::assets::resolve_png;
 use bevy::prelude::*;
@@ -28,10 +28,19 @@ const FLASH_MATCH_EPS: f32 = 0.5;
 /// `GetAnimationCellHeight() / 2` = 48 (`battle_animation.cpp`).
 const FALLBACK_BATTLER_HEIGHT: f32 = 48.0;
 
-/// A backdrop or battler sprite belonging to the live fight; despawned together
-/// when the fight ends (or a new one starts).
+/// A backdrop, battler, or floating-number sprite belonging to the live fight;
+/// despawned together when the fight ends (or a new one starts).
 #[derive(Component)]
-struct SceneEntity;
+pub(super) struct SceneEntity;
+
+/// Seconds a guaranteed per-hit blink brightens a struck foe before it clears
+/// (RM2000 `SetBlinkTimer(20)` at 60 fps).
+const BLINK_SECS: f32 = 20.0 / 60.0;
+
+/// Peak amount a blink adds to each colour channel at its start. It brightens
+/// (adds) rather than tints (lerps), so an already-white sprite still flashes —
+/// a multiply tint toward white is a no-op.
+const BLINK_BRIGHTEN: f32 = 0.9;
 
 /// An enemy battler sprite: its index into [`Battle::enemies`], its RM2000
 /// screen-offset base — the anchor animations play on and the point a target
@@ -47,13 +56,23 @@ pub(super) struct Battler {
 }
 
 /// A running target-flash tint on a battler: `rgb`/`power` the flash colour and
-/// peak strength, decaying back to the base tint over `secs`.
+/// peak strength, decaying back to the base tint over `secs`. Fired by an
+/// animation's own `flash_scope=1` timings.
 #[derive(Component)]
 struct BattlerTint {
     elapsed: f32,
     secs: f32,
     rgb: [f32; 3],
     power: f32,
+}
+
+/// A guaranteed per-hit whitening blink on a foe sprite: started for every landed
+/// blow (RM2000 `SetBlinkTimer`) independent of the animation's own flash. It
+/// brightens the sprite toward white, decaying over `secs`.
+#[derive(Component)]
+struct BattlerBlink {
+    elapsed: f32,
+    secs: f32,
 }
 
 /// A foe's placement `(x, y)` on the RM2000 320×240 backdrop re-centred to a
@@ -97,7 +116,7 @@ fn sync_scene(
         commands.spawn((
             Sprite {
                 image: asset_server.load(resolve_png("Monster", &foe.battler)),
-                color: enemy_tint(foe.alive(), false),
+                color: battler_look(foe.alive(), None, false).0,
                 ..default()
             },
             Transform::from_translation(overlay_translation(base, BATTLER_Z + index as f32 * 0.1)),
@@ -161,20 +180,62 @@ fn apply_battler_flash(
     }
 }
 
-/// Paint every battler each frame: its base tint (dead / targeted / natural) and,
-/// while a [`BattlerTint`] runs, the decaying flash blended over that base —
-/// removing the tint and settling back to the base once it is spent.
+/// Advance any in-progress foe death/explosion in real time (so the held beat
+/// plays out) and turn each queued per-hit blink into a [`BattlerBlink`] on its
+/// foe sprite. Guarded so an idle fight never marks [`Battle`] changed.
+fn drive_battlers(
+    time: Res<Time>,
+    mut battle: ResMut<Battle>,
+    mut commands: Commands,
+    battlers: Query<(Entity, &Battler)>,
+) {
+    let dying = battle.death_in_progress();
+    let has_blinks = !battle.pending_blinks.is_empty();
+    if !dying && !has_blinks {
+        return;
+    }
+    if dying {
+        battle.advance_deaths(time.delta_secs());
+    }
+    for pos in std::mem::take(&mut battle.pending_blinks) {
+        let target = Vec2::new(pos.0, pos.1);
+        if let Some((entity, _)) = battlers
+            .iter()
+            .find(|(_, b)| b.base.distance_squared(target) < FLASH_MATCH_EPS)
+        {
+            commands.entity(entity).insert(BattlerBlink {
+                elapsed: 0.0,
+                secs: BLINK_SECS,
+            });
+        }
+    }
+}
+
+/// Paint every battler each frame: its base look (natural / targeted / dying), the
+/// decaying animation flash blended over it ([`BattlerTint`]), and the guaranteed
+/// per-hit brighten ([`BattlerBlink`]) added on top — plus the death/explosion
+/// zoom on the sprite's scale. Spent tints and blinks are removed.
+#[allow(clippy::type_complexity)]
 fn paint_battlers(
     time: Res<Time>,
     battle: Res<Battle>,
     mut commands: Commands,
-    mut battlers: Query<(Entity, &Battler, &mut Sprite, Option<&mut BattlerTint>)>,
+    mut battlers: Query<(
+        Entity,
+        &Battler,
+        &mut Sprite,
+        &mut Transform,
+        Option<&mut BattlerTint>,
+        Option<&mut BattlerBlink>,
+    )>,
 ) {
     let dt = time.delta_secs();
-    for (entity, battler, mut sprite, tint) in &mut battlers {
-        let alive = battle.enemies.get(battler.index).is_some_and(|f| f.alive());
-        let base = enemy_tint(alive, targeted(&battle, battler.index));
-        let color = match tint {
+    for (entity, battler, mut sprite, mut transform, tint, blink) in &mut battlers {
+        let foe = battle.enemies.get(battler.index);
+        let alive = foe.is_some_and(|f| f.alive());
+        let dying = foe.and_then(|f| f.dying.as_ref());
+        let (base, zoom) = battler_look(alive, dying, targeted(&battle, battler.index));
+        let mut color = match tint {
             Some(mut tint) => {
                 tint.elapsed += dt;
                 if tint.elapsed >= tint.secs {
@@ -187,8 +248,21 @@ fn paint_battlers(
             }
             None => base,
         };
+        if let Some(mut blink) = blink {
+            blink.elapsed += dt;
+            if blink.elapsed >= blink.secs {
+                commands.entity(entity).remove::<BattlerBlink>();
+            } else {
+                let amount = BLINK_BRIGHTEN * (1.0 - blink.elapsed / blink.secs);
+                color = brighten(color, amount);
+            }
+        }
         if sprite.color != color {
             sprite.color = color;
+        }
+        let scale = Vec3::splat(zoom);
+        if transform.scale != scale {
+            transform.scale = scale;
         }
     }
 }
@@ -202,21 +276,42 @@ fn targeted(battle: &Battle, index: usize) -> bool {
     living.get(battle.cursor.min(living.len().saturating_sub(1))) == Some(&index)
 }
 
-/// The base tint of an enemy battler sprite: faded and dark once it's dead, a
-/// warm gold glow while it's the current target, and its natural colours (white,
-/// no tint) otherwise.
-fn enemy_tint(alive: bool, targeted: bool) -> Color {
-    if !alive {
-        return Color::srgba(0.35, 0.35, 0.35, 0.5);
+/// A battler sprite's base colour and zoom this frame: a living foe shows its
+/// natural colours (a warm gold glow while it's the current target); a foe playing
+/// its RM2000 death-out fades from full opacity (a self-destruct also zooms out as
+/// it fades); any other downed foe is gone (fully transparent). The animation
+/// flash and the per-hit blink are layered over this by [`paint_battlers`].
+fn battler_look(alive: bool, dying: Option<&Dying>, targeted: bool) -> (Color, f32) {
+    if alive {
+        let color = if targeted {
+            Color::srgb(1.0, 0.9, 0.55)
+        } else {
+            Color::WHITE
+        };
+        return (color, 1.0);
     }
-    if targeted {
-        return Color::srgb(1.0, 0.9, 0.55);
+    match dying {
+        // RM2000 `Sprite_Enemy::Draw`: death alpha `7 * dt` (dt 36 -> 0), explode
+        // alpha `12 * et` with zoom `(20 - et) / 20 + 1` (et 20 -> 0), each timer
+        // counted down; here `elapsed / secs` runs 0 -> 1 in their place.
+        Some(d) => {
+            let progress = (d.elapsed / d.secs).clamp(0.0, 1.0);
+            let fade = 1.0 - progress;
+            if d.explode {
+                (
+                    Color::srgba(1.0, 1.0, 1.0, fade * 240.0 / 255.0),
+                    1.0 + progress,
+                )
+            } else {
+                (Color::srgba(1.0, 1.0, 1.0, fade * 252.0 / 255.0), 1.0)
+            }
+        }
+        None => (Color::srgba(1.0, 1.0, 1.0, 0.0), 1.0),
     }
-    Color::WHITE
 }
 
 /// `base` blended toward `rgb` by `amount` (0 = base, 1 = full `rgb`), keeping
-/// `base`'s own alpha.
+/// `base`'s own alpha. Used for an animation's colour flash.
 fn blend(base: Color, rgb: [f32; 3], amount: f32) -> Color {
     let b = base.to_srgba();
     Color::srgba(
@@ -227,14 +322,24 @@ fn blend(base: Color, rgb: [f32; 3], amount: f32) -> Color {
     )
 }
 
+/// `color` brightened toward white by `amount` added to each channel (a hit
+/// blink), keeping its alpha so a fading death sprite still flashes without going
+/// opaque. A multiply tint can't whiten a white sprite, so this adds instead.
+fn brighten(color: Color, amount: f32) -> Color {
+    let c = color.to_srgba();
+    Color::srgba(c.red + amount, c.green + amount, c.blue + amount, c.alpha)
+}
+
 /// Register the battle scene systems: rebuild the backdrop + battlers per fight,
-/// route target flashes onto them, and paint the battlers each frame.
+/// advance deaths and route per-hit blinks and target flashes onto them, and paint
+/// the battlers each frame.
 pub fn register(app: &mut App) {
     app.add_systems(
         Update,
         (
             sync_scene,
             measure_battlers,
+            drive_battlers,
             apply_battler_flash,
             paint_battlers,
         ),
@@ -258,10 +363,42 @@ mod tests {
     }
 
     #[test]
-    fn enemy_tint_marks_dead_and_targeted_states() {
-        assert_eq!(enemy_tint(true, false), Color::WHITE);
-        assert_eq!(enemy_tint(true, true), Color::srgb(1.0, 0.9, 0.55));
-        assert!(enemy_tint(false, false).alpha() < 1.0);
+    fn battler_look_covers_alive_targeted_and_death_states() {
+        // A living foe is white, or warm gold while it is the current target.
+        assert_eq!(battler_look(true, None, false), (Color::WHITE, 1.0));
+        assert_eq!(
+            battler_look(true, None, true).0,
+            Color::srgb(1.0, 0.9, 0.55)
+        );
+        // A downed foe with no death-out is gone (fully transparent).
+        assert_eq!(battler_look(false, None, false).0.alpha(), 0.0);
+        // A fresh death-out starts near full opacity and holds its scale.
+        let death = Dying {
+            elapsed: 0.0,
+            secs: 0.6,
+            explode: false,
+        };
+        let (color, zoom) = battler_look(false, Some(&death), false);
+        assert!(color.alpha() > 0.9);
+        assert_eq!(zoom, 1.0);
+        // A finished self-destruct has zoomed out and faded away.
+        let boom = Dying {
+            elapsed: 0.4,
+            secs: 0.4,
+            explode: true,
+        };
+        let (color, zoom) = battler_look(false, Some(&boom), false);
+        assert!(zoom > 1.9);
+        assert!(color.alpha() < 0.01);
+    }
+
+    #[test]
+    fn brighten_lifts_channels_and_keeps_alpha() {
+        // A white sprite can't be whitened by a multiply tint, so the blink adds.
+        let lifted = brighten(Color::srgba(0.4, 0.4, 0.4, 0.7), 0.5);
+        let c = lifted.to_srgba();
+        assert!((c.red - 0.9).abs() < 1e-6);
+        assert!((c.alpha - 0.7).abs() < 1e-6);
     }
 
     #[test]

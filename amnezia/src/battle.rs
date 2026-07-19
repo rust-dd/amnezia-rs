@@ -14,6 +14,7 @@
 //! ends in victory (exp + gold rewarded), defeat, or a successful flee. Party
 //! HP/SP persists between fights in [`Vitals`].
 
+mod floaters;
 mod hud;
 mod input;
 mod logic;
@@ -116,6 +117,7 @@ impl Plugin for BattlePlugin {
                 ),
             );
         scene::register(app);
+        floaters::register(app);
         hud::register(app);
     }
 }
@@ -210,6 +212,11 @@ fn debug_trigger(
 /// the fight or open a fresh command round once the queue is spent.
 fn resolve_tick(time: Res<Time>, mut battle: ResMut<Battle>) {
     if battle.phase != Phase::Resolve {
+        return;
+    }
+    // Hold the step while a slain foe plays out its death or explosion, so the
+    // beat is seen before the next action lands (RM2000 `SetWait(36, 60)`).
+    if battle.death_in_progress() {
         return;
     }
     if !battle.timer.tick(time.delta()).just_finished() {
