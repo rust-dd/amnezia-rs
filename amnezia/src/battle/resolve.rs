@@ -274,10 +274,13 @@ impl Battle {
                 format!("{} védekezik", self.enemies[ei].name)
             }
             (Source::Enemy(ei), Command::SelfDestruct) => {
-                let damage = self.enemies[ei].stats.attack as i32;
+                let atk = self.enemies[ei].stats.attack as i32;
                 let name = self.enemies[ei].name.clone();
                 for ti in self.living_members() {
-                    self.hit_member(ti, damage, 4);
+                    // EasyRPG `CalcSelfDestructEffect`: max(0, atk - def/2) against
+                    // each member's own defence, then the var=4 spread.
+                    let base = (atk - self.members[ti].stats.defense as i32 / 2).max(0);
+                    self.hit_member(ti, base, 4);
                 }
                 self.enemies[ei].hp = 0;
                 self.start_foe_death(ei, true);
@@ -415,10 +418,14 @@ impl Battle {
             self.members[pi].stats.attack,
             self.enemies[ti].stats.defense,
         );
-        let hit = logic::to_hit(
+        // A foe that cannot act (asleep/paralyzed) is struck with certainty
+        // (EasyRPG `CalcNormalAttackToHit` returns 100 vs a do-nothing target).
+        let can_act = logic::worst_restriction(&self.enemies[ti].states, &self.states) != 1;
+        let hit = logic::to_hit_vs(
             logic::effective_hit(self.members[pi].weapon_hit),
             self.members[pi].stats.agility,
             self.enemies[ti].stats.agility,
+            can_act,
         );
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
             let pos = self.foe_anim_pos(ti);
@@ -441,11 +448,11 @@ impl Battle {
         };
         let roll = rng_next(&mut self.rng);
         let mut dmg = logic::variance_adjust(base, 4, roll).max(0);
-        // A defending foe halves the final result (min 1 on a landed hit),
-        // matching the member Defend and EasyRPG `AdjustDamageForDefend`, applied
-        // after element/crit/variance.
-        if self.enemies[ti].defending && dmg > 0 {
-            dmg = logic::defended(dmg).max(1);
+        // A defending foe halves the final result — plain `dmg/2`, no floor, so a
+        // foe and a member Defend behave alike (EasyRPG `AdjustDamageForDefend`),
+        // applied after element/crit/variance.
+        if self.enemies[ti].defending {
+            dmg = logic::defended(dmg);
         }
         Strike::Hit { dmg, crit }
     }
@@ -473,13 +480,14 @@ impl Battle {
     }
 
     /// Apply `base` damage to enemy `ti` with `var` variance (4 for a physical
-    /// blow, the skill's variance for a cast), one draw per hit, then the
-    /// defending-foe halving (min 1). Returns the damage dealt.
+    /// blow, the skill's variance for a cast), one draw per hit, then the plain
+    /// defending-foe halving (no floor, like a member Defend). Returns the damage
+    /// dealt.
     fn hit_enemy(&mut self, ti: usize, base: i32, var: i32) -> i32 {
         let roll = rng_next(&mut self.rng);
         let mut dmg = logic::variance_adjust(base, var, roll).max(0);
-        if self.enemies[ti].defending && dmg > 0 {
-            dmg = logic::defended(dmg).max(1);
+        if self.enemies[ti].defending {
+            dmg = logic::defended(dmg);
         }
         self.enemies[ti].hp -= dmg;
         self.release_states_on_enemy(ti);
@@ -512,10 +520,14 @@ impl Battle {
     fn enemy_strike_member(&mut self, ei: usize, ti: usize) -> Option<i32> {
         let charged = self.enemies[ei].charging;
         self.enemies[ei].charging = false;
-        let hit = logic::to_hit(
+        // A member that cannot act is struck with certainty (EasyRPG
+        // `CalcNormalAttackToHit` returns 100 vs a do-nothing target).
+        let can_act = logic::worst_restriction(&self.members[ti].states, &self.states) != 1;
+        let hit = logic::to_hit_vs(
             logic::effective_hit(0),
             self.enemies[ei].stats.agility,
             self.members[ti].stats.agility,
+            can_act,
         );
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
             let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
@@ -627,6 +639,23 @@ impl Battle {
     fn skill_hit_enemy(&mut self, pi: usize, ti: usize, skill: &SkillDef) -> Vec<String> {
         let caster = self.members[pi].name.clone();
         let target = self.enemies[ti].name.clone();
+        // Roll the skill's to-hit (EasyRPG `CalcSkillToHit`): its own hit rate, or
+        // the bare-hands 90% default when unset (0), agility-adjusted — but a
+        // certain hit against a foe that cannot act. A miss deals nothing and
+        // inflicts no state.
+        let can_act = logic::worst_restriction(&self.enemies[ti].states, &self.states) != 1;
+        let hit = logic::to_hit_vs(
+            logic::effective_hit(skill.hit),
+            self.members[pi].stats.agility,
+            self.enemies[ti].stats.agility,
+            can_act,
+        );
+        if (rng_next(&mut self.rng) % 100) as i32 >= hit {
+            let pos = self.foe_anim_pos(ti);
+            self.pending_se.push(BattleSe::Dodge);
+            self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
+            return vec![format!("{caster} varázsol: {target} elkerülte")];
+        }
         let base = logic::skill_effect(
             skill,
             &self.members[pi].stats,
@@ -640,6 +669,14 @@ impl Battle {
             &self.enemies[ti].attribute_ranks,
             &self.attributes,
         );
+        // A skill can land a critical (EasyRPG `CalcSkillEffect` triples the
+        // effect), rolled off the caster's weapon crit rate like a normal attack.
+        let crit = ((rng_next(&mut self.rng) % 100) as u32) < self.members[pi].weapon_crit;
+        let base = if crit {
+            logic::critical_damage(base)
+        } else {
+            base
+        };
         // Foes carry no SP pool, so an SP-draining skill finds nothing to take.
         let dealt = if skill.affect_sp {
             0
@@ -652,7 +689,12 @@ impl Battle {
             let pos = (self.party_anim_x(pi), PARTY_ANIM_Y);
             self.push_number(pos, dealt.to_string(), NumberKind::Heal);
         }
-        let mut lines = vec![format!("{caster} varázsol: {target} -{dealt}")];
+        let head = if crit {
+            format!("{caster} varázsol: Kritikus! {target} -{dealt}")
+        } else {
+            format!("{caster} varázsol: {target} -{dealt}")
+        };
+        let mut lines = vec![head];
         for &sid in &skill.affected_states {
             let rank = sid
                 .checked_sub(1)
@@ -850,6 +892,25 @@ impl Battle {
             skill.animation_id,
             vec![(self.party_anim_x(ti), PARTY_ANIM_Y)],
         );
+        // Roll the skill's to-hit (EasyRPG `CalcSkillToHit`), certain against a
+        // member that cannot act. An enemy skill carries no crit stat in our model,
+        // so it never critical's (a documented simplification).
+        let can_act = logic::worst_restriction(&self.members[ti].states, &self.states) != 1;
+        let hit = logic::to_hit_vs(
+            logic::effective_hit(skill.hit),
+            self.enemies[ei].stats.agility,
+            self.members[ti].stats.agility,
+            can_act,
+        );
+        if (rng_next(&mut self.rng) % 100) as i32 >= hit {
+            let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
+            self.pending_se.push(BattleSe::Dodge);
+            self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
+            return Some(format!(
+                "{name} varázsol: {} elkerülte",
+                self.members[ti].name
+            ));
+        }
         let base = logic::skill_effect(
             &skill,
             &self.enemies[ei].stats,
@@ -933,6 +994,30 @@ impl Battle {
             }
             let forced = self.forced_party_command(i, restriction);
             self.members[i].command = Some(forced);
+        }
+        self.begin_resolve();
+    }
+
+    /// Order every living member for RM2000 Auto-battle, then resolve: a freely
+    /// acting member basic-attacks a random living enemy (nothing when no foe is
+    /// left), while a restricted member keeps its forced action. Reuses the same
+    /// target/AI helpers as the per-actor flow, so the enemies still act.
+    pub(super) fn auto_battle_commands(&mut self) {
+        let enemies_alive: Vec<bool> = self.enemies.iter().map(|e| e.alive()).collect();
+        for i in 0..self.members.len() {
+            if !self.members[i].alive() {
+                continue;
+            }
+            let restriction = logic::worst_restriction(&self.members[i].states, &self.states);
+            let command = if restriction == 0 {
+                match logic::select_target(&enemies_alive, rng_next(&mut self.rng) as usize) {
+                    Some(target) => Command::Attack { target },
+                    None => Command::Nothing,
+                }
+            } else {
+                self.forced_party_command(i, restriction)
+            };
+            self.members[i].command = Some(command);
         }
         self.begin_resolve();
     }
@@ -1055,28 +1140,23 @@ impl Battle {
         logic::total_rewards(&rewards)
     }
 
-    /// Roll a party escape against the enemies' average agility.
-    pub fn attempt_flee(&mut self) -> bool {
-        let party = self
-            .members
-            .iter()
-            .filter(|m| m.alive())
-            .map(|m| m.stats.agility)
-            .max();
-        let living: Vec<u32> = self
-            .enemies
-            .iter()
-            .filter(|e| e.alive())
-            .map(|e| e.stats.agility)
-            .collect();
-        let enemy = if living.is_empty() {
-            0
-        } else {
-            living.iter().sum::<u32>() / living.len() as u32
-        };
-        let chance = logic::flee_chance(party.unwrap_or(0), enemy);
+    /// Roll a party escape against the persisted RM2000 escape chance (EasyRPG
+    /// `TryEscape`): a first strike escapes outright; otherwise a `PercentChance`
+    /// draw against `escape_chance`. On failure the chance is raised by 10 for the
+    /// next attempt and `false` is returned, so the caller forfeits the party's
+    /// turn. The chance was fixed at [`Battle::build`] from the two sides' average
+    /// agilities and is never recomputed here.
+    pub fn attempt_escape(&mut self) -> bool {
+        if self.first_strike {
+            return true;
+        }
         let roll = (rng_next(&mut self.rng) % 100) as u32;
-        logic::flee_succeeds(chance, roll)
+        if logic::escape_succeeds(self.escape_chance, roll) {
+            true
+        } else {
+            self.escape_chance += 10;
+            false
+        }
     }
 
     /// Conclude the fight with `outcome` and wait in the outcome phase for the

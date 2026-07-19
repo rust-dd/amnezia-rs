@@ -162,6 +162,19 @@ pub fn to_hit(base_hit: u32, source_agi: u32, target_agi: u32) -> i32 {
     (100.0 - (100 - base_hit as i32) as f32 * (1.0 + (tgt / src - 1.0) / 2.0)) as i32
 }
 
+/// [`to_hit`], except a target that cannot act is struck with certainty: RM2000 /
+/// EasyRPG `CalcNormalAttackToHit` and `CalcSkillToHit` both return 100 against a
+/// do-nothing target (asleep, paralyzed) before any agility adjustment.
+/// `target_can_act` is false for such a target — its worst restriction is
+/// "can't act" ([`worst_restriction`] `== 1`).
+pub fn to_hit_vs(base_hit: u32, source_agi: u32, target_agi: u32, target_can_act: bool) -> i32 {
+    if target_can_act {
+        to_hit(base_hit, source_agi, target_agi)
+    } else {
+        100
+    }
+}
+
 /// A critical hit's damage: RM2000 triples the blow.
 pub fn critical_damage(base: i32) -> i32 {
     base * 3
@@ -261,16 +274,32 @@ pub fn turn_order(agilities: &[u32]) -> Vec<usize> {
     order
 }
 
-/// The party's escape chance in percent (`0..=100`): a 50% base shifted by the
-/// agility gap between the fleeing party and the enemies, then clamped to a
-/// `25..=90` band so fleeing is always possible but never certain.
-pub fn flee_chance(party_agility: u32, enemy_agility: u32) -> u32 {
-    let base = 50 + party_agility as i32 - enemy_agility as i32;
-    base.clamp(25, 90) as u32
+/// A side's average agility (RM2000 / EasyRPG `Game_Party_Base::GetAverageAgility`):
+/// the integer mean of the given `agilities`, or `1` for an empty side (which also
+/// guards the escape-chance division). Each side averages over its own combatants.
+pub fn average_agility(agilities: &[u32]) -> u32 {
+    if agilities.is_empty() {
+        return 1;
+    }
+    agilities.iter().sum::<u32>() / agilities.len() as u32
 }
 
-/// Whether a `roll` in `0..=99` beats the escape `chance`.
-pub fn flee_succeeds(chance: u32, roll: u32) -> bool {
+/// The party's starting escape chance in percent (RM2000 / EasyRPG
+/// `Scene_Battle::InitEscapeChance`): `clamp(150 - round(100 * enemy_avg_agi /
+/// party_avg_agi), 0, 100)` off the two sides' AVERAGE agilities. A party as fast as
+/// the foes escapes at 50%, a faster party higher and a slower one lower;
+/// `party_avg_agi` is guarded to at least 1 against a divide-by-zero. RM2000 computes
+/// this once at battle start, then raises it by 10 on each failed attempt (see
+/// [`super::model::Battle::attempt_escape`]).
+pub fn init_escape_chance(party_avg_agi: u32, enemy_avg_agi: u32) -> u32 {
+    let party = party_avg_agi.max(1) as f64;
+    let base = (100.0 * enemy_avg_agi as f64 / party).round() as i32;
+    (150 - base).clamp(0, 100) as u32
+}
+
+/// Whether a `roll` in `0..=99` succeeds against the escape `chance` percent
+/// (EasyRPG `Rand::PercentChance`: `GetRandomNumber(0, 99) < rate`).
+pub fn escape_succeeds(chance: u32, roll: u32) -> bool {
     roll < chance
 }
 
@@ -680,11 +709,37 @@ mod tests {
     }
 
     #[test]
-    fn flee_chance_shifts_with_agility_gap_and_clamps() {
-        assert_eq!(flee_chance(20, 10), 60); // +10 gap
-        assert_eq!(flee_chance(0, 100), 25); // clamped low
-        assert_eq!(flee_chance(200, 0), 90); // clamped high
-        assert!(flee_succeeds(60, 59) && !flee_succeeds(60, 60));
+    fn escape_chance_uses_the_ratio_of_average_agilities_and_clamps() {
+        // Equal average agility -> 150 - round(100) = 50%.
+        assert_eq!(init_escape_chance(10, 10), 50);
+        // A faster party (slower enemies) escapes more easily, clamped at 100.
+        assert_eq!(init_escape_chance(20, 10), 100); // 150 - round(50) = 100
+        // Rounding of the ratio: 100 * 7 / 10 = 70 -> 150 - 70 = 80.
+        assert_eq!(init_escape_chance(10, 7), 80);
+        // A slower party escapes less easily, clamped at 0.
+        assert_eq!(init_escape_chance(10, 20), 0); // 150 - 200 = -50 -> 0
+        // A zero party average is guarded against a divide-by-zero.
+        assert_eq!(init_escape_chance(0, 10), 0);
+        // PercentChance semantics: a roll strictly under the chance succeeds.
+        assert!(escape_succeeds(60, 59) && !escape_succeeds(60, 60));
+    }
+
+    #[test]
+    fn average_agility_is_the_integer_mean_or_one_when_empty() {
+        assert_eq!(average_agility(&[8, 8, 8]), 8);
+        assert_eq!(average_agility(&[10, 5]), 7); // 15 / 2 = 7 (integer division)
+        assert_eq!(average_agility(&[]), 1); // an empty side guards the division
+    }
+
+    #[test]
+    fn to_hit_vs_forces_a_certain_hit_against_a_target_that_cannot_act() {
+        // A target that can act uses the ordinary agility-adjusted chance.
+        assert_eq!(to_hit_vs(90, 10, 10, true), to_hit(90, 10, 10));
+        assert_eq!(to_hit_vs(90, 10, 20, true), 85);
+        // A target that cannot act (asleep/paralyzed) is struck with certainty,
+        // whatever the base hit or the agility gap.
+        assert_eq!(to_hit_vs(90, 10, 20, false), 100);
+        assert_eq!(to_hit_vs(0, 5, 50, false), 100);
     }
 
     #[test]

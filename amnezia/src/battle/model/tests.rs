@@ -8,7 +8,7 @@ fn build_instantiates_both_sides_into_the_command_phase() {
     assert_eq!(battle.enemies.len(), 2);
     assert_eq!(battle.members[0].hp, 63);
     assert_eq!(battle.enemies[0].hp, 30);
-    assert!(battle.phase == Phase::Command);
+    assert!(battle.phase == Phase::PartyCommand);
     assert_eq!(battle.next_chooser(), Some(0));
 }
 
@@ -56,7 +56,7 @@ fn new_round_clears_orders_and_defence() {
     battle.new_round();
     assert!(battle.members[0].command.is_none());
     assert!(!battle.members[0].defending);
-    assert!(battle.phase == Phase::Command);
+    assert!(battle.phase == Phase::PartyCommand);
 }
 
 #[test]
@@ -67,6 +67,21 @@ fn new_round_clears_every_foe_defence() {
     }
     battle.new_round();
     assert!(battle.enemies.iter().all(|e| !e.defending));
+}
+
+#[test]
+fn build_fixes_the_escape_chance_from_the_two_sides_average_agilities() {
+    // Ron (level 2, agi 12) vs two bandits (agi 8): party avg 12, enemy avg 8,
+    // so 150 - round(100 * 8 / 12 = 66.67 -> 67) = 83.
+    let battle = build_1v2();
+    assert_eq!(
+        battle.escape_chance,
+        logic::init_escape_chance(
+            battle.members[0].stats.agility,
+            battle.enemies[0].stats.agility
+        )
+    );
+    assert_eq!(battle.escape_chance, 83);
 }
 
 #[test]

@@ -6,7 +6,7 @@
 //! the main camera owns the default UI. The panels are hidden until a fight runs
 //! and their text is recomposed whenever the [`Battle`] changes.
 
-use super::input::{COMMAND_LABELS, item_choices, skill_choices};
+use super::input::{COMMAND_LABELS, PARTY_LABELS, item_choices, skill_choices};
 use super::model::{Battle, MenuLevel, Phase};
 use crate::font::GameFont;
 use crate::gamedata::GameData;
@@ -96,6 +96,15 @@ fn update_hud(
 /// The command panel body: the active member's menu (or a phase note when not
 /// choosing), with the cursor marking the current row.
 fn compose_command(battle: &Battle, data: &GameData, inventory: &Inventory) -> String {
+    if battle.phase == Phase::PartyCommand {
+        let mut out = "Parancs:\n".to_string();
+        for (i, row) in PARTY_LABELS.iter().enumerate() {
+            out.push_str(if i == battle.cursor { "▶ " } else { "  " });
+            out.push_str(row);
+            out.push('\n');
+        }
+        return out;
+    }
     if battle.phase != Phase::Command {
         return match battle.phase {
             Phase::Outcome => "[Enter] Tovább".to_string(),

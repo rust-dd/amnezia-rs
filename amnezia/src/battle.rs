@@ -588,7 +588,7 @@ mod tests {
         );
         {
             let battle = app.world().resource::<Battle>();
-            assert!(battle.phase == Phase::Command);
+            assert!(battle.phase == Phase::PartyCommand);
             assert_eq!(battle.enemies.len(), 1);
             assert_eq!(battle.members.len(), 1);
         }

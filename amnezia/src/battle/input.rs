@@ -14,25 +14,50 @@ use bevy::prelude::*;
 /// The medicine category in the converted `ItemDef::item_type`.
 const MEDICINE: u32 = 6;
 
-/// The top-level command options, in cursor order.
-pub const COMMAND_LABELS: [&str; 5] = ["Támadás", "Képesség", "Tárgy", "Védekezés", "Menekülés"];
+/// The per-actor command options, in cursor order — RM2000 order, Defend before
+/// Item and no per-actor flee (escape is a party-level option, see [`PARTY_LABELS`]).
+pub const COMMAND_LABELS: [&str; 4] = ["Támadás", "Képesség", "Védekezés", "Tárgy"];
 
-/// Drive the command phase: dispatch the keyboard to the active menu level.
+/// The party-level option window shown at the top of each round (RM2000
+/// Fight / Auto / Escape), in cursor order.
+pub const PARTY_LABELS: [&str; 3] = ["Harc", "Auto", "Menekülés"];
+
+/// Drive the command phases: the party-option window at round start, then the
+/// per-actor menu levels once the player picks Fight.
 pub fn command_input(
     keys: Res<ButtonInput<KeyCode>>,
     data: Res<GameData>,
     mut inventory: ResMut<Inventory>,
     mut battle: ResMut<Battle>,
 ) {
-    if battle.phase != Phase::Command || !any_key(&keys) {
+    if !any_key(&keys) {
         return;
     }
-    match battle.menu {
-        MenuLevel::Command => command_menu(&keys, &mut battle),
-        MenuLevel::Skill => skill_menu(&keys, &data, &mut battle),
-        MenuLevel::Item => item_menu(&keys, &data, &inventory, &mut battle),
-        MenuLevel::Target => target_menu(&keys, &mut battle),
-        MenuLevel::AllyTarget => ally_target_menu(&keys, &mut inventory, &mut battle),
+    match battle.phase {
+        Phase::PartyCommand => party_menu(&keys, &mut battle),
+        Phase::Command => match battle.menu {
+            MenuLevel::Command => command_menu(&keys, &mut battle),
+            MenuLevel::Skill => skill_menu(&keys, &data, &mut battle),
+            MenuLevel::Item => item_menu(&keys, &data, &inventory, &mut battle),
+            MenuLevel::Target => target_menu(&keys, &mut battle),
+            MenuLevel::AllyTarget => ally_target_menu(&keys, &mut inventory, &mut battle),
+        },
+        _ => {}
+    }
+}
+
+/// The party-option window (RM2000 Fight / Auto / Escape): Fight drops into
+/// per-actor command entry, Auto orders the whole party a basic attack and
+/// resolves, Escape attempts to flee now.
+fn party_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
+    move_cursor(keys, &mut battle.cursor, PARTY_LABELS.len());
+    if !confirm(keys) {
+        return;
+    }
+    match battle.cursor {
+        0 => battle.begin_actor_commands(),
+        1 => battle.auto_battle(),
+        _ => escape(battle),
     }
 }
 
@@ -77,9 +102,8 @@ fn command_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     match battle.cursor {
         0 => open_target(battle, None),
         1 => enter(battle, MenuLevel::Skill),
-        2 => enter(battle, MenuLevel::Item),
-        3 => battle.commit(Command::Defend),
-        _ => flee(battle),
+        2 => battle.commit(Command::Defend),
+        _ => enter(battle, MenuLevel::Item),
     }
 }
 
@@ -216,15 +240,18 @@ fn enter(battle: &mut Battle, level: MenuLevel) {
     battle.cursor = 0;
 }
 
-fn flee(battle: &mut Battle) {
+/// Attempt a party escape from the party-option window: play the escape SE, then
+/// on success end the fight, or on failure forfeit the whole party's turn (the
+/// enemies act) and resolve — RM2000 `ProcessSceneActionEscape`'s failure path.
+fn escape(battle: &mut Battle) {
     // The escape SE plays on the attempt (RM2000 `SFX_Escape`), drained like the
     // per-hit effects.
     battle.pending_se.push(BattleSe::Escape);
-    if battle.attempt_flee() {
+    if battle.attempt_escape() {
         battle.finish(BattleOutcome::Escape);
     } else {
         battle.log.push("Menekülés sikertelen!".to_string());
-        battle.commit(Command::Nothing);
+        battle.begin_resolve();
     }
 }
 
@@ -408,5 +435,75 @@ mod tests {
                 target: 1
             })
         ));
+    }
+
+    fn press_enter() -> ButtonInput<KeyCode> {
+        let mut keys = ButtonInput::<KeyCode>::default();
+        keys.press(KeyCode::Enter);
+        keys
+    }
+
+    #[test]
+    fn the_actor_command_list_is_attack_skill_defend_item_without_flee() {
+        // RM2000 order — Defend before Item — and no per-actor flee row.
+        assert_eq!(
+            COMMAND_LABELS,
+            ["Támadás", "Képesség", "Védekezés", "Tárgy"]
+        );
+        assert!(!COMMAND_LABELS.contains(&"Menekülés"));
+        // Escape lives on the party-level window instead.
+        assert_eq!(PARTY_LABELS, ["Harc", "Auto", "Menekülés"]);
+    }
+
+    #[test]
+    fn the_command_menu_maps_defend_to_row_two_and_item_to_row_three() {
+        let mut battle = build_party2();
+        battle.begin_actor_commands(); // drop into per-actor entry
+        // Row 2 = Védekezés -> commit Defend for the first member.
+        battle.cursor = 2;
+        command_menu(&press_enter(), &mut battle);
+        assert!(matches!(battle.members[0].command, Some(Command::Defend)));
+        // Row 3 = Tárgy -> the second member opens the item menu (no flee row).
+        battle.cursor = 3;
+        command_menu(&press_enter(), &mut battle);
+        assert!(battle.menu == MenuLevel::Item);
+    }
+
+    #[test]
+    fn the_party_window_fight_option_enters_per_actor_command_entry() {
+        let mut battle = build_party2();
+        assert!(battle.phase == Phase::PartyCommand);
+        battle.cursor = 0; // Harc
+        party_menu(&press_enter(), &mut battle);
+        assert!(battle.phase == Phase::Command);
+        assert!(battle.menu == MenuLevel::Command);
+    }
+
+    #[test]
+    fn the_party_window_auto_option_orders_every_member_to_attack() {
+        let mut battle = build_party2(); // two members, one foe
+        battle.cursor = 1; // Auto
+        party_menu(&press_enter(), &mut battle);
+        assert!(matches!(
+            battle.members[0].command,
+            Some(Command::Attack { .. })
+        ));
+        assert!(matches!(
+            battle.members[1].command,
+            Some(Command::Attack { .. })
+        ));
+        assert!(battle.phase == Phase::Resolve); // the round is resolving
+    }
+
+    #[test]
+    fn the_party_window_escape_forfeits_the_turn_on_failure() {
+        let mut battle = build_party2();
+        battle.escape_chance = 0; // a 0% chance always fails
+        battle.cursor = 2; // Menekülés
+        party_menu(&press_enter(), &mut battle);
+        // No member acted, yet the round resolves so the enemies act.
+        assert!(battle.members.iter().all(|m| m.command.is_none()));
+        assert!(battle.phase == Phase::Resolve);
+        assert!(battle.log.iter().any(|l| l.contains("sikertelen")));
     }
 }

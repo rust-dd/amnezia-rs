@@ -15,7 +15,8 @@ fn fire_attr() -> amnezia_data::AttributeDef {
 }
 
 /// A single-enemy (scope 0) damage skill carrying `attributes` (elements) and
-/// `states` (statuses it may inflict).
+/// `states` (statuses it may inflict). Its `hit` is 100 so the added skill to-hit
+/// roll lands deterministically; a missing-skill test sets it lower explicitly.
 fn damage_skill(id: u32, power: u32, attributes: Vec<u32>, states: Vec<u32>) -> SkillDef {
     SkillDef {
         id,
@@ -23,7 +24,7 @@ fn damage_skill(id: u32, power: u32, attributes: Vec<u32>, states: Vec<u32>) -> 
         description: String::new(),
         sp_cost: 3,
         power,
-        hit: 0,
+        hit: 100,
         skill_type: 0,
         scope: 0,
         animation_id: 0,
@@ -753,7 +754,8 @@ fn a_defending_foe_takes_half_of_an_identical_strike() {
         panic!("a forced-hit strike missed");
     };
     assert!(half < full);
-    assert_eq!(half, (full / 2).max(1));
+    // Plain halving, no floor (EasyRPG `AdjustDamageForDefend`).
+    assert_eq!(half, full / 2);
 }
 
 #[test]
@@ -1146,4 +1148,100 @@ fn a_missed_strike_enqueues_the_dodge_se() {
     );
     // A pure miss lands nothing, so no damage SE.
     assert!(!battle.pending_se.contains(&BattleSe::EnemyDamaged));
+}
+
+/// A can't-act (restriction 1) state — asleep or paralyzed.
+fn sleep_state(id: u32) -> amnezia_data::StateDef {
+    amnezia_data::StateDef {
+        id,
+        name: "Alvás".into(),
+        restriction: 1,
+        priority: 0,
+        hold_turn: 99,
+        auto_release_prob: 0,
+        release_by_damage: 0,
+        hp_change_type: 0,
+        hp_change_max: 0,
+        hp_change_val: 0,
+        hp_change_map_steps: 0,
+        hp_change_map_val: 0,
+    }
+}
+
+#[test]
+fn a_skill_can_miss_its_to_hit_roll_and_deal_nothing() {
+    let mut battle = build_1v2();
+    let mut s = damage_skill(1, 30, vec![], vec![]);
+    s.hit = 50; // a coin-flip base so a miss is reachable
+    battle.skills = vec![s];
+    // Wind the rng so the skill's first (to-hit) draw lands in the miss band.
+    let hit = logic::to_hit_vs(
+        logic::effective_hit(50),
+        battle.members[0].stats.agility,
+        battle.enemies[0].stats.agility,
+        true,
+    );
+    loop {
+        let mut probe = battle.rng;
+        if (rng_next(&mut probe) % 100) as i32 >= hit {
+            break;
+        }
+        rng_next(&mut battle.rng);
+    }
+    let skill = battle.skills[0].clone();
+    let before = battle.enemies[0].hp;
+    let lines = battle.skill_hit_enemy(0, 0, &skill);
+    assert_eq!(
+        battle.enemies[0].hp, before,
+        "a missed skill deals no damage"
+    );
+    assert!(lines.iter().any(|l| l.contains("elkerülte")));
+}
+
+#[test]
+fn a_skill_auto_hits_a_foe_that_cannot_act() {
+    let mut battle = build_1v2();
+    // A can't-act foe is struck for certain, whatever the skill's hit rate.
+    battle.states = vec![sleep_state(7)];
+    battle.enemies[0].states = vec![(7, 0)];
+    battle.enemies[0].hp = 500; // survive so the wound is observable
+    let mut s = damage_skill(1, 30, vec![], vec![]);
+    s.hit = 1; // 1% would almost always miss a foe that could act
+    battle.skills = vec![s];
+    let before = battle.enemies[0].hp;
+    battle.cast_skill(0, 1, 0);
+    assert!(
+        battle.enemies[0].hp < before,
+        "a cannot-act foe cannot dodge the cast"
+    );
+}
+
+#[test]
+fn self_destruct_deals_attack_minus_half_defence_per_member() {
+    let mut battle = build_party2(); // two members, one foe
+    battle.enemies[0].stats.attack = 40;
+    battle.members[0].stats.defense = 40; // base = max(0, 40 - 20) = 20
+    let hp0 = battle.members[0].hp;
+    battle.apply(Action {
+        source: Source::Enemy(0),
+        kind: Command::SelfDestruct,
+        agility: 0,
+    });
+    let taken = hp0 - battle.members[0].hp;
+    // CalcSelfDestructEffect base 20, then the var=4 spread (±4); a flat-attack
+    // (40) blow would land well outside this band.
+    assert!((16..=24).contains(&taken), "self-destruct dealt {taken}");
+    assert!(taken < 40, "it is attack - def/2, not the flat attack");
+}
+
+#[test]
+fn a_failed_escape_raises_the_next_chance_by_ten_and_a_first_strike_is_certain() {
+    let mut battle = build_1v2();
+    battle.escape_chance = 0; // a 0% chance always fails
+    assert!(!battle.attempt_escape());
+    assert_eq!(battle.escape_chance, 10); // bumped for the next attempt
+    // A first strike escapes outright, with no roll and no further bump.
+    battle.first_strike = true;
+    assert!(battle.attempt_escape());
+    assert_eq!(battle.escape_chance, 10);
 }

@@ -28,6 +28,10 @@ pub const LOG_TAIL: usize = 5;
 pub enum Phase {
     #[default]
     Inactive,
+    /// The RM2000 party-level option window at the top of each round: Fight (drop
+    /// to per-actor [`Command`] entry), Auto (auto-battle the whole party), or
+    /// Escape (attempt to flee). Shown before any member picks an order.
+    PartyCommand,
     Command,
     Resolve,
     Outcome,
@@ -287,6 +291,16 @@ pub struct Battle {
     pub(super) items: Vec<ItemDef>,
     /// The current battle round, counting from `1`, gating turn-numbered AI.
     pub round: u32,
+    /// The party's current escape chance in percent (RM2000 / EasyRPG
+    /// `escape_chance`): set once at [`Battle::build`] from the two sides' average
+    /// agilities ([`logic::init_escape_chance`]) and raised by 10 on each failed
+    /// escape (see [`Battle::attempt_escape`]).
+    pub(super) escape_chance: u32,
+    /// Whether the party opened with a first strike (RM2000 preemptive attack): it
+    /// grants a guaranteed escape and the `+9999` turn-order bonus. No encounter
+    /// path sets it yet (there is no ambush/initiative plumbing), so it stays
+    /// `false`; the mechanism is honoured wherever the flag is raised.
+    pub(super) first_strike: bool,
     pub turn: usize,
     pub menu: MenuLevel,
     pub cursor: usize,
@@ -360,7 +374,7 @@ impl Battle {
         background: String,
         seed: u64,
     ) -> Self {
-        let enemies = troop
+        let enemies: Vec<Foe> = troop
             .members
             .iter()
             .filter_map(|m| {
@@ -385,7 +399,7 @@ impl Battle {
                 })
             })
             .collect();
-        let members = actors
+        let members: Vec<Fighter> = actors
             .iter()
             .map(|a| {
                 let level = progression.level(a);
@@ -431,8 +445,15 @@ impl Battle {
                 }
             })
             .collect();
+        // The RM2000 escape chance is fixed at battle start from the two sides'
+        // AVERAGE agilities (EasyRPG `InitEscapeChance`), then only nudged by +10
+        // per failed attempt — never recomputed as combatants fall.
+        let party_avg =
+            logic::average_agility(&members.iter().map(|f| f.stats.agility).collect::<Vec<_>>());
+        let enemy_avg =
+            logic::average_agility(&enemies.iter().map(|e| e.stats.agility).collect::<Vec<_>>());
         Battle {
-            phase: Phase::Command,
+            phase: Phase::PartyCommand,
             background,
             members,
             enemies,
@@ -445,6 +466,7 @@ impl Battle {
             rng: seed | 1,
             generation: seed | 1,
             round: 1,
+            escape_chance: logic::init_escape_chance(party_avg, enemy_avg),
             ..default()
         }
     }
@@ -513,6 +535,25 @@ impl Battle {
         }
     }
 
+    /// Drop from the party-option window into per-actor command entry (RM2000
+    /// Fight): enter the command phase and hand the round to the first member who
+    /// may freely choose, auto-ordering and skipping any restricted members — or
+    /// resolving at once if none can act.
+    pub fn begin_actor_commands(&mut self) {
+        self.phase = Phase::Command;
+        self.menu = MenuLevel::Command;
+        self.cursor = 0;
+        self.skip_restricted_choosers();
+    }
+
+    /// Auto-battle the whole party (RM2000 Auto): order every living member a basic
+    /// attack on a random living enemy (a restricted member keeps its forced
+    /// action), then resolve the round. Reuses the same target/AI helpers as the
+    /// per-actor flow, so the enemies still act.
+    pub fn auto_battle(&mut self) {
+        self.auto_battle_commands();
+    }
+
     /// Build the agility-ordered turn queue from every member's committed command
     /// plus each living enemy's AI-chosen action (`resolve::enemy_action`), and
     /// start resolving.
@@ -536,13 +577,19 @@ impl Battle {
         // RM2000 `CreateExecutionOrder`: each battler's sort key is its agility
         // plus a fresh jitter of `Rand::GetRandomNumber(0, agi/4 + 3)`, re-rolled
         // every round, sorted fastest-first. The stable `turn_order` keeps the
-        // given order on equal keys. (First-strike's +9999 preemptive bonus is
-        // unused here — there is no preemptive-attack path yet.)
+        // given order on equal keys. On a first strike (RM2000 preemptive) every
+        // party battler's key gains the +9999 bonus, launching the whole party
+        // ahead of the foes; `first_strike` is dormant until an encounter path
+        // raises it.
         let keys: Vec<u32> = actions
             .iter()
             .map(|a| {
                 let jitter = (rng_next(&mut self.rng) % (a.agility as u64 / 4 + 4)) as u32;
-                a.agility.saturating_add(jitter)
+                let key = a.agility.saturating_add(jitter);
+                match a.source {
+                    Source::Party(_) if self.first_strike => key.saturating_add(9999),
+                    _ => key,
+                }
             })
             .collect();
         self.queue = logic::turn_order(&keys)
@@ -581,8 +628,9 @@ impl Battle {
         self.cursor = 0;
         self.pending_skill = None;
         self.pending_item = None;
-        self.phase = Phase::Command;
-        self.skip_restricted_choosers();
+        // Reopen the party-option window; per-actor entry (and the restricted-member
+        // auto-ordering) resumes only once the player picks Fight.
+        self.phase = Phase::PartyCommand;
     }
 
     /// The last [`LOG_TAIL`] log lines, for the log window.
