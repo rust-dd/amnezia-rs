@@ -1,9 +1,9 @@
 //! The battle HUD: the three windowskin panels (command, status, log/message)
 //! styled with the same `System.png` 9-slice as the dialogue box, laid along the
-//! bottom of the screen. They render on a dedicated order-2 [`HudCamera`] (spawned
-//! in [`super`]) so they sit ABOVE the order-1 effect overlay the backdrop,
+//! bottom of the screen. They render on a dedicated order-3 [`HudCamera`] (spawned
+//! in [`super`]) so they sit ABOVE the order-2 effect overlay the backdrop,
 //! battlers, and animations draw on — bound to it with [`UiTargetCamera`] since
-//! the main camera owns the default UI. The panels are hidden until a fight runs
+//! the front camera owns the default UI. The panels are hidden until a fight runs
 //! and their text is recomposed whenever the [`Battle`] changes.
 
 use super::input::{COMMAND_LABELS, PARTY_LABELS, item_choices, skill_choices};

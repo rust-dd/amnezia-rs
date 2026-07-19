@@ -5,9 +5,11 @@
 
 use crate::assets::{asset_root, load_ron, resolve_png};
 use crate::player::spawn_player;
+use crate::screenfx::{FrontCamera, PICTURE_LAYER, ScreenTone};
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::tiles::{self, CHAR_Y_OFFSET};
 use amnezia_data::{Chipset, Event, Map, Start};
+use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 
 mod autonomy;
@@ -30,10 +32,12 @@ const DEV_START: Option<Start> = None;
 pub struct MapScene;
 
 /// The main world camera: it follows the hero (`player::camera_follow`), takes
-/// the screen shake, draws the map / pictures / UI on the default render layer
-/// 0, and is the [`IsDefaultUiCamera`]. The fixed effect-overlay camera in
-/// [`crate::animation`] deliberately lacks this marker, so the follow, shake,
-/// and picture-pinning systems keep matching exactly one camera.
+/// the screen shake, and draws the map on the default render layer 0, where its
+/// [`crate::screenfx::ScreenTone`] post-process tints it. Pictures and the UI
+/// render untinted on the [`crate::screenfx::FrontCamera`] above it. The overlay
+/// camera in [`crate::animation`] and the front camera both lack this marker, so
+/// the follow, shake, and picture-pinning systems keep matching exactly one
+/// camera.
 #[derive(Component)]
 pub struct MainCamera;
 
@@ -153,6 +157,20 @@ impl Plugin for WorldPlugin {
     }
 }
 
+/// The fixed 320×240 orthographic projection shared by the world and front
+/// cameras — RM2000's native screen. Maps larger than this scroll; the whole view
+/// scales to fill the (4:3) window, so tiles are pixel-perfect with no gray margin
+/// around a small map.
+fn fixed_projection() -> Projection {
+    Projection::Orthographic(OrthographicProjection {
+        scaling_mode: bevy::camera::ScalingMode::Fixed {
+            width: 320.0,
+            height: 240.0,
+        },
+        ..OrthographicProjection::default_2d()
+    })
+}
+
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -161,22 +179,29 @@ fn setup(
     party: Res<Party>,
     inventory: Res<Inventory>,
 ) {
-    // A fixed 320×240 world viewport — RM2000's native screen. Maps larger than
-    // this scroll; the whole view scales to fill the (4:3) window, so tiles are
-    // pixel-perfect and no gray margin shows around a small map.
+    // The main camera renders the world on layer 0; its ScreenTone post-process
+    // tints only what it draws. Pictures and the UI move to the front camera, so
+    // they stay untinted and above the tone.
     commands.spawn((
         Camera2d,
-        // Own the UI so the second (effect-overlay) camera doesn't make the UI
-        // camera ambiguous; the overlay camera then paints animations over this.
-        IsDefaultUiCamera,
         MainCamera,
-        Projection::Orthographic(OrthographicProjection {
-            scaling_mode: bevy::camera::ScalingMode::Fixed {
-                width: 320.0,
-                height: 240.0,
-            },
-            ..OrthographicProjection::default_2d()
-        }),
+        fixed_projection(),
+        ScreenTone::default(),
+    ));
+    // The front camera composites pictures (PICTURE_LAYER) and the UI over the
+    // toned world, and owns the default UI camera. `sync_front_camera` keeps its
+    // transform matched to the main camera each frame so pictures stay in place.
+    commands.spawn((
+        Camera2d,
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        fixed_projection(),
+        IsDefaultUiCamera,
+        RenderLayers::layer(PICTURE_LAYER),
+        FrontCamera,
     ));
     let start: Start = match DEV_START {
         Some(dev) => dev,

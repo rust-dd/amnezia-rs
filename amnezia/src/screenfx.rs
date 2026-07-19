@@ -1,9 +1,12 @@
 //! Screen presentation effects driven by the event interpreter: the erase/show
 //! black fade, the color tint, the brief flash, and the camera shake. The
-//! interpreter stays decoupled by emitting a [`ScreenEffect`] message; this
-//! plugin consumes it and drives three fullscreen overlays (tint, flash, fade)
-//! plus a camera-shake offset. Mirrors the audio/shop producer/consumer
-//! contract.
+//! interpreter stays decoupled by emitting a [`ScreenEffect`] message; the
+//! plugins here consume it.
+//!
+//! The color tint is a faithful camera post-process (see the [`tone`] submodule)
+//! that can darken, brighten, and desaturate the whole scene; flash and fade stay
+//! as fullscreen UI overlays, and the shake offsets the camera. The [`shake`] and
+//! [`fade`] submodules hold the RM2000-matched motion and timing maths.
 //!
 //! The shake avoids touching `player.rs`: [`apply_camera_shake`] runs in
 //! `PostUpdate` (after the `Update` `camera_follow` has set the base position)
@@ -13,29 +16,25 @@
 use crate::world::MainCamera;
 use bevy::prelude::*;
 use bevy::transform::TransformSystems;
+use flash::Flashing;
+use shake::ShakeState;
 
-/// Seconds an erase/show fade takes to reach full black / full clear. The
-/// interpreter waits this long after an `EraseScreen`/`ShowScreen` so the next
-/// command runs against the settled screen.
-pub const SCREEN_FADE_SECS: f32 = 0.25;
+mod fade;
+mod flash;
+mod shake;
+mod tone;
 
-/// Alpha per second for the erase/show fade, so a full fade takes
-/// [`SCREEN_FADE_SECS`].
-const FADE_SPEED: f32 = 1.0 / SCREEN_FADE_SECS;
+pub use fade::transition_secs;
+pub use tone::{FrontCamera, PICTURE_LAYER, ScreenTone};
 
-/// World units of horizontal camera displacement per unit of shake `power`.
-const SHAKE_AMPLITUDE: f32 = 1.5;
-
-/// Radians per second of shake oscillation per unit of shake `speed`.
-const SHAKE_FREQUENCY: f32 = 4.0;
-
-/// A screen effect the interpreter emits; consumed by [`step_effects`].
+/// A screen effect the interpreter emits; consumed by [`step_effects`] (and, for
+/// the tint, by the [`tone`] submodule).
 #[derive(Message, Debug, Clone, PartialEq)]
 pub enum ScreenEffect {
-    /// Fade to black and hold (`EraseScreen` 11010).
-    Erase,
-    /// Fade from black back to the scene (`ShowScreen` 11020).
-    Show,
+    /// Fade to black over `secs` and hold (`EraseScreen` 11010).
+    Erase { secs: f32 },
+    /// Fade from black back to the scene over `secs` (`ShowScreen` 11020).
+    Show { secs: f32 },
     /// Shift the screen color over `secs` (`TintScreen` 11030). `r,g,b,sat` are
     /// RM2000 0..200, 100 = neutral.
     Tint {
@@ -107,60 +106,23 @@ fn tenths(v: i32) -> f32 {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScreenShakeSet;
 
-/// Which overlay a fullscreen node is, so one query drives all three.
+/// Which overlay a fullscreen node is, so one query drives both.
 #[derive(Component, Clone, Copy)]
 enum FxLayer {
-    Tint,
     Flash,
     Fade,
 }
 
-/// The live effect state: fade progress, the lerping tint, the decaying flash,
-/// and the running shake with its current offset.
-#[derive(Resource)]
+/// The live effect state: fade progress, the decaying flash, and the running
+/// shake with its current offset. The tint lives in the [`tone`] submodule.
+#[derive(Resource, Default)]
 struct Fx {
     fade_alpha: f32,
     fade_target: f32,
-    tint_cur: [f32; 4],
-    tint_to: [f32; 4],
-    tint_secs_left: f32,
+    fade_secs: f32,
     flash: Option<Flashing>,
-    shake: Option<Shaking>,
+    shake: ShakeState,
     shake_offset: Vec2,
-}
-
-impl Default for Fx {
-    fn default() -> Self {
-        Self {
-            fade_alpha: 0.0,
-            fade_target: 0.0,
-            tint_cur: NEUTRAL_TINT,
-            tint_to: NEUTRAL_TINT,
-            tint_secs_left: 0.0,
-            flash: None,
-            shake: None,
-            shake_offset: Vec2::ZERO,
-        }
-    }
-}
-
-/// RM2000 neutral tint (100 = no change on every channel).
-const NEUTRAL_TINT: [f32; 4] = [100.0, 100.0, 100.0, 100.0];
-
-struct Flashing {
-    r: i32,
-    g: i32,
-    b: i32,
-    intensity: i32,
-    elapsed: f32,
-    secs: f32,
-}
-
-struct Shaking {
-    power: i32,
-    speed: i32,
-    elapsed: f32,
-    secs: f32,
 }
 
 /// The ambient weather (`Weather` 11070). A static translucent wash over the
@@ -189,6 +151,7 @@ impl Plugin for ScreenFxPlugin {
         app.add_message::<ScreenEffect>()
             .init_resource::<Fx>()
             .init_resource::<Weather>()
+            .add_plugins(tone::ScreenTonePlugin)
             .add_systems(Startup, spawn_overlays)
             .add_systems(Update, (step_effects, render_weather))
             .add_systems(
@@ -200,18 +163,11 @@ impl Plugin for ScreenFxPlugin {
     }
 }
 
-/// The three fullscreen overlays. Tint and flash sit below the message/menu UI
-/// (negative z) so those windows stay untinted, yet above every 2D sprite
-/// (pictures, the map) because UI always composites over the world. The erase
-/// fade sits above everything (even the teleport fade) so a black-out truly
-/// covers the screen.
+/// The two fullscreen overlays plus the weather wash. They render on the front
+/// (picture/UI) camera, so they sit above the toned world and pictures. The flash
+/// sits below the menu/message UI; the erase fade sits above everything so a
+/// black-out truly covers the screen.
 fn spawn_overlays(mut commands: Commands) {
-    commands.spawn((
-        full_screen(),
-        transparent(),
-        GlobalZIndex(-20),
-        FxLayer::Tint,
-    ));
     commands.spawn((
         full_screen(),
         transparent(),
@@ -224,8 +180,6 @@ fn spawn_overlays(mut commands: Commands) {
         GlobalZIndex(1003),
         FxLayer::Fade,
     ));
-    // Between the color tint (-20) and the flash (-10): an ambient wash that
-    // sits over the world but under the flash and every UI window.
     commands.spawn((
         full_screen(),
         transparent(),
@@ -263,7 +217,6 @@ fn step_effects(
     }
     let dt = time.delta_secs();
     step_fade(&mut fx, dt);
-    step_tint(&mut fx, dt);
     step_flash(&mut fx, dt);
     step_shake(&mut fx, dt);
     for (mut background, layer) in &mut layers {
@@ -271,18 +224,19 @@ fn step_effects(
     }
 }
 
-/// Fold one incoming effect into the live state.
+/// Fold one incoming effect into the live state. The tint is handled separately
+/// by the [`tone`] submodule, so it is a no-op here.
 fn apply_effect(fx: &mut Fx, effect: &ScreenEffect) {
     match *effect {
-        ScreenEffect::Erase => fx.fade_target = 1.0,
-        ScreenEffect::Show => fx.fade_target = 0.0,
-        ScreenEffect::Tint { r, g, b, sat, secs } => {
-            fx.tint_to = [r as f32, g as f32, b as f32, sat as f32];
-            fx.tint_secs_left = secs;
-            if secs <= 0.0 {
-                fx.tint_cur = fx.tint_to;
-            }
+        ScreenEffect::Erase { secs } => {
+            fx.fade_target = 1.0;
+            fx.fade_secs = secs;
         }
+        ScreenEffect::Show { secs } => {
+            fx.fade_target = 0.0;
+            fx.fade_secs = secs;
+        }
+        ScreenEffect::Tint { .. } => {}
         ScreenEffect::Flash {
             r,
             g,
@@ -290,88 +244,40 @@ fn apply_effect(fx: &mut Fx, effect: &ScreenEffect) {
             intensity,
             secs,
         } => {
-            fx.flash = Some(Flashing {
-                r,
-                g,
-                b,
-                intensity,
-                elapsed: 0.0,
-                secs,
-            });
+            fx.flash = Some(Flashing::new(r, g, b, intensity, secs));
         }
         ScreenEffect::Shake { power, speed, secs } => {
-            fx.shake = Some(Shaking {
-                power,
-                speed,
-                elapsed: 0.0,
-                secs,
-            });
+            fx.shake.start(power, speed, secs);
         }
     }
 }
 
+/// Advance the fade linearly so it reaches its target after `fade_secs` seconds
+/// (a zero duration snaps, matching an instant transition).
 fn step_fade(fx: &mut Fx, dt: f32) {
-    fx.fade_alpha = approach(fx.fade_alpha, fx.fade_target, FADE_SPEED * dt);
-}
-
-fn step_tint(fx: &mut Fx, dt: f32) {
-    if fx.tint_secs_left <= 0.0 {
-        fx.tint_cur = fx.tint_to;
+    if fx.fade_secs <= 0.0 {
+        fx.fade_alpha = fx.fade_target;
         return;
     }
-    let t = (dt / fx.tint_secs_left).clamp(0.0, 1.0);
-    for i in 0..4 {
-        fx.tint_cur[i] += (fx.tint_to[i] - fx.tint_cur[i]) * t;
-    }
-    fx.tint_secs_left -= dt;
+    fx.fade_alpha = approach(fx.fade_alpha, fx.fade_target, dt / fx.fade_secs);
 }
 
 fn step_flash(fx: &mut Fx, dt: f32) {
-    if let Some(flash) = &mut fx.flash {
-        flash.elapsed += dt;
-        if flash.elapsed >= flash.secs {
-            fx.flash = None;
-        }
+    if fx.flash.as_mut().is_some_and(|flash| !flash.step(dt)) {
+        fx.flash = None;
     }
 }
 
 fn step_shake(fx: &mut Fx, dt: f32) {
-    let Some(shake) = &mut fx.shake else {
-        fx.shake_offset = Vec2::ZERO;
-        return;
-    };
-    shake.elapsed += dt;
-    if shake.elapsed >= shake.secs {
-        fx.shake = None;
-        fx.shake_offset = Vec2::ZERO;
-        return;
-    }
-    fx.shake_offset = Vec2::new(shake_offset(shake.power, shake.speed, shake.elapsed), 0.0);
+    fx.shake_offset = Vec2::new(fx.shake.step(dt), 0.0);
 }
 
 /// The color an overlay should paint given the current state.
 fn overlay_color(fx: &Fx, layer: FxLayer) -> Color {
     match layer {
         FxLayer::Fade => Color::srgba(0.0, 0.0, 0.0, fx.fade_alpha),
-        FxLayer::Tint => {
-            let [r, g, b, a] = tint_overlay(
-                fx.tint_cur[0] as i32,
-                fx.tint_cur[1] as i32,
-                fx.tint_cur[2] as i32,
-                fx.tint_cur[3] as i32,
-            );
-            Color::srgba(r, g, b, a)
-        }
         FxLayer::Flash => match &fx.flash {
-            Some(flash) => {
-                let (r, g, b) = flash_color(flash.r, flash.g, flash.b);
-                Color::srgba(
-                    r,
-                    g,
-                    b,
-                    flash_alpha(flash.intensity, flash.elapsed, flash.secs),
-                )
-            }
+            Some(flash) => flash.color(),
             None => Color::srgba(0.0, 0.0, 0.0, 0.0),
         },
     }
@@ -421,111 +327,32 @@ fn approach(cur: f32, target: f32, step: f32) -> f32 {
     }
 }
 
-/// The overlay color+alpha (0..1 each) approximating an RM2000 multiply tint
-/// `(r,g,b,sat)` in 0..200 (100 = neutral). The alpha darkens by the darkest
-/// channel; the color adds the brighter channels back so a colored tint keeps
-/// its hue. Brightening (values > 100) and saturation aren't representable by an
-/// alpha overlay and read as neutral (first pass).
-fn tint_overlay(r: i32, g: i32, b: i32, _sat: i32) -> [f32; 4] {
-    let fr = (r as f32 / 100.0).clamp(0.0, 1.0);
-    let fg = (g as f32 / 100.0).clamp(0.0, 1.0);
-    let fb = (b as f32 / 100.0).clamp(0.0, 1.0);
-    let min_f = fr.min(fg).min(fb);
-    let alpha = 1.0 - min_f;
-    if alpha <= f32::EPSILON {
-        return [0.0, 0.0, 0.0, 0.0];
-    }
-    [
-        (fr - min_f) / alpha,
-        (fg - min_f) / alpha,
-        (fb - min_f) / alpha,
-        alpha,
-    ]
-}
-
-/// The flash overlay's RGB (0..1) from RM2000 0..31 channels.
-fn flash_color(r: i32, g: i32, b: i32) -> (f32, f32, f32) {
-    (
-        (r as f32 / 31.0).clamp(0.0, 1.0),
-        (g as f32 / 31.0).clamp(0.0, 1.0),
-        (b as f32 / 31.0).clamp(0.0, 1.0),
-    )
-}
-
-/// The flash alpha, decaying linearly from `intensity/31` at `elapsed == 0` to 0
-/// at `elapsed == secs`.
-fn flash_alpha(intensity: i32, elapsed: f32, secs: f32) -> f32 {
-    if secs <= 0.0 {
-        return 0.0;
-    }
-    let peak = (intensity as f32 / 31.0).clamp(0.0, 1.0);
-    (peak * (1.0 - elapsed / secs)).clamp(0.0, 1.0)
-}
-
-/// The horizontal camera offset (world units) for a shake of `power`/`speed` at
-/// `elapsed` seconds: a sine whose amplitude scales with power and frequency
-/// with speed. Zero at `elapsed == 0`, so the screen starts centred.
-fn shake_offset(power: i32, speed: i32, elapsed: f32) -> f32 {
-    let amplitude = power as f32 * SHAKE_AMPLITUDE;
-    let frequency = speed as f32 * SHAKE_FREQUENCY;
-    amplitude * (elapsed * frequency).sin()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn tint_neutral_is_fully_transparent() {
-        assert_eq!(tint_overlay(100, 100, 100, 100), [0.0, 0.0, 0.0, 0.0]);
+    fn fade_reaches_target_over_its_duration() {
+        let mut fx = Fx {
+            fade_target: 1.0,
+            fade_secs: 0.5,
+            ..default()
+        };
+        step_fade(&mut fx, 0.25);
+        assert!((fx.fade_alpha - 0.5).abs() < 1e-6);
+        step_fade(&mut fx, 0.25);
+        assert!((fx.fade_alpha - 1.0).abs() < 1e-6);
     }
 
     #[test]
-    fn tint_gray_darkens_with_black_overlay() {
-        // A uniform 70/100 tint = a 30%-opaque black overlay (screen * 0.7).
-        let [r, g, b, a] = tint_overlay(70, 70, 70, 70);
-        assert_eq!((r, g, b), (0.0, 0.0, 0.0));
-        assert!((a - 0.3).abs() < 1e-6);
-    }
-
-    #[test]
-    fn tint_colored_keeps_hue_in_the_overlay() {
-        // Green darkest -> alpha from green; red/blue brighter -> tinted overlay.
-        let [r, g, b, a] = tint_overlay(70, 60, 70, 100);
-        assert!((a - 0.4).abs() < 1e-6);
-        assert!(r > 0.0 && b > 0.0 && g == 0.0);
-    }
-
-    #[test]
-    fn tint_black_is_full_black_overlay() {
-        assert_eq!(tint_overlay(0, 0, 0, 100), [0.0, 0.0, 0.0, 1.0]);
-    }
-
-    #[test]
-    fn flash_alpha_decays_from_peak_to_zero() {
-        assert!((flash_alpha(31, 0.0, 0.5) - 1.0).abs() < 1e-6);
-        assert!((flash_alpha(31, 0.25, 0.5) - 0.5).abs() < 1e-6);
-        assert_eq!(flash_alpha(31, 0.5, 0.5), 0.0);
-        assert_eq!(flash_alpha(31, 1.0, 0.5), 0.0);
-    }
-
-    #[test]
-    fn flash_alpha_scales_with_intensity() {
-        assert!((flash_alpha(20, 0.0, 0.5) - 20.0 / 31.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn flash_color_normalises_0_31_channels() {
-        assert_eq!(flash_color(31, 0, 31), (1.0, 0.0, 1.0));
-    }
-
-    #[test]
-    fn shake_starts_centred_and_stays_bounded() {
-        assert_eq!(shake_offset(5, 5, 0.0), 0.0);
-        for i in 0..200 {
-            let t = i as f32 * 0.01;
-            assert!(shake_offset(5, 5, t).abs() <= 5.0 * SHAKE_AMPLITUDE + 1e-4);
-        }
+    fn instant_fade_snaps_to_target() {
+        let mut fx = Fx {
+            fade_target: 1.0,
+            fade_secs: 0.0,
+            ..default()
+        };
+        step_fade(&mut fx, 0.016);
+        assert_eq!(fx.fade_alpha, 1.0);
     }
 
     #[test]

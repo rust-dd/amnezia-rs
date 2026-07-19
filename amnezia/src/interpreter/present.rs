@@ -5,7 +5,7 @@
 
 use super::opcodes::*;
 use crate::picture::PictureCommand;
-use crate::screenfx::{SCREEN_FADE_SECS, ScreenEffect};
+use crate::screenfx::{ScreenEffect, transition_secs};
 use crate::state::Variables;
 use amnezia_data::EventCommand;
 
@@ -18,16 +18,22 @@ pub(super) enum Present {
     GameOver,
 }
 
-/// Translate a presentation command, or `None` if it isn't one. Screen fades
-/// always wait ([`SCREEN_FADE_SECS`]) so the next command runs against the
-/// settled screen; tint/flash/shake/move wait only when their command's wait
-/// flag is set.
+/// Translate a presentation command, or `None` if it isn't one. Screen fades wait
+/// for their transition duration (from `params[0]`, see [`transition_secs`]) so
+/// the next command runs against the settled screen; tint/flash/shake/move wait
+/// only when their command's wait flag is set.
 pub(super) fn parse_present(command: &EventCommand, variables: &Variables) -> Option<Present> {
     let params = command.params.as_slice();
     let id = || params.first().copied().unwrap_or(0) as u32;
     match command.code {
-        ERASE_SCREEN => Some(Present::Screen(ScreenEffect::Erase, Some(SCREEN_FADE_SECS))),
-        SHOW_SCREEN => Some(Present::Screen(ScreenEffect::Show, Some(SCREEN_FADE_SECS))),
+        ERASE_SCREEN => {
+            let secs = transition_secs(params.first().copied().unwrap_or(0));
+            Some(Present::Screen(ScreenEffect::Erase { secs }, Some(secs)))
+        }
+        SHOW_SCREEN => {
+            let secs = transition_secs(params.first().copied().unwrap_or(0));
+            Some(Present::Screen(ScreenEffect::Show { secs }, Some(secs)))
+        }
         TINT_SCREEN => Some(Present::Screen(
             ScreenEffect::tint(params),
             wait_secs(params, 5, 4),
@@ -98,15 +104,18 @@ mod tests {
     #[test]
     fn erase_and_show_wait_for_the_fade() {
         let vars = Variables::default();
+        // A default (type 0) fade runs 35 frames ≈ 0.583 s, and the interpreter
+        // waits that long for it to settle.
         let erase = parse_present(&command(ERASE_SCREEN, "", vec![0]), &vars);
         assert!(matches!(
             erase,
-            Some(Present::Screen(ScreenEffect::Erase, Some(_)))
+            Some(Present::Screen(ScreenEffect::Erase { secs }, Some(w)))
+                if (secs - 35.0 / 60.0).abs() < 1e-6 && (w - 35.0 / 60.0).abs() < 1e-6
         ));
         let show = parse_present(&command(SHOW_SCREEN, "", vec![0]), &vars);
         assert!(matches!(
             show,
-            Some(Present::Screen(ScreenEffect::Show, Some(_)))
+            Some(Present::Screen(ScreenEffect::Show { .. }, Some(_)))
         ));
     }
 

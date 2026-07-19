@@ -183,19 +183,18 @@ impl Plugin for AnimationPlugin {
     }
 }
 
-/// Spawn the fixed effect-overlay camera: a second 2D camera at the origin with
-/// the same fixed 320×240 scaling as the main camera, render `order` 1, and no
-/// clear. It draws only [`render::OVERLAY_LAYER`], so it paints the effect sprites
-/// (and the battle backdrop/battlers, which share the layer) over everything the
-/// main camera already rendered — the world and the pictures — while the order-2
-/// HUD camera composites the battle windows above it. It deliberately does not
-/// follow the hero, which is what makes [`PlayAnimation`]'s `(x, y)` pure
-/// screen-space.
+/// Spawn the fixed effect-overlay camera: a 2D camera at the origin with the same
+/// fixed 320×240 scaling as the main camera, render `order` 2, and no clear. It
+/// draws only [`render::OVERLAY_LAYER`], so it paints the effect sprites (and the
+/// battle backdrop/battlers, which share the layer) over everything below it — the
+/// toned world and the front camera's pictures and UI — while the order-3 HUD
+/// camera composites the battle windows above it. It deliberately does not follow
+/// the hero, which is what makes [`PlayAnimation`]'s `(x, y)` pure screen-space.
 fn spawn_overlay_camera(mut commands: Commands) {
     commands.spawn((
         Camera2d,
         Camera {
-            order: 1,
+            order: 2,
             clear_color: ClearColorConfig::None,
             ..default()
         },

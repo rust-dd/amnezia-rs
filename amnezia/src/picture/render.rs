@@ -7,8 +7,10 @@
 use super::{Picture, Tone};
 use crate::assets::resolve_png;
 use crate::picture::PictureCommand;
+use crate::screenfx::PICTURE_LAYER;
 use crate::world::MainCamera;
 use bevy::asset::Asset;
+use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use bevy::render::render_resource::AsBindGroup;
 use bevy::shader::ShaderRef;
@@ -115,6 +117,7 @@ pub(super) fn apply_commands(
                     MeshMaterial2d(material),
                     Transform::from_translation(screen_offset(*x, *y).extend(picture_z(*id)))
                         .with_scale(Vec3::ZERO),
+                    RenderLayers::layer(PICTURE_LAYER),
                 ));
             }
             PictureCommand::Move {

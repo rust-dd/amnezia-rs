@@ -167,13 +167,13 @@ impl Plugin for BattlePlugin {
 #[derive(Component)]
 struct HudCamera;
 
-/// Spawn the HUD camera at startup (order 2, no clear), so [`hud`]'s windows can
+/// Spawn the HUD camera at startup (order 3, no clear), so [`hud`]'s windows can
 /// target it and paint over the effect overlay the battle scene draws on.
 fn spawn_hud_camera(mut commands: Commands) {
     commands.spawn((
         Camera2d,
         Camera {
-            order: 2,
+            order: 3,
             clear_color: ClearColorConfig::None,
             ..default()
         },
