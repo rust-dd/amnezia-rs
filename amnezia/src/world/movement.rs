@@ -56,6 +56,12 @@ pub trait Character {
     fn index(&self) -> u32;
     fn charset(&self) -> &str;
     fn set_graphic(&mut self, name: String, index: u32);
+    /// The world draw-Z for this character at tile row `tile_y`. The hero uses
+    /// the default "same as hero" band; an event NPC overrides it to sit in the
+    /// band for its page layer (below/same/above the hero).
+    fn draw_z(&self, tile_y: i32) -> f32 {
+        tiles::character_z(tile_y)
+    }
 }
 
 /// An in-progress single-tile tween between two tile centers (equal for `Wait`).
@@ -275,11 +281,8 @@ pub fn walk<C: Character + Component<Mutability = Mutable>>(
             let (sx, sy) = tiles::charset_source(ch.index(), ch.dir(), ch.frame());
             sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
             sprite.image = asset_server.load(resolve_png("CharSet", ch.charset()));
-            transform.translation = Vec3::new(
-                pos.x,
-                pos.y + CHAR_Y_OFFSET,
-                tiles::character_z(ch.tile().1),
-            );
+            let z = ch.draw_z(ch.tile().1);
+            transform.translation = Vec3::new(pos.x, pos.y + CHAR_Y_OFFSET, z);
         }
     }
 }
@@ -313,6 +316,9 @@ impl Character for super::EventSprite {
     fn set_graphic(&mut self, name: String, index: u32) {
         self.charset = name;
         self.index = index;
+    }
+    fn draw_z(&self, tile_y: i32) -> f32 {
+        tiles::character_z_layer(tile_y, self.layer)
     }
 }
 

@@ -16,7 +16,7 @@ use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::Fade;
 use crate::title::TitleActive;
-use crate::world::MapEvents;
+use crate::world::{MapData, MapEvents};
 use bevy::prelude::*;
 use typewriter::Typewriter;
 
@@ -103,6 +103,7 @@ impl Plugin for DialoguePlugin {
 fn interact(
     keys: Res<ButtonInput<KeyCode>>,
     fade: Res<Fade>,
+    data: Res<MapData>,
     map_events: Res<MapEvents>,
     switches: Res<Switches>,
     variables: Res<Variables>,
@@ -142,19 +143,31 @@ fn interact(
         return;
     };
     let (fx, fy) = facing_tile(player);
-    // RM2000 `CheckEventTriggerThere`: a trigger-0 event on the tile the hero
-    // faces fires only when its active page shares the hero's layer (layer 1).
-    for event in &map_events.events {
-        if event.x as i32 != fx || event.y as i32 != fy {
-            continue;
+    let (dx, dy) = (fx - player.tile_x, fy - player.tile_y);
+    // RM2000 `CheckActionEvent`: a trigger-0 event on the tile the hero faces
+    // fires only when its active page shares the hero's layer (layer 1). If that
+    // tile is a counter, the scan reaches across it to the next tile — up to
+    // RPG_RT's maximum of three counter tiles — so the hero can talk to an event
+    // standing behind a shop counter.
+    let (mut tx, mut ty) = (fx, fy);
+    for hop in 0..=3 {
+        for event in &map_events.events {
+            if event.x as i32 != tx || event.y as i32 != ty {
+                continue;
+            }
+            if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
+                && page.trigger == 0
+                && page.layer == 1
+            {
+                running.start(event.id, page.commands.clone());
+                return;
+            }
         }
-        if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
-            && page.trigger == 0
-            && page.layer == 1
-        {
-            running.start(event.id, page.commands.clone());
-            return;
+        if hop == 3 || !data.is_counter(tx, ty) {
+            break;
         }
+        tx += dx;
+        ty += dy;
     }
     // RM2000 `CheckEventTriggerHere`: a trigger-0 event on the hero's own tile
     // fires when its active page is below or above the hero (layer != 1). The save

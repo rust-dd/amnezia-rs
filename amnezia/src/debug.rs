@@ -103,7 +103,9 @@ fn toggle_overlay(
                     custom_size: Some(Vec2::splat(tiles::TILE)),
                     ..default()
                 },
-                Transform::from_xyz(wx, wy, 5.0),
+                // Above every world draw band (tiles and characters) so the
+                // impassable-tile overlay stays visible on top.
+                Transform::from_xyz(wx, wy, 100.0),
                 PassOverlay,
             ));
         }

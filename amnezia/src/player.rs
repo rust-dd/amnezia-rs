@@ -202,7 +202,9 @@ fn move_player(
     if nx < 0 || ny < 0 || nx >= data.width || ny >= data.height {
         return;
     }
-    let blocked = !data.passable(nx, ny)
+    // RM2000 MakeWay: the tile being left must permit exit toward the move and
+    // the destination must permit entry from the opposite side.
+    let blocked = !data.can_move(player.tile_x, player.tile_y, nx, ny)
         || event_blocks_at(
             &map_events,
             &switches,

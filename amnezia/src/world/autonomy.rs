@@ -294,7 +294,7 @@ pub(crate) fn autonomous_movement(
                     && ny >= 0
                     && nx < data.width
                     && ny < data.height
-                    && data.passable(nx, ny)
+                    && data.can_move(ex, ey, nx, ny)
                     && !(nx == px && ny == py)
                     && !event_solid_at(
                         &map_events,
@@ -478,6 +478,7 @@ mod tests {
                 frame: 1,
                 charset: "C".into(),
                 index: 0,
+                layer: 1,
             },
             MoveQueue::default(),
             AutoMove {

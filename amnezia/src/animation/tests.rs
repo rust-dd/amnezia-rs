@@ -171,6 +171,7 @@ fn resolver_projects_hero_and_event_onto_screen() {
             frame: 0,
             charset: String::new(),
             index: 0,
+            layer: 1,
         },
         Transform::from_xyz(90.0, 30.0, 3.0),
     ));

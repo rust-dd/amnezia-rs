@@ -55,6 +55,10 @@ pub struct EventSprite {
     pub frame: u32,
     pub charset: String,
     pub index: u32,
+    /// The active page's draw layer (0 below the hero, 1 same, 2 above), which
+    /// places the sprite's y-sorted Z relative to the hero via
+    /// [`crate::tiles::character_z_layer`].
+    pub layer: u32,
 }
 
 /// The active map's geometry, tile layers, and passability, for movement.
@@ -79,15 +83,47 @@ impl MapData {
         (x, y)
     }
 
-    /// Whether the hero can stand on tile `(x, y)`.
+    /// Whether tile `(x, y)` is passable from any direction — a non-directional
+    /// standability test, used by the debug overlay. Movement uses [`can_move`],
+    /// which also checks the tile being left and the direction of travel.
     pub fn passable(&self, x: i32, y: i32) -> bool {
+        self.passable_dir(x, y, tiles::PASS_ALL)
+    }
+
+    /// Whether the cell at `(x, y)` permits passage in the direction(s) `bit`,
+    /// combining its lower and upper layers. Out-of-bounds cells are impassable.
+    fn passable_dir(&self, x: i32, y: i32, bit: u8) -> bool {
+        if x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return false;
+        }
         let idx = (y * self.width + x) as usize;
         tiles::passable(
             self.lower[idx],
             self.upper[idx],
             &self.passages_down,
             &self.passages_up,
+            bit,
         )
+    }
+
+    /// Whether a character can move from `(fx, fy)` to the adjacent `(tx, ty)`,
+    /// per RM2000's `Game_Map::MakeWay`: the tile being left must permit exit
+    /// toward the move, and the tile being entered must permit entry from the
+    /// opposite side. Both checks combine each tile's lower and upper passability.
+    pub fn can_move(&self, fx: i32, fy: i32, tx: i32, ty: i32) -> bool {
+        let bit_from = tiles::passable_mask(fx, fy, tx, ty);
+        let bit_to = tiles::passable_mask(tx, ty, fx, fy);
+        self.passable_dir(fx, fy, bit_from) && self.passable_dir(tx, ty, bit_to)
+    }
+
+    /// Whether the tile `(x, y)` is a counter (its upper tile carries the counter
+    /// bit): an action event one tile beyond can be talked to across it.
+    pub fn is_counter(&self, x: i32, y: i32) -> bool {
+        if x < 0 || y < 0 || x >= self.width || y >= self.height {
+            return false;
+        }
+        let idx = (y * self.width + x) as usize;
+        tiles::is_counter(self.upper[idx], &self.passages_up)
     }
 }
 
@@ -258,13 +294,13 @@ pub fn load_map(
     );
 
     for (index, &id) in map.lower.iter().enumerate() {
-        // A star-flagged lower tile (roof/wall top/treetop painted on the ground
-        // layer) draws above the hero (z 4), the same rule the upper layer uses;
-        // ordinary ground stays at z 0 below everything.
+        // A star- or wall-flagged lower tile (roof/wall face/treetop painted on
+        // the ground layer) draws above the hero, the same rule the upper layer
+        // uses; ordinary ground stays below everything.
         let z = if tiles::above_hero_lower(id, &passages_down) {
-            4.0
+            tiles::Z_TILE_ABOVE
         } else {
-            0.0
+            tiles::Z_GROUND
         };
         match tiles::lower_render(id) {
             tiles::LowerRender::Whole { src } => {
@@ -291,12 +327,12 @@ pub fn load_map(
     for (index, &id) in map.upper.iter().enumerate() {
         if let Some(source) = tiles::upper_source(id) {
             // "Above hero" upper tiles (roof/tree/tall-object tops) draw over the
-            // hero (z 4 > player z 3) so the hero walks behind them; ordinary
-            // upper tiles stay below the hero at z 1.
+            // hero so the hero walks behind them; ordinary upper tiles stay below
+            // the hero.
             let z = if tiles::above_hero(id, &passages_up) {
-                4.0
+                tiles::Z_TILE_ABOVE
             } else {
-                1.0
+                tiles::Z_UPPER
             };
             render::spawn_tile(commands, &chipset, source, index as i32, width, offset, z);
         }
@@ -368,8 +404,11 @@ fn apply_relocate(
             sprite.tile_y = msg.y as i32;
             *queue = MoveQueue::default();
             let (wx, wy) = data.tile_center(msg.x as i32, msg.y as i32);
-            transform.translation =
-                Vec3::new(wx, wy + CHAR_Y_OFFSET, tiles::character_z(msg.y as i32));
+            transform.translation = Vec3::new(
+                wx,
+                wy + CHAR_Y_OFFSET,
+                tiles::character_z_layer(msg.y as i32, sprite.layer),
+            );
         }
     }
 }
@@ -406,6 +445,7 @@ mod tests {
                     frame: 1,
                     charset: "C".into(),
                     index: 0,
+                    layer: 1,
                 },
                 Transform::default(),
                 MoveQueue::default(),

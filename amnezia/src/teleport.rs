@@ -3,14 +3,20 @@
 //! the persistent hero), then fades back in. Movement and interaction are
 //! suppressed while a fade is in progress.
 
-use crate::player::Player;
+use crate::player::{CameraPan, Player};
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::tiles::CHAR_Y_OFFSET;
 use crate::world::{MapChanged, MapData, MapEvents, MapScene, load_map};
 use bevy::prelude::*;
 
-/// Screen fades per second (a full fade-out or fade-in takes 1/this seconds).
-const FADE_SPEED: f32 = 4.0;
+/// Frames (at 60 fps) each fade phase runs — RM2000's map-transfer transition
+/// default (EasyRPG `Transition::GetDefaultFrames`), matching `screenfx::fade`'s
+/// 35-frame screen fade. The previous 0.25 s fade was ~2.3× too fast.
+const FADE_FRAMES: f32 = 35.0;
+
+/// Overlay alpha added per second, so a full fade-out (or fade-in) spans
+/// [`FADE_FRAMES`] frames.
+const FADE_SPEED: f32 = 60.0 / FADE_FRAMES;
 
 /// A pending teleport `(map_id, x, y)`, set by an interaction or a touch, and
 /// picked up by the fade. At most one is queued at a time.
@@ -93,6 +99,7 @@ fn drive_fade(
     mut fade: ResMut<Fade>,
     mut map_data: ResMut<MapData>,
     mut map_events: ResMut<MapEvents>,
+    mut pan: ResMut<CameraPan>,
     mut map_changed: MessageWriter<MapChanged>,
     scene: Query<Entity, With<MapScene>>,
     mut players: Query<(&mut Player, &mut Transform)>,
@@ -120,6 +127,7 @@ fn drive_fade(
                         &inventory,
                         &mut map_data,
                         &mut map_events,
+                        &mut pan,
                         &scene,
                         &mut players,
                         map_id,
@@ -155,12 +163,21 @@ fn swap_map(
     inventory: &Inventory,
     map_data: &mut MapData,
     map_events: &mut MapEvents,
+    pan: &mut CameraPan,
     scene: &Query<Entity, With<MapScene>>,
     players: &mut Query<(&mut Player, &mut Transform)>,
     map_id: u32,
     x: u32,
     y: u32,
 ) {
+    let (tile_x, tile_y) = (x as i32, y as i32);
+    // A teleport whose destination is the current map (RM2000 same-map transfer)
+    // keeps the loaded map, its events, and their state — only the hero moves.
+    // Rebuilding the scene would reset every event's position and page state.
+    if map_id == map_data.map_id {
+        reposition_hero(players, map_data, tile_x, tile_y);
+        return;
+    }
     for entity in scene {
         commands.entity(entity).despawn();
     }
@@ -173,7 +190,25 @@ fn swap_map(
         inventory,
         map_id,
     );
-    let (tile_x, tile_y) = (x as i32, y as i32);
+    reposition_hero(players, &data, tile_x, tile_y);
+    *map_data = data;
+    *map_events = events;
+    // A cross-map transfer re-centers on the hero: drop any cutscene camera pan
+    // carried over from the previous map.
+    pan.offset = Vec2::ZERO;
+    pan.target = Vec2::ZERO;
+    pan.speed = 0.0;
+}
+
+/// Move the persistent hero to tile `(tile_x, tile_y)` on `data`: update its
+/// logical tile and snap its transform to the tile center. Facing is retained —
+/// the teleport target carries no direction, matching RM2000's "retain heading".
+fn reposition_hero(
+    players: &mut Query<(&mut Player, &mut Transform)>,
+    data: &MapData,
+    tile_x: i32,
+    tile_y: i32,
+) {
     if let Ok((mut player, mut transform)) = players.single_mut() {
         player.tile_x = tile_x;
         player.tile_y = tile_y;
@@ -182,6 +217,65 @@ fn swap_map(
         transform.translation.y = world_y + CHAR_Y_OFFSET;
         transform.translation.z = crate::tiles::character_z(tile_y);
     }
-    *map_data = data;
-    *map_events = events;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Reposition the single hero to tile (4, 6) — the same-map teleport path.
+    fn run_reposition(data: Res<MapData>, mut players: Query<(&mut Player, &mut Transform)>) {
+        reposition_hero(&mut players, &data, 4, 6);
+    }
+
+    /// A same-map teleport repositions the hero without tearing down the scene:
+    /// `reposition_hero` moves the hero's tile and transform and never despawns
+    /// the `MapScene` entities (it holds no `Commands`), so the map's generation
+    /// is unchanged.
+    #[test]
+    fn same_map_reposition_moves_hero_and_keeps_scene() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.insert_resource(MapData::for_test(10, 10));
+        // Three scene entities that a full reload would despawn.
+        let scene: Vec<Entity> = (0..3)
+            .map(|_| app.world_mut().spawn(MapScene).id())
+            .collect();
+        let hero = app
+            .world_mut()
+            .spawn((
+                Player {
+                    tile_x: 1,
+                    tile_y: 1,
+                    dir: crate::tiles::DIR_DOWN,
+                    frame: 1,
+                    charset: "Chara1".into(),
+                    index: 0,
+                },
+                Transform::default(),
+            ))
+            .id();
+
+        app.add_systems(Update, run_reposition);
+        app.update();
+
+        // The hero moved to the target tile and its transform snapped there.
+        let player = app.world().entity(hero).get::<Player>().unwrap();
+        assert_eq!((player.tile_x, player.tile_y), (4, 6));
+        let (cx, cy) = app.world().resource::<MapData>().tile_center(4, 6);
+        let transform = app.world().entity(hero).get::<Transform>().unwrap();
+        assert_eq!(transform.translation.x, cx);
+        assert_eq!(transform.translation.y, cy + CHAR_Y_OFFSET);
+        // No scene entity was despawned — the same map is still standing.
+        for entity in scene {
+            assert!(app.world().get_entity(entity).is_ok());
+        }
+    }
+
+    #[test]
+    fn fade_phase_matches_the_thirty_five_frame_transition() {
+        // Each fade phase spans 35 frames at 60 fps ≈ 0.583 s: FADE_SPEED alpha
+        // per second fills 0→1 in exactly that time.
+        assert!((1.0 / FADE_SPEED - FADE_FRAMES / 60.0).abs() < 1e-6);
+    }
 }
