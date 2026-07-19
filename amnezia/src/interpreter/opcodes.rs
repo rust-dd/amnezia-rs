@@ -38,8 +38,9 @@ pub(super) const WEATHER: u32 = 11070;
 pub(super) const PLAYER_TRANSPARENCY: u32 = 11310;
 /// Play a battle animation on a character (ShowBattleAnimation): `params =
 /// [anim_id, target_char_ref, wait, global]`. `target_char_ref` decodes like
-/// 10860/11330 — 10001 = hero, 10005 = this event, else event id — and the
-/// wait/global flags are ignored (the animation is fire-and-forget).
+/// 10860/11330 — 10001 = hero, 10005 = this event, else event id. `wait` blocks
+/// the event for the animation's duration and `global` tiles it 3×3 across the
+/// screen (see the dispatch arm in [`super`]).
 pub(super) const SHOW_BATTLE_ANIMATION: u32 = 11210;
 /// Shop/inn outcome handlers, self-selected like the battle handlers (param-less).
 pub(super) const TRANSACTION: u32 = 20720;

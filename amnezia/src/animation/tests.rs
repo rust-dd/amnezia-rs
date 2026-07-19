@@ -4,6 +4,8 @@ fn flash_timing(scope: u32) -> AnimationTimingDef {
     AnimationTimingDef {
         frame: 1,
         se_name: String::new(),
+        se_volume: 100,
+        se_tempo: 100,
         flash_scope: scope,
         flash_red: 31,
         flash_green: 20,
@@ -179,10 +181,12 @@ fn resolver_projects_hero_and_event_onto_screen() {
     app.world_mut().write_message(ShowMapAnimation {
         anim_id: 62,
         target: AnimTarget::Hero,
+        global: false,
     });
     app.world_mut().write_message(ShowMapAnimation {
         anim_id: 63,
         target: AnimTarget::Event(7),
+        global: false,
     });
     app.update();
 
@@ -216,6 +220,8 @@ fn se_timing(name: &str) -> AnimationTimingDef {
     AnimationTimingDef {
         frame: 1,
         se_name: name.to_string(),
+        se_volume: 100,
+        se_tempo: 100,
         flash_scope: FLASH_SCOPE_TARGET,
         flash_red: 31,
         flash_green: 31,
@@ -256,7 +262,20 @@ fn a_screen_scope_animation_draws_its_cells_once_centred() {
         },
     ];
     let center = Vec2::new(0.0, -40.0);
-    assert_eq!(draw_anchors(&def, &targets, center), vec![center]);
+    assert_eq!(draw_anchors(&def, &targets, center, false), vec![center]);
+}
+
+#[test]
+fn a_global_animation_tiles_its_cells_3x3_across_the_screen() {
+    // The global flag (opcode 11210 params[3]) overrides scope: the cells draw at
+    // the screen centre plus its eight neighbours, one screen-width/height apart.
+    let def = anim_def(1, SCOPE_SCREEN, 1, Vec::new());
+    let anchors = draw_anchors(&def, &[], Vec2::ZERO, true);
+    assert_eq!(anchors.len(), 9);
+    assert!(anchors.contains(&Vec2::ZERO));
+    assert!(anchors.contains(&Vec2::new(-320.0, -240.0)));
+    assert!(anchors.contains(&Vec2::new(320.0, 240.0)));
+    assert!(anchors.contains(&Vec2::new(320.0, 0.0)));
 }
 
 #[test]
@@ -275,7 +294,7 @@ fn a_target_scope_animation_draws_at_each_target_with_the_position_offset() {
         },
     ];
     assert_eq!(
-        draw_anchors(&def, &targets, Vec2::ZERO),
+        draw_anchors(&def, &targets, Vec2::ZERO, false),
         vec![Vec2::new(-60.0, 4.0), Vec2::new(40.0, -8.0)]
     );
 }

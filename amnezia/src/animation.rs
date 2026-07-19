@@ -30,7 +30,7 @@ use bevy::camera::ScalingMode;
 use bevy::prelude::*;
 use render::{fade_flashes, next_frame, spawn_frame_cells, spawn_screen_flash};
 
-pub use render::{overlay_layer, overlay_translation};
+pub use render::{flash_envelope, overlay_layer, overlay_translation};
 
 /// Seconds each animation *data* frame is shown. RM2000 (and EasyRPG) advances
 /// the animation once per 60 fps game-frame and shows each data frame for two of
@@ -39,18 +39,12 @@ pub use render::{overlay_layer, overlay_translation};
 /// timer is real-time, so this stays a fixed step.
 pub const FRAME_SECS: f32 = 1.0 / 30.0;
 
-/// Seconds one 60 fps game-frame lasts: half a data frame.
+/// Seconds one 60 fps game-frame lasts: half a data frame. The flash envelope
+/// ([`render::flash_envelope`]) counts these game-frames — EasyRPG holds a flash
+/// over its `UpdateFlashGeneric` window of eleven game-frames (`delta_frames <=
+/// 10`) — so the window stays decoupled from [`FRAME_SECS`]: halving the per-frame
+/// step for the 15→30 fps fix must not reshape it.
 const GAME_FRAME_SECS: f32 = FRAME_SECS / 2.0;
-
-/// How long a flash lasts before it has fully decayed. EasyRPG holds a flash for
-/// its `UpdateFlashGeneric` window of ten game-frames (`delta_frames <= 10`), so
-/// this is decoupled from [`FRAME_SECS`] (ten game-frames, not "three data
-/// frames") — halving the per-frame step for the 15→30 fps fix must not shorten
-/// it.
-const FLASH_SECS: f32 = 10.0 * GAME_FRAME_SECS;
-
-/// The RM2000 sentinel sound name meaning "no sound"; skipped like an empty name.
-const SE_OFF: &str = "(OFF)";
 
 /// The flash channel `flash_scope` value that flashes the whole screen; `1`
 /// flashes the target, `0` nothing.
@@ -92,26 +86,28 @@ pub struct AnimAnchor {
 /// [`AnimAnchor`] (a single-target scope-0 animation) — or, for a screen-scope
 /// animation, once at `screen_center` (RM2000 screen offset from centre, y
 /// downward). Target flashes still fire at every target regardless of scope,
-/// matching EasyRPG (`battle_animation.cpp`).
+/// matching EasyRPG (`battle_animation.cpp`). `global` (RM2000 map opcode 11210's
+/// global flag) tiles the cells 3×3 across the screen instead, overriding scope.
 #[derive(Message)]
 pub struct PlayAnimation {
     pub anim_id: u32,
     pub targets: Vec<AnimAnchor>,
     pub screen_center: Vec2,
+    pub global: bool,
 }
 
 /// A request to flash-tint a target battler sprite as an animation's target
 /// flash fires: `pos` is the battler's RM2000 screen offset from centre (the same
-/// point the animation plays on), `rgb` the flash colour (0..1), `power` its peak
-/// strength (0..1), decaying over `secs`. `battle::scene` finds the battler at
-/// `pos` and drives its sprite colour. RM2000 front view draws no party sprites,
-/// so a party-area target flash matches no battler and shows nothing.
+/// point the animation plays on), `rgb` the flash colour (0..1), and `power` the
+/// RM2000 flash strength (`0..=31`) that drives the stepped [`flash_envelope`].
+/// `battle::scene` finds the battler at `pos` and drives its sprite colour over
+/// the ~11-game-frame envelope. RM2000 front view draws no party sprites, so a
+/// party-area target flash matches no battler and shows nothing.
 #[derive(Message)]
 pub struct BattlerFlash {
     pub pos: Vec2,
     pub rgb: [f32; 3],
-    pub power: f32,
-    pub secs: f32,
+    pub power: u32,
 }
 
 /// The character a [`ShowMapAnimation`] plays on, already resolved from the
@@ -125,13 +121,16 @@ pub enum AnimTarget {
 
 /// The interpreter's request to play battle animation `anim_id` on a map
 /// character (RM2000 `ShowBattleAnimation`, opcode 11210). The interpreter only
-/// decodes the id and resolves the char-ref; [`resolve_map_animation`] looks the
-/// target's world position up against the main camera and emits the screen-space
-/// [`PlayAnimation`], so the interpreter itself needs no camera/transform queries.
+/// decodes the id, resolves the char-ref, and reads the `global` flag (params[3]);
+/// [`resolve_map_animation`] looks the target's world position up against the main
+/// camera and emits the screen-space [`PlayAnimation`], so the interpreter itself
+/// needs no camera/transform queries. `global` tiles the animation 3×3 across the
+/// screen (EasyRPG `BattleAnimationMap::DrawGlobal`).
 #[derive(Message)]
 pub struct ShowMapAnimation {
     pub anim_id: u32,
     pub target: AnimTarget,
+    pub global: bool,
 }
 
 /// Every converted battle animation, loaded once at plugin build.
@@ -237,7 +236,8 @@ fn start_animations(
         if def.frames.is_empty() {
             continue;
         }
-        let draw_anchors = draw_anchors(def, &request.targets, request.screen_center);
+        let draw_anchors =
+            draw_anchors(def, &request.targets, request.screen_center, request.global);
         let flash_anchors: Vec<Vec2> = request.targets.iter().map(|t| t.pos).collect();
         let cells = spawn_cells_at(&mut commands, &asset_server, def, 0, &draw_anchors);
         fire_timings(
@@ -259,12 +259,22 @@ fn start_animations(
     }
 }
 
-/// The screen points an animation's cells draw at: a screen-scope animation draws
-/// its cells once at `screen_center`; otherwise once per target, each shifted
-/// vertically by the [`AnimationDef::position`] anchor over that target's height
-/// (see [`position_offset`]). The flash anchors stay at the un-shifted target
-/// centres, so a target flash still lands on the battler.
-fn draw_anchors(def: &AnimationDef, targets: &[AnimAnchor], screen_center: Vec2) -> Vec<Vec2> {
+/// The screen points an animation's cells draw at: a `global` animation tiles its
+/// cells 3×3 across the screen around `screen_center` (EasyRPG
+/// `BattleAnimationMap::DrawGlobal`), overriding scope; otherwise a screen-scope
+/// animation draws its cells once at `screen_center`, and a single-target one once
+/// per target, each shifted vertically by the [`AnimationDef::position`] anchor
+/// over that target's height (see [`position_offset`]). The flash anchors stay at
+/// the un-shifted target centres, so a target flash still lands on the battler.
+fn draw_anchors(
+    def: &AnimationDef,
+    targets: &[AnimAnchor],
+    screen_center: Vec2,
+    global: bool,
+) -> Vec<Vec2> {
+    if global {
+        return render::global_anchors(screen_center);
+    }
     if def.scope == SCOPE_SCREEN {
         return vec![screen_center];
     }
@@ -362,17 +372,15 @@ fn fire_timings(
     }
 }
 
-/// Emit the timing's sound effect. An empty or `(OFF)` name is silent; the audio
-/// plugin resolves the name to a `wav` (or no-ops if none exists).
+/// Emit the timing's sound effect at its own volume/tempo (RM2000 stores a full
+/// `Sound` per timing, not just a name). An empty or `(OFF)` name is silent
+/// ([`AudioRequest::se`] returns `None`); otherwise the `0..=100` volume and
+/// percent tempo map onto the request's logarithmic gain and playback speed, the
+/// same mapping a System SE uses.
 fn emit_sound(audio: &mut MessageWriter<AudioRequest>, timing: &AnimationTimingDef) {
-    if timing.se_name.is_empty() || timing.se_name == SE_OFF {
-        return;
+    if let Some(request) = AudioRequest::se(&timing.se_name, timing.se_volume, timing.se_tempo) {
+        audio.write(request);
     }
-    audio.write(AudioRequest::Sound {
-        name: timing.se_name.clone(),
-        volume: 1.0,
-        speed: 1.0,
-    });
 }
 
 /// Emit the timing's flash. A screen flash spawns a single full-screen decaying
@@ -393,17 +401,12 @@ fn emit_flash(
         flash_channel(timing.flash_green),
         flash_channel(timing.flash_blue),
     ];
-    let power = flash_channel(timing.flash_power);
+    let power = timing.flash_power;
     match timing.flash_scope {
-        FLASH_SCOPE_SCREEN => spawn_screen_flash(commands, rgb, power, FLASH_SECS),
+        FLASH_SCOPE_SCREEN => spawn_screen_flash(commands, rgb, power),
         FLASH_SCOPE_TARGET => {
             for &pos in flash_anchors {
-                battler_flash.write(BattlerFlash {
-                    pos,
-                    rgb,
-                    power,
-                    secs: FLASH_SECS,
-                });
+                battler_flash.write(BattlerFlash { pos, rgb, power });
             }
         }
         _ => {}
@@ -449,6 +452,7 @@ fn debug_preview(
                 height: MAP_CHARACTER_HEIGHT,
             }],
             screen_center: MAP_SCREEN_CENTER,
+            global: false,
         });
     }
 }
@@ -490,6 +494,7 @@ fn resolve_map_animation(
                 height: MAP_CHARACTER_HEIGHT,
             }],
             screen_center: MAP_SCREEN_CENTER,
+            global: request.global,
         });
     }
 }

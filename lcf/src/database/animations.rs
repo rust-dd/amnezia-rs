@@ -8,14 +8,18 @@
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
 
-/// One placed sprite-sheet tile within an animation frame. `cell_id` selects the
-/// tile from the animation's graphic (a 5x5 grid of patterns, so `0..=24`).
-/// `x`/`y` offset it from the animation's anchor in screen pixels (signed,
-/// centred on 0). `scale` is a zoom percent (`100` = full size). The four
-/// `tone_*` channels tint the tile on RM2000's `0..=200` scale (`100` = neutral)
-/// and `transparency` is a `0..=100` percent (`0` = opaque).
+/// One placed sprite-sheet tile within an animation frame. `valid` is liblcf's
+/// per-cell flag (default `true`): the RM2000 editor clears it on a *deleted*
+/// cell, keeping the slot so later cells hold their index, and a `valid == false`
+/// cell is not drawn. `cell_id` selects the tile from the animation's graphic (a
+/// 5x5 grid of patterns, so `0..=24`). `x`/`y` offset it from the animation's
+/// anchor in screen pixels (signed, centred on 0). `scale` is a zoom percent
+/// (`100` = full size). The four `tone_*` channels tint the tile on RM2000's
+/// `0..=200` scale (`100` = neutral) and `transparency` is a `0..=100` percent
+/// (`0` = opaque).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnimationCell {
+    pub valid: bool,
     pub cell_id: u32,
     pub x: i32,
     pub y: i32,
@@ -36,14 +40,19 @@ pub struct AnimationFrame {
 
 /// A frame-timed flash and sound effect on an animation's timeline. `frame` is
 /// the 1-based frame the effect fires on and `se_name` the sound-effect file
-/// under `Sound/` (empty = silent). `flash_scope` selects what flashes (`0`
-/// nothing, `1` the target, `2` the whole screen); `flash_red`/`green`/`blue`
-/// are the flash colour on RM2000's `0..=31` scale and `flash_power` its
-/// strength.
+/// under `Sound/` (empty = silent), played at `se_volume` (`0..=100`), percent
+/// `se_tempo` (`100` = normal), and stereo `se_balance` (`50` = centred) — the
+/// same nested `Sound` sub-struct as a System SE. `flash_scope` selects what
+/// flashes (`0` nothing, `1` the target, `2` the whole screen);
+/// `flash_red`/`green`/`blue` are the flash colour on RM2000's `0..=31` scale and
+/// `flash_power` its strength.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnimationTiming {
     pub frame: u32,
     pub se_name: String,
+    pub se_volume: u32,
+    pub se_tempo: u32,
+    pub se_balance: u32,
     pub flash_scope: u32,
     pub flash_red: u32,
     pub flash_green: u32,
@@ -88,12 +97,25 @@ const TIMING_FLASH_POWER: u32 = 0x07;
 // white (31 on the 5-bit flash scale), so absent colours restore 31.
 const TIMING_DEFAULT_FLASH: u32 = 31;
 
+// A timing's SE is a nested `Sound` sub-struct sharing the `Music`/`Sound` chunk
+// ids: name `0x01`, volume `0x03`, tempo `0x04`, balance `0x05` (`0x02` is the
+// `Music`-only fade-in, absent on a `Sound`).
 const SOUND_NAME: u32 = 0x01;
+const SOUND_VOLUME: u32 = 0x03;
+const SOUND_TEMPO: u32 = 0x04;
+const SOUND_BALANCE: u32 = 0x05;
+
+// A `Sound` omits volume/tempo when normal (100) and balance when centred (50).
+const SOUND_DEFAULT_VOLUME: u32 = 100;
+const SOUND_DEFAULT_TEMPO: u32 = 100;
+const SOUND_DEFAULT_BALANCE: u32 = 50;
 
 const FRAME_CELLS: u32 = 0x01;
 
-// Cell chunk ids trail liblcf's field order by one: `0x01` is an always-zero
-// leading flag this game never sets, so the nine drawn fields start at `0x02`.
+// Cell chunk ids (liblcf `ChunkAnimationCellData`): `0x01` is the `valid` flag —
+// the editor clears it on a deleted cell to keep later cells' indices stable —
+// and the nine drawn fields follow from `0x02`.
+const CELL_VALID: u32 = 0x01;
 const CELL_ID: u32 = 0x02;
 const CELL_X: u32 = 0x03;
 const CELL_Y: u32 = 0x04;
@@ -111,11 +133,11 @@ const CELL_DEFAULT_TONE: i32 = 100;
 
 /// Parse a frame's `cells` list (`AnimationFrame` chunk `0x01`): a `[count]`
 /// header then, per cell, a 1-based index id and a chunk stream. Chunk ids
-/// (liblcf `ChunkAnimationCellData`, shifted past the leading `0x01` flag):
-/// cell_id `0x02`, x `0x03`, y `0x04`, scale `0x05`, tone_red `0x06`, tone_green
-/// `0x07`, tone_blue `0x08`, tone_gray `0x09`, transparency `0x0A`. `x`, `y`, and
-/// the tones are signed (large varints wrap to negative). Omitted fields take
-/// their RM2000 defaults: scale and the tones `100`, everything else `0`.
+/// (liblcf `ChunkAnimationCellData`): valid `0x01`, cell_id `0x02`, x `0x03`, y
+/// `0x04`, scale `0x05`, tone_red `0x06`, tone_green `0x07`, tone_blue `0x08`,
+/// tone_gray `0x09`, transparency `0x0A`. `x`, `y`, and the tones are signed
+/// (large varints wrap to negative). Omitted fields take their RM2000 defaults:
+/// `valid` true, scale and the tones `100`, everything else `0`.
 fn parse_cells(data: &[u8]) -> Result<Vec<AnimationCell>, LcfError> {
     let mut reader = Reader::new(data);
     let count = reader.varint()?;
@@ -123,6 +145,7 @@ fn parse_cells(data: &[u8]) -> Result<Vec<AnimationCell>, LcfError> {
     for _ in 0..count {
         let _cell_index = reader.varint()?;
         let mut cell = AnimationCell {
+            valid: true,
             cell_id: 0,
             x: 0,
             y: 0,
@@ -141,6 +164,7 @@ fn parse_cells(data: &[u8]) -> Result<Vec<AnimationCell>, LcfError> {
             let sub_size = reader.varint()? as usize;
             let sub_data = reader.take(sub_size)?;
             match sub_id {
+                CELL_VALID => cell.valid = Reader::new(sub_data).varint()? != 0,
                 CELL_ID => cell.cell_id = Reader::new(sub_data).varint()?,
                 CELL_X => cell.x = Reader::new(sub_data).varint()? as i32,
                 CELL_Y => cell.y = Reader::new(sub_data).varint()? as i32,
@@ -184,13 +208,27 @@ fn parse_frames(data: &[u8]) -> Result<Vec<AnimationFrame>, LcfError> {
     Ok(frames)
 }
 
-/// Extract a timing's sound-effect file name from its nested `Sound` struct
-/// (`ChunkAnimationTiming` chunk `0x02`): a chunk stream whose name member is
-/// `ChunkSound` `0x01`. Volume, tempo, and balance are not needed for playback
-/// wiring and are skipped.
-fn parse_sound_name(data: &[u8]) -> Result<String, LcfError> {
+/// A timing's parsed sound effect: the file `name`, its `0..=100` `volume`,
+/// percent `tempo`, and stereo `balance`, read from the nested `Sound` struct.
+struct SoundFields {
+    name: String,
+    volume: u32,
+    tempo: u32,
+    balance: u32,
+}
+
+/// Parse a timing's sound effect from its nested `Sound` struct
+/// (`ChunkAnimationTiming` chunk `0x02`): a chunk stream sharing the System
+/// `Sound` shape — name `0x01`, volume `0x03`, tempo `0x04`, balance `0x05`.
+/// Omitted fields keep the RM2000 defaults (volume/tempo `100`, balance `50`).
+fn parse_sound(data: &[u8]) -> Result<SoundFields, LcfError> {
     let mut reader = Reader::new(data);
-    let mut name = String::new();
+    let mut sound = SoundFields {
+        name: String::new(),
+        volume: SOUND_DEFAULT_VOLUME,
+        tempo: SOUND_DEFAULT_TEMPO,
+        balance: SOUND_DEFAULT_BALANCE,
+    };
     loop {
         let sub_id = reader.varint()?;
         if sub_id == 0 {
@@ -198,11 +236,15 @@ fn parse_sound_name(data: &[u8]) -> Result<String, LcfError> {
         }
         let sub_size = reader.varint()? as usize;
         let sub_data = reader.take(sub_size)?;
-        if sub_id == SOUND_NAME {
-            name = decode_cp1250(sub_data);
+        match sub_id {
+            SOUND_NAME => sound.name = decode_cp1250(sub_data),
+            SOUND_VOLUME => sound.volume = Reader::new(sub_data).varint()?,
+            SOUND_TEMPO => sound.tempo = Reader::new(sub_data).varint()?,
+            SOUND_BALANCE => sound.balance = Reader::new(sub_data).varint()?,
+            _ => {}
         }
     }
-    Ok(name)
+    Ok(sound)
 }
 
 /// Parse an animation's `timings` list (`ChunkAnimation` chunk `0x06`): a
@@ -220,6 +262,9 @@ fn parse_timings(data: &[u8]) -> Result<Vec<AnimationTiming>, LcfError> {
         let mut timing = AnimationTiming {
             frame: 0,
             se_name: String::new(),
+            se_volume: SOUND_DEFAULT_VOLUME,
+            se_tempo: SOUND_DEFAULT_TEMPO,
+            se_balance: SOUND_DEFAULT_BALANCE,
             flash_scope: 0,
             flash_red: TIMING_DEFAULT_FLASH,
             flash_green: TIMING_DEFAULT_FLASH,
@@ -235,7 +280,13 @@ fn parse_timings(data: &[u8]) -> Result<Vec<AnimationTiming>, LcfError> {
             let sub_data = reader.take(sub_size)?;
             match sub_id {
                 TIMING_FRAME => timing.frame = Reader::new(sub_data).varint()?,
-                TIMING_SE => timing.se_name = parse_sound_name(sub_data)?,
+                TIMING_SE => {
+                    let sound = parse_sound(sub_data)?;
+                    timing.se_name = sound.name;
+                    timing.se_volume = sound.volume;
+                    timing.se_tempo = sound.tempo;
+                    timing.se_balance = sound.balance;
+                }
                 TIMING_FLASH_SCOPE => timing.flash_scope = Reader::new(sub_data).varint()?,
                 TIMING_FLASH_RED => timing.flash_red = Reader::new(sub_data).varint()?,
                 TIMING_FLASH_GREEN => timing.flash_green = Reader::new(sub_data).varint()?,
@@ -318,9 +369,12 @@ mod tests {
         );
         let frames = section(&[element(1, &[subchunk(0x01, &section(&[cell]))])]);
 
-        // A timing at frame 5: plays "Punch" (name-only Sound struct) and flashes
-        // the whole screen (scope 2) with red 28, the other channels defaulting.
+        // A timing at frame 5: plays "Punch" at 80% volume, 120% tempo (balance
+        // omitted → centred 50) and flashes the whole screen (scope 2) with red
+        // 28, the other channels defaulting.
         let mut sound = subchunk(0x01, b"Punch");
+        sound.extend(subchunk(0x03, &varint(80)));
+        sound.extend(subchunk(0x04, &varint(120)));
         sound.extend(varint(0));
         let timing = element(
             1,
@@ -358,6 +412,7 @@ mod tests {
         assert_eq!(
             a.frames[0].cells[0],
             AnimationCell {
+                valid: true,
                 cell_id: 3,
                 x: -24,
                 y: 48,
@@ -375,6 +430,9 @@ mod tests {
             AnimationTiming {
                 frame: 5,
                 se_name: "Punch".to_string(),
+                se_volume: 80,
+                se_tempo: 120,
+                se_balance: 50,
                 flash_scope: 2,
                 flash_red: 28,
                 flash_green: 31,
@@ -401,6 +459,7 @@ mod tests {
         assert_eq!(
             a.frames[0].cells[0],
             AnimationCell {
+                valid: true,
                 cell_id: 0,
                 x: 0,
                 y: 0,
@@ -413,6 +472,24 @@ mod tests {
             }
         );
         assert!(a.timings.is_empty());
+    }
+
+    #[test]
+    fn a_deleted_cell_parses_as_invalid() {
+        // The editor marks a deleted cell with `valid` (0x01) = 0, keeping its
+        // slot so the following cell holds index 1; only the flag distinguishes it.
+        let deleted = element(1, &[subchunk(0x01, &varint(0)), subchunk(0x02, &varint(4))]);
+        let kept = element(2, &[subchunk(0x02, &varint(7))]);
+        let frames = section(&[element(1, &[subchunk(0x01, &section(&[deleted, kept]))])]);
+        let anim = element(1, &[subchunk(0x0C, &frames)]);
+        let ldb = make_ldb(&[(0x13, section(&[anim]))]);
+        let a = &parse_animations(&ldb).unwrap()[0];
+        let cells = &a.frames[0].cells;
+        assert_eq!(cells.len(), 2);
+        assert!(!cells[0].valid);
+        assert_eq!(cells[0].cell_id, 4);
+        assert!(cells[1].valid);
+        assert_eq!(cells[1].cell_id, 7);
     }
 
     #[test]

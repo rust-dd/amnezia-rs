@@ -391,6 +391,7 @@ fn drain_pending_anims(
             anim_id: anim.anim_id,
             targets,
             screen_center: BATTLE_SCREEN_CENTER,
+            global: false,
         });
     }
 }

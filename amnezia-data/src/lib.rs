@@ -471,13 +471,17 @@ pub struct AnimationFrameDef {
 }
 
 /// One placed sprite-sheet tile within an animation frame (see
-/// `lcf::AnimationCell`): `cell_id` selects the tile from the animation's
-/// graphic, `x`/`y` offset it from the anchor in screen pixels, `scale` is a
-/// zoom percent (`100` = full size), the four `tone_*` channels tint it on
-/// RM2000's `0..=200` scale (`100` = neutral), and `transparency` is a
-/// `0..=100` percent (`0` = opaque).
+/// `lcf::AnimationCell`): `valid` is liblcf's per-cell flag (default `true`) — an
+/// editor-deleted cell clears it, keeping its slot so later cells hold their
+/// index, and the renderer skips a `valid == false` cell. `cell_id` selects the
+/// tile from the animation's graphic, `x`/`y` offset it from the anchor in screen
+/// pixels, `scale` is a zoom percent (`100` = full size), the four `tone_*`
+/// channels tint it on RM2000's `0..=200` scale (`100` = neutral), and
+/// `transparency` is a `0..=100` percent (`0` = opaque).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnimationCellDef {
+    #[serde(default = "default_true")]
+    pub valid: bool,
     pub cell_id: u32,
     pub x: i32,
     pub y: i32,
@@ -487,6 +491,14 @@ pub struct AnimationCellDef {
     pub tone_blue: i32,
     pub tone_gray: i32,
     pub transparency: u32,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_audio_level() -> u32 {
+    100
 }
 
 /// A background-music entry (RM2000 `Music`): the track `name` under
@@ -549,14 +561,20 @@ pub struct SystemDef {
 
 /// A frame-timed flash and sound effect on an animation's timeline (see
 /// `lcf::AnimationTiming`): `frame` is the 1-based frame it fires on, `se_name`
-/// the sound-effect file under `audio/Sound/` (empty = silent), `flash_scope`
-/// selects what flashes (`0` nothing, `1` the target, `2` the whole screen),
-/// `flash_red`/`flash_green`/`flash_blue` the flash colour on RM2000's `0..=31`
-/// scale, and `flash_power` its strength.
+/// the sound-effect file under `audio/Sound/` (empty = silent) played at
+/// `se_volume` (`0..=100`) and percent `se_tempo` (`100` = normal),
+/// `flash_scope` selects what flashes (`0` nothing, `1` the target, `2` the whole
+/// screen), `flash_red`/`flash_green`/`flash_blue` the flash colour on RM2000's
+/// `0..=31` scale, and `flash_power` its strength. `se_volume`/`se_tempo` carry a
+/// `serde` default of `100` so timelines written before they existed still load.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnimationTimingDef {
     pub frame: u32,
     pub se_name: String,
+    #[serde(default = "default_audio_level")]
+    pub se_volume: u32,
+    #[serde(default = "default_audio_level")]
+    pub se_tempo: u32,
     pub flash_scope: u32,
     pub flash_red: u32,
     pub flash_green: u32,

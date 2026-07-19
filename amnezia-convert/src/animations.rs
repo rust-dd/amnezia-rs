@@ -34,6 +34,7 @@ pub fn convert_animations(input: &Path, output: &Path) -> Result<usize> {
                         .cells
                         .into_iter()
                         .map(|c| AnimationCellDef {
+                            valid: c.valid,
                             cell_id: c.cell_id,
                             x: c.x,
                             y: c.y,
@@ -53,6 +54,8 @@ pub fn convert_animations(input: &Path, output: &Path) -> Result<usize> {
                 .map(|t| AnimationTimingDef {
                     frame: t.frame,
                     se_name: t.se_name,
+                    se_volume: t.se_volume,
+                    se_tempo: t.se_tempo,
                     flash_scope: t.flash_scope,
                     flash_red: t.flash_red,
                     flash_green: t.flash_green,

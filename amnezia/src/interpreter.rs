@@ -504,20 +504,33 @@ fn run_interpreter(
             SHOW_BATTLE_ANIMATION => {
                 // `params = [anim_id, target_char_ref, wait, global]`. Decode the
                 // id, resolve the char-ref exactly like 10860/11330, and emit the
-                // request; the animation resolver projects the target to a screen
-                // position, so no camera/transform query is needed here. The
-                // wait/global flags are ignored — the animation is fire-and-forget.
-                // A short `params` or an unresolvable target simply no-ops.
-                if let [anim_id, target_ref, ..] = command.params.as_slice()
+                // request (the resolver projects the target to a screen position, so
+                // no camera/transform query is needed here). `global` (params[3])
+                // tiles the animation 3×3 across the screen; `wait` (params[2])
+                // blocks the event for the animation's duration, mirroring EasyRPG
+                // `CommandShowBattleAnimation`. A short `params` or an unresolvable
+                // target simply no-ops (and never waits, matching a NULL character).
+                let global = command.params.get(3).copied().unwrap_or(0) > 0;
+                let wait = if let [anim_id, target_ref, ..] = command.params.as_slice()
                     && *anim_id >= 0
                     && let Some(target) = resolve_anim_target(*target_ref, running.event_id)
                 {
+                    let anim_id = *anim_id as u32;
                     subsystems.visuals.anim_writer.write(ShowMapAnimation {
-                        anim_id: *anim_id as u32,
+                        anim_id,
                         target,
+                        global,
                     });
-                }
+                    let frames = anim_frame_count(&subsystems.visuals.library, anim_id);
+                    battle_anim_wait(&command.params, frames)
+                } else {
+                    None
+                };
                 running.ip += 1;
+                if let Some(secs) = wait {
+                    running.wait = secs;
+                    return;
+                }
             }
             TRANSACTION | INN_STAY => running.select_shop_handler(command.indent, true),
             NO_TRANSACTION | INN_CANCEL => running.select_shop_handler(command.indent, false),

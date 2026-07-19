@@ -4,7 +4,7 @@
 //! small and the bundle definitions out of the dispatch loop.
 
 use super::event_rng::EventRng;
-use crate::animation::ShowMapAnimation;
+use crate::animation::{AnimationLibrary, ShowMapAnimation};
 use crate::appearance::SpriteChange;
 use crate::battle::{BattleActive, BattleRequest, BattleResult};
 use crate::dialogue::{MessagePosition, MessageTransparent};
@@ -141,13 +141,15 @@ pub(super) struct FlowCtx<'w, 's> {
 
 /// The interpreter's character-visual output writers: an actor reskin
 /// ([`SpriteChange`], opcode 10630) and a map battle animation
-/// ([`ShowMapAnimation`], opcode 11210). Bundled into one nested `SystemParam` so
-/// [`SubsystemIo`] — and thus `run_interpreter` — keeps within Bevy's
-/// 16-parameter cap.
+/// ([`ShowMapAnimation`], opcode 11210), plus the [`AnimationLibrary`] the
+/// waiting form of 11210 reads to size its block by the animation's frame count.
+/// Bundled into one nested `SystemParam` so [`SubsystemIo`] — and thus
+/// `run_interpreter` — keeps within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 pub(super) struct CharacterVisuals<'w> {
     pub(super) sprite_writer: MessageWriter<'w, SpriteChange>,
     pub(super) anim_writer: MessageWriter<'w, ShowMapAnimation>,
+    pub(super) library: Res<'w, AnimationLibrary>,
 }
 
 /// The interpreter's merchant channel: the writer that opens the shop/inn screen

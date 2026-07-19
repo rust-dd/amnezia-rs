@@ -3,7 +3,7 @@
 //! game state, and how a `ConditionalBranch` condition is evaluated. Kept free of
 //! Bevy so they unit-test directly against the plain state resources.
 
-use crate::animation::AnimTarget;
+use crate::animation::{AnimTarget, AnimationLibrary};
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party, Switches, Variables};
@@ -80,6 +80,26 @@ pub(super) fn resolve_anim_target(char_ref: i32, this_event: u32) -> Option<Anim
         id if id > 0 => Some(AnimTarget::Event(id as u32)),
         _ => None,
     }
+}
+
+/// The data-frame count of animation `id` in the library, `0` when it is absent
+/// (a bad id no-ops with no wait). Used to size a waiting `ShowBattleAnimation`.
+pub(super) fn anim_frame_count(library: &AnimationLibrary, id: u32) -> usize {
+    library
+        .0
+        .iter()
+        .find(|a| a.id == id)
+        .map_or(0, |a| a.frames.len())
+}
+
+/// The seconds a `ShowBattleAnimation` (11210) blocks its event when the wait flag
+/// (`params[2]`) is set: the animation's `frames` data frames at the fixed 1/30 s
+/// cadence ([`crate::animation::FRAME_SECS`]), mirroring
+/// `Game_Interpreter_Map::CommandShowBattleAnimation` storing the animation's
+/// frame count as `_state.wait_time`. `None` when the flag is clear (fire-and-forget).
+pub(super) fn battle_anim_wait(params: &[i32], frames: usize) -> Option<f32> {
+    (params.get(2).copied().unwrap_or(0) > 0)
+        .then_some(frames as f32 * crate::animation::FRAME_SECS)
 }
 
 /// Resolve an RM2000 change-command value operand, mirroring EasyRPG's
@@ -229,6 +249,23 @@ mod tests {
         assert_eq!(resolve_anim_target(7, 42), Some(AnimTarget::Event(7)));
         assert_eq!(resolve_anim_target(0, 42), None);
         assert_eq!(resolve_anim_target(-3, 42), None);
+    }
+
+    #[test]
+    fn battle_anim_wait_blocks_only_when_the_wait_flag_is_set() {
+        // `params = [anim_id, target, wait, global]`. A clear wait flag never
+        // blocks; a set one blocks for the animation's frame count at 1/30 s.
+        assert_eq!(battle_anim_wait(&[62, 10001, 0, 0], 12), None);
+        assert_eq!(
+            battle_anim_wait(&[62, 10001, 1, 0], 12),
+            Some(12.0 * crate::animation::FRAME_SECS)
+        );
+        // 12 frames at 1/30 s is 0.4 s.
+        assert!((battle_anim_wait(&[62, 10001, 1, 0], 12).unwrap() - 0.4).abs() < 1e-6);
+        // A missing wait param (short list) is treated as no-wait.
+        assert_eq!(battle_anim_wait(&[62, 10001], 12), None);
+        // A set flag with a zero-frame (or absent) animation blocks for zero time.
+        assert_eq!(battle_anim_wait(&[62, 10001, 1, 0], 0), Some(0.0));
     }
 
     #[test]

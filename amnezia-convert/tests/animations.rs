@@ -125,6 +125,7 @@ fn converts_ldb_to_animations_ron() {
             position: 2,
             frames: vec![AnimationFrameDef {
                 cells: vec![AnimationCellDef {
+                    valid: true,
                     cell_id: 3,
                     x: -24,
                     y: 48,
@@ -139,6 +140,8 @@ fn converts_ldb_to_animations_ron() {
             timings: vec![AnimationTimingDef {
                 frame: 5,
                 se_name: "Punch".to_string(),
+                se_volume: 100,
+                se_tempo: 100,
                 flash_scope: 2,
                 flash_red: 28,
                 flash_green: 31,

@@ -7,7 +7,7 @@
 //! in the sibling [`super::hud`] on a higher-order camera above this overlay.
 
 use super::model::{Battle, Dying, MenuLevel, Phase};
-use crate::animation::{BattlerFlash, overlay_layer, overlay_translation};
+use crate::animation::{BattlerFlash, flash_envelope, overlay_layer, overlay_translation};
 use crate::assets::resolve_png;
 use bevy::prelude::*;
 
@@ -55,15 +55,15 @@ pub(super) struct Battler {
     pub(super) height: f32,
 }
 
-/// A running target-flash tint on a battler: `rgb`/`power` the flash colour and
-/// peak strength, decaying back to the base tint over `secs`. Fired by an
-/// animation's own `flash_scope=1` timings.
+/// A running target-flash tint on a battler: `rgb` the flash colour and `power`
+/// the RM2000 flash strength (`0..=31`), its blend amount following the stepped
+/// [`flash_envelope`] from `elapsed` back to the base tint over the
+/// ~11-game-frame window. Fired by an animation's own `flash_scope=1` timings.
 #[derive(Component)]
 struct BattlerTint {
     elapsed: f32,
-    secs: f32,
     rgb: [f32; 3],
-    power: f32,
+    power: u32,
 }
 
 /// A guaranteed per-hit whitening blink on a foe sprite: started for every landed
@@ -172,7 +172,6 @@ fn apply_battler_flash(
         {
             commands.entity(entity).insert(BattlerTint {
                 elapsed: 0.0,
-                secs: flash.secs,
                 rgb: flash.rgb,
                 power: flash.power,
             });
@@ -238,12 +237,12 @@ fn paint_battlers(
         let mut color = match tint {
             Some(mut tint) => {
                 tint.elapsed += dt;
-                if tint.elapsed >= tint.secs {
-                    commands.entity(entity).remove::<BattlerTint>();
-                    base
-                } else {
-                    let amount = tint.power * (1.0 - tint.elapsed / tint.secs);
-                    blend(base, tint.rgb, amount)
+                match flash_envelope(tint.elapsed, tint.power) {
+                    Some(amount) => blend(base, tint.rgb, amount),
+                    None => {
+                        commands.entity(entity).remove::<BattlerTint>();
+                        base
+                    }
                 }
             }
             None => base,
@@ -419,8 +418,7 @@ mod tests {
         app.world_mut().write_message(BattlerFlash {
             pos: base,
             rgb: [1.0, 0.6, 0.3],
-            power: 1.0,
-            secs: 0.2,
+            power: 31,
         });
         app.update();
         assert!(app.world().entity(entity).get::<BattlerTint>().is_some());
@@ -445,8 +443,7 @@ mod tests {
         app.world_mut().write_message(BattlerFlash {
             pos: Vec2::new(0.0, 80.0),
             rgb: [1.0, 1.0, 1.0],
-            power: 1.0,
-            secs: 0.2,
+            power: 31,
         });
         app.update();
         assert!(app.world().entity(entity).get::<BattlerTint>().is_none());
