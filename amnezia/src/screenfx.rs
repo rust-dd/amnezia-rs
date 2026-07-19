@@ -25,7 +25,7 @@ mod shake;
 mod tone;
 
 pub use fade::transition_secs;
-pub use tone::{FrontCamera, PICTURE_LAYER, ScreenTone};
+pub use tone::{FrontCamera, PICTURE_LAYER, ScreenTone, TintState};
 
 /// A screen effect the interpreter emits; consumed by [`step_effects`] (and, for
 /// the tint, by the [`tone`] submodule).
@@ -129,7 +129,7 @@ struct Fx {
 /// scene rather than a particle sim; [`render_weather`] paints it. `Rain`/`Snow`/
 /// `Fog` are only produced by the interpreter's Weather arm, which lands
 /// separately.
-#[derive(Resource, Default, PartialEq, Eq, Clone, Copy)]
+#[derive(Resource, Default, PartialEq, Eq, Clone, Copy, Debug)]
 #[allow(dead_code)]
 pub enum Weather {
     #[default]
@@ -138,6 +138,37 @@ pub enum Weather {
     Snow,
     Fog,
 }
+
+impl Weather {
+    /// The RM2000 weather code (`Weather` 11070, `params[0]`): 0 none, 1 rain,
+    /// 2 snow, 3 fog. The interpreter maps a command through here and the save
+    /// persists the result, so both share one mapping.
+    pub fn from_code(code: i32) -> Self {
+        match code {
+            1 => Weather::Rain,
+            2 => Weather::Snow,
+            3 => Weather::Fog,
+            _ => Weather::None,
+        }
+    }
+
+    /// This weather's RM2000 code, the inverse of [`Self::from_code`], for a save.
+    pub fn code(self) -> i32 {
+        match self {
+            Weather::None => 0,
+            Weather::Rain => 1,
+            Weather::Snow => 2,
+            Weather::Fog => 3,
+        }
+    }
+}
+
+/// The active weather's strength (`Weather` 11070, `params[1]`). RM2000's save
+/// keeps `weather` and `weather_strength` as separate fields; [`weather_color`]
+/// paints a fixed intensity today, so this is tracked so a save/load round-trip
+/// preserves the value the scripts set.
+#[derive(Resource, Default)]
+pub struct WeatherStrength(pub i32);
 
 /// The fullscreen node that carries the weather wash, kept separate from the
 /// [`FxLayer`] overlays so the effect query never touches it.
@@ -151,6 +182,7 @@ impl Plugin for ScreenFxPlugin {
         app.add_message::<ScreenEffect>()
             .init_resource::<Fx>()
             .init_resource::<Weather>()
+            .init_resource::<WeatherStrength>()
             .add_plugins(tone::ScreenTonePlugin)
             .add_systems(Startup, spawn_overlays)
             .add_systems(Update, (step_effects, render_weather))

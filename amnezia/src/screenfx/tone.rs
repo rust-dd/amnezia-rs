@@ -77,9 +77,10 @@ impl FullscreenMaterial for ScreenTone {
 pub struct FrontCamera;
 
 /// The live screen tone: the currently displayed values, the command's target,
-/// and the seconds left to reach it. Values are RM2000 0..200.
+/// and the seconds left to reach it. Values are RM2000 0..200. Public so the save
+/// system can snapshot the current tone and restore it (via [`Self::set_tone`]).
 #[derive(Resource)]
-struct TintState {
+pub struct TintState {
     current: [f32; 4],
     target: [f32; 4],
     secs_left: f32,
@@ -92,6 +93,23 @@ impl Default for TintState {
             target: NEUTRAL,
             secs_left: 0.0,
         }
+    }
+}
+
+impl TintState {
+    /// The currently displayed tone in RM2000 units (R, G, B, saturation; each
+    /// 0..200, 100 neutral) — what a save snapshots.
+    pub fn tone(&self) -> [f32; 4] {
+        self.current
+    }
+
+    /// Restore a settled tone: snap both the displayed value and the target to
+    /// `tone` with no interpolation left, so a loaded tint holds at once.
+    /// `update_tone` repaints the camera's [`ScreenTone`] from it next frame.
+    pub fn set_tone(&mut self, tone: [f32; 4]) {
+        self.current = tone;
+        self.target = tone;
+        self.secs_left = 0.0;
     }
 }
 

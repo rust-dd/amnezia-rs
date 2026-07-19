@@ -16,7 +16,7 @@ use crate::picture::PictureCommand;
 use crate::player::{CameraPan, HeroTransparency, Player};
 use crate::progression::Progression;
 use crate::save::{EventSaveRequest, ResumedFromSave, SaveAccess};
-use crate::screenfx::{ScreenEffect, Weather};
+use crate::screenfx::{ScreenEffect, Weather, WeatherStrength};
 use crate::shop::{ShopOpen, ShopOutcome, ShopRequest};
 use crate::text::HeroName;
 use crate::timer::GameClock;
@@ -99,6 +99,7 @@ pub(super) struct MapFx<'w> {
     pub(super) camera_pan: ResMut<'w, CameraPan>,
     pub(super) hero_transparency: ResMut<'w, HeroTransparency>,
     pub(super) weather: ResMut<'w, Weather>,
+    pub(super) weather_strength: ResMut<'w, WeatherStrength>,
     pub(super) message_position: ResMut<'w, MessagePosition>,
     pub(super) message_transparent: ResMut<'w, MessageTransparent>,
     pub(super) game_clock: ResMut<'w, GameClock>,

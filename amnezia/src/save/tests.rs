@@ -1,0 +1,364 @@
+use super::*;
+
+#[test]
+fn save_game_ron_round_trip() {
+    let game = SaveGame {
+        map_id: 5,
+        x: 12,
+        y: 7,
+        dir: 2,
+        switches: vec![(1, true), (3, false), (10, true)],
+        variables: vec![(2, -4), (5, 100)],
+        party: vec![1, 3],
+        items: vec![(181, 2), (200, 1)],
+        gold: 250,
+        progression: vec![(1, 500), (3, 20)],
+        vitals: vec![(1, (40, 12)), (3, (30, 0))],
+        hero_name: "Kettu".into(),
+        charset: "Poses2".into(),
+        charset_index: 4,
+        tone: (70, 60, 70, 100),
+        weather: 2,
+        weather_strength: 5,
+    };
+    let ron = ron::ser::to_string_pretty(&game, PrettyConfig::default()).unwrap();
+    let decoded: SaveGame = ron::from_str(&ron).unwrap();
+    assert_eq!(game, decoded);
+}
+
+/// A unique temp slot path per test, so file-touching tests never race on a
+/// shared file (cargo runs them in parallel) and never touch the real save.
+fn temp_slot(tag: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("amnezia_{tag}_{}.ron", std::process::id()))
+}
+
+/// A minimal but complete resource set for driving [`save_or_load`] headlessly,
+/// with the save slot pointed at `location` so the real developer save is never
+/// read or written.
+fn save_app(location: PathBuf) -> App {
+    let mut app = App::new();
+    app.add_plugins(MinimalPlugins);
+    app.init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<Dialogue>()
+        .init_resource::<Fade>()
+        .init_resource::<PendingTeleport>()
+        .init_resource::<Switches>()
+        .init_resource::<Variables>()
+        .init_resource::<Party>()
+        .init_resource::<Inventory>()
+        .init_resource::<LoadRequest>()
+        .init_resource::<SaveRequest>()
+        .init_resource::<EventSaveRequest>()
+        .init_resource::<Vitals>()
+        .init_resource::<Progression>()
+        .init_resource::<ResumedFromSave>()
+        .init_resource::<Weather>()
+        .init_resource::<WeatherStrength>()
+        .init_resource::<TintState>();
+    app.insert_resource(SaveLocation(location));
+    app.insert_resource(HeroName("Ron".into()));
+    app.add_systems(Update, save_or_load);
+    app
+}
+
+#[test]
+fn slot_exists_tracks_the_file() {
+    let path = temp_slot("exists");
+    let _ = std::fs::remove_file(&path);
+    assert!(!slot_exists(&path));
+    std::fs::write(&path, "x").unwrap();
+    assert!(slot_exists(&path));
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn resolved_save_path_is_absolute_and_cwd_independent() {
+    // The bug's core: the save path must not depend on the working directory,
+    // so a save written on one launch is found on the next wherever the game
+    // (or the packaged `.app`) was started from.
+    assert!(
+        save_path().is_absolute(),
+        "the save path must be absolute so it is independent of the CWD"
+    );
+    assert!(save_dir().is_absolute());
+}
+
+#[test]
+fn resolve_lets_event_save_and_menu_load_bypass_the_running_gate() {
+    // Gated (a dialogue or a still-running event): the interpreter save (opcode
+    // 11910) and the title's Continue (menu_load) both still fire, but the F5 /
+    // menu save and the F9 dev load are held back.
+    assert_eq!(resolve(true, false, false, false, true), Some(Action::Save));
+    assert_eq!(resolve(false, true, false, false, true), None);
+    assert_eq!(resolve(false, false, true, false, true), Some(Action::Load));
+    assert_eq!(resolve(false, false, false, true, true), None);
+    // Ungated: every request fires; a save wins a tie against a load.
+    assert_eq!(
+        resolve(false, true, false, false, false),
+        Some(Action::Save)
+    );
+    assert_eq!(
+        resolve(false, false, false, true, false),
+        Some(Action::Load)
+    );
+    assert_eq!(
+        resolve(false, false, true, false, false),
+        Some(Action::Load)
+    );
+    assert_eq!(resolve(false, true, false, true, false), Some(Action::Save));
+    assert_eq!(resolve(false, false, false, false, false), None);
+}
+
+#[test]
+fn open_save_menu_saves_while_its_event_is_running() {
+    let path = temp_slot("eventsave");
+    let _ = std::fs::remove_file(&path);
+    let mut app = save_app(path.clone());
+    app.insert_resource(MapData::for_test(20, 15));
+    // An event is mid-run when the save is requested (as `OpenSaveMenu` is).
+    let mut running = RunningEvent::default();
+    running.start(1, Vec::new());
+    assert!(running.active());
+    app.insert_resource(running);
+    app.world_mut().spawn(Player {
+        tile_x: 3,
+        tile_y: 4,
+        dir: 2,
+        frame: 1,
+        charset: "Chara1".into(),
+        index: 0,
+    });
+    // Stand in for the interpreter's OpenSaveMenu (opcode 11910) arm.
+    app.world_mut().resource_mut::<EventSaveRequest>().0 = true;
+    app.update();
+
+    let saved = path.exists();
+    let consumed = !app.world().resource::<EventSaveRequest>().0;
+    let _ = std::fs::remove_file(&path);
+    assert!(
+        saved,
+        "an OpenSaveMenu save must be written even while its event runs"
+    );
+    assert!(
+        consumed,
+        "the event-save request must be consumed once saved"
+    );
+}
+
+#[test]
+fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
+    // A valid save at the map-2 save crystal (16, 6), with a switch set so the
+    // restore is observable.
+    let path = temp_slot("continue");
+    let game = SaveGame {
+        map_id: 2,
+        x: 16,
+        y: 6,
+        dir: 4,
+        switches: vec![(8, true)],
+        variables: vec![(3, 42)],
+        party: vec![1, 3],
+        items: vec![(181, 2)],
+        gold: 250,
+        progression: vec![(1, 500)],
+        vitals: vec![(1, (40, 12))],
+        hero_name: String::new(),
+        charset: String::new(),
+        charset_index: 0,
+        tone: (100, 100, 100, 100),
+        weather: 0,
+        weather_strength: 0,
+    };
+    write_save(&path, &game).unwrap();
+
+    let mut app = save_app(path.clone());
+    // The boot intro autostart is mid-run: `gated` would refuse a plain load.
+    let mut running = RunningEvent::default();
+    running.start(1, Vec::new());
+    assert!(running.active());
+    app.insert_resource(running);
+    app.world_mut().spawn(Player {
+        tile_x: 0,
+        tile_y: 0,
+        dir: 2,
+        frame: 1,
+        charset: "Chara1".into(),
+        index: 0,
+    });
+    // The title's Continue sets this; it must load despite the running event.
+    app.world_mut().resource_mut::<LoadRequest>().0 = true;
+    app.update();
+
+    let world = app.world();
+    assert_eq!(
+        world.resource::<PendingTeleport>().0,
+        Some((2, 16, 6)),
+        "Continue must teleport to the SAVED map/tile, not the start map"
+    );
+    assert!(
+        world.resource::<Switches>().get(8),
+        "restored switches must be applied"
+    );
+    assert_eq!(world.resource::<Variables>().get(3), 42);
+    assert_eq!(world.resource::<Party>().snapshot(), vec![1, 3]);
+    assert!(
+        world.resource::<ResumedFromSave>().0,
+        "a load must mark the session resumed so the boot intro is suppressed"
+    );
+    assert!(
+        !world.resource::<LoadRequest>().0,
+        "the Continue request must be consumed"
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn load_restores_name_charset_and_screen_state() {
+    // A slot that carries a renamed hero, a reskinned costume, a purple twilight
+    // tint, and heavy snow: a Continue must put all four back into their live
+    // resources so the resumed scene looks exactly as it was saved.
+    let path = temp_slot("scene");
+    let game = SaveGame {
+        map_id: 2,
+        x: 16,
+        y: 6,
+        dir: 4,
+        switches: vec![],
+        variables: vec![],
+        party: vec![1],
+        items: vec![],
+        gold: 0,
+        progression: vec![],
+        vitals: vec![],
+        hero_name: "Kettu".into(),
+        charset: "Poses2".into(),
+        charset_index: 4,
+        tone: (70, 60, 70, 100),
+        weather: 2,
+        weather_strength: 8,
+    };
+    write_save(&path, &game).unwrap();
+
+    let mut app = save_app(path.clone());
+    app.insert_resource(RunningEvent::default());
+    let hero = app
+        .world_mut()
+        .spawn(Player {
+            tile_x: 0,
+            tile_y: 0,
+            dir: 2,
+            frame: 1,
+            charset: "Chara1".into(),
+            index: 0,
+        })
+        .id();
+    app.world_mut().resource_mut::<LoadRequest>().0 = true;
+    app.update();
+
+    let world = app.world();
+    assert_eq!(
+        world.resource::<HeroName>().0,
+        "Kettu",
+        "the saved hero name must be restored"
+    );
+    let player = world.entity(hero).get::<Player>().unwrap();
+    assert_eq!(
+        player.charset, "Poses2",
+        "the saved costume must be restored"
+    );
+    assert_eq!(player.index, 4);
+    assert_eq!(
+        *world.resource::<Weather>(),
+        Weather::Snow,
+        "the saved weather type must be restored"
+    );
+    assert_eq!(world.resource::<WeatherStrength>().0, 8);
+    assert_eq!(
+        world.resource::<TintState>().tone().map(|v| v as i32),
+        [70, 60, 70, 100],
+        "the saved screen tone must be restored"
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn old_slot_without_scene_fields_keeps_boot_defaults() {
+    // A pre-#46 slot has no name/charset/tone/weather. Loading it must not blank
+    // the hero name, wipe the costume, or black out the screen — the boot defaults
+    // (and the neutral tone) stay in place while the rest of the state restores.
+    let path = temp_slot("legacy");
+    let legacy = "(map_id:2,x:16,y:6,dir:4,switches:[(8,true)],\
+        variables:[],party:[1],items:[],gold:0,progression:[],vitals:[])";
+    std::fs::write(&path, legacy).unwrap();
+
+    let mut app = save_app(path.clone());
+    app.insert_resource(RunningEvent::default());
+    let hero = app
+        .world_mut()
+        .spawn(Player {
+            tile_x: 0,
+            tile_y: 0,
+            dir: 2,
+            frame: 1,
+            charset: "Chara1".into(),
+            index: 0,
+        })
+        .id();
+    app.world_mut().resource_mut::<LoadRequest>().0 = true;
+    app.update();
+
+    let world = app.world();
+    assert!(
+        world.resource::<Switches>().get(8),
+        "an old slot must still restore its core state"
+    );
+    assert_eq!(
+        world.resource::<HeroName>().0,
+        "Ron",
+        "an old slot must keep the boot hero name, not blank it"
+    );
+    let player = world.entity(hero).get::<Player>().unwrap();
+    assert_eq!(
+        player.charset, "Chara1",
+        "an old slot must keep the costume"
+    );
+    assert_eq!(
+        world.resource::<TintState>().tone().map(|v| v as i32),
+        [100, 100, 100, 100],
+        "an old slot must leave the tone neutral, not black the screen"
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
+    let path = temp_slot("roundtrip");
+    let _ = std::fs::remove_file(&path);
+    let game = SaveGame {
+        map_id: 2,
+        x: 16,
+        y: 6,
+        dir: 2,
+        switches: vec![(8, true)],
+        variables: vec![],
+        party: vec![1],
+        items: vec![],
+        gold: 0,
+        progression: vec![],
+        vitals: vec![],
+        hero_name: String::new(),
+        charset: String::new(),
+        charset_index: 0,
+        tone: (100, 100, 100, 100),
+        weather: 0,
+        weather_strength: 0,
+    };
+    write_save(&path, &game).unwrap();
+    // "Restart": a fresh read at the same resolved path finds and decodes it.
+    assert!(
+        slot_exists(&path),
+        "the written slot must be found on re-read"
+    );
+    assert_eq!(read_save(&path), Some(game));
+    let _ = std::fs::remove_file(&path);
+}

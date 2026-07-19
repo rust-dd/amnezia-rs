@@ -491,12 +491,9 @@ fn run_interpreter(
                 running.ip += 1;
             }
             WEATHER => {
-                *subsystems.mapfx.weather = match command.params.first().copied().unwrap_or(0) {
-                    1 => Weather::Rain,
-                    2 => Weather::Snow,
-                    3 => Weather::Fog,
-                    _ => Weather::None,
-                };
+                *subsystems.mapfx.weather =
+                    Weather::from_code(command.params.first().copied().unwrap_or(0));
+                subsystems.mapfx.weather_strength.0 = command.params.get(1).copied().unwrap_or(0);
                 running.ip += 1;
             }
             PLAYER_TRANSPARENCY => {
