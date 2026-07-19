@@ -10,10 +10,12 @@ use crate::tiles::{self, CHAR_Y_OFFSET};
 use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::prelude::*;
 
+mod autonomy;
 mod movement;
 mod render;
 mod water;
 
+pub use autonomy::AutoMove;
 pub use movement::{Character, MoveQueue, RouteAction, decode_route, walk};
 
 /// Developer start override. `None` uses the faithful LMT start (`start.ron`,
@@ -131,7 +133,12 @@ impl Plugin for WorldPlugin {
             .add_systems(
                 Update,
                 (
-                    (walk::<EventSprite>, update_event_sprites).chain(),
+                    (
+                        autonomy::autonomous_movement,
+                        walk::<EventSprite>,
+                        update_event_sprites,
+                    )
+                        .chain(),
                     water::animate_water,
                     apply_relocate,
                 ),

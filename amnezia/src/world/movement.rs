@@ -14,9 +14,19 @@ use bevy::ecs::component::Mutable;
 use bevy::prelude::*;
 use std::collections::VecDeque;
 
-/// Seconds a character spends tweening across one tile. RM2000 varies this with
-/// the move speed/frequency; a single brisk constant is the first-pass tuning.
+/// Seconds a character spends tweening across one tile at RM2000 move speed 4
+/// (the hero's pace, and every scripted route's). Autonomous event movement
+/// scales this per the event's move speed via [`step_secs_for_speed`].
 const STEP_DURATION: f32 = 0.18;
+
+/// Tween seconds for one tile at RM2000 move `speed` (1 slowest … 6 fastest).
+/// EasyRPG advances a move by `1 << (1 + speed)` per frame, so each speed step
+/// halves the time; anchoring speed 4 at [`STEP_DURATION`] keeps the hero's feel
+/// while scaling the rest by that same power of two (speed 3 = 0.36s, speed 5 =
+/// 0.09s). The speed is clamped to the valid 1–6 range.
+pub(super) fn step_secs_for_speed(speed: u32) -> f32 {
+    STEP_DURATION * 2f32.powi(4 - speed.clamp(1, 6) as i32)
+}
 
 /// The `(dx, dy)` of a diagonal move sub-command (4 upper-right, 5 lower-right,
 /// 6 lower-left, 7 upper-left).
@@ -59,11 +69,23 @@ struct Tween {
 /// interpreter enqueues scripted routes; the player system pushes keyboard
 /// steps. `route` marks a scripted run so the character settles to its standing
 /// frame when the route drains (keyboard idling settles separately).
-#[derive(Component, Default)]
+#[derive(Component)]
 pub struct MoveQueue {
     steps: VecDeque<RouteAction>,
     active: Option<Tween>,
     route: bool,
+    step_secs: f32,
+}
+
+impl Default for MoveQueue {
+    fn default() -> Self {
+        Self {
+            steps: VecDeque::new(),
+            active: None,
+            route: false,
+            step_secs: STEP_DURATION,
+        }
+    }
 }
 
 impl MoveQueue {
@@ -77,6 +99,13 @@ impl MoveQueue {
     /// Queue a single keyboard step (no scripted-settle).
     pub fn push_step(&mut self, action: RouteAction) {
         self.steps.push_back(action);
+    }
+
+    /// Set the per-tile tween duration for the steps that follow (RM2000 move
+    /// speed, via [`step_secs_for_speed`]); the autonomous mover sets this from
+    /// the event's speed before enqueuing its step.
+    pub fn set_step_secs(&mut self, secs: f32) {
+        self.step_secs = secs;
     }
 
     /// Whether a step is tweening or pending; the interpreter waits on this and
@@ -95,11 +124,12 @@ impl MoveQueue {
     /// starting the next tween. Returns the world-space tile-center position to
     /// render at this frame, or `None` when the character is idle.
     fn advance<C: Character>(&mut self, ch: &mut C, data: &MapData, dt: f32) -> Option<Vec2> {
+        let step = self.step_secs;
         loop {
             if let Some(tween) = self.active.as_mut() {
                 tween.elapsed += dt;
-                if tween.elapsed < STEP_DURATION {
-                    return Some(tween.from.lerp(tween.to, tween.elapsed / STEP_DURATION));
+                if tween.elapsed < step {
+                    return Some(tween.from.lerp(tween.to, tween.elapsed / step));
                 }
                 let end = tween.to;
                 self.active = None;
@@ -168,7 +198,7 @@ fn center(data: &MapData, x: i32, y: i32) -> Vec2 {
 }
 
 /// The tile delta for a facing direction.
-fn dir_delta(dir: u32) -> (i32, i32) {
+pub(super) fn dir_delta(dir: u32) -> (i32, i32) {
     match dir {
         DIR_UP => (0, -1),
         DIR_RIGHT => (1, 0),

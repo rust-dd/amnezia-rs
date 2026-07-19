@@ -4,7 +4,7 @@
 //! teleport can despawn the whole scene at once.
 
 use super::water::WaterQuarter;
-use super::{EventSprite, MapScene, MoveQueue};
+use super::{AutoMove, EventSprite, MapScene, MoveQueue};
 use crate::assets::resolve_png;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::tiles::{self, CHAR_Y_OFFSET};
@@ -124,6 +124,12 @@ pub(super) fn spawn_event_npc(
             index: page.graphic_index,
         },
         MoveQueue::default(),
+        AutoMove::new(
+            page.move_type,
+            page.move_frequency,
+            page.move_speed,
+            event.id,
+        ),
         MapScene,
     ));
 }

@@ -172,6 +172,13 @@ pub struct Event {
 /// collision: a `layer == 1` page blocks the player. `direction` is the CharSet
 /// facing row (Up=0, Right=1, Down=2, Left=3; default 2 = down) and `pattern`
 /// the walk frame column (default 1 = the standing middle frame).
+///
+/// `move_type` is the page's autonomous movement (0 stationary, 1 random,
+/// 2 vertical pace, 3 horizontal pace, 4 toward hero, 5 away from hero, 6 custom
+/// route); RM2000 always writes it, so its default only guards a malformed page
+/// (liblcf's default is 1). `move_frequency` (1–8, default 3) sets how often the
+/// event steps and `move_speed` (1–6, default 3) how fast each step moves; both
+/// are omitted from the file when equal to their default.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventPage {
     pub trigger: u32,
@@ -179,6 +186,9 @@ pub struct EventPage {
     pub graphic_index: u32,
     pub direction: u32,
     pub pattern: u32,
+    pub move_type: u32,
+    pub move_frequency: u32,
+    pub move_speed: u32,
     pub layer: u32,
     pub condition: EventCondition,
     pub commands: Vec<EventCommand>,
@@ -277,6 +287,9 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
             graphic_index: 0,
             direction: 2,
             pattern: 1,
+            move_type: 1,
+            move_frequency: 3,
+            move_speed: 3,
             layer: 0,
             condition: EventCondition::default(),
             commands: Vec::new(),
@@ -294,8 +307,11 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
                 0x16 => page.graphic_index = Reader::new(sub_data).varint()?,
                 0x17 => page.direction = Reader::new(sub_data).varint()?,
                 0x18 => page.pattern = Reader::new(sub_data).varint()?,
+                0x1F => page.move_type = Reader::new(sub_data).varint()?,
+                0x20 => page.move_frequency = Reader::new(sub_data).varint()?,
                 0x21 => page.trigger = Reader::new(sub_data).varint()?,
                 0x22 => page.layer = Reader::new(sub_data).varint()?,
+                0x25 => page.move_speed = Reader::new(sub_data).varint()?,
                 0x34 => page.commands = parse_commands(sub_data)?,
                 _ => {}
             }
@@ -567,6 +583,56 @@ mod tests {
         let pages = &map.events[0].pages;
         assert_eq!((pages[0].direction, pages[0].pattern), (3, 1));
         assert_eq!((pages[1].direction, pages[1].pattern), (2, 1));
+    }
+
+    #[test]
+    fn parses_move_fields_and_applies_defaults() {
+        // Page 1 carries explicit move chunks (0x1F type 2, 0x20 freq 6, 0x25
+        // speed 5); page 2 carries none, so move_type defaults to 1 (random) and
+        // frequency/speed to 3 — the RM2000 defaults an omitted chunk stands for.
+        let mut page_a = varint(1);
+        page_a.extend(subchunk(0x1F, &varint(2)));
+        page_a.extend(subchunk(0x20, &varint(6)));
+        page_a.extend(subchunk(0x25, &varint(5)));
+        page_a.push(0);
+        let mut page_b = varint(2);
+        page_b.push(0);
+        let mut pages = varint(2);
+        pages.extend_from_slice(&page_a);
+        pages.extend_from_slice(&page_b);
+        let mut event = varint(7);
+        event.extend(subchunk(0x05, &pages));
+        event.push(0);
+        let mut section = varint(1);
+        section.extend_from_slice(&event);
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[
+                (0x02, varint(2)),
+                (0x03, varint(1)),
+                (0x47, layer_bytes(&[0, 0])),
+                (0x48, layer_bytes(&[0, 0])),
+                (0x51, section),
+            ],
+        );
+        let map = parse_map(&file).unwrap();
+        let pages = &map.events[0].pages;
+        assert_eq!(
+            (
+                pages[0].move_type,
+                pages[0].move_frequency,
+                pages[0].move_speed
+            ),
+            (2, 6, 5)
+        );
+        assert_eq!(
+            (
+                pages[1].move_type,
+                pages[1].move_frequency,
+                pages[1].move_speed
+            ),
+            (1, 3, 3)
+        );
     }
 
     #[test]

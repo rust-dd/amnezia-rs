@@ -33,8 +33,13 @@ pub struct Event {
 
 /// One page of an event: its trigger, graphic, and command list. `direction` is
 /// the CharSet facing row (Up=0, Right=1, Down=2, Left=3) and `pattern` the walk
-/// frame column the NPC stands at. Both carry `serde` defaults (2 = down, 1 =
-/// middle frame) so map RON written before these fields existed still loads.
+/// frame column the NPC stands at. `move_type` selects the page's autonomous
+/// movement (0 stationary, 1 random, 2 vertical pace, 3 horizontal pace, 4 toward
+/// hero, 5 away from hero, 6 custom route), `move_frequency` (1–8) how often it
+/// steps, and `move_speed` (1–6) how fast each step tweens. Every field after the
+/// graphic carries a `serde` default (direction 2 = down, pattern 1 = middle
+/// frame, move_type 0 = stationary, frequency/speed 3) so map RON written before
+/// these fields existed still loads.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventPage {
     pub trigger: u32,
@@ -44,6 +49,12 @@ pub struct EventPage {
     pub direction: u32,
     #[serde(default = "default_pattern")]
     pub pattern: u32,
+    #[serde(default)]
+    pub move_type: u32,
+    #[serde(default = "default_move_frequency")]
+    pub move_frequency: u32,
+    #[serde(default = "default_move_speed")]
+    pub move_speed: u32,
     pub layer: u32,
     pub condition: EventCondition,
     pub commands: Vec<EventCommand>,
@@ -55,6 +66,14 @@ fn default_direction() -> u32 {
 
 fn default_pattern() -> u32 {
     1
+}
+
+fn default_move_frequency() -> u32 {
+    3
+}
+
+fn default_move_speed() -> u32 {
+    3
 }
 
 /// A page's activation condition (see `lcf::EventCondition`).

@@ -47,6 +47,9 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
                         graphic_index: p.graphic_index,
                         direction: p.direction,
                         pattern: p.pattern,
+                        move_type: p.move_type,
+                        move_frequency: p.move_frequency,
+                        move_speed: p.move_speed,
                         layer: p.layer,
                         condition: amnezia_data::EventCondition {
                             flags: p.condition.flags,

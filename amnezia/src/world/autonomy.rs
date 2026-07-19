@@ -1,0 +1,524 @@
+//! Autonomous event movement: the RM2000 `move_type` behaviours (random, the
+//! two pacing cycles, and toward/away the hero) that let NPCs wander on their
+//! own, paced by the page's `move_frequency` and tweened at its `move_speed`.
+//!
+//! Each moving NPC carries an [`AutoMove`] holding its move fields and a
+//! frequency-derived countdown. When the countdown elapses and the NPC is
+//! standing still (and no message/fade/menu/battle/event is holding the map),
+//! [`autonomous_movement`] picks one tile step via [`decide`], updates both the
+//! logical [`MapEvents`] tile and the sprite's [`MoveQueue`] so they stay in
+//! sync, and re-arms the countdown. Scripted routes, the `Move Event` opcode,
+//! and custom routes (`move_type` 6) are handled elsewhere or deferred.
+
+use super::movement::{dir_delta, step_secs_for_speed};
+use super::{EventSprite, MapData, MapEvents, MoveQueue, RouteAction};
+use crate::battle::BattleActive;
+use crate::dialogue::Dialogue;
+use crate::gameover::GameOverActive;
+use crate::interpreter::RunningEvent;
+use crate::menu::MenuOpen;
+use crate::player::Player;
+use crate::shop::ShopOpen;
+use crate::state::{Inventory, Party, Switches, Variables, active_page};
+use crate::teleport::Fade;
+use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
+use crate::title::TitleActive;
+use bevy::ecs::system::SystemParam;
+use bevy::prelude::*;
+
+/// Logical frames per second the RM2000 stop-count delays are measured in.
+const FPS: f32 = 60.0;
+
+/// The resources that pause autonomous movement — the same set that stops the
+/// hero (message, teleport fade, running event, menu, shop, battle, title) plus
+/// game-over. Bundled so [`autonomous_movement`] stays within the system-param
+/// count.
+#[derive(SystemParam)]
+pub(crate) struct MoveGuards<'w> {
+    dialogue: Res<'w, Dialogue>,
+    fade: Res<'w, Fade>,
+    running: Res<'w, RunningEvent>,
+    menu: Res<'w, MenuOpen>,
+    shop: Res<'w, ShopOpen>,
+    battle: Res<'w, BattleActive>,
+    title: Res<'w, TitleActive>,
+    gameover: Res<'w, GameOverActive>,
+}
+
+impl MoveGuards<'_> {
+    /// Whether any pause condition is active, freezing every NPC this frame.
+    fn paused(&self) -> bool {
+        self.dialogue.active
+            || self.fade.busy()
+            || self.running.active()
+            || self.menu.0
+            || self.shop.0
+            || self.battle.0
+            || self.title.0
+            || self.gameover.0
+    }
+}
+
+/// An event's autonomous-movement state: the active page's move fields plus a
+/// countdown to the next step and a per-event RNG. Built by [`AutoMove::new`]
+/// from the page the NPC spawned with.
+#[derive(Component)]
+pub struct AutoMove {
+    move_type: u32,
+    frequency: u32,
+    speed: u32,
+    timer: f32,
+    rng: u32,
+}
+
+impl AutoMove {
+    /// Build from an active page's `move_type`/`move_frequency`/`move_speed`,
+    /// seeding the RNG from the event id (so same-map random movers don't step
+    /// in lockstep) and arming the first step one full frequency delay out.
+    pub fn new(move_type: u32, frequency: u32, speed: u32, event_id: u32) -> Self {
+        Self {
+            move_type,
+            frequency,
+            speed,
+            timer: stop_frames(frequency) as f32 / FPS,
+            rng: event_id.wrapping_mul(2_654_435_761) | 1,
+        }
+    }
+
+    /// Seconds until the next step attempt. A random mover gets RM2000's
+    /// `SetMaxStopCountForRandom` jitter (`* (3..=6) / 5`) so its wandering
+    /// doesn't tick like a metronome; the rest use the flat frequency delay.
+    fn next_delay(&mut self) -> f32 {
+        let base = stop_frames(self.frequency) as f32 / FPS;
+        if self.move_type == 1 {
+            base * (next_rand(&mut self.rng) % 4 + 3) as f32 / 5.0
+        } else {
+            base
+        }
+    }
+}
+
+/// RM2000 stop-count frames between steps for a move `frequency` (1 slowest … 8
+/// fastest): `GetMaxStopCountForStep`, `freq >= 8 ? 0 : 1 << (9 - freq)`. Higher
+/// frequency ⇒ fewer frames ⇒ more frequent steps.
+fn stop_frames(frequency: u32) -> u32 {
+    let f = frequency.clamp(1, 8);
+    if f >= 8 { 0 } else { 1 << (9 - f) }
+}
+
+/// xorshift32 — cheap deterministic per-event randomness, no `rand` dependency.
+fn next_rand(state: &mut u32) -> u32 {
+    let mut x = *state;
+    x ^= x << 13;
+    x ^= x >> 17;
+    x ^= x << 5;
+    *state = x;
+    x
+}
+
+/// The opposite of a facing (Up↔Down, Left↔Right).
+fn reverse(dir: u32) -> u32 {
+    (dir + 2) % 4
+}
+
+/// One event's decided action for a movement tick.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Decision {
+    /// Step one tile in this direction.
+    Step(u32),
+    /// Blocked or turning in place: face this direction without moving.
+    Face(u32),
+    /// Nothing to do (stationary, or no candidate direction).
+    Idle,
+}
+
+/// Decide an event's next action for `move_type`, given its `facing`, its tile
+/// `(ex, ey)`, the player's tile `(px, py)`, a pre-drawn random direction (used
+/// only by the random type), and a `passable` test for a candidate direction.
+#[allow(clippy::too_many_arguments)]
+fn decide(
+    move_type: u32,
+    facing: u32,
+    ex: i32,
+    ey: i32,
+    px: i32,
+    py: i32,
+    rand_dir: u32,
+    passable: impl Fn(u32) -> bool,
+) -> Decision {
+    match move_type {
+        1 => {
+            if passable(rand_dir) {
+                Decision::Step(rand_dir)
+            } else {
+                Decision::Face(rand_dir)
+            }
+        }
+        2 => cycle(facing, DIR_DOWN, passable),
+        3 => cycle(facing, DIR_RIGHT, passable),
+        4 => seek(&toward_candidates(px - ex, py - ey), passable),
+        5 => seek(&away_candidates(px - ex, py - ey), passable),
+        _ => Decision::Idle,
+    }
+}
+
+/// Pace along `default_dir`↔its reverse: keep going the way the event faces, and
+/// on a block reverse — turning even when boxed in. Mirrors `MoveTypeCycle`.
+fn cycle(facing: u32, default_dir: u32, passable: impl Fn(u32) -> bool) -> Decision {
+    let primary = if facing == reverse(default_dir) {
+        reverse(default_dir)
+    } else {
+        default_dir
+    };
+    if passable(primary) {
+        return Decision::Step(primary);
+    }
+    let back = reverse(primary);
+    if passable(back) {
+        Decision::Step(back)
+    } else {
+        Decision::Face(back)
+    }
+}
+
+/// Step the first passable candidate; if none is passable, face the preferred
+/// one and idle. Shared by the toward/away movers.
+fn seek(candidates: &[u32], passable: impl Fn(u32) -> bool) -> Decision {
+    for &dir in candidates {
+        if passable(dir) {
+            return Decision::Step(dir);
+        }
+    }
+    match candidates.first() {
+        Some(&dir) => Decision::Face(dir),
+        None => Decision::Idle,
+    }
+}
+
+/// Directions stepping toward `(dx, dy)` = player minus event, dominant axis
+/// first, skipping an axis the event is already aligned on. Mirrors EasyRPG's
+/// `GetDirectionToCharacter`, whose ties favour the vertical axis.
+fn toward_candidates(dx: i32, dy: i32) -> Vec<u32> {
+    use std::cmp::Ordering::{Equal, Greater, Less};
+    let horiz = match dx.cmp(&0) {
+        Greater => Some(DIR_RIGHT),
+        Less => Some(DIR_LEFT),
+        Equal => None,
+    };
+    let vert = match dy.cmp(&0) {
+        Greater => Some(DIR_DOWN),
+        Less => Some(DIR_UP),
+        Equal => None,
+    };
+    let (first, second) = if dx.abs() > dy.abs() {
+        (horiz, vert)
+    } else {
+        (vert, horiz)
+    };
+    first.into_iter().chain(second).collect()
+}
+
+/// Directions stepping away from the player: the reverse of each toward
+/// direction, in the same dominant-axis order.
+fn away_candidates(dx: i32, dy: i32) -> Vec<u32> {
+    toward_candidates(dx, dy).into_iter().map(reverse).collect()
+}
+
+/// Whether an event other than `self_id` occupies `(x, y)` with a solid
+/// (same-layer) active page — the hero's own collision rule, so a routed NPC
+/// can't step onto another solid event.
+#[allow(clippy::too_many_arguments)]
+fn event_solid_at(
+    map_events: &MapEvents,
+    switches: &Switches,
+    variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
+    self_id: u32,
+    x: i32,
+    y: i32,
+) -> bool {
+    map_events.events.iter().any(|e| {
+        e.id != self_id
+            && e.x as i32 == x
+            && e.y as i32 == y
+            && active_page(e, switches, variables, party, inventory).is_some_and(|p| p.layer == 1)
+    })
+}
+
+/// Drive every NPC's autonomous movement: on its frequency countdown, and only
+/// while standing still and unblocked by a message/fade/menu/battle/event, pick
+/// one passable tile step for its `move_type`, keep the logical [`MapEvents`]
+/// tile in step with the sprite's [`MoveQueue`], face the move, and re-arm.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn autonomous_movement(
+    time: Res<Time>,
+    data: Res<MapData>,
+    mut map_events: ResMut<MapEvents>,
+    switches: Res<Switches>,
+    variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
+    guards: MoveGuards,
+    players: Query<&Player>,
+    mut movers: Query<(&mut EventSprite, &mut MoveQueue, &mut AutoMove)>,
+) {
+    if guards.paused() {
+        return;
+    }
+    let Ok(player) = players.single() else {
+        return;
+    };
+    let (px, py) = (player.tile_x, player.tile_y);
+    let dt = time.delta_secs();
+    for (mut sprite, mut queue, mut auto) in &mut movers {
+        // Stationary (0) and custom-route (6) events never move here; a busy
+        // queue means the previous step is still tweening, and — like EasyRPG's
+        // stop_count — the delay only counts down while the NPC stands still.
+        if auto.move_type == 0 || auto.move_type == 6 || queue.busy() {
+            continue;
+        }
+        auto.timer -= dt;
+        if auto.timer > 0.0 {
+            continue;
+        }
+
+        let (ex, ey) = (sprite.tile_x, sprite.tile_y);
+        let self_id = sprite.id;
+        let rand_dir = next_rand(&mut auto.rng) % 4;
+        let decision = {
+            let passable = |dir: u32| {
+                let (dx, dy) = dir_delta(dir);
+                let (nx, ny) = (ex + dx, ey + dy);
+                nx >= 0
+                    && ny >= 0
+                    && nx < data.width
+                    && ny < data.height
+                    && data.passable(nx, ny)
+                    && !(nx == px && ny == py)
+                    && !event_solid_at(
+                        &map_events,
+                        &switches,
+                        &variables,
+                        &party,
+                        &inventory,
+                        self_id,
+                        nx,
+                        ny,
+                    )
+            };
+            decide(
+                auto.move_type,
+                sprite.dir,
+                ex,
+                ey,
+                px,
+                py,
+                rand_dir,
+                passable,
+            )
+        };
+
+        match decision {
+            Decision::Step(dir) => {
+                let (dx, dy) = dir_delta(dir);
+                let (nx, ny) = (ex + dx, ey + dy);
+                if let Some(event) = map_events.events.iter_mut().find(|e| e.id == self_id) {
+                    event.x = nx as u32;
+                    event.y = ny as u32;
+                }
+                sprite.dir = dir;
+                queue.set_step_secs(step_secs_for_speed(auto.speed));
+                queue.enqueue_route([RouteAction::Step { dx, dy, face: dir }]);
+            }
+            Decision::Face(dir) => sprite.dir = dir,
+            Decision::Idle => {}
+        }
+        auto.timer = auto.next_delay();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use amnezia_data::Event;
+
+    /// A passability closure that blocks the listed directions and allows the rest.
+    fn block(blocked: &'static [u32]) -> impl Fn(u32) -> bool {
+        move |dir| !blocked.contains(&dir)
+    }
+
+    #[test]
+    fn frequency_gates_the_step_cadence() {
+        // Higher frequency ⇒ shorter delay ⇒ more frequent steps.
+        assert!(stop_frames(1) > stop_frames(3));
+        assert!(stop_frames(3) > stop_frames(6));
+        assert_eq!(stop_frames(3), 64); // 1 << (9 - 3)
+        assert_eq!(stop_frames(8), 0); // fastest: no wait
+        // Out-of-range frequencies clamp into 1..=8 rather than overflow-shifting.
+        assert_eq!(stop_frames(0), stop_frames(1));
+        assert_eq!(stop_frames(99), stop_frames(8));
+    }
+
+    #[test]
+    fn speed_scales_the_tween_by_powers_of_two() {
+        // Each slower speed doubles the per-tile time; speed 4 is the hero anchor.
+        assert!(step_secs_for_speed(3) > step_secs_for_speed(4));
+        assert!((step_secs_for_speed(4) / step_secs_for_speed(5) - 2.0).abs() < 1e-6);
+        assert_eq!(step_secs_for_speed(0), step_secs_for_speed(1)); // clamps low
+        assert_eq!(step_secs_for_speed(9), step_secs_for_speed(6)); // clamps high
+    }
+
+    #[test]
+    fn random_mover_steps_when_open_and_turns_when_blocked() {
+        // move_type 1 takes the pre-drawn direction: steps it when passable,
+        // otherwise just turns to face it (the RM2000 turn/idle fallback).
+        assert_eq!(
+            decide(1, DIR_DOWN, 2, 2, 9, 9, DIR_RIGHT, block(&[])),
+            Decision::Step(DIR_RIGHT)
+        );
+        assert_eq!(
+            decide(1, DIR_DOWN, 2, 2, 9, 9, DIR_UP, block(&[DIR_UP])),
+            Decision::Face(DIR_UP)
+        );
+    }
+
+    #[test]
+    fn pace_mover_reverses_at_a_block() {
+        // Vertical pacer facing Down with Down blocked reverses and steps Up.
+        assert_eq!(
+            decide(2, DIR_DOWN, 2, 2, 2, 2, 0, block(&[DIR_DOWN])),
+            Decision::Step(DIR_UP)
+        );
+        // Boxed in on both ends: it still reverses its facing (to Up), no step.
+        assert_eq!(
+            decide(2, DIR_DOWN, 2, 2, 2, 2, 0, block(&[DIR_DOWN, DIR_UP])),
+            Decision::Face(DIR_UP)
+        );
+        // Horizontal pacer keeps its reverse heading when already facing Left.
+        assert_eq!(
+            decide(3, DIR_LEFT, 2, 2, 2, 2, 0, block(&[])),
+            Decision::Step(DIR_LEFT)
+        );
+    }
+
+    #[test]
+    fn toward_mover_steps_closer_and_away_mover_steps_off() {
+        // Player three tiles to the right: toward steps Right (closer), away Left.
+        assert_eq!(
+            decide(4, DIR_DOWN, 2, 2, 5, 2, 0, block(&[])),
+            Decision::Step(DIR_RIGHT)
+        );
+        assert_eq!(
+            decide(5, DIR_DOWN, 2, 2, 5, 2, 0, block(&[])),
+            Decision::Step(DIR_LEFT)
+        );
+        // Diagonal: the dominant axis (vertical here, since |dy| >= |dx|) wins.
+        assert_eq!(toward_candidates(1, 3), vec![DIR_DOWN, DIR_RIGHT]);
+        assert_eq!(away_candidates(1, 3), vec![DIR_UP, DIR_LEFT]);
+    }
+
+    #[test]
+    fn passability_blocks_a_step_no_wall_walking() {
+        // Toward the player but every neighbour blocked: it faces, never steps.
+        let d = decide(
+            4,
+            DIR_DOWN,
+            2,
+            2,
+            5,
+            2,
+            0,
+            block(&[DIR_UP, DIR_DOWN, DIR_LEFT, DIR_RIGHT]),
+        );
+        assert!(matches!(d, Decision::Face(_)));
+        assert!(!matches!(d, Decision::Step(_)));
+    }
+
+    fn app_with_mover(move_type: u32, timer: f32) -> App {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.insert_resource(MapData::for_test(10, 10));
+        app.insert_resource(MapEvents {
+            events: vec![Event {
+                id: 1,
+                x: 2,
+                y: 2,
+                name: String::new(),
+                pages: Vec::new(),
+            }],
+        });
+        app.init_resource::<Switches>();
+        app.init_resource::<Variables>();
+        app.init_resource::<Party>();
+        app.init_resource::<Inventory>();
+        app.init_resource::<Dialogue>();
+        app.init_resource::<Fade>();
+        app.init_resource::<MenuOpen>();
+        app.init_resource::<ShopOpen>();
+        app.init_resource::<BattleActive>();
+        app.init_resource::<GameOverActive>();
+        app.init_resource::<RunningEvent>();
+        app.insert_resource(TitleActive(false));
+        app.add_systems(Update, autonomous_movement);
+        app.world_mut().spawn(Player {
+            tile_x: 5,
+            tile_y: 2,
+            dir: DIR_DOWN,
+            frame: 1,
+            charset: "C".into(),
+            index: 0,
+        });
+        app.world_mut().spawn((
+            EventSprite {
+                id: 1,
+                tile_x: 2,
+                tile_y: 2,
+                dir: DIR_DOWN,
+                frame: 1,
+                charset: "C".into(),
+                index: 0,
+            },
+            MoveQueue::default(),
+            AutoMove {
+                move_type,
+                frequency: 3,
+                speed: 3,
+                timer,
+                rng: 1,
+            },
+        ));
+        app
+    }
+
+    fn event_tile(app: &App) -> (u32, u32) {
+        let ev = &app.world().resource::<MapEvents>().events[0];
+        (ev.x, ev.y)
+    }
+
+    #[test]
+    fn ready_toward_mover_updates_logical_tile_and_queues_the_step() {
+        // A toward-hero mover whose timer is already up steps Right toward the
+        // player at (5,2): the logical MapEvents tile advances to (3,2), the
+        // sprite faces Right, and its queue holds the tween.
+        let mut app = app_with_mover(4, 0.0);
+        app.update();
+        assert_eq!(event_tile(&app), (3, 2));
+        let world = app.world_mut();
+        let mut q = world.query::<(&EventSprite, &MoveQueue)>();
+        let (sprite, queue) = q.single(world).unwrap();
+        assert_eq!(sprite.dir, DIR_RIGHT);
+        assert!(queue.busy());
+    }
+
+    #[test]
+    fn mover_with_time_remaining_stays_put() {
+        // The same mover, but a long countdown gates it: no step this frame.
+        let mut app = app_with_mover(4, 100.0);
+        app.update();
+        assert_eq!(event_tile(&app), (2, 2));
+        let world = app.world_mut();
+        let mut q = world.query::<&MoveQueue>();
+        assert!(!q.single(world).unwrap().busy());
+    }
+}
