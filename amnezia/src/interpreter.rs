@@ -34,7 +34,7 @@ mod present;
 use commands::*;
 use flow::*;
 use opcodes::*;
-use params::{Blockers, SubsystemIo};
+use params::{Blockers, IntroGuard, SubsystemIo};
 use present::{Present, parse_present};
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
@@ -889,6 +889,7 @@ fn autorun(
     battle: Res<BattleActive>,
     title: Res<TitleActive>,
     gameover: Res<GameOverActive>,
+    intro_guard: IntroGuard,
     mut running: ResMut<RunningEvent>,
 ) {
     if running.active()
@@ -900,6 +901,12 @@ fn autorun(
         || title.0
         || gameover.0
     {
+        return;
+    }
+    // After a Continue, never let the start map's unconditional New Game intro
+    // replay: a resume that resolved onto the start map (a stale slot, or a race)
+    // would otherwise re-run the opening and teleport the player to the beginning.
+    if intro_guard.suppresses_start_intro() {
         return;
     }
     for event in &map_events.events {
