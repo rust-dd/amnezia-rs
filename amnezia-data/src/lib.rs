@@ -139,6 +139,15 @@ pub struct Hero {
     pub name: String,
 }
 
+/// One entry in an actor's skill-learning list: the `level` at which the actor
+/// learns skill `skill_id`. A member's known skills are every `Learning` whose
+/// `level` is at or below its current level (RM2000 `Game_Actor::LearnLevelSkills`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Learning {
+    pub level: u32,
+    pub skill_id: u32,
+}
+
 /// Per-level stat curves for a playable actor (level L is index L-1; length == max_level).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorCurves {
@@ -165,6 +174,10 @@ pub struct ActorCurves {
 /// `face_name` names the actor's FaceSet graphic and `face_index` selects its
 /// 48×48 portrait cell in that sheet's 4×4 grid (`col = index % 4`,
 /// `row = index / 4`); the menu status window draws it beside the member's stats.
+///
+/// `learnings` is the actor's skill-learning list — the `(level, skill_id)` pairs
+/// it learns as it levels up. A member's known skills (shown in the skill menu and
+/// usable in battle) are exactly those learnings at or below its current level.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorDef {
     pub id: u32,
@@ -176,6 +189,8 @@ pub struct ActorDef {
     pub sp: u32,
     #[serde(default)]
     pub curves: ActorCurves,
+    #[serde(default)]
+    pub learnings: Vec<Learning>,
     #[serde(default)]
     pub exp_base: u32,
     #[serde(default)]

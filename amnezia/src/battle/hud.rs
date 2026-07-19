@@ -117,7 +117,7 @@ fn compose_command(battle: &Battle, data: &GameData, inventory: &Inventory) -> S
     let rows: Vec<String> = match battle.menu {
         MenuLevel::Command => COMMAND_LABELS.iter().map(|s| s.to_string()).collect(),
         MenuLevel::Skill => or_empty(
-            skill_choices(data, actor.sp)
+            skill_choices(data, &actor.known_skills, actor.sp)
                 .into_iter()
                 .map(|(_, _, label)| label)
                 .collect(),

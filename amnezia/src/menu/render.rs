@@ -133,7 +133,8 @@ pub(super) fn content(
             cursor_line: None,
         },
         MenuScreen::SkillList { member, cursor } => {
-            let (text, cursor_line) = skills::compose_list(member, cursor, data, party);
+            let (text, cursor_line) =
+                skills::compose_list(member, cursor, data, party, progression);
             ContentView { text, cursor_line }
         }
         MenuScreen::SkillTarget {

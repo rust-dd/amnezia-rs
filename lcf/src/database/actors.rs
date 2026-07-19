@@ -8,6 +8,15 @@
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
 
+/// One entry in an actor's skill-learning list (liblcf `rpg::Learning`): the
+/// `level` at which the actor learns skill `skill_id`. The actor knows every
+/// skill whose `level` is at or below its current level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Learning {
+    pub level: u32,
+    pub skill_id: u32,
+}
+
 /// The six per-level stat curves an actor grows along. Each vector holds one
 /// entry per level with length `max_level`; the value for level `L` sits at
 /// index `L - 1`. The order mirrors the RM2000 `Parameters` blob: max HP, max
@@ -36,7 +45,8 @@ pub struct StatCurves {
 /// animation id used when the actor attacks with no weapon.
 ///
 /// `face_name` names the actor's FaceSet graphic and `face_index` selects its
-/// 48×48 portrait cell within that sheet's 4×4 grid.
+/// 48×48 portrait cell within that sheet's 4×4 grid. `skills` is the actor's
+/// `Learning` list: the `(level, skill_id)` pairs it learns as it levels up.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Actor {
     pub id: u32,
@@ -49,6 +59,7 @@ pub struct Actor {
     pub initial_hp: u32,
     pub initial_sp: u32,
     pub stat_curves: StatCurves,
+    pub skills: Vec<Learning>,
     pub exp_base: u32,
     pub exp_inflation: u32,
     pub exp_correction: u32,
@@ -72,6 +83,9 @@ const ACTOR_FACE_INDEX: u32 = 0x10;
 const ACTOR_TWO_WEAPON: u32 = 0x15;
 const ACTOR_LOCK_EQUIPMENT: u32 = 0x16;
 const ACTOR_PARAMETERS: u32 = 0x1F;
+const ACTOR_SKILLS: u32 = 0x3F;
+const LEARNING_LEVEL: u32 = 0x01;
+const LEARNING_SKILL_ID: u32 = 0x02;
 const ACTOR_EXP_BASE: u32 = 0x29;
 const ACTOR_EXP_INFLATION: u32 = 0x2A;
 const ACTOR_EXP_CORRECTION: u32 = 0x2B;
@@ -137,12 +151,49 @@ fn read_equipment(data: &[u8]) -> [u32; EQUIPMENT_SLOTS] {
     slots
 }
 
+/// Parse an actor's `skills` list (`0x3F`), the array of `rpg::Learning` entries
+/// that says which skill the actor learns at which level. Same nested
+/// struct-list shape as elsewhere in the LCF: a `[count]` header then, per entry,
+/// a 1-based index id and a chunk stream (level `0x01`, skill_id `0x02`). An entry
+/// whose skill id stays 0 (chunk omitted) is dropped, matching RM2000 ignoring a
+/// blank learning row.
+fn parse_learnings(data: &[u8]) -> Result<Vec<Learning>, LcfError> {
+    let mut reader = Reader::new(data);
+    let count = reader.varint()?;
+    let mut learnings = Vec::with_capacity(count as usize);
+    for _ in 0..count {
+        let _entry_id = reader.varint()?;
+        let mut learning = Learning {
+            level: 1,
+            skill_id: 0,
+        };
+        loop {
+            let sub_id = reader.varint()?;
+            if sub_id == 0 {
+                break;
+            }
+            let sub_size = reader.varint()? as usize;
+            let sub_data = reader.take(sub_size)?;
+            match sub_id {
+                LEARNING_LEVEL => learning.level = Reader::new(sub_data).varint()?,
+                LEARNING_SKILL_ID => learning.skill_id = Reader::new(sub_data).varint()?,
+                _ => {}
+            }
+        }
+        if learning.skill_id != 0 {
+            learnings.push(learning);
+        }
+    }
+    Ok(learnings)
+}
+
 /// Parse the actor table (`ChunkData::actors` = `0x0B`) out of an LDB byte
 /// slice. Chunk ids (liblcf `ChunkActor`): name `0x01`, title `0x02`,
 /// face_name `0x0F`, face_index `0x10`, initial_level `0x07`, final_level
-/// `0x08`, two_weapon `0x15`, lock_equipment `0x16`, parameters `0x1F`, exp_base
-/// `0x29`, exp_inflation `0x2A`, exp_correction `0x2B`, initial_equipment `0x33`
-/// (five Int16 item ids), unarmed_animation `0x38`.
+/// `0x08`, two_weapon `0x15`, lock_equipment `0x16`, parameters `0x1F`, skills
+/// `0x3F` (the `rpg::Learning` list), exp_base `0x29`, exp_inflation `0x2A`,
+/// exp_correction `0x2B`, initial_equipment `0x33` (five Int16 item ids),
+/// unarmed_animation `0x38`.
 pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
     let section = find_section(bytes, ACTOR_SECTION, LcfError::MissingActors)?;
     let mut reader = Reader::new(section);
@@ -157,6 +208,7 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
         let mut initial_level = ACTOR_DEFAULT_LEVEL;
         let mut final_level: Option<u32> = None;
         let mut parameters: &[u8] = &[];
+        let mut skills = Vec::new();
         let mut exp_base = ACTOR_DEFAULT_EXP_BASE;
         let mut exp_inflation = ACTOR_DEFAULT_EXP_INFLATION;
         let mut exp_correction = ACTOR_DEFAULT_EXP_CORRECTION;
@@ -181,6 +233,7 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
                 ACTOR_TWO_WEAPON => two_weapons = Reader::new(sub_data).varint()? != 0,
                 ACTOR_LOCK_EQUIPMENT => fix_equipment = Reader::new(sub_data).varint()? != 0,
                 ACTOR_PARAMETERS => parameters = sub_data,
+                ACTOR_SKILLS => skills = parse_learnings(sub_data)?,
                 ACTOR_EXP_BASE => exp_base = Reader::new(sub_data).varint()?,
                 ACTOR_EXP_INFLATION => exp_inflation = Reader::new(sub_data).varint()?,
                 ACTOR_EXP_CORRECTION => exp_correction = Reader::new(sub_data).varint()?,
@@ -210,6 +263,7 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
             initial_hp,
             initial_sp,
             stat_curves,
+            skills,
             exp_base,
             exp_inflation,
             exp_correction,
@@ -229,7 +283,57 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
 #[cfg(test)]
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk, varint};
-    use crate::{LcfError, StatCurves, parse_actors};
+    use crate::{LcfError, Learning, StatCurves, parse_actors};
+
+    /// Build a `skills` chunk (`0x3F`): a `[count]` header then per learning a
+    /// 1-based index and its `level` (`0x01`) / `skill_id` (`0x02`) sub-chunks.
+    fn learnings(entries: &[(u32, u32)]) -> Vec<u8> {
+        let mut out = varint(entries.len() as u32);
+        for (i, &(level, skill_id)) in entries.iter().enumerate() {
+            out.extend_from_slice(&element(
+                i as u32 + 1,
+                &[
+                    subchunk(0x01, &varint(level)),
+                    subchunk(0x02, &varint(skill_id)),
+                ],
+            ));
+        }
+        out
+    }
+
+    #[test]
+    fn parses_skill_learning_list() {
+        let hero = element(1, &[subchunk(0x3F, &learnings(&[(1, 5), (3, 8), (7, 12)]))]);
+        let ldb = make_ldb(&[(0x0B, section(&[hero]))]);
+        let actor = &parse_actors(&ldb).unwrap()[0];
+        assert_eq!(
+            actor.skills,
+            vec![
+                Learning {
+                    level: 1,
+                    skill_id: 5
+                },
+                Learning {
+                    level: 3,
+                    skill_id: 8
+                },
+                Learning {
+                    level: 7,
+                    skill_id: 12
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn skill_learning_list_defaults_empty_and_drops_blank_rows() {
+        // An entry with no skill_id chunk (skill 0) is a blank row RM2000 ignores.
+        let hero = element(2, &[subchunk(0x3F, &learnings(&[(4, 0)]))]);
+        let ldb = make_ldb(&[(0x0B, section(&[hero, element(3, &[])]))]);
+        let actors = parse_actors(&ldb).unwrap();
+        assert!(actors[0].skills.is_empty(), "blank learning row dropped");
+        assert!(actors[1].skills.is_empty(), "omitted list defaults empty");
+    }
 
     /// Build a `Parameters` chunk (`0x1F`) by concatenating the six Int16 stat
     /// curves (max HP, max SP, attack, defense, spirit, agility) as little-endian

@@ -17,8 +17,8 @@ mod map_tree;
 
 pub use database::{
     Actor, Animation, AnimationCell, AnimationFrame, AnimationTiming, Attribute, Chipset,
-    CommonEvent, EnemyAction, Item, Monster, Music, Skill, Sound, StatCurves, State, System, Troop,
-    TroopMember, parse_actors, parse_animations, parse_attributes, parse_chipsets,
+    CommonEvent, EnemyAction, Item, Learning, Monster, Music, Skill, Sound, StatCurves, State,
+    System, Troop, TroopMember, parse_actors, parse_animations, parse_attributes, parse_chipsets,
     parse_common_events, parse_items, parse_monsters, parse_skills, parse_states, parse_system,
     parse_troops,
 };

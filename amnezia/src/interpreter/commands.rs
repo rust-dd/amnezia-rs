@@ -96,14 +96,16 @@ pub(super) fn apply_change_items(inventory: &mut Inventory, params: &[i32]) {
 }
 
 /// Apply a `ChangePartyMembers` command `[op, operand_type, actor_id]`: op 0
-/// adds the actor to the party, 1 removes.
-pub(super) fn apply_change_party(party: &mut Party, params: &[i32]) {
+/// adds the actor to the party, 1 removes. Adding mirrors RM2000
+/// `Game_Party::AddActor`: an id with no actor behind it is ignored, and the
+/// party itself caps the roster at four (see [`Party::add`]).
+pub(super) fn apply_change_party(party: &mut Party, data: &GameData, params: &[i32]) {
     let [op, _, actor_id, ..] = params else {
         return;
     };
     let actor_id = *actor_id as u32;
     match op {
-        0 => party.add(actor_id),
+        0 if data.actor(actor_id).is_some() => party.add(actor_id),
         1 => party.remove(actor_id),
         _ => {}
     }
@@ -340,11 +342,21 @@ mod tests {
 
     #[test]
     fn change_party_adds_and_removes() {
+        let mut actor2 = level_def();
+        actor2.id = 2;
+        let data = GameData {
+            actors: vec![level_def(), actor2],
+            items: vec![],
+            skills: vec![],
+        };
         let mut party = Party::default();
-        apply_change_party(&mut party, &[0, 0, 2]);
+        apply_change_party(&mut party, &data, &[0, 0, 2]);
         assert!(party.has(2));
-        apply_change_party(&mut party, &[1, 0, 2]);
+        apply_change_party(&mut party, &data, &[1, 0, 2]);
         assert!(!party.has(2));
+        // An actor with no database entry is ignored (RM2000 AddActor).
+        apply_change_party(&mut party, &data, &[0, 0, 99]);
+        assert!(!party.has(99), "unknown actor id refused");
     }
 
     #[test]
@@ -433,6 +445,7 @@ mod tests {
             hp: 30,
             sp: 10,
             curves: amnezia_data::ActorCurves::default(),
+            learnings: Vec::new(),
             exp_base: 30,
             exp_inflation: 30,
             exp_correction: 0,

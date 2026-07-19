@@ -1,8 +1,8 @@
 //! The Skill command: a chosen party member's known skills with their SP costs,
-//! and — for field-usable recovery skills — applying one to a chosen ally. The
-//! game's data model carries no per-actor skill learning, so the list is the whole
-//! skill database (see the module note in `menu`); the caster member still matters
-//! because casting spends *their* SP.
+//! and — for field-usable recovery skills — applying one to a chosen ally. A
+//! member knows the skills its actor `learnings` grant at or below its current
+//! level (see [`Progression::known_skill_ids`]); the list is those, not the whole
+//! database, and the caster member matters because casting spends *their* SP.
 //!
 //! A skill counts as field-usable here when it is a normal (`skill_type` 0)
 //! HP-recovery skill that targets an ally (`scope` 3 one ally, 4 all allies) with
@@ -34,9 +34,34 @@ pub(super) fn field_usable(skill: &SkillDef) -> bool {
         && skill.power > 0
 }
 
-/// The skill under `cursor` in the database order the list shows.
-pub(super) fn skill_at(cursor: usize, data: &GameData) -> Option<&SkillDef> {
-    data.skills.get(cursor)
+/// The `member`'s known skills in database (id) order: the skill defs whose ids
+/// the member has learned by its current level (see
+/// [`Progression::known_skill_ids`]). Both the list the menu draws and the cursor
+/// it moves index into this, not the whole skill database.
+pub(super) fn known_skills<'a>(
+    member: usize,
+    data: &'a GameData,
+    party: &Party,
+    progression: &Progression,
+) -> Vec<&'a SkillDef> {
+    let Some(def) = party.snapshot().get(member).and_then(|&id| data.actor(id)) else {
+        return Vec::new();
+    };
+    let ids = progression.known_skill_ids(def);
+    data.skills.iter().filter(|s| ids.contains(&s.id)).collect()
+}
+
+/// The skill under `cursor` in the `member`'s known-skill list.
+pub(super) fn skill_at<'a>(
+    member: usize,
+    cursor: usize,
+    data: &'a GameData,
+    party: &Party,
+    progression: &Progression,
+) -> Option<&'a SkillDef> {
+    known_skills(member, data, party, progression)
+        .into_iter()
+        .nth(cursor)
 }
 
 /// Apply a field-usable skill cast by `caster` on `target`: spend the caster's SP
@@ -104,6 +129,7 @@ pub(super) fn compose_list(
     cursor: usize,
     data: &GameData,
     party: &Party,
+    progression: &Progression,
 ) -> (String, Option<usize>) {
     let caster = party
         .snapshot()
@@ -111,22 +137,17 @@ pub(super) fn compose_list(
         .and_then(|&id| data.actor(id))
         .map(|def| i18n::tr(&def.name))
         .unwrap_or_default();
+    let known = known_skills(member, data, party, progression);
     let mut lines = vec![format!("- Képességek -  {caster}"), String::new()];
-    if data.skills.is_empty() {
+    if known.is_empty() {
         lines.push(String::from("(nincs képesség)"));
         lines.push(String::new());
         lines.push(String::from("[Esc] vissza"));
         return (lines.join("\n"), None);
     }
-    let start = viewport_start(cursor, data.skills.len(), VISIBLE_ROWS);
+    let start = viewport_start(cursor, known.len(), VISIBLE_ROWS);
     let mut cursor_line = None;
-    for (i, skill) in data
-        .skills
-        .iter()
-        .enumerate()
-        .skip(start)
-        .take(VISIBLE_ROWS)
-    {
+    for (i, &skill) in known.iter().enumerate().skip(start).take(VISIBLE_ROWS) {
         if i == cursor {
             cursor_line = Some(lines.len());
         }
@@ -198,12 +219,25 @@ mod tests {
 
     #[test]
     fn skill_list_shows_costs_and_tags_battle_only_skills() {
+        use amnezia_data::Learning;
         let mut d = testkit::data();
         d.skills = vec![
             testkit::heal_skill(2, "Gyógyítás", 8, 40),
             testkit::skill(3, "Tűzgolyó", 12),
         ];
-        let (text, cursor_line) = compose_list(0, 0, &d, &Party::default());
+        // The hero (level 2) has learned both skills by level 1.
+        d.actors[0].learnings = vec![
+            Learning {
+                level: 1,
+                skill_id: 2,
+            },
+            Learning {
+                level: 1,
+                skill_id: 3,
+            },
+        ];
+        let (text, cursor_line) =
+            compose_list(0, 0, &d, &Party::default(), &Progression::default());
         assert!(text.contains("Gyógyítás  SP 8"), "heal, no tag: {text}");
         assert!(
             text.contains("Tűzgolyó  SP 12  (harc)"),
@@ -211,6 +245,30 @@ mod tests {
         );
         // Header line 0, blank line 1, first skill on line 2.
         assert_eq!(cursor_line, Some(2), "cursor over the first skill: {text}");
+    }
+
+    #[test]
+    fn skill_list_hides_skills_the_member_has_not_learned() {
+        use amnezia_data::Learning;
+        let mut d = testkit::data();
+        d.skills = vec![
+            testkit::heal_skill(2, "Gyógyítás", 8, 40),
+            testkit::skill(3, "Tűzgolyó", 12),
+        ];
+        // Only the heal (skill 2) is learned by level 2; the fireball needs level 5.
+        d.actors[0].learnings = vec![
+            Learning {
+                level: 1,
+                skill_id: 2,
+            },
+            Learning {
+                level: 5,
+                skill_id: 3,
+            },
+        ];
+        let (text, _) = compose_list(0, 0, &d, &Party::default(), &Progression::default());
+        assert!(text.contains("Gyógyítás"), "learned skill shown: {text}");
+        assert!(!text.contains("Tűzgolyó"), "unlearned skill hidden: {text}");
     }
 
     #[test]

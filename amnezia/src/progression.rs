@@ -8,6 +8,10 @@ use amnezia_data::ActorDef;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
+/// The RM2000 (RPG2000) experience ceiling: stored EXP never exceeds this
+/// (EasyRPG `Game_Constants::MaxExpValue`).
+const MAX_EXP: u32 = 999_999;
+
 /// Stored total experience per actor id. An absent actor sits at the experience
 /// of its starting level (see [`Progression::total`]).
 #[derive(Resource, Default)]
@@ -25,10 +29,25 @@ impl Progression {
     }
 
     /// Add `amount` experience to the actor, starting from its starting-level
-    /// baseline the first time.
+    /// baseline the first time. The stored total is clamped to [`MAX_EXP`], as
+    /// EasyRPG `Game_Actor::SetExp` clamps to the experience ceiling.
     pub fn add(&mut self, def: &ActorDef, amount: u32) {
-        let next = self.total(def).saturating_add(amount);
+        let next = self.total(def).saturating_add(amount).min(MAX_EXP);
         self.0.insert(def.id, next);
+    }
+
+    /// The skill ids the actor knows at its current level: every `Learning` whose
+    /// `level` is at or below it, in learning order (EasyRPG
+    /// `Game_Actor::LearnLevelSkills` accumulates exactly this set as the actor
+    /// climbs). The skill menu and the battle command list build a member's usable
+    /// skills from this instead of the whole skill database.
+    pub fn known_skill_ids(&self, def: &ActorDef) -> Vec<u32> {
+        let level = self.level(def);
+        def.learnings
+            .iter()
+            .filter(|l| l.level <= level)
+            .map(|l| l.skill_id)
+            .collect()
     }
 
     /// The actor's current level: the highest level whose cumulative experience
@@ -64,24 +83,42 @@ impl Progression {
     }
 }
 
-/// Cumulative experience needed to REACH `level` (level 1 = 0), from the actor's
-/// RPG2000 exp-curve parameters: each step adds the running standard cost, which
-/// then grows by `exp_inflation` percent plus a flat `exp_correction`. A
-/// documented approximation of RM2000's exact rounding — monotonic, so more
-/// experience always means an equal-or-higher level.
+/// EasyRPG `Game_Actor::CalculateExp(level)` for the RPG2000 curve (`exp_curve
+/// == 1`), reproduced exactly. Over `level` iterations it sums a running
+/// `base + correction` term while `base` is scaled each step by an `inflation`
+/// factor that itself decays toward 1; the decay rate depends on `level`, so it
+/// is a constant for the whole call. The C++ accumulates in `int`, truncating
+/// each `base + correction` toward zero — matched here by the `as i64` cast. The
+/// return is the cumulative experience whose crossing raises the actor to level
+/// `level + 1`, clamped to [`MAX_EXP`].
+fn calculate_exp(level: u32, base: u32, inflation: u32, correction: u32) -> u32 {
+    let mut result: i64 = 0;
+    let mut base = base as f64;
+    let correction = correction as f64;
+    let mut inflation = 1.5 + inflation as f64 * 0.01;
+    let decay = (level as f64 + 1.0) * 0.002 + 0.8;
+    for _ in 0..level {
+        result += (correction + base) as i64;
+        base *= inflation;
+        inflation = decay * (inflation - 1.0) + 1.0;
+    }
+    result.clamp(0, MAX_EXP as i64) as u32
+}
+
+/// Cumulative experience needed to REACH `level` (level 1 = 0). EasyRPG's
+/// `GetBaseExp(level)` is `CalculateExp(level - 1)`, evaluated from the actor's
+/// `exp_base`/`exp_inflation`/`exp_correction`. Monotonic in `level`, so more
+/// experience always maps to an equal-or-higher level.
 fn exp_for_level(level: u32, def: &ActorDef) -> u32 {
     if level <= 1 {
         return 0;
     }
-    let factor = 1.0 + def.exp_inflation as f64 / 100.0;
-    let correction = def.exp_correction as f64;
-    let mut standard = def.exp_base as f64;
-    let mut total = 0.0_f64;
-    for _ in 1..level {
-        total += standard.floor();
-        standard = standard * factor + correction;
-    }
-    total as u32
+    calculate_exp(
+        level - 1,
+        def.exp_base,
+        def.exp_inflation,
+        def.exp_correction,
+    )
 }
 
 pub struct ProgressionPlugin;
@@ -107,6 +144,7 @@ mod tests {
             hp: 30,
             sp: 10,
             curves: ActorCurves::default(),
+            learnings: Vec::new(),
             exp_base: 30,
             exp_inflation: 30,
             exp_correction: 0,
@@ -121,6 +159,70 @@ mod tests {
             face_name: String::new(),
             face_index: 0,
         }
+    }
+
+    #[test]
+    fn exp_curve_matches_the_rm2000_formula() {
+        // The RM2000 default parameters (base 30, inflation 30, correction 0)
+        // give this cumulative-to-reach table, hand-derived from EasyRPG's
+        // `CalculateExp`: L1=0, L2=30, L3=84, L4=172.
+        let d = def();
+        assert_eq!(exp_for_level(1, &d), 0);
+        assert_eq!(exp_for_level(2, &d), 30);
+        assert_eq!(exp_for_level(3, &d), 84);
+        assert_eq!(exp_for_level(4, &d), 172);
+
+        // Correction is a flat per-step addend: with correction 100 the first
+        // step (reaching level 2) costs base 30 + 100 = 130.
+        let mut c = def();
+        c.exp_correction = 100;
+        assert_eq!(exp_for_level(2, &c), 130);
+
+        // The curve is clamped to the RM2000 experience ceiling.
+        let mut steep = def();
+        steep.exp_base = 900_000;
+        steep.exp_inflation = 100;
+        steep.max_level = 50;
+        assert_eq!(exp_for_level(50, &steep), MAX_EXP);
+    }
+
+    #[test]
+    fn known_skills_are_the_learnings_at_or_below_the_level() {
+        use amnezia_data::Learning;
+        let mut d = def();
+        d.max_level = 20;
+        d.learnings = vec![
+            Learning {
+                level: 1,
+                skill_id: 5,
+            },
+            Learning {
+                level: 3,
+                skill_id: 8,
+            },
+            Learning {
+                level: 7,
+                skill_id: 12,
+            },
+        ];
+        let mut p = Progression::default();
+        // At the starting level 1 only the level-1 skill is known.
+        assert_eq!(p.known_skill_ids(&d), vec![5]);
+        // Climbing to level 3 (its exp threshold) adds skill 8.
+        p.add(&d, exp_for_level(3, &d));
+        assert!(p.level(&d) >= 3);
+        assert_eq!(p.known_skill_ids(&d), vec![5, 8]);
+        // A level that crosses the level-7 learning adds skill 12.
+        p.set_level(&d, 7);
+        assert_eq!(p.known_skill_ids(&d), vec![5, 8, 12]);
+    }
+
+    #[test]
+    fn stored_experience_is_clamped_to_the_ceiling() {
+        let d = def();
+        let mut p = Progression::default();
+        p.add(&d, u32::MAX);
+        assert_eq!(p.total(&d), MAX_EXP);
     }
 
     #[test]

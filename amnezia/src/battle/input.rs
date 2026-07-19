@@ -61,11 +61,14 @@ fn party_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     }
 }
 
-/// The affordable offensive skills as `(skill_id, sp_cost, label)` for the caster
-/// with `sp` points — the single source both the menu and the UI read.
-pub fn skill_choices(data: &GameData, sp: i32) -> Vec<(u32, u32, String)> {
+/// The affordable offensive skills as `(skill_id, sp_cost, label)` for a caster
+/// that `knows` the given skill ids and has `sp` points — the single source both
+/// the menu and the UI read. Restricting to `known` keeps the list to the actor's
+/// learned skills rather than the whole database.
+pub fn skill_choices(data: &GameData, known: &[u32], sp: i32) -> Vec<(u32, u32, String)> {
     usable_skills(&data.skills, sp)
         .into_iter()
+        .filter(|s| known.contains(&s.id))
         .map(|s| {
             (
                 s.id,
@@ -112,8 +115,9 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
         enter(battle, MenuLevel::Command);
         return;
     }
+    let known = battle.members[battle.turn].known_skills.clone();
     let sp = battle.members[battle.turn].sp;
-    let choices = skill_choices(data, sp);
+    let choices = skill_choices(data, &known, sp);
     move_cursor(keys, &mut battle.cursor, choices.len());
     if confirm(keys)
         && let Some(&(skill_id, _, _)) = choices.get(battle.cursor)
@@ -355,6 +359,8 @@ mod tests {
         };
         let mut battle = build_party2();
         battle.skills = vec![heal];
+        let turn = battle.turn;
+        battle.members[turn].known_skills = vec![2];
         battle.menu = MenuLevel::Skill;
         battle.cursor = 0;
         let mut keys = ButtonInput::<KeyCode>::default();
@@ -387,6 +393,8 @@ mod tests {
         };
         let mut battle = build_party2();
         battle.skills = vec![buff];
+        let turn = battle.turn;
+        battle.members[turn].known_skills = vec![5];
         battle.menu = MenuLevel::Skill;
         battle.cursor = 0;
         let mut keys = ButtonInput::<KeyCode>::default();

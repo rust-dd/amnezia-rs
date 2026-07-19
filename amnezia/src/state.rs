@@ -5,6 +5,13 @@ use amnezia_data::{Event, EventPage};
 use bevy::prelude::*;
 use std::collections::HashMap;
 
+/// RM2000 caps the active party at four members (EasyRPG `Game_Party::AddActor`).
+const MAX_PARTY: usize = 4;
+/// The RM2000 gold ceiling (EasyRPG `Game_Constants::MaxGoldValue`).
+const MAX_GOLD: i32 = 999_999;
+/// The default RM2000 per-item stack limit (EasyRPG `Game_Constants::MaxItemCount`).
+const MAX_ITEM_COUNT: u32 = 99;
+
 /// The game's on/off switches, keyed by 1-based id (default false).
 #[derive(Resource, Default)]
 pub struct Switches(HashMap<u32, bool>);
@@ -61,8 +68,11 @@ impl Default for Party {
 }
 
 impl Party {
+    /// Add `actor_id` to the roster unless it is already present or the party is
+    /// full — RM2000 refuses a fifth member (`Game_Party::AddActor`). The
+    /// actor-exists check lives at the call site, which holds the actor database.
     pub fn add(&mut self, actor_id: u32) {
-        if !self.members.contains(&actor_id) {
+        if !self.members.contains(&actor_id) && self.members.len() < MAX_PARTY {
             self.members.push(actor_id);
         }
     }
@@ -93,19 +103,26 @@ pub struct Inventory {
 }
 
 impl Inventory {
+    /// Add `count` of an item, capping the stack at [`MAX_ITEM_COUNT`] (RM2000
+    /// `Game_Party::AddItem` clamps to the per-item maximum, 99 by default).
     pub fn add_item(&mut self, item_id: u32, count: u32) {
-        *self.items.entry(item_id).or_insert(0) += count;
+        let owned = self.items.entry(item_id).or_insert(0);
+        *owned = owned.saturating_add(count).min(MAX_ITEM_COUNT);
     }
     pub fn remove_item(&mut self, item_id: u32, count: u32) {
         if let Some(owned) = self.items.get_mut(&item_id) {
             *owned = owned.saturating_sub(count);
         }
     }
+    /// Add gold, clamping the total to `[0, MAX_GOLD]` (RM2000
+    /// `Game_Party::GainGold`).
     pub fn add_gold(&mut self, amount: i32) {
-        self.gold += amount;
+        self.gold = self.gold.saturating_add(amount).clamp(0, MAX_GOLD);
     }
+    /// Remove gold, clamping the total to `[0, MAX_GOLD]` (RM2000
+    /// `Game_Party::LoseGold`).
     pub fn remove_gold(&mut self, amount: i32) {
-        self.gold -= amount;
+        self.gold = self.gold.saturating_sub(amount).clamp(0, MAX_GOLD);
     }
 }
 
@@ -293,5 +310,30 @@ mod tests {
         inv.add_gold(100);
         inv.remove_gold(30);
         assert_eq!(inv.gold(), 70);
+    }
+
+    #[test]
+    fn party_refuses_a_fifth_member() {
+        let mut party = Party::default(); // starts with the hero (actor 1)
+        party.add(2);
+        party.add(3);
+        party.add(4);
+        assert_eq!(party.snapshot(), vec![1, 2, 3, 4]);
+        party.add(5); // the party is full — RM2000 caps at four
+        assert_eq!(party.snapshot(), vec![1, 2, 3, 4], "fifth member refused");
+    }
+
+    #[test]
+    fn gold_and_item_counts_are_clamped_to_their_maxima() {
+        let mut inv = Inventory::default();
+        inv.add_gold(2_000_000); // above the 999_999 ceiling
+        assert_eq!(inv.gold(), MAX_GOLD);
+        inv.remove_gold(5_000_000); // never below zero
+        assert_eq!(inv.gold(), 0);
+
+        inv.add_item(7, 250); // above the 99 stack cap
+        assert_eq!(inv.count(7), MAX_ITEM_COUNT);
+        inv.add_item(7, 50); // stays capped
+        assert_eq!(inv.count(7), MAX_ITEM_COUNT);
     }
 }

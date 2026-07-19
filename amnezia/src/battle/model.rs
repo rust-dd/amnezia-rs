@@ -81,6 +81,10 @@ pub struct Fighter {
     /// This fighter's active status effects as `(state_id, turns_held)` pairs; the
     /// turn count drives [`logic::tick_recovery`]'s hold-then-wear-off schedule.
     pub states: Vec<(u32, u32)>,
+    /// The skill ids this member knows at its current level (its actor `learnings`
+    /// at or below the level), captured at build time. The battle skill command
+    /// offers only these, not the whole database.
+    pub(super) known_skills: Vec<u32>,
     /// The 1-based attribute (element) ids this member's equipped gear guards
     /// against, unioned across its five slots at build time. A matching enemy
     /// skill's damage is halved once in [`super::resolve`].
@@ -494,6 +498,7 @@ impl Battle {
                     },
                     states: Vec::new(),
                     resist_attributes: logic::equipment_resist(a, items),
+                    known_skills: progression.known_skill_ids(a),
                 }
             })
             .collect();
@@ -755,6 +760,7 @@ pub(super) mod testkit {
             hp,
             sp,
             curves: Default::default(),
+            learnings: Vec::new(),
             exp_base: 30,
             exp_inflation: 30,
             exp_correction: 0,

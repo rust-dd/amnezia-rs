@@ -8,11 +8,10 @@
 //! return-to-title confirmation for End Game. Selecting a member from the party
 //! window (→ from the command list) opens that member's status detail.
 //!
-//! The game's data has no per-actor skill learning, so the Skill list shows the
-//! whole skill database for whichever caster is chosen (their SP is what a cast
-//! spends). Field skill-use is limited to HP-recovery ally skills healing a flat
-//! `power`, and equipment is view-only — both noted where they live
-//! ([`skills`], [`equip`]).
+//! The Skill list shows only the chosen caster's known skills — the actor
+//! `learnings` at or below its current level (their SP is what a cast spends).
+//! Field skill-use is limited to HP-recovery ally skills healing a flat `power`,
+//! and equipment is view-only — both noted where they live ([`skills`], [`equip`]).
 //!
 //! State and input live in [`input`]; the movement/interpreter pause guard that
 //! freezes the world while the menu is open (keyed on [`MenuOpen`]) is wired by

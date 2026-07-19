@@ -1,7 +1,7 @@
 //! Conversion of the party-side `RPG_RT.ldb` tables (hero name, actors, items,
 //! skills) into their clean RON assets.
 
-use amnezia_data::{ActorCurves, ActorDef, Hero, ItemDef, SkillDef};
+use amnezia_data::{ActorCurves, ActorDef, Hero, ItemDef, Learning, SkillDef};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -30,10 +30,10 @@ pub fn convert_hero(input: &Path, output: &Path) -> Result<String> {
 
 /// Convert the actor table in `input/RPG_RT.ldb` into `output/actors.ron` (each
 /// actor's id, name, class title, FaceSet portrait, levels, starting HP/SP,
-/// per-level stat curves, experience-curve parameters, initial equipment ids,
-/// and the dual-wield / fixed-equipment / unarmed-animation flags), returning the
-/// number of actors written. The status and equip menus and the level-up system
-/// read it.
+/// per-level stat curves, skill-learning list, experience-curve parameters,
+/// initial equipment ids, and the dual-wield / fixed-equipment / unarmed-animation
+/// flags), returning the number of actors written. The status and equip menus and
+/// the level-up system read it.
 pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -89,6 +89,14 @@ pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
                     .map(|&v| v.max(0) as u32)
                     .collect(),
             },
+            learnings: a
+                .skills
+                .iter()
+                .map(|l| Learning {
+                    level: l.level,
+                    skill_id: l.skill_id,
+                })
+                .collect(),
             exp_base: a.exp_base,
             exp_inflation: a.exp_inflation,
             exp_correction: a.exp_correction,

@@ -4,7 +4,8 @@
 //! transitions are unit-tested without an app.
 
 use crate::gamedata::GameData;
-use crate::state::Inventory;
+use crate::progression::Progression;
+use crate::state::{Inventory, Party};
 use bevy::input::ButtonInput;
 use bevy::prelude::KeyCode;
 
@@ -85,9 +86,16 @@ pub(super) fn item_target(
 }
 
 /// The screen a confirm on `member`'s skill list opens: the ally picker for a
-/// field-usable skill under `cursor`, or `None` for a battle-only skill.
-pub(super) fn skill_target(member: usize, cursor: usize, data: &GameData) -> Option<MenuScreen> {
-    let skill = skills::skill_at(cursor, data)?;
+/// field-usable skill under `cursor` (indexed into the member's known skills), or
+/// `None` for a battle-only skill.
+pub(super) fn skill_target(
+    member: usize,
+    cursor: usize,
+    data: &GameData,
+    party: &Party,
+    progression: &Progression,
+) -> Option<MenuScreen> {
+    let skill = skills::skill_at(member, cursor, data, party, progression)?;
     skills::field_usable(skill).then_some(MenuScreen::SkillTarget {
         member,
         skill_id: skill.id,
@@ -204,16 +212,29 @@ mod tests {
             testkit::heal_skill(2, "Gyógyítás", 8, 40),
             testkit::skill(3, "Tűzgolyó", 12),
         ];
+        // The hero (party member 0) has learned both skills.
+        d.actors[0].learnings = vec![
+            amnezia_data::Learning {
+                level: 1,
+                skill_id: 2,
+            },
+            amnezia_data::Learning {
+                level: 1,
+                skill_id: 3,
+            },
+        ];
+        let party = Party::default();
+        let prog = Progression::default();
         assert_eq!(
-            skill_target(1, 0, &d),
+            skill_target(0, 0, &d, &party, &prog),
             Some(MenuScreen::SkillTarget {
-                member: 1,
+                member: 0,
                 skill_id: 2,
                 cursor: 0
             })
         );
         // The battle-only attack skill is inert.
-        assert_eq!(skill_target(1, 1, &d), None);
+        assert_eq!(skill_target(0, 1, &d, &party, &prog), None);
     }
 
     #[test]

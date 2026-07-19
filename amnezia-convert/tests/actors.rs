@@ -1,4 +1,4 @@
-use amnezia_data::{ActorCurves, ActorDef};
+use amnezia_data::{ActorCurves, ActorDef, Learning};
 use std::path::Path;
 
 fn varint(mut v: u32) -> Vec<u8> {
@@ -56,6 +56,23 @@ fn parameters(curves: [[i16; 2]; 6]) -> Vec<u8> {
         .collect()
 }
 
+/// Build a `skills` chunk (`0x3F`): the `rpg::Learning` array as a `[count]`
+/// header then, per entry, a 1-based index and its level (`0x01`) / skill_id
+/// (`0x02`) sub-chunks.
+fn learnings(entries: &[(u32, u32)]) -> Vec<u8> {
+    let mut out = varint(entries.len() as u32);
+    for (i, &(level, skill_id)) in entries.iter().enumerate() {
+        out.extend_from_slice(&element(
+            i as u32 + 1,
+            &[
+                subchunk(0x01, &varint(level)),
+                subchunk(0x02, &varint(skill_id)),
+            ],
+        ));
+    }
+    out
+}
+
 #[test]
 fn converts_ldb_to_actors_ron() {
     let tmp = Path::new(env!("CARGO_TARGET_TMPDIR")).join("converts_actors_ron");
@@ -78,6 +95,7 @@ fn converts_ldb_to_actors_ron() {
             subchunk(0x07, &varint(2)),
             subchunk(0x15, &varint(1)),
             subchunk(0x1F, &params),
+            subchunk(0x3F, &learnings(&[(1, 10), (5, 12)])),
             subchunk(0x29, &varint(31)),
             subchunk(0x2A, &varint(29)),
             subchunk(0x2B, &varint(40)),
@@ -111,6 +129,16 @@ fn converts_ldb_to_actors_ron() {
                 spirit: vec![3, 5],
                 agility: vec![6, 9],
             },
+            learnings: vec![
+                Learning {
+                    level: 1,
+                    skill_id: 10,
+                },
+                Learning {
+                    level: 5,
+                    skill_id: 12,
+                },
+            ],
             exp_base: 31,
             exp_inflation: 29,
             exp_correction: 40,

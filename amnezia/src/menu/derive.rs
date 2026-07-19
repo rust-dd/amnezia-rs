@@ -89,6 +89,7 @@ mod tests {
             hp: 63,
             sp: 37,
             curves: ActorCurves::default(),
+            learnings: Vec::new(),
             exp_base: 30,
             exp_inflation: 30,
             exp_correction: 0,

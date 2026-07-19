@@ -410,12 +410,27 @@ fn apply_victory_rewards(
     let exp = battle.reward_exp;
     let mut level_ups: Vec<String> = Vec::new();
     for fighter in &battle.members {
+        // RM2000 awards experience only to the active (living) members
+        // (`GetActiveBattlers`); a fallen member gains none.
+        if !fighter.alive() {
+            continue;
+        }
         if let Some(def) = data.actor(fighter.actor_id) {
             let before = progression.level(def);
             progression.add(def, exp);
             let after = progression.level(def);
             if after > before {
                 level_ups.push(format!("{} elérte a(z) {after}. szintet!", fighter.name));
+                // Each learning crossed by the level gain is learned now; RM2000
+                // logs a line per newly learned skill.
+                for learn in &def.learnings {
+                    if learn.level > before
+                        && learn.level <= after
+                        && let Some(skill) = data.skills.iter().find(|s| s.id == learn.skill_id)
+                    {
+                        level_ups.push(format!("{} megtanulta: {}", fighter.name, skill.name));
+                    }
+                }
             }
         }
     }
@@ -463,7 +478,7 @@ fn seed_now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use amnezia_data::{MusicDef, SoundDef, TroopMemberDef};
+    use amnezia_data::{MusicDef, SkillDef, SoundDef, TroopMemberDef};
     use bevy::input::ButtonInput;
 
     /// A System audio def with a battle track, start SE, and the per-hit effects
@@ -512,6 +527,7 @@ mod tests {
                 hp: 63,
                 sp: 37,
                 curves: Default::default(),
+                learnings: Vec::new(),
                 exp_base: 30,
                 exp_inflation: 30,
                 exp_correction: 0,
@@ -641,6 +657,11 @@ mod tests {
             hp: 40,
             sp: 10,
             curves: Default::default(),
+            // Ron learns skill 1 at level 2, so crossing into level 2 learns it.
+            learnings: vec![amnezia_data::Learning {
+                level: 2,
+                skill_id: 1,
+            }],
             exp_base: 30,
             exp_inflation: 30,
             exp_correction: 0,
@@ -658,7 +679,25 @@ mod tests {
         app.insert_resource(GameData {
             actors: vec![ron.clone()],
             items: vec![],
-            skills: vec![],
+            skills: vec![SkillDef {
+                id: 1,
+                name: "Tűzcsapás".into(),
+                description: String::new(),
+                sp_cost: 0,
+                power: 10,
+                hit: 100,
+                skill_type: 0,
+                scope: 0,
+                animation_id: 0,
+                physical_rate: 0,
+                magical_rate: 0,
+                variance: 0,
+                affect_hp: true,
+                affect_sp: false,
+                absorb: false,
+                attributes: vec![],
+                affected_states: vec![],
+            }],
         });
         app.init_resource::<Inventory>();
         app.init_resource::<Vitals>();
@@ -736,6 +775,14 @@ mod tests {
                 .iter()
                 .any(|l| l.contains("szintet")),
             "a level-up line is staged into the battle log"
+        );
+        assert!(
+            app.world()
+                .resource::<Battle>()
+                .log
+                .iter()
+                .any(|l| l.contains("megtanulta") && l.contains("Tűzcsapás")),
+            "crossing level 2 learns and logs the level-2 skill"
         );
         let total_once = app.world().resource::<Progression>().total(&ron);
         // Confirm at the outcome screen: gold and exp must not be applied a second

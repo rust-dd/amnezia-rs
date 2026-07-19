@@ -18,7 +18,7 @@ mod states;
 mod system;
 mod troops;
 
-pub use actors::{Actor, StatCurves, parse_actors};
+pub use actors::{Actor, Learning, StatCurves, parse_actors};
 pub use animations::{Animation, AnimationCell, AnimationFrame, AnimationTiming, parse_animations};
 pub use attributes::{Attribute, parse_attributes};
 pub use common_events::{CommonEvent, parse_common_events};

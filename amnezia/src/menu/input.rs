@@ -212,10 +212,11 @@ pub(super) fn menu_input(
             }
         }
         MenuScreen::SkillList { member, cursor } => {
-            let max = data.skills.len().saturating_sub(1);
-            let cursor = step(cursor, up, down, max);
+            let count = skills::known_skills(member, &data, &party, &progression).len();
+            let cursor = step(cursor, up, down, count.saturating_sub(1));
             state.screen = MenuScreen::SkillList { member, cursor };
-            if confirm && let Some(next) = skill_target(member, cursor, &data) {
+            if confirm && let Some(next) = skill_target(member, cursor, &data, &party, &progression)
+            {
                 state.screen = next;
             }
         }

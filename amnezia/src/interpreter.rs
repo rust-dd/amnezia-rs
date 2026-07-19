@@ -344,7 +344,11 @@ fn run_interpreter(
                 running.ip += 1;
             }
             CHANGE_PARTY => {
-                apply_change_party(&mut party, &command.params);
+                apply_change_party(
+                    &mut party,
+                    &subsystems.actor_edits.game_data,
+                    &command.params,
+                );
                 running.ip += 1;
             }
             FULL_HEAL => {
