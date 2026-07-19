@@ -11,6 +11,10 @@ const MAX_PARTY: usize = 4;
 const MAX_GOLD: i32 = 999_999;
 /// The default RM2000 per-item stack limit (EasyRPG `Game_Constants::MaxItemCount`).
 const MAX_ITEM_COUNT: u32 = 99;
+/// The RM2000 variable bounds: every write clamps into `[MIN_VAR, MAX_VAR]`
+/// (EasyRPG `Game_Variables::min_2k`/`max_2k`, the RPG2000 six-nines range).
+const MIN_VAR: i32 = -999_999;
+const MAX_VAR: i32 = 999_999;
 
 /// The game's on/off switches, keyed by 1-based id (default false).
 #[derive(Resource, Default)]
@@ -41,8 +45,11 @@ impl Variables {
     pub fn get(&self, id: u32) -> i32 {
         self.0.get(&id).copied().unwrap_or(0)
     }
+    /// Store `value` in variable `id`, clamped to the RM2000 range
+    /// `[MIN_VAR, MAX_VAR]` — RPG_RT clamps every variable write, so an add/mul
+    /// that overshoots saturates at the six-nines bound rather than wrapping.
     pub fn set(&mut self, id: u32, value: i32) {
-        self.0.insert(id, value);
+        self.0.insert(id, value.clamp(MIN_VAR, MAX_VAR));
     }
     /// Every set variable as `(id, value)` pairs, for a save snapshot.
     pub fn entries(&self) -> Vec<(u32, i32)> {
@@ -287,6 +294,17 @@ mod tests {
         assert_eq!(flags(&party, &inv), Some(0x08)); // has item 5
         party.add(3);
         assert_eq!(flags(&party, &inv), Some(0x10)); // actor 3 joined (higher page)
+    }
+
+    #[test]
+    fn variable_writes_clamp_to_the_rm2000_range() {
+        let mut var = Variables::default();
+        var.set(1, 5_000_000);
+        assert_eq!(var.get(1), MAX_VAR, "a write above the ceiling saturates");
+        var.set(2, -5_000_000);
+        assert_eq!(var.get(2), MIN_VAR, "a write below the floor saturates");
+        var.set(3, 12_345);
+        assert_eq!(var.get(3), 12_345, "an in-range write is stored verbatim");
     }
 
     #[test]

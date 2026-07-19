@@ -22,6 +22,8 @@ mod model;
 mod resolve;
 mod scene;
 
+pub(crate) use logic::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus};
+
 use crate::animation::{ActiveAnimations, AnimAnchor, PlayAnimation};
 use crate::assets::{asset_root, load_ron};
 use crate::audio::{AudioRequest, BgmTrack, CurrentBgm};

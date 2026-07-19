@@ -25,13 +25,21 @@ use amnezia_data::EventCommand;
 use bevy::prelude::*;
 use std::collections::HashMap;
 
+mod actor_query;
+mod branch;
 mod commands;
+mod control_vars;
+mod event_rng;
 mod flow;
 mod opcodes;
 mod params;
 mod present;
 
+use actor_query::ActorCtx;
+use branch::branch_holds;
 use commands::*;
+use control_vars::{apply_control_variables, resolve_operand};
+use event_rng::EventRng;
 use flow::*;
 use opcodes::*;
 use params::{Blockers, IntroGuard, SubsystemIo};
@@ -175,6 +183,7 @@ pub struct InterpreterPlugin;
 impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RunningEvent>()
+            .init_resource::<EventRng>()
             .add_systems(Update, (autorun, run_interpreter, clear_move_wait).chain());
     }
 }
@@ -332,7 +341,41 @@ fn run_interpreter(
                 running.ip += 1;
             }
             CONTROL_VARIABLES => {
-                apply_control_variables(&mut variables, &command.params);
+                // Resolve the operand — constant / variable / var-of-var / random /
+                // item / actor / character / other — from the live state, then
+                // assign it under the command's target mode and operation. Only the
+                // character operand (type 6) needs the world queries, resolved here.
+                let character = if command.params.get(4).copied() == Some(6) {
+                    resolve_character(
+                        command.params.get(5).copied().unwrap_or(0),
+                        running.event_id,
+                        &subsystems.flow.players,
+                        &event_movers,
+                    )
+                } else {
+                    None
+                };
+                let actors = ActorCtx {
+                    data: &subsystems.actor_edits.game_data,
+                    progression: &subsystems.actor_edits.progression,
+                    vitals: &subsystems.vitals,
+                    hero_name: &subsystems.actor_edits.hero_name.0,
+                };
+                let operand = resolve_operand(
+                    &command.params,
+                    &variables,
+                    &inventory,
+                    &party,
+                    &actors,
+                    subsystems.mapfx.game_clock.seconds(),
+                    character,
+                );
+                apply_control_variables(
+                    &mut variables,
+                    &mut subsystems.event_rng,
+                    &command.params,
+                    operand,
+                );
                 running.ip += 1;
             }
             CHANGE_GOLD => {
@@ -502,8 +545,11 @@ fn run_interpreter(
             }
             CONDITIONAL_BRANCH => {
                 // Timer conditional (type 2) compares the running clock; the rest
-                // are pure state checks in `branch_holds`.
-                let holds = if command.params.first().copied() == Some(2) {
+                // are state checks in `branch_holds`. The actor sub-checks (type 5)
+                // read from `ActorCtx`, and the orientation check (type 6) needs the
+                // referenced character's real facing, resolved here from the world.
+                let kind = command.params.first().copied().unwrap_or(-1);
+                let holds = if kind == 2 {
                     let target = command.params.get(1).copied().unwrap_or(0).max(0) as u32;
                     let secs = subsystems.mapfx.game_clock.seconds();
                     if command.params.get(2).copied().unwrap_or(0) == 0 {
@@ -512,7 +558,33 @@ fn run_interpreter(
                         secs <= target
                     }
                 } else {
-                    branch_holds(&command.params, &switches, &variables, &party, &inventory)
+                    let facing = if kind == 6 {
+                        resolve_character(
+                            command.params.get(1).copied().unwrap_or(0),
+                            running.event_id,
+                            &subsystems.flow.players,
+                            &event_movers,
+                        )
+                        .map(|(_, _, dir)| dir)
+                    } else {
+                        None
+                    };
+                    let actors = ActorCtx {
+                        data: &subsystems.actor_edits.game_data,
+                        progression: &subsystems.actor_edits.progression,
+                        vitals: &subsystems.vitals,
+                        hero_name: &subsystems.actor_edits.hero_name.0,
+                    };
+                    branch_holds(
+                        &command.params,
+                        &command.string,
+                        &switches,
+                        &variables,
+                        &party,
+                        &inventory,
+                        &actors,
+                        facing,
+                    )
                 };
                 if holds {
                     running.ip += 1;
@@ -925,6 +997,32 @@ fn autorun(
 
 fn is_message(code: u32) -> bool {
     matches!(code, SHOW_MESSAGE | SHOW_MESSAGE_2 | CHANGE_FACE)
+}
+
+/// Resolve an RM2000 character reference — 10001 the hero, 10005 this event, any
+/// other positive value an event id — to its `(tile_x, tile_y, facing)`, read from
+/// the live hero and event sprites. Shared by the `ControlVariables` character
+/// operand and the `ConditionalBranch` orientation check; an unknown reference or
+/// a missing sprite yields `None`.
+fn resolve_character(
+    char_ref: i32,
+    this_event: u32,
+    players: &Query<&Player>,
+    events: &Query<(&EventSprite, &mut MoveQueue), Without<Player>>,
+) -> Option<(i32, i32, u32)> {
+    if char_ref == 10001 {
+        players.single().ok().map(|p| (p.tile_x, p.tile_y, p.dir))
+    } else {
+        let id = if char_ref == 10005 {
+            this_event as i32
+        } else {
+            char_ref
+        };
+        events
+            .iter()
+            .find(|(e, _)| e.id as i32 == id)
+            .map(|(e, _)| (e.tile_x, e.tile_y, e.dir))
+    }
 }
 
 /// Release the `MoveEvent` pause once every moved character's queue has drained,

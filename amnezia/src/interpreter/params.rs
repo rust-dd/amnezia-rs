@@ -3,6 +3,7 @@
 //! handful of nested `SystemParam` structs here — keeping the system signature
 //! small and the bundle definitions out of the dispatch loop.
 
+use super::event_rng::EventRng;
 use crate::animation::ShowMapAnimation;
 use crate::appearance::SpriteChange;
 use crate::battle::{BattleActive, BattleRequest, BattleResult};
@@ -180,4 +181,5 @@ pub struct SubsystemIo<'w, 's> {
     pub(super) access: AccessFlags<'w>,
     pub(super) actor_edits: ActorEdits<'w>,
     pub(super) flow: FlowCtx<'w, 's>,
+    pub(super) event_rng: ResMut<'w, EventRng>,
 }
