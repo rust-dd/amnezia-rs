@@ -23,18 +23,27 @@ const BATTLER_Z: f32 = 200.0;
 /// base to tint it. Both are integer-derived, so this only guards float noise.
 const FLASH_MATCH_EPS: f32 = 0.5;
 
+/// The battler height an animation's `position` anchor assumes until the battler
+/// image has loaded and its real pixel height is known: EasyRPG falls back to
+/// `GetAnimationCellHeight() / 2` = 48 (`battle_animation.cpp`).
+const FALLBACK_BATTLER_HEIGHT: f32 = 48.0;
+
 /// A backdrop or battler sprite belonging to the live fight; despawned together
 /// when the fight ends (or a new one starts).
 #[derive(Component)]
 struct SceneEntity;
 
-/// An enemy battler sprite: its index into [`Battle::enemies`] and its RM2000
+/// An enemy battler sprite: its index into [`Battle::enemies`], its RM2000
 /// screen-offset base — the anchor animations play on and the point a target
-/// flash is matched against.
+/// flash is matched against — and its measured pixel height, from which an
+/// animation's `position` anchor derives its vertical offset (see
+/// [`battler_height_at`]). Height starts at [`FALLBACK_BATTLER_HEIGHT`] and is
+/// updated once the battler image loads.
 #[derive(Component)]
-struct Battler {
+pub(super) struct Battler {
     index: usize,
     base: Vec2,
+    pub(super) height: f32,
 }
 
 /// A running target-flash tint on a battler: `rgb`/`power` the flash colour and
@@ -94,9 +103,39 @@ fn sync_scene(
             Transform::from_translation(overlay_translation(base, BATTLER_Z + index as f32 * 0.1)),
             overlay_layer(),
             SceneEntity,
-            Battler { index, base },
+            Battler {
+                index,
+                base,
+                height: FALLBACK_BATTLER_HEIGHT,
+            },
         ));
     }
+}
+
+/// Update each battler's measured pixel height once its image has loaded, so an
+/// animation's `position` anchor (feet/head) shifts by the real half-height
+/// rather than the fallback. Runs every frame; the height settles as soon as the
+/// asset is ready and is otherwise left at [`FALLBACK_BATTLER_HEIGHT`].
+fn measure_battlers(images: Res<Assets<Image>>, mut battlers: Query<(&mut Battler, &Sprite)>) {
+    for (mut battler, sprite) in &mut battlers {
+        if let Some(image) = images.get(&sprite.image) {
+            let height = image.height() as f32;
+            if battler.height != height {
+                battler.height = height;
+            }
+        }
+    }
+}
+
+/// The pixel height of the battler whose base matches `pos` (an animation's
+/// target centre), for the animation's `position` anchor offset. `None` when no
+/// battler sits there — a party-area target, which the caller heights with a
+/// sensible default.
+pub(super) fn battler_height_at(battlers: &Query<&Battler>, pos: Vec2) -> Option<f32> {
+    battlers
+        .iter()
+        .find(|b| b.base.distance_squared(pos) < FLASH_MATCH_EPS)
+        .map(|b| b.height)
 }
 
 /// Route each [`BattlerFlash`] to the battler at its `pos`, starting a decaying
@@ -191,7 +230,15 @@ fn blend(base: Color, rgb: [f32; 3], amount: f32) -> Color {
 /// Register the battle scene systems: rebuild the backdrop + battlers per fight,
 /// route target flashes onto them, and paint the battlers each frame.
 pub fn register(app: &mut App) {
-    app.add_systems(Update, (sync_scene, apply_battler_flash, paint_battlers));
+    app.add_systems(
+        Update,
+        (
+            sync_scene,
+            measure_battlers,
+            apply_battler_flash,
+            paint_battlers,
+        ),
+    );
 }
 
 #[cfg(test)]
@@ -224,7 +271,14 @@ mod tests {
         app.add_message::<BattlerFlash>();
         app.add_systems(Update, apply_battler_flash);
         let base = battler_base(176, 96);
-        let entity = app.world_mut().spawn(Battler { index: 0, base }).id();
+        let entity = app
+            .world_mut()
+            .spawn(Battler {
+                index: 0,
+                base,
+                height: FALLBACK_BATTLER_HEIGHT,
+            })
+            .id();
         app.world_mut().write_message(BattlerFlash {
             pos: base,
             rgb: [1.0, 0.6, 0.3],
@@ -242,7 +296,14 @@ mod tests {
         app.add_message::<BattlerFlash>();
         app.add_systems(Update, apply_battler_flash);
         let base = battler_base(176, 96);
-        let entity = app.world_mut().spawn(Battler { index: 0, base }).id();
+        let entity = app
+            .world_mut()
+            .spawn(Battler {
+                index: 0,
+                base,
+                height: FALLBACK_BATTLER_HEIGHT,
+            })
+            .id();
         // The party area (below centre, no battler there) matches nothing.
         app.world_mut().write_message(BattlerFlash {
             pos: Vec2::new(0.0, 80.0),

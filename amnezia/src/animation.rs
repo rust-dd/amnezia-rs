@@ -32,11 +32,22 @@ use render::{fade_flashes, next_frame, spawn_frame_cells, spawn_screen_flash};
 
 pub use render::{overlay_layer, overlay_translation};
 
-/// Seconds each animation frame is shown (RM2000 runs animations at ~15 fps).
-pub const FRAME_SECS: f32 = 1.0 / 15.0;
+/// Seconds each animation *data* frame is shown. RM2000 (and EasyRPG) advances
+/// the animation once per 60 fps game-frame and shows each data frame for two of
+/// them (`battle_animation.cpp`: `num_frames = GetRealFrames() * 2`,
+/// `GetRealFrame() = frame / 2`), so a data frame lasts `2/60 = 1/30 s`. The
+/// timer is real-time, so this stays a fixed step.
+pub const FRAME_SECS: f32 = 1.0 / 30.0;
 
-/// A target flash decays over roughly three frames.
-const FLASH_SECS: f32 = 3.0 * FRAME_SECS;
+/// Seconds one 60 fps game-frame lasts: half a data frame.
+const GAME_FRAME_SECS: f32 = FRAME_SECS / 2.0;
+
+/// How long a flash lasts before it has fully decayed. EasyRPG holds a flash for
+/// its `UpdateFlashGeneric` window of ten game-frames (`delta_frames <= 10`), so
+/// this is decoupled from [`FRAME_SECS`] (ten game-frames, not "three data
+/// frames") — halving the per-frame step for the 15→30 fps fix must not shorten
+/// it.
+const FLASH_SECS: f32 = 10.0 * GAME_FRAME_SECS;
 
 /// The RM2000 sentinel sound name meaning "no sound"; skipped like an empty name.
 const SE_OFF: &str = "(OFF)";
@@ -46,13 +57,47 @@ const SE_OFF: &str = "(OFF)";
 const FLASH_SCOPE_SCREEN: u32 = 2;
 const FLASH_SCOPE_TARGET: u32 = 1;
 
-/// Play animation `anim_id` centred at RM2000 screen offset `(x, y)` from the
-/// screen centre (y downward).
+/// An [`AnimationDef::scope`] of `1` covers the whole screen: its cells draw once,
+/// centred, instead of once per target. `0` draws at each target.
+const SCOPE_SCREEN: u32 = 1;
+
+/// The [`AnimationDef::position`] vertical anchors that shift the effect off the
+/// target centre: `0` (head/up) lifts it by half the target height, `2`
+/// (feet/down) drops it by half; `1` (centre) and anything else leave it centred
+/// (EasyRPG `battle_animation.cpp` `CalculateOffset`).
+const POSITION_UP: u32 = 0;
+const POSITION_DOWN: u32 = 2;
+
+/// The fixed target height RM2000 uses for a map animation (opcode 11210):
+/// EasyRPG `BattleAnimationMap::DrawSingle` uses `character_height = 24`.
+const MAP_CHARACTER_HEIGHT: f32 = 24.0;
+
+/// Where a screen-scope animation centres its cells on the map: EasyRPG
+/// `BattleAnimationMap` draws a screen animation at the screen centre, which in
+/// our centre-origin overlay is the origin.
+const MAP_SCREEN_CENTER: Vec2 = Vec2::ZERO;
+
+/// One target an animation plays on: `pos` its RM2000 screen offset from the
+/// screen centre (y downward) — the point the target flash and the battler match
+/// against — and `height` the target sprite's pixel height, from which the
+/// [`AnimationDef::position`] anchor derives its vertical offset.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct AnimAnchor {
+    pub pos: Vec2,
+    pub height: f32,
+}
+
+/// Play animation `anim_id` on `targets`. One cast is a single [`PlayAnimation`]:
+/// its sound-effect timeline fires once, and its cells draw at each target's
+/// [`AnimAnchor`] (a single-target scope-0 animation) — or, for a screen-scope
+/// animation, once at `screen_center` (RM2000 screen offset from centre, y
+/// downward). Target flashes still fire at every target regardless of scope,
+/// matching EasyRPG (`battle_animation.cpp`).
 #[derive(Message)]
 pub struct PlayAnimation {
     pub anim_id: u32,
-    pub x: f32,
-    pub y: f32,
+    pub targets: Vec<AnimAnchor>,
+    pub screen_center: Vec2,
 }
 
 /// A request to flash-tint a target battler sprite as an animation's target
@@ -93,13 +138,18 @@ pub struct ShowMapAnimation {
 #[derive(Resource)]
 pub struct AnimationLibrary(pub Vec<AnimationDef>);
 
-/// A playing animation: which library entry it is, its screen base point, the
-/// current frame, the per-frame timer, and the cell entities of that frame (kept
-/// so they can be despawned when the frame advances).
+/// A playing animation: which library entry it is, the screen points its cells
+/// draw at (`draw_anchors` — one per target, or a single centred point for a
+/// screen-scope animation), the target centres its flashes fire at
+/// (`flash_anchors` — every target, so the battler-match points survive the
+/// position offset baked into `draw_anchors`), the current frame, the per-frame
+/// timer, and the cell entities of that frame (kept so they can be despawned when
+/// the frame advances).
 #[derive(Component)]
 struct LiveAnimation {
     index: usize,
-    base: Vec2,
+    draw_anchors: Vec<Vec2>,
+    flash_anchors: Vec<Vec2>,
     frame: usize,
     timer: Timer,
     cells: Vec<Entity>,
@@ -179,17 +229,57 @@ fn start_animations(
         if def.frames.is_empty() {
             continue;
         }
-        let base = Vec2::new(request.x, request.y);
-        let cells = spawn_frame_cells(&mut commands, &asset_server, def, 0, base);
-        fire_timings(&mut commands, &mut audio, &mut battler_flash, def, 0, base);
+        let draw_anchors = draw_anchors(def, &request.targets, request.screen_center);
+        let flash_anchors: Vec<Vec2> = request.targets.iter().map(|t| t.pos).collect();
+        let cells = spawn_cells_at(&mut commands, &asset_server, def, 0, &draw_anchors);
+        fire_timings(
+            &mut commands,
+            &mut audio,
+            &mut battler_flash,
+            def,
+            0,
+            &flash_anchors,
+        );
         commands.spawn(LiveAnimation {
             index,
-            base,
+            draw_anchors,
+            flash_anchors,
             frame: 0,
             timer: Timer::from_seconds(FRAME_SECS, TimerMode::Repeating),
             cells,
         });
     }
+}
+
+/// The screen points an animation's cells draw at: a screen-scope animation draws
+/// its cells once at `screen_center`; otherwise once per target, each shifted
+/// vertically by the [`AnimationDef::position`] anchor over that target's height
+/// (see [`position_offset`]). The flash anchors stay at the un-shifted target
+/// centres, so a target flash still lands on the battler.
+fn draw_anchors(def: &AnimationDef, targets: &[AnimAnchor], screen_center: Vec2) -> Vec<Vec2> {
+    if def.scope == SCOPE_SCREEN {
+        return vec![screen_center];
+    }
+    targets
+        .iter()
+        .map(|t| Vec2::new(t.pos.x, t.pos.y + position_offset(def.position, t.height)))
+        .collect()
+}
+
+/// Spawn frame `frame`'s cells at every anchor in `bases`, returning all the cell
+/// entities together so they despawn as one when the frame advances.
+fn spawn_cells_at(
+    commands: &mut Commands,
+    asset_server: &AssetServer,
+    def: &AnimationDef,
+    frame: usize,
+    bases: &[Vec2],
+) -> Vec<Entity> {
+    let mut cells = Vec::new();
+    for &base in bases {
+        cells.extend(spawn_frame_cells(commands, asset_server, def, frame, base));
+    }
+    cells
 }
 
 /// Advance every live animation one frame per timer tick: despawn the old
@@ -215,14 +305,15 @@ fn step_animations(
         match next_frame(anim.frame, def.frames.len()) {
             Some(frame) => {
                 anim.frame = frame;
-                anim.cells = spawn_frame_cells(&mut commands, &asset_server, def, frame, anim.base);
+                anim.cells =
+                    spawn_cells_at(&mut commands, &asset_server, def, frame, &anim.draw_anchors);
                 fire_timings(
                     &mut commands,
                     &mut audio,
                     &mut battler_flash,
                     def,
                     frame,
-                    anim.base,
+                    &anim.flash_anchors,
                 );
             }
             None => commands.entity(entity).despawn(),
@@ -231,18 +322,21 @@ fn step_animations(
 }
 
 /// Fire every timing that lands on `frame` (0-based; timings store 1-based frame
-/// numbers): emit its sound effect and its flash.
+/// numbers): emit its sound effect **once** for the whole cast, then its flash —
+/// a single full-screen quad for a screen flash, or one target tint per anchor.
+/// Firing the SE once (not once per target) matches EasyRPG, where a cast is a
+/// single `BattleAnimation` whose timeline runs once for all its battlers.
 fn fire_timings(
     commands: &mut Commands,
     audio: &mut MessageWriter<AudioRequest>,
     battler_flash: &mut MessageWriter<BattlerFlash>,
     def: &AnimationDef,
     frame: usize,
-    base: Vec2,
+    flash_anchors: &[Vec2],
 ) {
     for timing in def.timings.iter().filter(|t| t.frame as usize == frame + 1) {
         emit_sound(audio, timing);
-        emit_flash(commands, battler_flash, timing, base);
+        emit_flash(commands, battler_flash, timing, flash_anchors);
     }
 }
 
@@ -259,18 +353,18 @@ fn emit_sound(audio: &mut MessageWriter<AudioRequest>, timing: &AnimationTimingD
     });
 }
 
-/// Emit the timing's flash. A screen flash spawns a full-screen decaying quad on
-/// the overlay (RM2000's animation screen flash is a full-screen tint). A target
-/// flash publishes a [`BattlerFlash`] for `battle::scene` to tint the target
-/// battler sprite — never a drawn box. `ScreenEffect::Flash` is deliberately
-/// unused here: it is a main-camera overlay that would hide behind the order-1
-/// overlay backdrop during battle; it stays reserved for the interpreter's map
-/// `FlashScreen` opcode.
+/// Emit the timing's flash. A screen flash spawns a single full-screen decaying
+/// quad on the overlay (RM2000's animation screen flash is a full-screen tint),
+/// once for the cast. A target flash publishes a [`BattlerFlash`] per anchor for
+/// `battle::scene` to tint each target battler sprite — never a drawn box.
+/// `ScreenEffect::Flash` is deliberately unused here: it is a main-camera overlay
+/// that would hide behind the order-1 overlay backdrop during battle; it stays
+/// reserved for the interpreter's map `FlashScreen` opcode.
 fn emit_flash(
     commands: &mut Commands,
     battler_flash: &mut MessageWriter<BattlerFlash>,
     timing: &AnimationTimingDef,
-    base: Vec2,
+    flash_anchors: &[Vec2],
 ) {
     let rgb = [
         flash_channel(timing.flash_red),
@@ -281,12 +375,14 @@ fn emit_flash(
     match timing.flash_scope {
         FLASH_SCOPE_SCREEN => spawn_screen_flash(commands, rgb, power, FLASH_SECS),
         FLASH_SCOPE_TARGET => {
-            battler_flash.write(BattlerFlash {
-                pos: base,
-                rgb,
-                power,
-                secs: FLASH_SECS,
-            });
+            for &pos in flash_anchors {
+                battler_flash.write(BattlerFlash {
+                    pos,
+                    rgb,
+                    power,
+                    secs: FLASH_SECS,
+                });
+            }
         }
         _ => {}
     }
@@ -295,6 +391,19 @@ fn emit_flash(
 /// An RM2000 flash channel (0..=31) as a 0..1 component.
 fn flash_channel(value: u32) -> f32 {
     (value as f32 / 31.0).clamp(0.0, 1.0)
+}
+
+/// The RM2000 screen-space y-offset (down positive) the [`AnimationDef::position`]
+/// anchor applies over a target of pixel `height`, matching EasyRPG
+/// `battle_animation.cpp` `CalculateOffset`: feet/down (`2`) drops the effect by
+/// `height / 2`, head/up (`0`) lifts it by `height / 2`, and centre (`1`, or any
+/// other value) leaves it on the target centre.
+fn position_offset(position: u32, height: f32) -> f32 {
+    match position {
+        POSITION_UP => -height / 2.0,
+        POSITION_DOWN => height / 2.0,
+        _ => 0.0,
+    }
 }
 
 /// Debug-only: F7 plays animation 1 ("Ron pusztakez") at screen centre so the
@@ -313,8 +422,11 @@ fn debug_preview(
     if keys.just_pressed(KeyCode::F7) {
         plays.write(PlayAnimation {
             anim_id: 1,
-            x: 0.0,
-            y: 0.0,
+            targets: vec![AnimAnchor {
+                pos: Vec2::ZERO,
+                height: MAP_CHARACTER_HEIGHT,
+            }],
+            screen_center: MAP_SCREEN_CENTER,
         });
     }
 }
@@ -351,8 +463,11 @@ fn resolve_map_animation(
         let offset = target_screen_offset(target_pos, camera_pos);
         plays.write(PlayAnimation {
             anim_id: request.anim_id,
-            x: offset.x,
-            y: offset.y,
+            targets: vec![AnimAnchor {
+                pos: offset,
+                height: MAP_CHARACTER_HEIGHT,
+            }],
+            screen_center: MAP_SCREEN_CENTER,
         });
     }
 }
@@ -369,151 +484,4 @@ fn target_screen_offset(target: Vec2, camera: Vec2) -> Vec2 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn flash_timing(scope: u32) -> AnimationTimingDef {
-        AnimationTimingDef {
-            frame: 1,
-            se_name: String::new(),
-            flash_scope: scope,
-            flash_red: 31,
-            flash_green: 20,
-            flash_blue: 10,
-            flash_power: 31,
-        }
-    }
-
-    #[test]
-    fn a_screen_scope_flash_spawns_a_fullscreen_quad_and_no_battler_flash() {
-        let mut app = App::new();
-        app.add_plugins(MinimalPlugins);
-        app.add_message::<BattlerFlash>();
-        app.add_systems(
-            Update,
-            |mut commands: Commands, mut bf: MessageWriter<BattlerFlash>| {
-                emit_flash(
-                    &mut commands,
-                    &mut bf,
-                    &flash_timing(2),
-                    Vec2::new(16.0, -24.0),
-                );
-            },
-        );
-        app.update();
-        let mut quads = app.world_mut().query::<&render::FlashQuad>();
-        assert_eq!(quads.iter(app.world()).count(), 1, "one full-screen quad");
-        let messages = app.world().resource::<Messages<BattlerFlash>>();
-        let mut cursor = messages.get_cursor();
-        assert_eq!(cursor.read(messages).count(), 0, "no target tint");
-    }
-
-    #[test]
-    fn a_target_scope_flash_publishes_a_battler_flash_not_a_box() {
-        let mut app = App::new();
-        app.add_plugins(MinimalPlugins);
-        app.add_message::<BattlerFlash>();
-        app.add_systems(
-            Update,
-            |mut commands: Commands, mut bf: MessageWriter<BattlerFlash>| {
-                emit_flash(
-                    &mut commands,
-                    &mut bf,
-                    &flash_timing(1),
-                    Vec2::new(16.0, -24.0),
-                );
-            },
-        );
-        app.update();
-        let mut quads = app.world_mut().query::<&render::FlashQuad>();
-        assert_eq!(quads.iter(app.world()).count(), 0, "no drawn box");
-        let messages = app.world().resource::<Messages<BattlerFlash>>();
-        let mut cursor = messages.get_cursor();
-        let flashes: Vec<Vec2> = cursor.read(messages).map(|f| f.pos).collect();
-        assert_eq!(flashes, vec![Vec2::new(16.0, -24.0)]);
-    }
-
-    #[test]
-    fn flash_channel_normalises_and_clamps_the_0_31_scale() {
-        assert_eq!(flash_channel(0), 0.0);
-        assert_eq!(flash_channel(31), 1.0);
-        assert_eq!(flash_channel(62), 1.0);
-        assert!((flash_channel(15) - 15.0 / 31.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn target_screen_offset_centres_and_negates_y() {
-        // A target on the camera centre maps to the screen centre.
-        assert_eq!(
-            target_screen_offset(Vec2::new(50.0, -20.0), Vec2::new(50.0, -20.0)),
-            Vec2::ZERO
-        );
-        // A target +32 right and +16 *up* in world (y-up) reads as RM2000
-        // `(32, -16)` — right, and above centre (RM2000 y grows downward).
-        assert_eq!(
-            target_screen_offset(Vec2::new(32.0, 16.0), Vec2::ZERO),
-            Vec2::new(32.0, -16.0)
-        );
-        // A target below the camera has positive RM2000 y.
-        assert_eq!(
-            target_screen_offset(Vec2::new(0.0, -40.0), Vec2::ZERO),
-            Vec2::new(0.0, 40.0)
-        );
-    }
-
-    #[test]
-    fn resolver_projects_hero_and_event_onto_screen() {
-        let mut app = App::new();
-        app.add_plugins(MinimalPlugins);
-        app.add_message::<ShowMapAnimation>();
-        app.add_message::<PlayAnimation>();
-        app.add_systems(Update, resolve_map_animation);
-
-        // Main camera at world (100, 50). The hero sits 32 right / 16 up from it;
-        // event 7 sits 10 left / 20 down.
-        app.world_mut()
-            .spawn((MainCamera, Transform::from_xyz(100.0, 50.0, 0.0)));
-        app.world_mut().spawn((
-            Player {
-                tile_x: 0,
-                tile_y: 0,
-                dir: 0,
-                frame: 0,
-                charset: String::new(),
-                index: 0,
-            },
-            Transform::from_xyz(132.0, 66.0, 3.0),
-        ));
-        app.world_mut().spawn((
-            EventSprite {
-                id: 7,
-                tile_x: 0,
-                tile_y: 0,
-                dir: 0,
-                frame: 0,
-                charset: String::new(),
-                index: 0,
-            },
-            Transform::from_xyz(90.0, 30.0, 3.0),
-        ));
-
-        app.world_mut().write_message(ShowMapAnimation {
-            anim_id: 62,
-            target: AnimTarget::Hero,
-        });
-        app.world_mut().write_message(ShowMapAnimation {
-            anim_id: 63,
-            target: AnimTarget::Event(7),
-        });
-        app.update();
-
-        let messages = app.world().resource::<Messages<PlayAnimation>>();
-        let mut cursor = messages.get_cursor();
-        let plays: Vec<(u32, f32, f32)> = cursor
-            .read(messages)
-            .map(|p| (p.anim_id, p.x, p.y))
-            .collect();
-        // Hero: (132-100, 50-66) = (32, -16). Event 7: (90-100, 50-30) = (-10, 20).
-        assert_eq!(plays, vec![(62, 32.0, -16.0), (63, -10.0, 20.0)]);
-    }
-}
+mod tests;

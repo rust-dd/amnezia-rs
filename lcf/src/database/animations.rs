@@ -249,11 +249,16 @@ fn parse_timings(data: &[u8]) -> Result<Vec<AnimationTiming>, LcfError> {
     Ok(timings)
 }
 
+// liblcf defaults an animation's vertical anchor to `2` (down / feet) when the
+// `position` chunk is absent — the same value the RM2000 editor writes for a new
+// animation.
+const ANIMATION_DEFAULT_POSITION: u32 = 2;
+
 /// Parse the battle-animation table (`ChunkData::animations` = `0x13`) out of an
 /// LDB byte slice. Chunk ids (liblcf `ChunkAnimation`): name `0x01`,
 /// animation_name `0x02`, timings `0x06`, scope `0x09`, position `0x0A`, frames
-/// `0x0C`. Names decode from Windows-1250; omitted scope and position default to
-/// 0.
+/// `0x0C`. Names decode from Windows-1250; an omitted scope defaults to `0`
+/// (single target) and an omitted position to `2` (feet), matching liblcf.
 pub fn parse_animations(bytes: &[u8]) -> Result<Vec<Animation>, LcfError> {
     let section = find_section(bytes, ANIMATION_SECTION, LcfError::MissingAnimations)?;
     let mut reader = Reader::new(section);
@@ -266,7 +271,7 @@ pub fn parse_animations(bytes: &[u8]) -> Result<Vec<Animation>, LcfError> {
             name: String::new(),
             animation_name: String::new(),
             scope: 0,
-            position: 0,
+            position: ANIMATION_DEFAULT_POSITION,
             frames: Vec::new(),
             timings: Vec::new(),
         };
@@ -389,7 +394,9 @@ mod tests {
         let a = &parse_animations(&ldb).unwrap()[0];
         assert!(a.name.is_empty());
         assert!(a.animation_name.is_empty());
-        assert_eq!((a.scope, a.position), (0, 0));
+        // An omitted scope defaults to 0 (single target); an omitted position to
+        // 2 (feet), the liblcf default.
+        assert_eq!((a.scope, a.position), (0, 2));
         assert_eq!(a.frames.len(), 1);
         assert_eq!(
             a.frames[0].cells[0],

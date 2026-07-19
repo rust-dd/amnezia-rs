@@ -223,13 +223,15 @@ impl Battle {
         self.log.push(line);
     }
 
-    /// Queue `anim_id` at RM2000 screen offset `(x, y)` from centre (y downward)
-    /// for `battle.rs` to play as this tick resolves. A `0` id (no animation) is
-    /// skipped, so an attacker with neither a weapon animation nor an unarmed one
+    /// Queue `anim_id` on `targets` (RM2000 screen offsets from centre, y
+    /// downward) for `battle.rs` to play as this tick resolves — one queued
+    /// animation for the whole cast, so its sound fires once while its cells and
+    /// flashes reach every target. A `0` id (no animation) or an empty target list
+    /// is skipped, so an attacker with neither a weapon nor an unarmed animation
     /// plays nothing rather than a stray effect.
-    fn push_anim(&mut self, anim_id: u32, x: f32, y: f32) {
-        if anim_id != 0 {
-            self.pending_anims.push(PendingAnim { anim_id, x, y });
+    fn push_anim(&mut self, anim_id: u32, targets: Vec<(f32, f32)>) {
+        if anim_id != 0 && !targets.is_empty() {
+            self.pending_anims.push(PendingAnim { anim_id, targets });
         }
     }
 
@@ -259,8 +261,7 @@ impl Battle {
     /// swing shows whether or not the blow lands.
     fn strike_enemy(&mut self, pi: usize, ti: usize) -> Strike {
         let anim = self.members[pi].attack_animation;
-        let (x, y) = self.foe_anim_pos(ti);
-        self.push_anim(anim, x, y);
+        self.push_anim(anim, vec![self.foe_anim_pos(ti)]);
         let base = logic::physical_damage(
             self.members[pi].stats.attack,
             self.enemies[ti].stats.defense,
@@ -363,27 +364,50 @@ impl Battle {
         let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
         self.members[pi].sp = (self.members[pi].sp - skill.sp_cost as i32).max(0);
         let mut lines: Vec<String> = Vec::new();
+        // Queue the skill's battle animation once, over every target it resolves
+        // against, so its sound plays once for the cast while its cells and
+        // flashes land on each target (see `push_anim`). The per-target effect
+        // helpers below no longer queue it themselves.
         match skill.scope {
             1 => {
-                for ti in self.living_enemies() {
+                let foes = self.living_enemies();
+                let anchors: Vec<(f32, f32)> =
+                    foes.iter().map(|&ti| self.foe_anim_pos(ti)).collect();
+                self.push_anim(skill.animation_id, anchors);
+                for ti in foes {
                     lines.extend(self.skill_hit_enemy(pi, ti, &skill));
                 }
             }
-            2 => lines.extend(self.skill_heal_ally(pi, pi, &skill)),
+            2 => {
+                self.push_anim(
+                    skill.animation_id,
+                    vec![(self.party_anim_x(pi), PARTY_ANIM_Y)],
+                );
+                lines.extend(self.skill_heal_ally(pi, pi, &skill));
+            }
             3 => {
                 if self.members.get(target).is_some_and(|m| m.alive()) {
+                    self.push_anim(
+                        skill.animation_id,
+                        vec![(self.party_anim_x(target), PARTY_ANIM_Y)],
+                    );
                     lines.extend(self.skill_heal_ally(pi, target, &skill));
                 }
             }
             4 => {
-                for ti in 0..self.members.len() {
-                    if self.members[ti].alive() {
-                        lines.extend(self.skill_heal_ally(pi, ti, &skill));
-                    }
+                let allies = self.living_members();
+                let anchors: Vec<(f32, f32)> = allies
+                    .iter()
+                    .map(|&ti| (self.party_anim_x(ti), PARTY_ANIM_Y))
+                    .collect();
+                self.push_anim(skill.animation_id, anchors);
+                for ti in allies {
+                    lines.extend(self.skill_heal_ally(pi, ti, &skill));
                 }
             }
             _ => {
                 if let Some(ti) = self.retarget_enemy(target) {
+                    self.push_anim(skill.animation_id, vec![self.foe_anim_pos(ti)]);
                     lines.extend(self.skill_hit_enemy(pi, ti, &skill));
                 }
             }
@@ -396,14 +420,12 @@ impl Battle {
         })
     }
 
-    /// Land `skill` from caster `pi` on enemy `ti`: queue the skill's battle
-    /// animation on the struck foe, then elemental damage against the foe's
-    /// resistance ranks (SP drains find no pool on a foe), an optional
+    /// Land `skill` from caster `pi` on enemy `ti`: elemental damage against the
+    /// foe's resistance ranks (SP drains find no pool on a foe), an optional
     /// life-absorb for the caster, and a status-infliction roll per affected
-    /// state, weighted by the foe's affliction rank.
+    /// state, weighted by the foe's affliction rank. The skill's battle animation
+    /// is queued once for the whole cast by [`Battle::cast_skill`], not here.
     fn skill_hit_enemy(&mut self, pi: usize, ti: usize, skill: &SkillDef) -> Vec<String> {
-        let (x, y) = self.foe_anim_pos(ti);
-        self.push_anim(skill.animation_id, x, y);
         let caster = self.members[pi].name.clone();
         let target = self.enemies[ti].name.clone();
         let base = logic::skill_effect(
@@ -445,12 +467,11 @@ impl Battle {
         lines
     }
 
-    /// Heal ally `ti` for caster `pi`'s `skill`: queue the skill's battle
-    /// animation at that ally's party slot, then restore SP or HP (clamped to the
-    /// maximum), then cure each of the skill's affected states from that ally.
+    /// Heal ally `ti` for caster `pi`'s `skill`: restore SP or HP (clamped to the
+    /// maximum), then cure each of the skill's affected states from that ally. The
+    /// skill's battle animation is queued once for the whole cast by
+    /// [`Battle::cast_skill`], not here.
     fn skill_heal_ally(&mut self, pi: usize, ti: usize, skill: &SkillDef) -> Vec<String> {
-        let x = self.party_anim_x(ti);
-        self.push_anim(skill.animation_id, x, PARTY_ANIM_Y);
         let caster = self.members[pi].name.clone();
         let target = self.members[ti].name.clone();
         let base = logic::skill_effect(
@@ -597,8 +618,7 @@ impl Battle {
         let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
         let name = self.enemies[ei].name.clone();
         if matches!(skill.scope, 2..=4) {
-            let (x, y) = self.foe_anim_pos(ei);
-            self.push_anim(skill.animation_id, x, y);
+            self.push_anim(skill.animation_id, vec![self.foe_anim_pos(ei)]);
             let base = logic::skill_effect(
                 &skill,
                 &self.enemies[ei].stats,
@@ -612,8 +632,10 @@ impl Battle {
             return Some(format!("{name} varázsol: {name} +{amt}"));
         }
         let ti = self.retarget_member(target)?;
-        let x = self.party_anim_x(ti);
-        self.push_anim(skill.animation_id, x, PARTY_ANIM_Y);
+        self.push_anim(
+            skill.animation_id,
+            vec![(self.party_anim_x(ti), PARTY_ANIM_Y)],
+        );
         let base = logic::skill_effect(
             &skill,
             &self.enemies[ei].stats,
@@ -1053,8 +1075,10 @@ mod tests {
             .iter()
             .find(|a| a.anim_id == 7)
             .expect("the weapon attack animation should be queued");
-        assert!((anim.x + 60.0).abs() < 1e-6, "x = {}", anim.x);
-        assert!((anim.y + 20.0).abs() < 1e-6, "y = {}", anim.y);
+        assert_eq!(anim.targets.len(), 1, "one target for the struck foe");
+        let (x, y) = anim.targets[0];
+        assert!((x + 60.0).abs() < 1e-6, "x = {x}");
+        assert!((y + 20.0).abs() < 1e-6, "y = {y}");
     }
 
     #[test]
@@ -1117,8 +1141,7 @@ mod tests {
         let mut battle = build_1v2();
         battle.pending_anims.push(PendingAnim {
             anim_id: 5,
-            x: 1.0,
-            y: 2.0,
+            targets: vec![(1.0, 2.0)],
         });
         battle.new_round();
         assert!(battle.pending_anims.is_empty());
@@ -1323,26 +1346,31 @@ mod tests {
             .filter(|a| a.anim_id == 9)
             .collect();
         assert_eq!(hits.len(), 1, "one animation for the one struck foe");
+        assert_eq!(hits[0].targets.len(), 1, "one target");
         // foe 0 at (100, 100): x = 100 - 160 = -60, y = 100 - 120 = -20.
-        assert!((hits[0].x + 60.0).abs() < 1e-6, "x = {}", hits[0].x);
-        assert!((hits[0].y + 20.0).abs() < 1e-6, "y = {}", hits[0].y);
+        let (x, y) = hits[0].targets[0];
+        assert!((x + 60.0).abs() < 1e-6, "x = {x}");
+        assert!((y + 20.0).abs() < 1e-6, "y = {y}");
     }
 
     #[test]
-    fn an_all_enemy_skill_queues_one_animation_per_living_foe() {
+    fn an_all_enemy_skill_queues_one_animation_over_every_living_foe() {
         let mut battle = build_1v2(); // two living foes, at x = 100 and x = 200
         let mut s = damage_skill(1, 20, vec![], vec![]);
         s.scope = 1; // all enemies
         s.animation_id = 8;
         battle.skills = vec![s];
         battle.cast_skill(0, 1, 0);
-        let xs: Vec<f32> = battle
+        // One queued animation for the whole cast (its SE fires once), carrying
+        // every living foe as a target so its cells and flashes reach each.
+        let hits: Vec<_> = battle
             .pending_anims
             .iter()
             .filter(|a| a.anim_id == 8)
-            .map(|a| a.x)
             .collect();
-        assert_eq!(xs.len(), 2, "one animation per living foe");
+        assert_eq!(hits.len(), 1, "one animation for the multi-target cast");
+        let xs: Vec<f32> = hits[0].targets.iter().map(|&(x, _)| x).collect();
+        assert_eq!(xs.len(), 2, "one target per living foe");
         assert!(xs.iter().any(|x| (x + 60.0).abs() < 1e-6), "foe at x=100");
         assert!(xs.iter().any(|x| (x - 40.0).abs() < 1e-6), "foe at x=200");
     }
@@ -1355,18 +1383,21 @@ mod tests {
         s.animation_id = 5;
         battle.skills = vec![s];
         battle.cast_skill(0, 2, 0);
+        // One queued animation for the whole cast, carrying every living ally.
         let heals: Vec<_> = battle
             .pending_anims
             .iter()
             .filter(|a| a.anim_id == 5)
             .collect();
-        assert_eq!(heals.len(), 2, "one animation per living ally");
+        assert_eq!(heals.len(), 1, "one animation for the multi-target heal");
+        let slots = &heals[0].targets;
+        assert_eq!(slots.len(), 2, "one target per living ally");
         assert!(
-            heals.iter().all(|a| (a.y - 80.0).abs() < 1e-6),
+            slots.iter().all(|&(_, y)| (y - 80.0).abs() < 1e-6),
             "each plays at the party-area y"
         );
         assert!(
-            (heals[0].x - heals[1].x).abs() > 1e-6,
+            (slots[0].0 - slots[1].0).abs() > 1e-6,
             "the two members' slots are spread apart"
         );
     }
@@ -1396,9 +1427,11 @@ mod tests {
             .filter(|a| a.anim_id == 6)
             .collect();
         assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].targets.len(), 1);
         // The lone member's party slot: centred x, party-area y.
-        assert!((hits[0].x).abs() < 1e-6, "x = {}", hits[0].x);
-        assert!((hits[0].y - 80.0).abs() < 1e-6, "y = {}", hits[0].y);
+        let (x, y) = hits[0].targets[0];
+        assert!(x.abs() < 1e-6, "x = {x}");
+        assert!((y - 80.0).abs() < 1e-6, "y = {y}");
     }
 
     #[test]
@@ -1414,8 +1447,10 @@ mod tests {
             .filter(|a| a.anim_id == 4)
             .collect();
         assert_eq!(hits.len(), 1);
-        assert!((hits[0].x + 60.0).abs() < 1e-6, "x = {}", hits[0].x);
-        assert!((hits[0].y + 20.0).abs() < 1e-6, "y = {}", hits[0].y);
+        assert_eq!(hits[0].targets.len(), 1);
+        let (x, y) = hits[0].targets[0];
+        assert!((x + 60.0).abs() < 1e-6, "x = {x}");
+        assert!((y + 20.0).abs() < 1e-6, "y = {y}");
     }
 
     fn damage_release_state(id: u32) -> amnezia_data::StateDef {

@@ -184,15 +184,17 @@ pub struct Action {
     pub agility: u32,
 }
 
-/// One queued attack animation, produced as a physical strike resolves and
-/// drained by `battle.rs`'s `drain_pending_anims` into a `PlayAnimation` overlay
-/// message. `anim_id` is the effect id; `x`/`y` its RM2000 screen offset from the
-/// screen centre (y downward), matching the animation player's coordinates.
-#[derive(Clone, Copy)]
+/// One queued battle animation, produced as an action resolves and drained by
+/// `battle.rs`'s `drain_pending_anims` into a single `PlayAnimation` overlay
+/// message. `anim_id` is the effect id; `targets` are the RM2000 screen offsets
+/// from the screen centre (y downward) of every battler the cast hits — one entry
+/// for a single-target strike, several for a multi-target skill — so the effect's
+/// sound plays once for the whole cast while its cells and flashes land on each
+/// target.
+#[derive(Clone)]
 pub(super) struct PendingAnim {
     pub anim_id: u32,
-    pub x: f32,
-    pub y: f32,
+    pub targets: Vec<(f32, f32)>,
 }
 
 /// The whole live battle, held as a Bevy resource and reset to `default()` (the

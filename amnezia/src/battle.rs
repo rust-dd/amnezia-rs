@@ -21,7 +21,7 @@ mod model;
 mod resolve;
 mod scene;
 
-use crate::animation::PlayAnimation;
+use crate::animation::{AnimAnchor, PlayAnimation};
 use crate::assets::{asset_root, load_ron};
 use crate::gamedata::GameData;
 use crate::progression::Progression;
@@ -37,6 +37,17 @@ const DEBUG_TROOP: u32 = 2;
 
 /// The backdrop every fight uses in v1 (per-troop terrain backdrops are deferred).
 const BACKDROP: &str = "Cave1";
+
+/// The RM2000 screen offset a screen-scope battle animation centres its cells on:
+/// EasyRPG `BattleAnimationBattle::Draw` uses `(screen_w/2, screen_h/3)`, which in
+/// our centre-origin 320×240 overlay (`0,0` = centre) is `(0, 80 - 120)` =
+/// `(0, -40)` (y downward).
+const BATTLE_SCREEN_CENTER: Vec2 = Vec2::new(0.0, -40.0);
+
+/// The target height a party-area animation assumes: RM2000 front view draws no
+/// party sprites, so there is no battler to measure, and this matches the
+/// fallback EasyRPG uses when a battler bitmap is not yet ready.
+const PARTY_TARGET_HEIGHT: f32 = 48.0;
 
 /// Start a fight with the given troop. The interpreter emits this from opcode
 /// 10710; the debug key emits it too until that wiring lands.
@@ -212,21 +223,39 @@ fn resolve_tick(time: Res<Time>, mut battle: ResMut<Battle>) {
     }
 }
 
-/// Drain the battle's per-tick attack-animation queue into overlay
-/// [`PlayAnimation`] messages: each physical strike resolved this tick queued its
-/// attacker's attack animation at its target's screen position (see `resolve`).
-/// Emitting them here keeps the queue-push Bevy-free and plays each effect once.
-/// Guarded on non-empty so an idle fight never marks [`Battle`] changed (which
-/// would re-run the UI every frame).
-fn drain_pending_anims(mut battle: ResMut<Battle>, mut plays: MessageWriter<PlayAnimation>) {
+/// Drain the battle's per-tick animation queue into overlay [`PlayAnimation`]
+/// messages: each action resolved this tick queued one animation over its
+/// target(s) (see `resolve`). This attaches each target's battler pixel height —
+/// looked up from the live battler sprites (see `scene::battler_height_at`), or a
+/// party-area default — so the animation's `position` anchor can offset from it,
+/// and stamps the battle screen-centre for a screen-scope effect. Emitting here
+/// keeps the queue-push Bevy-free and plays each effect once. Guarded on non-empty
+/// so an idle fight never marks [`Battle`] changed (which would re-run the UI
+/// every frame).
+fn drain_pending_anims(
+    mut battle: ResMut<Battle>,
+    battlers: Query<&scene::Battler>,
+    mut plays: MessageWriter<PlayAnimation>,
+) {
     if battle.pending_anims.is_empty() {
         return;
     }
     for anim in battle.pending_anims.drain(..) {
+        let targets = anim
+            .targets
+            .iter()
+            .map(|&(x, y)| {
+                let pos = Vec2::new(x, y);
+                AnimAnchor {
+                    pos,
+                    height: scene::battler_height_at(&battlers, pos).unwrap_or(PARTY_TARGET_HEIGHT),
+                }
+            })
+            .collect();
         plays.write(PlayAnimation {
             anim_id: anim.anim_id,
-            x: anim.x,
-            y: anim.y,
+            targets,
+            screen_center: BATTLE_SCREEN_CENTER,
         });
     }
 }
