@@ -623,8 +623,17 @@ fn run_interpreter(
                 running.ip += 1;
             }
             OPEN_SHOP => {
-                // Offer `params[4..]` (item ids, negatives dropped); pause until the
-                // screen closes, then the shop-resume above skips the block.
+                // `params[0]` is the mode (0 buy+sell, 1 buy-only, 2 sell-only),
+                // `params[1]` the shop type (shopkeeper wording), and `params[4..]`
+                // the offered item ids (negatives dropped). Pause until the screen
+                // closes, then the shop-resume above skips the block and its
+                // Transaction/NoTransaction handlers self-select.
+                let (allow_buy, allow_sell) = match command.params.first().copied().unwrap_or(0) {
+                    1 => (true, false),
+                    2 => (false, true),
+                    _ => (true, true),
+                };
+                let shop_type = command.params.get(1).copied().unwrap_or(0).max(0) as u32;
                 let items = command
                     .params
                     .iter()
@@ -632,10 +641,12 @@ fn run_interpreter(
                     .filter(|&&p| p >= 0)
                     .map(|&p| p as u32)
                     .collect();
-                subsystems
-                    .merchant
-                    .writer
-                    .write(ShopRequest::OpenShop { items });
+                subsystems.merchant.writer.write(ShopRequest::OpenShop {
+                    items,
+                    allow_buy,
+                    allow_sell,
+                    shop_type,
+                });
                 running.shop_pending = true;
                 return;
             }
