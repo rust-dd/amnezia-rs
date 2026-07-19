@@ -123,12 +123,19 @@ pub struct RelocateEvent {
     pub y: u32,
 }
 
+/// Emitted once when the active map is replaced — a teleport/transfer or a
+/// save-load, both routed through the fade's `swap_map`. Pictures clear on it,
+/// matching RPG Maker 2000's transfer default (it erases pictures on transfer).
+#[derive(Message)]
+pub struct MapChanged;
+
 pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<water::WaterAnim>()
             .add_message::<RelocateEvent>()
+            .add_message::<MapChanged>()
             .add_systems(Startup, setup)
             .add_systems(
                 Update,

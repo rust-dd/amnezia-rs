@@ -1,28 +1,45 @@
 //! On-screen pictures (RM2000 `ShowPicture`/`MovePicture`/`ErasePicture`): a
 //! numbered picture (1..50) drawn from `graphics/Picture/*.png`, positioned in
 //! the 320×240 screen and optionally tweened. The interpreter emits a
-//! [`PictureCommand`]; this plugin spawns/moves/despawns a sprite per id.
+//! [`PictureCommand`]; this plugin spawns/moves/despawns a textured quad per id.
 //!
-//! Each picture is a top-level, centre-anchored [`Sprite`] kept pinned to the
-//! screen by [`place_pictures`], which re-centres it on the camera every frame
-//! (so it doesn't scroll with the map and survives map transfers). Positions are
-//! read after the screen shake lands, so pictures shake with the view.
+//! Each picture carries a colour [`Tone`] (RGB multiply + saturation, so a
+//! grayscale or tinted picture renders as one — see [`render`]) and honours the
+//! RM2000 fixed-to-map flag: a screen-pinned picture re-centres on the (shaken)
+//! camera every frame, a map-fixed one holds a world anchor and scrolls with the
+//! map. Pictures shake with the screen (they track the shaken camera) but are
+//! never touched by the screen tint, and all pictures are cleared on a map
+//! change ([`clear_on_map_change`]), matching RPG Maker 2000's transfer default.
 
-use crate::assets::resolve_png;
 use crate::screenfx::ScreenShakeSet;
-use crate::world::MainCamera;
+use crate::world::MapChanged;
 use bevy::prelude::*;
+use bevy::sprite_render::Material2dPlugin;
 use bevy::transform::TransformSystems;
 
-/// RM2000 screen centre in its 320×240 viewport; a picture's `(x, y)` is its
-/// centre, so this maps to the camera centre.
-const CENTER_X: f32 = 160.0;
-const CENTER_Y: f32 = 120.0;
+mod render;
 
-/// World z of picture 0; each picture adds its id, so higher ids draw on top and
-/// every picture sits above the map and characters (z < 4) yet within the 2D
-/// camera's range.
-const PICTURE_Z_BASE: f32 = 100.0;
+/// An RM2000 picture colour tone: per-channel RGB and a saturation, each a
+/// percent with 100 neutral (`saturation = 0` is full grayscale). Interpolated
+/// by [`PictureCommand::Move`] over its duration.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Tone {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub sat: f32,
+}
+
+impl Tone {
+    /// The no-op tone (every channel neutral). Used as a test reference point.
+    #[cfg(test)]
+    pub(crate) const NEUTRAL: Tone = Tone {
+        r: 100.0,
+        g: 100.0,
+        b: 100.0,
+        sat: 100.0,
+    };
+}
 
 /// A picture command emitted by the interpreter, consumed by this plugin. The
 /// interpreter resolves `x`/`y` (direct or via variables) before sending, so
@@ -35,16 +52,19 @@ pub enum PictureCommand {
         name: String,
         x: f32,
         y: f32,
+        fixed_to_map: bool,
         transparency: f32,
         zoom: f32,
+        tone: Tone,
     },
-    /// Tween picture `id` to `(x, y)`/opacity/zoom over `secs`.
+    /// Tween picture `id` to `(x, y)`/opacity/zoom/tone over `secs`.
     Move {
         id: u32,
         x: f32,
         y: f32,
         transparency: f32,
         zoom: f32,
+        tone: Tone,
         secs: f32,
     },
     /// Remove picture `id`.
@@ -53,20 +73,24 @@ pub enum PictureCommand {
 
 impl PictureCommand {
     /// Map a `ShowPicture` (11110) with `name` from the command string and
-    /// already-resolved `(x, y)`. `params[5]` is zoom %, `params[6]` transparency.
+    /// already-resolved `(x, y)`. `params[4]` is the fixed-to-map flag,
+    /// `params[5]` zoom %, `params[6]` transparency, `params[8..12]` the tone.
     pub fn show(id: u32, name: &str, x: f32, y: f32, params: &[i32]) -> Self {
         Self::Show {
             id,
             name: name.to_string(),
             x,
             y,
+            fixed_to_map: fixed_param(params),
             transparency: transparency_param(params),
             zoom: zoom_param(params),
+            tone: tone_param(params),
         }
     }
 
-    /// Map a `MovePicture` (11120): same fields as `Show` plus `params[14]`
-    /// duration in tenths of a second (the graphic is unchanged, so no name).
+    /// Map a `MovePicture` (11120): same fields as `Show` (minus the graphic and
+    /// the fixed flag, which stay from the original show) plus `params[14]`
+    /// duration in tenths of a second.
     pub fn move_to(id: u32, x: f32, y: f32, params: &[i32]) -> Self {
         Self::Move {
             id,
@@ -74,6 +98,7 @@ impl PictureCommand {
             y,
             transparency: transparency_param(params),
             zoom: zoom_param(params),
+            tone: tone_param(params),
             secs: params.get(14).copied().unwrap_or(0) as f32 / 10.0,
         }
     }
@@ -94,7 +119,23 @@ fn zoom_param(params: &[i32]) -> f32 {
     params.get(5).copied().unwrap_or(100) as f32
 }
 
-/// A live on-screen picture: its id, current visual state, and any running move.
+/// RM2000 fixed-to-map flag (`params[4]`, > 0 = anchored to the map).
+fn fixed_param(params: &[i32]) -> bool {
+    params.get(4).copied().unwrap_or(0) > 0
+}
+
+/// RM2000 colour tone (`params[8..12]` = red, green, blue, saturation percents).
+fn tone_param(params: &[i32]) -> Tone {
+    Tone {
+        r: params.get(8).copied().unwrap_or(100) as f32,
+        g: params.get(9).copied().unwrap_or(100) as f32,
+        b: params.get(10).copied().unwrap_or(100) as f32,
+        sat: params.get(11).copied().unwrap_or(100) as f32,
+    }
+}
+
+/// A live on-screen picture: its id, current visual state, map anchor, texture
+/// size, and any running move.
 #[derive(Component)]
 struct Picture {
     id: u32,
@@ -102,14 +143,94 @@ struct Picture {
     y: f32,
     transparency: f32,
     zoom: f32,
+    tone: Tone,
+    /// Anchored to the map (scrolls with it) rather than pinned to the screen.
+    fixed_to_map: bool,
+    /// The fixed world position of a map-anchored picture, sampled at show time.
+    world_anchor: Option<Vec2>,
+    /// The native texture size, filled once the image loads.
+    base_size: Option<Vec2>,
     tween: Option<Tween>,
 }
 
-/// A `MovePicture` in progress: interpolating `[x, y, transparency, zoom]`.
+impl Picture {
+    /// This picture's current visual state as an interpolation endpoint.
+    fn anim(&self) -> Anim {
+        Anim {
+            x: self.x,
+            y: self.y,
+            transparency: self.transparency,
+            zoom: self.zoom,
+            tone: self.tone,
+        }
+    }
+
+    /// Apply the visual state `state`, immediately when `secs <= 0`, otherwise as
+    /// a tween from the current state.
+    fn apply(&mut self, state: Anim) {
+        self.x = state.x;
+        self.y = state.y;
+        self.transparency = state.transparency;
+        self.zoom = state.zoom;
+        self.tone = state.tone;
+    }
+
+    /// Retarget this picture to a new visual state over `secs`.
+    fn retarget(&mut self, x: f32, y: f32, transparency: f32, zoom: f32, tone: Tone, secs: f32) {
+        let to = Anim {
+            x,
+            y,
+            transparency,
+            zoom,
+            tone,
+        };
+        if secs <= 0.0 {
+            self.apply(to);
+            self.tween = None;
+        } else {
+            self.tween = Some(Tween {
+                from: self.anim(),
+                to,
+                elapsed: 0.0,
+                secs,
+            });
+        }
+    }
+}
+
+/// A picture's interpolated visual state.
+#[derive(Clone, Copy)]
+struct Anim {
+    x: f32,
+    y: f32,
+    transparency: f32,
+    zoom: f32,
+    tone: Tone,
+}
+
+impl Anim {
+    /// Linear interpolation of every field.
+    fn lerp(from: Anim, to: Anim, t: f32) -> Anim {
+        Anim {
+            x: lerp(from.x, to.x, t),
+            y: lerp(from.y, to.y, t),
+            transparency: lerp(from.transparency, to.transparency, t),
+            zoom: lerp(from.zoom, to.zoom, t),
+            tone: Tone {
+                r: lerp(from.tone.r, to.tone.r, t),
+                g: lerp(from.tone.g, to.tone.g, t),
+                b: lerp(from.tone.b, to.tone.b, t),
+                sat: lerp(from.tone.sat, to.tone.sat, t),
+            },
+        }
+    }
+}
+
+/// A `MovePicture` in progress, interpolating the whole visual state.
 #[derive(Clone, Copy)]
 struct Tween {
-    from: [f32; 4],
-    to: [f32; 4],
+    from: Anim,
+    to: Anim,
     elapsed: f32,
     secs: f32,
 }
@@ -119,87 +240,24 @@ pub struct PicturePlugin;
 impl Plugin for PicturePlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<PictureCommand>()
-            .add_systems(Update, (apply_commands, drive_tweens))
+            .add_plugins(Material2dPlugin::<render::PictureMaterial>::default())
+            .add_systems(Startup, render::setup_picture_mesh)
+            .add_systems(
+                Update,
+                (
+                    clear_on_map_change,
+                    render::apply_commands,
+                    render::size_pictures,
+                    drive_tweens,
+                )
+                    .chain(),
+            )
             .add_systems(
                 PostUpdate,
-                place_pictures
+                render::place_pictures
                     .after(ScreenShakeSet)
                     .before(TransformSystems::Propagate),
             );
-    }
-}
-
-/// Spawn, retarget, or despawn pictures as commands arrive.
-fn apply_commands(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut requests: MessageReader<PictureCommand>,
-    mut pictures: Query<(Entity, &mut Picture)>,
-) {
-    for request in requests.read() {
-        match request {
-            PictureCommand::Show {
-                id,
-                name,
-                x,
-                y,
-                transparency,
-                zoom,
-            } => {
-                despawn_picture(&mut commands, &pictures, *id);
-                commands.spawn((
-                    Picture {
-                        id: *id,
-                        x: *x,
-                        y: *y,
-                        transparency: *transparency,
-                        zoom: *zoom,
-                        tween: None,
-                    },
-                    Sprite {
-                        image: asset_server.load(resolve_png("Picture", name)),
-                        color: sprite_color(*transparency),
-                        ..default()
-                    },
-                    Transform::from_translation(screen_offset(*x, *y).extend(picture_z(*id))),
-                ));
-            }
-            PictureCommand::Move {
-                id,
-                x,
-                y,
-                transparency,
-                zoom,
-                secs,
-            } => {
-                if let Some((_, mut pic)) = pictures.iter_mut().find(|(_, p)| p.id == *id) {
-                    if *secs <= 0.0 {
-                        pic.x = *x;
-                        pic.y = *y;
-                        pic.transparency = *transparency;
-                        pic.zoom = *zoom;
-                        pic.tween = None;
-                    } else {
-                        pic.tween = Some(Tween {
-                            from: [pic.x, pic.y, pic.transparency, pic.zoom],
-                            to: [*x, *y, *transparency, *zoom],
-                            elapsed: 0.0,
-                            secs: *secs,
-                        });
-                    }
-                }
-            }
-            PictureCommand::Erase { id } => despawn_picture(&mut commands, &pictures, *id),
-        }
-    }
-}
-
-/// Despawn every picture entity with the given id.
-fn despawn_picture(commands: &mut Commands, pictures: &Query<(Entity, &mut Picture)>, id: u32) {
-    for (entity, pic) in pictures.iter() {
-        if pic.id == id {
-            commands.entity(entity).despawn();
-        }
     }
 }
 
@@ -212,61 +270,25 @@ fn drive_tweens(time: Res<Time>, mut pictures: Query<&mut Picture>) {
         };
         tween.elapsed += dt;
         let t = (tween.elapsed / tween.secs).clamp(0.0, 1.0);
-        let [x, y, transparency, zoom] = lerp4(tween.from, tween.to, t);
-        pic.x = x;
-        pic.y = y;
-        pic.transparency = transparency;
-        pic.zoom = zoom;
+        pic.apply(Anim::lerp(tween.from, tween.to, t));
         pic.tween = (tween.elapsed < tween.secs).then_some(tween);
     }
 }
 
-/// Pin each picture to the (shaken) camera centre plus its screen offset, and
-/// repaint its opacity and zoom.
-fn place_pictures(
-    cameras: Query<&Transform, (With<MainCamera>, Without<Picture>)>,
-    mut pictures: Query<(&Picture, &mut Transform, &mut Sprite)>,
+/// Erase every picture when the map changes, matching RM2000's transfer default
+/// (it clears pictures on transfer). The interpreter is paused across the fade,
+/// so the destination map's own `ShowPicture`s run only after this has cleared.
+fn clear_on_map_change(
+    mut commands: Commands,
+    mut changed: MessageReader<MapChanged>,
+    pictures: Query<Entity, With<Picture>>,
 ) {
-    let Ok(camera) = cameras.single() else {
+    if changed.read().last().is_none() {
         return;
-    };
-    let base = camera.translation.truncate();
-    for (pic, mut transform, mut sprite) in &mut pictures {
-        transform.translation = (base + screen_offset(pic.x, pic.y)).extend(picture_z(pic.id));
-        transform.scale = Vec3::splat((pic.zoom / 100.0).max(0.0));
-        sprite.color = sprite_color(pic.transparency);
     }
-}
-
-/// The camera-relative offset of a picture centred at RM2000 `(x, y)`; RM2000 y
-/// grows downward, so it flips against world y.
-fn screen_offset(x: f32, y: f32) -> Vec2 {
-    Vec2::new(x - CENTER_X, CENTER_Y - y)
-}
-
-/// A white sprite tint carrying the picture's opacity (1 - transparency).
-fn sprite_color(transparency: f32) -> Color {
-    Color::srgba(1.0, 1.0, 1.0, opacity(transparency))
-}
-
-/// Opacity (0..1) from RM2000 transparency percent (0 opaque, 100 invisible).
-fn opacity(transparency: f32) -> f32 {
-    1.0 - transparency.clamp(0.0, 100.0) / 100.0
-}
-
-/// The world z of picture `id`.
-fn picture_z(id: u32) -> f32 {
-    PICTURE_Z_BASE + id as f32
-}
-
-/// Linear interpolation of two 4-vectors.
-fn lerp4(from: [f32; 4], to: [f32; 4], t: f32) -> [f32; 4] {
-    [
-        lerp(from[0], to[0], t),
-        lerp(from[1], to[1], t),
-        lerp(from[2], to[2], t),
-        lerp(from[3], to[3], t),
-    ]
+    for entity in &pictures {
+        commands.entity(entity).despawn();
+    }
 }
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
@@ -278,40 +300,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn screen_offset_centres_on_the_viewport_centre() {
-        assert_eq!(screen_offset(160.0, 120.0), Vec2::ZERO);
-        assert_eq!(screen_offset(0.0, 0.0), Vec2::new(-160.0, 120.0));
-        assert_eq!(screen_offset(320.0, 240.0), Vec2::new(160.0, -120.0));
-    }
-
-    #[test]
-    fn opacity_is_the_complement_of_transparency() {
-        assert_eq!(opacity(0.0), 1.0);
-        assert_eq!(opacity(100.0), 0.0);
-        assert_eq!(opacity(50.0), 0.5);
-        assert_eq!(opacity(150.0), 0.0);
-    }
-
-    #[test]
-    fn picture_z_orders_by_id_and_stays_above_the_map() {
-        assert!(picture_z(2) > picture_z(1));
-        assert!(picture_z(1) > 4.0);
-    }
-
-    #[test]
-    fn lerp_interpolates_endpoints_and_midpoint() {
-        assert_eq!(lerp(0.0, 10.0, 0.0), 0.0);
-        assert_eq!(lerp(0.0, 10.0, 1.0), 10.0);
-        assert_eq!(lerp(0.0, 10.0, 0.5), 5.0);
-        assert_eq!(
-            lerp4([0.0, 0.0, 0.0, 100.0], [10.0, 20.0, 100.0, 200.0], 0.5),
-            [5.0, 10.0, 50.0, 150.0]
-        );
-    }
-
-    #[test]
-    fn show_maps_id_name_transparency_and_zoom() {
-        // Cross at (93, 94): [id, method, x, y, fixed, zoom, transp, ...].
+    fn show_maps_position_flag_tone_transparency_and_zoom() {
+        // Cross at (93, 94): [id, method, x, y, fixed, zoom, transp, usetransp,
+        // R, G, B, sat, effmode, effpower].
         let params = [2, 1, 93, 94, 0, 100, 0, 1, 100, 100, 100, 100, 0, 60];
         assert_eq!(
             PictureCommand::show(2, "Cross", 93.0, 94.0, &params),
@@ -320,43 +311,136 @@ mod tests {
                 name: "Cross".into(),
                 x: 93.0,
                 y: 94.0,
+                fixed_to_map: false,
                 transparency: 0.0,
                 zoom: 100.0,
+                tone: Tone::NEUTRAL,
             }
         );
     }
 
     #[test]
-    fn move_reads_duration_from_param_14() {
-        // Intro fade-in: transparency 0, duration 10 tenths = 1.0s.
-        let params = [
-            1,
-            1,
-            12,
-            13,
-            0,
-            100,
-            0,
-            0,
-            100,
-            100,
-            100,
-            0,
-            0,
-            -2147483640,
-            10,
-            1,
-        ];
+    fn show_reads_the_fixed_to_map_flag_and_a_grayscale_tone() {
+        // A map-fixed shadow, and the intro plate's grayscale (saturation 0).
+        let fixed = [1, 1, 12, 13, 1, 150, 60, 1, 100, 100, 100, 100, 0, 60];
+        let gray = [1, 0, 74, 120, 0, 100, 100, 0, 100, 100, 100, 0, 0, 60];
+        match PictureCommand::show(1, "AirshipShadow", 12.0, 13.0, &fixed) {
+            PictureCommand::Show { fixed_to_map, .. } => assert!(fixed_to_map),
+            _ => panic!("expected a Show"),
+        }
+        match PictureCommand::show(1, "Intro1", 74.0, 120.0, &gray) {
+            PictureCommand::Show {
+                tone, fixed_to_map, ..
+            } => {
+                assert!(!fixed_to_map);
+                assert_eq!(tone.sat, 0.0);
+                assert_eq!((tone.r, tone.g, tone.b), (100.0, 100.0, 100.0));
+            }
+            _ => panic!("expected a Show"),
+        }
+    }
+
+    #[test]
+    fn move_reads_duration_and_tone_from_the_command() {
+        // Intro fade to grayscale: saturation 0, duration 30 tenths = 3.0s.
+        let params = [1, 0, 246, 120, 0, 100, 0, 0, 100, 100, 100, 0, 0, 0, 30, 1];
         assert_eq!(
-            PictureCommand::move_to(1, 12.0, 13.0, &params),
+            PictureCommand::move_to(1, 246.0, 120.0, &params),
             PictureCommand::Move {
                 id: 1,
-                x: 12.0,
-                y: 13.0,
+                x: 246.0,
+                y: 120.0,
                 transparency: 0.0,
                 zoom: 100.0,
-                secs: 1.0,
+                tone: Tone {
+                    r: 100.0,
+                    g: 100.0,
+                    b: 100.0,
+                    sat: 0.0,
+                },
+                secs: 3.0,
             }
         );
+    }
+
+    #[test]
+    fn lerp_interpolates_endpoints_and_midpoint() {
+        assert_eq!(lerp(0.0, 10.0, 0.0), 0.0);
+        assert_eq!(lerp(0.0, 10.0, 1.0), 10.0);
+        assert_eq!(lerp(0.0, 10.0, 0.5), 5.0);
+    }
+
+    #[test]
+    fn tween_interpolates_the_tone_toward_grayscale() {
+        // Start in colour (sat 100), retarget to grayscale (sat 0) over 2s.
+        let mut pic = Picture {
+            id: 1,
+            x: 0.0,
+            y: 0.0,
+            transparency: 0.0,
+            zoom: 100.0,
+            tone: Tone::NEUTRAL,
+            fixed_to_map: false,
+            world_anchor: None,
+            base_size: None,
+            tween: None,
+        };
+        pic.retarget(
+            0.0,
+            0.0,
+            0.0,
+            100.0,
+            Tone {
+                r: 100.0,
+                g: 100.0,
+                b: 100.0,
+                sat: 0.0,
+            },
+            2.0,
+        );
+        let tween = pic.tween.expect("a tween");
+        let mid = Anim::lerp(tween.from, tween.to, 0.5);
+        assert_eq!(mid.tone.sat, 50.0);
+    }
+
+    #[test]
+    fn a_map_change_despawns_every_picture() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.add_message::<MapChanged>();
+        app.add_systems(Update, clear_on_map_change);
+        app.world_mut().spawn(test_picture(1));
+        app.world_mut().spawn(test_picture(2));
+
+        // No map change yet: the pictures survive a frame.
+        app.update();
+        assert_eq!(count_pictures(&mut app), 2);
+
+        // On a map change every picture despawns.
+        app.world_mut().write_message(MapChanged);
+        app.update();
+        assert_eq!(count_pictures(&mut app), 0);
+    }
+
+    fn test_picture(id: u32) -> Picture {
+        Picture {
+            id,
+            x: 0.0,
+            y: 0.0,
+            transparency: 0.0,
+            zoom: 100.0,
+            tone: Tone::NEUTRAL,
+            fixed_to_map: false,
+            world_anchor: None,
+            base_size: None,
+            tween: None,
+        }
+    }
+
+    fn count_pictures(app: &mut App) -> usize {
+        app.world_mut()
+            .query::<&Picture>()
+            .iter(app.world())
+            .count()
     }
 }

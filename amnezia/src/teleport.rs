@@ -6,7 +6,7 @@
 use crate::player::Player;
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::tiles::CHAR_Y_OFFSET;
-use crate::world::{MapData, MapEvents, MapScene, load_map};
+use crate::world::{MapChanged, MapData, MapEvents, MapScene, load_map};
 use bevy::prelude::*;
 
 /// Screen fades per second (a full fade-out or fade-in takes 1/this seconds).
@@ -93,6 +93,7 @@ fn drive_fade(
     mut fade: ResMut<Fade>,
     mut map_data: ResMut<MapData>,
     mut map_events: ResMut<MapEvents>,
+    mut map_changed: MessageWriter<MapChanged>,
     scene: Query<Entity, With<MapScene>>,
     mut players: Query<(&mut Player, &mut Transform)>,
     mut overlay: Query<&mut BackgroundColor, With<FadeOverlay>>,
@@ -125,6 +126,7 @@ fn drive_fade(
                         x,
                         y,
                     );
+                    map_changed.write(MapChanged);
                 }
                 fade.phase = Phase::In;
             }
