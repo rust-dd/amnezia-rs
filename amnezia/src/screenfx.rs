@@ -23,9 +23,11 @@ mod fade;
 mod flash;
 mod shake;
 mod tone;
+mod weather;
 
 pub use fade::transition_secs;
 pub use tone::{FrontCamera, PICTURE_LAYER, ScreenTone, TintState};
+pub use weather::{Weather, WeatherStrength};
 
 /// A screen effect the interpreter emits; consumed by [`step_effects`] (and, for
 /// the tint, by the [`tone`] submodule).
@@ -125,67 +127,16 @@ struct Fx {
     shake_offset: Vec2,
 }
 
-/// The ambient weather (`Weather` 11070). A static translucent wash over the
-/// scene rather than a particle sim; [`render_weather`] paints it. `Rain`/`Snow`/
-/// `Fog` are only produced by the interpreter's Weather arm, which lands
-/// separately.
-#[derive(Resource, Default, PartialEq, Eq, Clone, Copy, Debug)]
-#[allow(dead_code)]
-pub enum Weather {
-    #[default]
-    None,
-    Rain,
-    Snow,
-    Fog,
-}
-
-impl Weather {
-    /// The RM2000 weather code (`Weather` 11070, `params[0]`): 0 none, 1 rain,
-    /// 2 snow, 3 fog. The interpreter maps a command through here and the save
-    /// persists the result, so both share one mapping.
-    pub fn from_code(code: i32) -> Self {
-        match code {
-            1 => Weather::Rain,
-            2 => Weather::Snow,
-            3 => Weather::Fog,
-            _ => Weather::None,
-        }
-    }
-
-    /// This weather's RM2000 code, the inverse of [`Self::from_code`], for a save.
-    pub fn code(self) -> i32 {
-        match self {
-            Weather::None => 0,
-            Weather::Rain => 1,
-            Weather::Snow => 2,
-            Weather::Fog => 3,
-        }
-    }
-}
-
-/// The active weather's strength (`Weather` 11070, `params[1]`). RM2000's save
-/// keeps `weather` and `weather_strength` as separate fields; [`weather_color`]
-/// paints a fixed intensity today, so this is tracked so a save/load round-trip
-/// preserves the value the scripts set.
-#[derive(Resource, Default)]
-pub struct WeatherStrength(pub i32);
-
-/// The fullscreen node that carries the weather wash, kept separate from the
-/// [`FxLayer`] overlays so the effect query never touches it.
-#[derive(Component)]
-struct WeatherOverlay;
-
 pub struct ScreenFxPlugin;
 
 impl Plugin for ScreenFxPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<ScreenEffect>()
             .init_resource::<Fx>()
-            .init_resource::<Weather>()
-            .init_resource::<WeatherStrength>()
             .add_plugins(tone::ScreenTonePlugin)
+            .add_plugins(weather::WeatherPlugin)
             .add_systems(Startup, spawn_overlays)
-            .add_systems(Update, (step_effects, render_weather))
+            .add_systems(Update, step_effects)
             .add_systems(
                 PostUpdate,
                 apply_camera_shake
@@ -195,10 +146,10 @@ impl Plugin for ScreenFxPlugin {
     }
 }
 
-/// The two fullscreen overlays plus the weather wash. They render on the front
-/// (picture/UI) camera, so they sit above the toned world and pictures. The flash
-/// sits below the menu/message UI; the erase fade sits above everything so a
-/// black-out truly covers the screen.
+/// The two fullscreen overlays. They render on the front (picture/UI) camera, so
+/// they sit above the toned world and pictures. The flash sits below the
+/// menu/message UI; the erase fade sits above everything so a black-out truly
+/// covers the screen. Weather draws on its own layer-0 sprites (see [`weather`]).
 fn spawn_overlays(mut commands: Commands) {
     commands.spawn((
         full_screen(),
@@ -211,12 +162,6 @@ fn spawn_overlays(mut commands: Commands) {
         transparent(),
         GlobalZIndex(1003),
         FxLayer::Fade,
-    ));
-    commands.spawn((
-        full_screen(),
-        transparent(),
-        GlobalZIndex(-15),
-        WeatherOverlay,
     ));
 }
 
@@ -326,30 +271,6 @@ fn apply_camera_shake(fx: Res<Fx>, mut cameras: Query<&mut Transform, With<MainC
     camera.translation.y += fx.shake_offset.y;
 }
 
-/// Repaint the weather overlay when [`Weather`] changes (and once at startup).
-fn render_weather(
-    weather: Res<Weather>,
-    mut overlays: Query<&mut BackgroundColor, With<WeatherOverlay>>,
-) {
-    if !weather.is_changed() {
-        return;
-    }
-    for mut background in &mut overlays {
-        background.0 = weather_color(*weather);
-    }
-}
-
-/// The translucent wash a weather kind paints: rain a blue-grey, snow a
-/// near-white, fog a flat grey; `None` is fully transparent (hidden).
-fn weather_color(weather: Weather) -> Color {
-    match weather {
-        Weather::None => Color::srgba(0.0, 0.0, 0.0, 0.0),
-        Weather::Rain => Color::srgba(0.35, 0.42, 0.55, 0.28),
-        Weather::Snow => Color::srgba(0.90, 0.92, 0.98, 0.30),
-        Weather::Fog => Color::srgba(0.62, 0.62, 0.66, 0.42),
-    }
-}
-
 /// Step `cur` toward `target` by at most `step`.
 fn approach(cur: f32, target: f32, step: f32) -> f32 {
     if cur < target {
@@ -433,21 +354,5 @@ mod tests {
                 secs: 4.0,
             }
         );
-    }
-
-    #[test]
-    fn weather_none_is_hidden() {
-        assert_eq!(
-            weather_color(Weather::None),
-            Color::srgba(0.0, 0.0, 0.0, 0.0)
-        );
-    }
-
-    #[test]
-    fn weather_kinds_are_translucent_not_opaque() {
-        for kind in [Weather::Rain, Weather::Snow, Weather::Fog] {
-            let a = weather_color(kind).alpha();
-            assert!(a > 0.0 && a < 1.0);
-        }
     }
 }
