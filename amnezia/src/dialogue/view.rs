@@ -81,6 +81,20 @@ pub(super) fn spawn_ui(
             DialoguePanel,
         ))
         .with_children(|panel| {
+            // Background fill first, then the frame on top: Bevy draws later
+            // siblings above earlier ones, and the 9-sliced frame's centre is
+            // transparent, so the fill shows through the middle while the 24px
+            // border stays visible. (Spawning the fill last painted over it.)
+            panel.spawn((
+                fill_node(),
+                ImageNode {
+                    image: system.clone(),
+                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
+                    image_mode: NodeImageMode::Stretch,
+                    ..default()
+                },
+                DialogueFrame,
+            ));
             panel.spawn((
                 fill_node(),
                 ImageNode {
@@ -93,16 +107,6 @@ pub(super) fn spawn_ui(
                         // 8px source border × the ×3 scale = RM2000's 24px frame.
                         max_corner_scale: 3.0,
                     }),
-                    ..default()
-                },
-                DialogueFrame,
-            ));
-            panel.spawn((
-                fill_node(),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
-                    image_mode: NodeImageMode::Stretch,
                     ..default()
                 },
                 DialogueFrame,
