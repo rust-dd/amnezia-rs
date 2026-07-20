@@ -17,7 +17,7 @@ use crate::menu::{MenuAccess, MenuOpen};
 use crate::picture::PictureCommand;
 use crate::player::{CameraPan, HeroTransparency, Player};
 use crate::progression::Progression;
-use crate::save::{EventSaveRequest, ResumedFromSave, SaveAccess};
+use crate::save::{EventSaveRequest, SaveAccess};
 use crate::screenfx::{ScreenEffect, Weather, WeatherStrength};
 use crate::shop::{ShopOpen, ShopOutcome, ShopRequest};
 use crate::state::{Inventory, Party, Switches, Variables};
@@ -26,7 +26,7 @@ use crate::text::HeroName;
 use crate::timer::GameClock;
 use crate::title::TitleActive;
 use crate::vitals::Vitals;
-use crate::world::{MapData, MapEvents, MoveQueue, RouteStepper, StartMap};
+use crate::world::{MapData, MapEvents, MoveQueue, RouteStepper};
 use amnezia_data::{CommonEvent, Event, EventCommand, EventPage};
 use bevy::prelude::*;
 
@@ -117,7 +117,6 @@ fn interp_app() -> App {
         .init_resource::<MenuOpen>()
         .init_resource::<ShopOpen>()
         .init_resource::<BattleActive>()
-        .init_resource::<ResumedFromSave>()
         .init_resource::<MapEvents>();
     app.insert_resource(AnimationLibrary(Vec::new()))
         .insert_resource(HeroName(String::new()))
@@ -127,7 +126,6 @@ fn interp_app() -> App {
             skills: Vec::new(),
         })
         .insert_resource(MapData::for_test(10, 10))
-        .insert_resource(StartMap(0))
         .insert_resource(TitleActive(false))
         .insert_resource(ButtonInput::<KeyCode>::default());
     app.add_message::<AudioRequest>()

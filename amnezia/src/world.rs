@@ -33,12 +33,6 @@ const DEV_START: Option<Start> = None;
 #[derive(Component)]
 pub struct MapScene;
 
-/// The start map id (from `start.ron`). Its autostart intro is unconditional, so
-/// [`crate::interpreter`]'s `autorun` suppresses it once a save has been loaded —
-/// a Continue must never replay the opening. Set once at boot in [`setup`].
-#[derive(Resource)]
-pub struct StartMap(pub u32);
-
 /// The main world camera: it follows the hero (`player::camera_follow`), takes
 /// the screen shake, and draws the map on the default render layer 0, where its
 /// [`crate::screenfx::ScreenTone`] post-process tints it. Pictures and the UI
@@ -268,7 +262,6 @@ fn setup(
         (start.x as i32, start.y as i32),
         &data,
     );
-    commands.insert_resource(StartMap(start.map_id));
     commands.insert_resource(data);
     commands.insert_resource(events);
 }

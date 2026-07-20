@@ -38,7 +38,7 @@ mod tests;
 use event_rng::EventRng;
 use exec::{Exec, run_frame};
 use frame::Frame;
-use params::{Blockers, IntroGuard};
+use params::Blockers;
 
 pub use parallel::{CommonEvents, ParallelPool};
 
@@ -127,7 +127,6 @@ fn autorun(
     battle: Res<BattleActive>,
     title: Res<TitleActive>,
     gameover: Res<GameOverActive>,
-    intro_guard: IntroGuard,
     mut running: ResMut<RunningEvent>,
 ) {
     if running.active()
@@ -139,12 +138,6 @@ fn autorun(
         || title.0
         || gameover.0
     {
-        return;
-    }
-    // After a Continue, never let the start map's unconditional New Game intro
-    // replay: a resume that resolved onto the start map (a stale slot, or a race)
-    // would otherwise re-run the opening and teleport the player to the beginning.
-    if intro_guard.suppresses_start_intro() {
         return;
     }
     for event in &map_events.events {

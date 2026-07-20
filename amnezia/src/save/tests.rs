@@ -53,7 +53,6 @@ fn save_app(location: PathBuf) -> App {
         .init_resource::<Vitals>()
         .init_resource::<Progression>()
         .init_resource::<Equipment>()
-        .init_resource::<ResumedFromSave>()
         .init_resource::<Weather>()
         .init_resource::<WeatherStrength>()
         .init_resource::<TintState>();
@@ -204,10 +203,6 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     );
     assert_eq!(world.resource::<Variables>().get(3), 42);
     assert_eq!(world.resource::<Party>().snapshot(), vec![1, 3]);
-    assert!(
-        world.resource::<ResumedFromSave>().0,
-        "a load must mark the session resumed so the boot intro is suppressed"
-    );
     assert!(
         !world.resource::<LoadRequest>().0,
         "the Continue request must be consumed"

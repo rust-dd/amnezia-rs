@@ -15,14 +15,14 @@ use crate::menu::{MenuAccess, MenuOpen};
 use crate::picture::PictureCommand;
 use crate::player::{CameraPan, HeroTransparency, Player};
 use crate::progression::Progression;
-use crate::save::{EventSaveRequest, ResumedFromSave, SaveAccess};
+use crate::save::{EventSaveRequest, SaveAccess};
 use crate::screenfx::{ScreenEffect, Weather, WeatherStrength};
 use crate::shop::{ShopOpen, ShopOutcome, ShopRequest};
 use crate::text::HeroName;
 use crate::timer::GameClock;
 use crate::title::TitleActive;
 use crate::vitals::Vitals;
-use crate::world::{MapData, MapEvents, RelocateEvent, StartMap};
+use crate::world::{MapData, MapEvents, RelocateEvent};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
@@ -40,53 +40,6 @@ pub(super) struct Blockers<'w> {
 impl Blockers<'_> {
     pub(super) fn any(&self) -> bool {
         self.menu.0 || self.shop.0 || self.battle.0
-    }
-}
-
-/// The guard that stops the start map's New Game intro from replaying after a
-/// resume. The start map's autostart is unconditional (it renames the hero, builds
-/// the party, and teleports into the opening), so a Continue that resolved onto the
-/// start map — a stale slot, or any resume landing there — would otherwise re-run
-/// it and throw the player back to the beginning. Read by `autorun`.
-#[derive(SystemParam)]
-pub(super) struct IntroGuard<'w> {
-    map_data: Option<Res<'w, MapData>>,
-    start_map: Res<'w, StartMap>,
-    resumed: Res<'w, ResumedFromSave>,
-}
-
-impl IntroGuard<'_> {
-    /// Whether the current map's autostart must be suppressed: a save has been
-    /// loaded this session and the party is on the start map.
-    pub(super) fn suppresses_start_intro(&self) -> bool {
-        suppresses_start_intro(
-            self.resumed.0,
-            self.map_data.as_deref().map(|m| m.map_id),
-            self.start_map.0,
-        )
-    }
-}
-
-/// The pure suppression decision, split out so it is unit-testable without a world:
-/// suppress when a load has happened and the active map is the start map.
-pub(super) fn suppresses_start_intro(resumed: bool, map_id: Option<u32>, start_map: u32) -> bool {
-    resumed && map_id == Some(start_map)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::suppresses_start_intro;
-
-    #[test]
-    fn suppresses_only_the_start_map_after_a_load() {
-        // A resumed game on the start map: the New Game intro must not replay.
-        assert!(suppresses_start_intro(true, Some(5), 5));
-        // Resumed but already teleported onto the saved map: its autostarts run.
-        assert!(!suppresses_start_intro(true, Some(2), 5));
-        // A fresh New Game on the start map: the intro must run.
-        assert!(!suppresses_start_intro(false, Some(5), 5));
-        // No map loaded yet: nothing to suppress.
-        assert!(!suppresses_start_intro(true, None, 5));
     }
 }
 

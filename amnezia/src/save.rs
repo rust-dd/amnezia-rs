@@ -101,17 +101,6 @@ impl Default for SaveLocation {
     }
 }
 
-/// Set once any save has been loaded this session (Continue or the `F9` dev load).
-/// The start map (`start.ron`, map 5) carries an *unconditional* autostart intro
-/// that renames the hero, builds the party, and teleports into the opening; it is
-/// meant to run only on New Game. A Continue that resolved onto the start map — a
-/// stale or degenerate slot, or any resume landing there — would otherwise let that
-/// intro replay and hurl the player back to the beginning. `autorun` reads this to
-/// suppress the start map's autostart. No map ever teleports back to the start map,
-/// so this stays set harmlessly for the rest of the session once a load happens.
-#[derive(Resource, Default)]
-pub struct ResumedFromSave(pub bool);
-
 /// Whether the single save slot exists on disk, for the title's Continue gate.
 pub fn save_slot_exists() -> bool {
     slot_exists(&save_path())
@@ -180,7 +169,6 @@ impl Plugin for SavePlugin {
             .init_resource::<EventSaveRequest>()
             .init_resource::<SaveAccess>()
             .init_resource::<SaveLocation>()
-            .init_resource::<ResumedFromSave>()
             .add_systems(Update, save_or_load);
     }
 }
@@ -193,7 +181,6 @@ struct SaveIo<'w> {
     load_request: ResMut<'w, LoadRequest>,
     save_request: ResMut<'w, SaveRequest>,
     event_save: ResMut<'w, EventSaveRequest>,
-    resumed: ResMut<'w, ResumedFromSave>,
     location: Res<'w, SaveLocation>,
     // The runtime equipment store, snapshotted on save and restored on load
     // beside the party and inventory. Bundled here so [`save_or_load`] stays
@@ -320,11 +307,9 @@ fn save_or_load(
             }
         }
         Some(Action::Load) => {
-            // Consume the request and mark the session resumed whether or not the
-            // slot reads back, so a missing or corrupt file can't wedge a waiting
-            // Continue — and can't drop it back into the start map's intro.
+            // Consume the request whether or not the slot reads back, so a missing
+            // or corrupt file can't wedge a waiting Continue on the title screen.
             save_io.load_request.0 = false;
-            save_io.resumed.0 = true;
             let Some(game) = read_save(&save_io.location.0) else {
                 return;
             };
