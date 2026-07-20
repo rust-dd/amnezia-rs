@@ -15,6 +15,7 @@ use crate::screenfx::{TintState, Weather, WeatherStrength};
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::teleport::{Fade, PendingTeleport};
 use crate::text::HeroName;
+use crate::timer::{GameClock, PlayTime};
 use crate::vitals::Vitals;
 use crate::world::MapData;
 use bevy::ecs::system::SystemParam;
@@ -151,6 +152,14 @@ struct SaveGame {
     // `ActorDef` starting gear, exactly the state those saves were written in.
     #[serde(default)]
     equipment: Vec<(u32, [u32; 5])>,
+    // Playtime and the RM2000 game timer, added after #48. `#[serde(default)]` keeps
+    // older slots loadable — they resume with a zeroed playtime and a stopped timer.
+    #[serde(default)]
+    playtime: u64,
+    #[serde(default)]
+    timer_remaining: f32,
+    #[serde(default)]
+    timer_running: bool,
 }
 
 /// The RM2000 neutral screen tone (every channel 100), the [`SaveGame::tone`]
@@ -198,6 +207,8 @@ struct SceneState<'w> {
     weather: ResMut<'w, Weather>,
     weather_strength: ResMut<'w, WeatherStrength>,
     tone: ResMut<'w, TintState>,
+    playtime: ResMut<'w, PlayTime>,
+    game_clock: ResMut<'w, GameClock>,
 }
 
 /// What [`save_or_load`] does this frame once a fade has been ruled out.
@@ -300,6 +311,9 @@ fn save_or_load(
                 weather: scene.weather.code(),
                 weather_strength: scene.weather_strength.0,
                 equipment: save_io.equipment.entries(),
+                playtime: scene.playtime.seconds,
+                timer_remaining: scene.game_clock.remaining,
+                timer_running: scene.game_clock.running,
             };
             match write_save(&save_io.location.0, &game) {
                 Ok(()) => info!("saved game to {}", save_io.location.0.display()),
@@ -320,6 +334,9 @@ fn save_or_load(
             progression.load(game.progression);
             vitals.load(game.vitals);
             save_io.equipment.load(game.equipment);
+            scene.playtime.seconds = game.playtime;
+            scene.game_clock.remaining = game.timer_remaining;
+            scene.game_clock.running = game.timer_running;
             // An empty name/charset is a pre-#46 slot that never stored them; leave
             // the boot default in place rather than blanking it.
             if !game.hero_name.is_empty() {

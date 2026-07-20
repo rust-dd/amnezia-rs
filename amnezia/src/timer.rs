@@ -38,12 +38,22 @@ impl GameClock {
     }
 }
 
+/// Total whole seconds the game has been played, accumulated each frame and
+/// persisted in the save (RM2000 shows it on the save screen); a resumed game keeps
+/// counting from the saved total.
+#[derive(Resource, Default)]
+pub struct PlayTime {
+    pub seconds: u64,
+    frac: f32,
+}
+
 pub struct GameClockPlugin;
 
 impl Plugin for GameClockPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameClock>()
-            .add_systems(Update, tick_clock);
+            .init_resource::<PlayTime>()
+            .add_systems(Update, (tick_clock, tick_playtime));
     }
 }
 
@@ -56,6 +66,16 @@ fn tick_clock(time: Res<Time>, mut clock: ResMut<GameClock>) {
     clock.remaining = (clock.remaining - time.delta_secs()).max(0.0);
     if clock.remaining <= 0.0 {
         clock.stop();
+    }
+}
+
+/// Accumulate real playtime, carrying the sub-second remainder so the whole-second
+/// count stays accurate over a long session.
+fn tick_playtime(time: Res<Time>, mut play: ResMut<PlayTime>) {
+    play.frac += time.delta_secs();
+    while play.frac >= 1.0 {
+        play.seconds += 1;
+        play.frac -= 1.0;
     }
 }
 
