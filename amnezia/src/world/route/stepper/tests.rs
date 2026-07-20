@@ -69,7 +69,7 @@ fn stepper(codes: &[u32], repeat: bool, skippable: bool) -> RouteStepper {
             string: String::new(),
         })
         .collect();
-    RouteStepper::new(commands, repeat, skippable, 4, 8)
+    RouteStepper::new(commands, repeat, skippable, 4, 8, false)
 }
 
 fn open(_dx: i32, _dy: i32) -> bool {
@@ -196,7 +196,7 @@ fn instant_commands_apply_then_reach_the_gate() {
             string: String::new(),
         },
     ];
-    let mut s = RouteStepper::new(commands, false, false, 4, 8);
+    let mut s = RouteStepper::new(commands, false, false, 4, 8, false);
     let mut fx = Vec::new();
     let action = s.advance(&mut ch, (0, 0), &open, &mut fx);
     assert!(matches!(action, Some((RouteAction::Step { dy: 1, .. }, _))));

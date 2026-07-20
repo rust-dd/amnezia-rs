@@ -49,11 +49,16 @@ pub struct RouteStepper {
     timer: f32,
     rng: u32,
     active: bool,
+    /// True for a forced route from a `MoveEvent` (11330), false for a page's own
+    /// `move_type == 6` custom route. A forced route keeps advancing while the event
+    /// interpreter runs and while a message is up — RM2000's `IsMoveRouteOverwritten`
+    /// short-circuits both pauses; a page route pauses like autonomous movement.
+    forced: bool,
 }
 
 impl Default for RouteStepper {
     fn default() -> Self {
-        Self::new(Vec::new(), false, false, 4, 3)
+        Self::new(Vec::new(), false, false, 4, 3, false)
     }
 }
 
@@ -64,6 +69,7 @@ impl RouteStepper {
         skippable: bool,
         speed: u32,
         frequency: u32,
+        forced: bool,
     ) -> Self {
         Self {
             active: !commands.is_empty(),
@@ -77,6 +83,7 @@ impl RouteStepper {
             transparency: 0,
             timer: 0.0,
             rng: 0x9E37_79B9,
+            forced,
         }
     }
 
@@ -88,6 +95,7 @@ impl RouteStepper {
             route.skippable,
             speed,
             frequency,
+            false,
         )
     }
 
@@ -102,13 +110,20 @@ impl RouteStepper {
         let repeat = params.get(2).copied().unwrap_or(0) != 0;
         let skippable = params.get(3).copied().unwrap_or(0) != 0;
         let tail = params.get(4..).unwrap_or(&[]);
-        Self::new(decode_commands(tail), repeat, skippable, 4, freq)
+        Self::new(decode_commands(tail), repeat, skippable, 4, freq, true)
     }
 
     /// Whether a route is loaded and still running — the flag the driving systems
     /// and the autonomy/player guards test to yield control to the stepper.
     pub fn active(&self) -> bool {
         self.active
+    }
+
+    /// Whether this is a forced `MoveEvent` route (vs a page's custom route). The
+    /// route drivers keep a forced route advancing during a running event or an open
+    /// message while pausing a page route like autonomous movement.
+    pub fn forced(&self) -> bool {
+        self.forced
     }
 
     /// Count down the inter-command delay by `dt` and report whether the next

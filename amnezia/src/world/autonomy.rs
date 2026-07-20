@@ -58,6 +58,22 @@ impl MoveGuards<'_> {
             || self.title.0
             || self.gameover.0
     }
+
+    /// The pauses that freeze even a *forced* move route (a `MoveEvent` on the hero
+    /// or an NPC): a scene that owns the screen (menu, shop, battle, title,
+    /// game-over) or a teleport fade. Unlike [`MoveGuards::paused`], this omits the
+    /// running event and the message — RM2000 advances an overwritten move route
+    /// every frame regardless of both (see `Game_Character::Update`, where
+    /// `IsMoveRouteOverwritten` short-circuits the interpreter/message stop gate), so
+    /// cutscene movement (the intro walking the hero in) plays while the event runs.
+    pub(super) fn forced_route_paused(&self) -> bool {
+        self.fade.busy()
+            || self.menu.0
+            || self.shop.0
+            || self.battle.0
+            || self.title.0
+            || self.gameover.0
+    }
 }
 
 /// An event's autonomous-movement state: the active page's move fields plus a
