@@ -1,10 +1,15 @@
-//! The game font: a full-Latin (Hungarian-covering) TrueType face embedded in
-//! the binary and registered as a Bevy asset before any UI is built.
+//! The game font: RM2000's built-in pixel font, embedded in the binary and
+//! registered as a Bevy asset before any UI is built. RPG Maker 2000 ships no font
+//! of its own — RPG_RT draws text with a built-in bitmap face — so the faithful font
+//! is EasyRPG's free reproduction of it, "RMG2000". `fonts/rmg2000.ttf` is that
+//! bitmap font converted to a TrueType outline by `fonts/rmg2000_to_ttf.py` (the
+//! Hungarian ő/ű come from EasyRPG's ttyp0 fallback, and the menu cursor / arrows /
+//! em dash are drawn in since RM2000 renders those graphically, not as characters).
 
 use bevy::prelude::*;
 
 const FONT_BYTES: &[u8] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/DejaVuSans.ttf"));
+    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/rmg2000.ttf"));
 
 /// Handle to the loaded game font, shared by every text surface.
 #[derive(Resource)]

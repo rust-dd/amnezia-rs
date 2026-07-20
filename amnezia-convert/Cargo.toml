@@ -11,10 +11,12 @@ amnezia-data = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 image = { workspace = true }
+kurbo = { workspace = true }
 lcf = { workspace = true }
 ron = { workspace = true }
 rustysynth = { workspace = true }
 vorbis_rs = { workspace = true }
+write-fonts = { workspace = true }
 xyz = { workspace = true }
 
 [dev-dependencies]
