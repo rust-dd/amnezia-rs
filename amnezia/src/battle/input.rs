@@ -75,10 +75,13 @@ pub fn command_input(
 /// per-actor command entry, Auto orders the whole party a basic attack and
 /// resolves, Escape attempts to flee now.
 fn party_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
-    move_cursor(keys, &mut battle.cursor, PARTY_COUNT);
+    if move_cursor(keys, &mut battle.cursor, PARTY_COUNT) {
+        battle.pending_se.push(BattleSe::Cursor);
+    }
     if !confirm(keys) {
         return;
     }
+    battle.pending_se.push(BattleSe::Decision);
     match battle.cursor {
         0 => battle.begin_actor_commands(),
         1 => battle.auto_battle(),
@@ -120,13 +123,17 @@ pub fn item_choices(data: &GameData, inventory: &Inventory) -> Vec<(u32, String)
 
 fn command_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     if keys.just_pressed(KeyCode::Escape) {
+        battle.pending_se.push(BattleSe::Cancel);
         battle.undo_choice();
         return;
     }
-    move_cursor(keys, &mut battle.cursor, COMMAND_COUNT);
+    if move_cursor(keys, &mut battle.cursor, COMMAND_COUNT) {
+        battle.pending_se.push(BattleSe::Cursor);
+    }
     if !confirm(keys) {
         return;
     }
+    battle.pending_se.push(BattleSe::Decision);
     match battle.cursor {
         0 => open_target(battle, None),
         1 => enter(battle, MenuLevel::Skill),
@@ -137,16 +144,22 @@ fn command_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
 
 fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle) {
     if keys.just_pressed(KeyCode::Escape) {
+        battle.pending_se.push(BattleSe::Cancel);
         enter(battle, MenuLevel::Command);
         return;
     }
     let known = battle.members[battle.turn].known_skills.clone();
     let sp = battle.members[battle.turn].sp;
     let choices = skill_choices(data, &known, sp);
-    move_cursor(keys, &mut battle.cursor, choices.len());
-    if confirm(keys)
-        && let Some(&(skill_id, _, _)) = choices.get(battle.cursor)
-    {
+    if move_cursor(keys, &mut battle.cursor, choices.len()) {
+        battle.pending_se.push(BattleSe::Cursor);
+    }
+    if confirm(keys) {
+        let Some(&(skill_id, _, _)) = choices.get(battle.cursor) else {
+            battle.pending_se.push(BattleSe::Buzzer);
+            return;
+        };
+        battle.pending_se.push(BattleSe::Decision);
         let scope = battle
             .skills
             .iter()
@@ -173,14 +186,20 @@ fn item_menu(
     battle: &mut Battle,
 ) {
     if keys.just_pressed(KeyCode::Escape) {
+        battle.pending_se.push(BattleSe::Cancel);
         enter(battle, MenuLevel::Command);
         return;
     }
     let choices = item_choices(data, inventory);
-    move_cursor(keys, &mut battle.cursor, choices.len());
-    if confirm(keys)
-        && let Some(&(id, _)) = choices.get(battle.cursor)
-    {
+    if move_cursor(keys, &mut battle.cursor, choices.len()) {
+        battle.pending_se.push(BattleSe::Cursor);
+    }
+    if confirm(keys) {
+        let Some(&(id, _)) = choices.get(battle.cursor) else {
+            battle.pending_se.push(BattleSe::Buzzer);
+            return;
+        };
+        battle.pending_se.push(BattleSe::Decision);
         open_ally_target(battle, None, Some(id));
     }
 }
@@ -192,6 +211,7 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {
+        battle.pending_se.push(BattleSe::Cancel);
         let back = if battle.pending_skill.is_some() {
             MenuLevel::Skill
         } else {
@@ -200,8 +220,11 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
         enter(battle, back);
         return;
     }
-    move_cursor(keys, &mut battle.cursor, living.len());
+    if move_cursor(keys, &mut battle.cursor, living.len()) {
+        battle.pending_se.push(BattleSe::Cursor);
+    }
     if confirm(keys) {
+        battle.pending_se.push(BattleSe::Decision);
         let target = living[battle.cursor.min(living.len() - 1)];
         let command = match battle.pending_skill {
             Some(skill_id) => Command::Skill { skill_id, target },
@@ -221,6 +244,7 @@ fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &mut Inventory, batt
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {
+        battle.pending_se.push(BattleSe::Cancel);
         let back = if battle.pending_skill.is_some() {
             MenuLevel::Skill
         } else {
@@ -229,8 +253,11 @@ fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &mut Inventory, batt
         enter(battle, back);
         return;
     }
-    move_cursor(keys, &mut battle.cursor, living.len());
+    if move_cursor(keys, &mut battle.cursor, living.len()) {
+        battle.pending_se.push(BattleSe::Cursor);
+    }
     if confirm(keys) {
+        battle.pending_se.push(BattleSe::Decision);
         let target = living[battle.cursor.min(living.len() - 1)];
         if let Some(skill_id) = battle.pending_skill {
             battle.commit(Command::Skill { skill_id, target });
@@ -285,12 +312,14 @@ fn escape(battle: &mut Battle) {
     }
 }
 
-/// Move a wrapping cursor over `len` rows, clamped when the list shrank.
-fn move_cursor(keys: &ButtonInput<KeyCode>, cursor: &mut usize, len: usize) {
+/// Move a wrapping cursor over `len` rows, clamped when the list shrank. Returns
+/// whether the cursor actually moved, so the caller can play the cursor SE.
+fn move_cursor(keys: &ButtonInput<KeyCode>, cursor: &mut usize, len: usize) -> bool {
     if len == 0 {
         *cursor = 0;
-        return;
+        return false;
     }
+    let before = *cursor;
     if keys.just_pressed(KeyCode::ArrowDown) {
         *cursor = (*cursor + 1) % len;
     }
@@ -298,6 +327,7 @@ fn move_cursor(keys: &ButtonInput<KeyCode>, cursor: &mut usize, len: usize) {
         *cursor = (*cursor + len - 1) % len;
     }
     *cursor = (*cursor).min(len - 1);
+    *cursor != before
 }
 
 /// Whether any key the battle menus react to was just pressed.
@@ -559,5 +589,28 @@ mod tests {
         assert!(battle.members.iter().all(|m| m.command.is_none()));
         assert!(battle.phase == Phase::Resolve);
         assert!(battle.log.iter().any(|l| l.contains("sikertelen")));
+    }
+
+    #[test]
+    fn navigating_the_battle_menu_plays_the_system_se() {
+        // Moves, confirms, and cancels feed the System cursor/decision/cancel SE
+        // (RM2000 SFX_Cursor/Decision/Cancel), drained like the other battle SE —
+        // the menu used to be silent.
+        let mut battle = build_party2();
+        let mut down = ButtonInput::<KeyCode>::default();
+        down.press(KeyCode::ArrowDown);
+        party_menu(&down, &mut battle);
+        assert!(battle.pending_se.contains(&BattleSe::Cursor));
+        // Fight confirms with the decision SE and enters per-actor command entry.
+        battle.pending_se.clear();
+        battle.cursor = 0;
+        party_menu(&press_enter(), &mut battle);
+        assert!(battle.pending_se.contains(&BattleSe::Decision));
+        // Cancel on the first actor plays the cancel SE (and backs out).
+        battle.pending_se.clear();
+        let mut esc = ButtonInput::<KeyCode>::default();
+        esc.press(KeyCode::Escape);
+        command_menu(&esc, &mut battle);
+        assert!(battle.pending_se.contains(&BattleSe::Cancel));
     }
 }

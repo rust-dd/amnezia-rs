@@ -231,6 +231,10 @@ pub(super) fn drain_pending_se(
             BattleSe::Dodge => &system.dodge_se,
             BattleSe::EnemyDefeated => &system.enemy_defeated_se,
             BattleSe::Escape => &system.escape_se,
+            BattleSe::Cursor => &system.cursor_se,
+            BattleSe::Decision => &system.decision_se,
+            BattleSe::Cancel => &system.cancel_se,
+            BattleSe::Buzzer => &system.buzzer_se,
         };
         if let Some(req) = AudioRequest::se(&sound.name, sound.volume, sound.tempo) {
             audio.write(req);

@@ -143,4 +143,12 @@ pub(in crate::battle) enum BattleSe {
     EnemyDefeated,
     /// The party attempted to flee (RM2000 `SFX_Escape`).
     Escape,
+    /// A command-menu cursor move (RM2000 `SFX_Cursor`).
+    Cursor,
+    /// A command-menu selection confirmed (RM2000 `SFX_Decision`).
+    Decision,
+    /// A command-menu cancel / step back (RM2000 `SFX_Cancel`).
+    Cancel,
+    /// An empty or invalid command-menu confirm (RM2000 `SFX_Buzzer`).
+    Buzzer,
 }
