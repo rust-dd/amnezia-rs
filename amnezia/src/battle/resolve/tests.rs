@@ -144,7 +144,7 @@ fn a_party_attack_wounds_its_target_and_logs() {
     let before = battle.enemies[0].hp;
     while battle.resolve_next() {}
     assert!(battle.enemies[0].hp < before);
-    assert!(battle.log.iter().any(|l| l.contains("rácsap")));
+    assert!(battle.log.iter().any(|l| l.contains("sebződik")));
 }
 
 /// One hero with a weapon whose `weapon_animation` is 7, versus a lone foe
@@ -1079,9 +1079,9 @@ fn a_critical_announces_on_its_own_line_before_the_damage_line() {
     }
     battle.commit(Command::Attack { target: 0 });
     while battle.resolve_next() {}
-    // "Kritikus!" is emitted as its own distinct log line.
+    // The critical term is emitted as its own distinct log line.
     assert!(
-        battle.log.iter().any(|l| l == "Kritikus!"),
+        battle.log.iter().any(|l| l == "Kritikus ütés!"),
         "a critical announces on its own line, log: {:?}",
         battle.log
     );
@@ -1089,7 +1089,7 @@ fn a_critical_announces_on_its_own_line_before_the_damage_line() {
     let damage_line = battle
         .log
         .iter()
-        .find(|l| l.contains("rácsap:") && l.contains('-'))
+        .find(|l| l.contains("sebződik"))
         .expect("the critical's damage line");
     assert!(
         !damage_line.contains("Kritikus"),

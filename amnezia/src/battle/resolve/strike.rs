@@ -73,28 +73,34 @@ impl Battle {
     /// order is unchanged whether this runs inline or deferred behind the hold.
     pub(in crate::battle::resolve) fn resolve_strike_impact(
         &mut self,
-        pi: usize,
+        _pi: usize,
         ti: usize,
         outcome: Strike,
     ) {
-        let member = self.members[pi].name.clone();
         let enemy = self.enemies[ti].name.clone();
         match outcome {
+            // RM2000 concatenates the target name with the term: a dodge reads
+            // "<foe> <dodge>", a hit "<foe> <value><enemy_damaged>", and a critical
+            // announces the standalone term on its own beat.
             Strike::Miss => {
                 let pos = self.foe_anim_pos(ti);
                 self.pending_se.push(BattleSe::Dodge);
                 self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
-                self.log.push(format!("{member} rácsap: {enemy} elkerülte"));
+                self.log
+                    .push(format!("{enemy}{}", crate::i18n::tr(&self.text.dodge)));
             }
             Strike::Hit { dmg, crit: false } => {
                 self.land_strike(ti, dmg);
-                self.log.push(format!("{member} rácsap: {enemy} -{dmg}"));
+                self.log.push(format!(
+                    "{enemy} {dmg}{}",
+                    crate::i18n::tr(&self.text.enemy_damaged)
+                ));
             }
             Strike::Hit { dmg, crit: true } => {
                 // RM2000 `ProcessBattleActionCritical`: announce the critical on
                 // its own beat, then land the (already rolled) blow next tick.
-                self.steps.push_back(Step::CritDamage { pi, ti, dmg });
-                self.log.push("Kritikus!".to_string());
+                self.steps.push_back(Step::CritDamage { ti, dmg });
+                self.log.push(crate::i18n::tr(&self.text.enemy_critical));
             }
         }
     }

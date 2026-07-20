@@ -56,11 +56,12 @@ impl Battle {
                     self.log.extend(lines);
                 }
             }
-            Step::CritDamage { pi, ti, dmg } => {
+            Step::CritDamage { ti, dmg } => {
                 self.land_strike(ti, dmg);
                 let line = format!(
-                    "{} rácsap: {} -{}",
-                    self.members[pi].name, self.enemies[ti].name, dmg
+                    "{} {dmg}{}",
+                    self.enemies[ti].name,
+                    crate::i18n::tr(&self.text.enemy_damaged)
                 );
                 self.log.push(line);
             }

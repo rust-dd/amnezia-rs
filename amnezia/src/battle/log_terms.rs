@@ -24,6 +24,15 @@ pub struct BattleText {
     pub gold_received_a: String,
     pub gold: String,
     pub gold_received_b: String,
+    // Per-hit lines. RM2000 (non-placeholder) concatenates these as suffixes onto
+    // the target name (see EasyRPG `GetDamagedMessage` / `GetActionFailureMessage`):
+    // a dodge is `<target><dodge>`, a hit `<target> <value><damaged>`, a critical is
+    // the standalone term.
+    pub dodge: String,
+    pub enemy_damaged: String,
+    pub actor_damaged: String,
+    pub enemy_critical: String,
+    pub actor_critical: String,
 }
 
 impl Default for BattleText {
@@ -37,6 +46,11 @@ impl Default for BattleText {
             gold_received_a: "+".to_string(),
             gold: " arany".to_string(),
             gold_received_b: String::new(),
+            dodge: " kivédi a támadást".to_string(),
+            enemy_damaged: " HP-t sebződik".to_string(),
+            actor_damaged: " HP-t veszít".to_string(),
+            enemy_critical: "Kritikus ütés!".to_string(),
+            actor_critical: "Kritikus csapás!".to_string(),
         }
     }
 }
@@ -53,6 +67,11 @@ impl BattleText {
         set(&mut self.gold_received_a, &t.gold_recieved_a);
         set(&mut self.gold, &t.gold);
         set(&mut self.gold_received_b, &t.gold_recieved_b);
+        set(&mut self.dodge, &t.dodge);
+        set(&mut self.enemy_damaged, &t.enemy_damaged);
+        set(&mut self.actor_damaged, &t.actor_damaged);
+        set(&mut self.enemy_critical, &t.enemy_critical);
+        set(&mut self.actor_critical, &t.actor_critical);
     }
 }
 
