@@ -11,6 +11,7 @@ use crate::tiles::{self, CHAR_Y_OFFSET};
 use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
+use bevy::window::PrimaryWindow;
 
 mod autonomy;
 mod movement;
@@ -192,8 +193,28 @@ impl Plugin for WorldPlugin {
                     route::route_hero,
                     water::animate_water,
                     apply_relocate,
+                    fit_ui_scale,
                 ),
             );
+    }
+}
+
+/// Scale the UI to the window each frame so the fixed 960×720 design (×3 of
+/// RM2000's 320×240) fits whatever size — and display density — the window has. The
+/// world already fills the window via the camera's Fixed 320×240 scaling, so only
+/// the UI, laid out in logical pixels, needs to track it; this keeps the two
+/// aligned and the game consistent across HiDPI and resized windows.
+fn fit_ui_scale(windows: Query<&Window, With<PrimaryWindow>>, mut ui_scale: ResMut<UiScale>) {
+    let Ok(window) = windows.single() else {
+        return;
+    };
+    let (w, h) = (window.width(), window.height());
+    if w <= 0.0 || h <= 0.0 {
+        return;
+    }
+    let scale = (w / 960.0).min(h / 720.0);
+    if scale > 0.0 && (ui_scale.0 - scale).abs() > 1e-3 {
+        ui_scale.0 = scale;
     }
 }
 
