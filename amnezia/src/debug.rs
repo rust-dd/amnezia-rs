@@ -4,7 +4,7 @@
 //! every impassable tile of the current map (re-toggle after a map change).
 
 use crate::font::GameFont;
-use crate::interpreter::RunningEvent;
+use crate::interpreter::{ParallelPool, RunningEvent};
 use crate::player::Player;
 use crate::tiles;
 use crate::world::MapData;
@@ -53,6 +53,7 @@ fn spawn_hud(mut commands: Commands, font: Res<GameFont>) {
 fn update_hud(
     data: Option<Res<MapData>>,
     running: Res<RunningEvent>,
+    parallel: Res<ParallelPool>,
     players: Query<&Player>,
     mut hud: Query<&mut Text, With<DebugHud>>,
 ) {
@@ -68,7 +69,8 @@ fn update_hud(
         Some(id) => format!("event {id}"),
         None => "idle".to_string(),
     };
-    **text = format!("map {map}  tile ({px},{py}) dir {dir}  run: {run}  [P: walls]");
+    let par = parallel.count();
+    **text = format!("map {map}  tile ({px},{py}) dir {dir}  run: {run}  par: {par}  [P: walls]");
 }
 
 fn toggle_overlay(

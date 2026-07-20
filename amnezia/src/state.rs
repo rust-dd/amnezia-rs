@@ -199,6 +199,25 @@ pub fn active_page<'a>(
         .find(|p| condition_holds(p, switches, variables, party, inventory))
 }
 
+/// The index of the [`active_page`], if any. The parallel-event pool keys a
+/// running page on this index so a condition change that promotes a different
+/// page resets that event's interpreter to the new page's commands.
+pub fn active_page_index(
+    event: &Event,
+    switches: &Switches,
+    variables: &Variables,
+    party: &Party,
+    inventory: &Inventory,
+) -> Option<usize> {
+    event
+        .pages
+        .iter()
+        .enumerate()
+        .rev()
+        .find(|(_, p)| condition_holds(p, switches, variables, party, inventory))
+        .map(|(index, _)| index)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
