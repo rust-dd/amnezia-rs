@@ -81,12 +81,24 @@ pub(super) fn spawn_ui(
             DialoguePanel,
         ))
         .with_children(|panel| {
-            // The frame's 9-slice fills its centre with a stretched smear of the
-            // windowskin's middle pixels (EasyRPG only ever blits the 8px border
-            // strips, never the centre). So draw the frame first, then cover that
-            // centre with the background fill inset by the 24px border: the border
-            // edges stay visible, the interior is the clean windowskin fill, and the
-            // face and text (spawned after) draw on top of the fill.
+            // Three windowskin layers so the border shows with neither the 9-slice's
+            // stretched-centre smear nor a dark gap at its inner edge:
+            //   1. the full background fill — the frame's semi-transparent inner
+            //      border then reveals the fill, not the dark map behind (no gap);
+            //   2. the frame, whose 9-slice also smears the windowskin's centre
+            //      pixels across the middle (EasyRPG only blits the border strips);
+            //   3. the background again, inset by the 24px border, hiding that smear.
+            // Face and text (spawned after) draw on top of the interior fill.
+            panel.spawn((
+                fill_node(),
+                ImageNode {
+                    image: system.clone(),
+                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
+                    image_mode: NodeImageMode::Stretch,
+                    ..default()
+                },
+                DialogueFrame,
+            ));
             panel.spawn((
                 fill_node(),
                 ImageNode {
