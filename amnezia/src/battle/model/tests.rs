@@ -50,6 +50,19 @@ fn undo_choice_steps_back_to_the_previous_committed_member() {
 }
 
 #[test]
+fn undo_choice_on_the_first_chooser_reopens_the_party_option_window() {
+    // Cancel on the first actor's command backs out of per-actor entry to the
+    // Fight/Auto/Escape window — RM2000 SelectPreviousActor on the first ally
+    // returns to State_SelectOption rather than staying stuck on the actor.
+    let mut battle = build_1v2();
+    battle.begin_actor_commands();
+    assert!(battle.phase == Phase::Command);
+    assert_eq!(battle.turn, 0);
+    battle.undo_choice();
+    assert!(battle.phase == Phase::PartyCommand);
+}
+
+#[test]
 fn new_round_clears_orders_and_defence() {
     let mut battle = build_1v2();
     battle.members[0].command = Some(Command::Defend);

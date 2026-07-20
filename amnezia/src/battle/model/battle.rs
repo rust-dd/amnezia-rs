@@ -199,6 +199,10 @@ impl Battle {
     /// Step back to the previous living chooser, clearing its order (RM2000 back).
     /// Auto-committed restricted members (asleep/berserk/confused) can't be
     /// re-ordered, so the step skips over them to the last freely-chosen member.
+    /// With nothing earlier to undo — cancel on the first freely-choosing member —
+    /// it backs all the way out to the party-option window (Fight / Auto / Escape),
+    /// matching RM2000 `SelectPreviousActor` returning to `State_SelectOption` when
+    /// the active actor is the first ally.
     pub fn undo_choice(&mut self) {
         self.menu = MenuLevel::Command;
         self.cursor = 0;
@@ -214,9 +218,12 @@ impl Battle {
                     && logic::worst_restriction(&f.states, &self.states) == 0
             })
             .map(|(i, _)| i);
-        if let Some(i) = target {
-            self.members[i].command = None;
-            self.turn = i;
+        match target {
+            Some(i) => {
+                self.members[i].command = None;
+                self.turn = i;
+            }
+            None => self.phase = Phase::PartyCommand,
         }
     }
 
