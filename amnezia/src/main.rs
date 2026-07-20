@@ -55,7 +55,13 @@ fn main() -> AppExit {
                     // 3× the 320×240 RM2000 viewport, 4:3, so the fixed camera
                     // scales pixel-perfect with no distortion or gray margin.
                     primary_window: Some(Window {
-                        resolution: bevy::window::WindowResolution::new(960, 720),
+                        // `new` takes *physical* pixels, so on a HiDPI/Retina display
+                        // the logical UI space would be 480×360 and the whole 960×720
+                        // UI would overflow 2×. Pin the scale factor to 1 so logical =
+                        // physical = 960×720 (3× RM2000's 320×240) and the ×3 pixel art
+                        // scales by an exact integer.
+                        resolution: bevy::window::WindowResolution::new(960, 720)
+                            .with_scale_factor_override(1.0),
                         resizable: false,
                         title: "Amnézia".to_string(),
                         ..default()
