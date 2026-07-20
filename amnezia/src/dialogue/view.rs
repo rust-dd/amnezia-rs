@@ -1,15 +1,38 @@
 //! The message-box UI: spawning the windowskin box and, each frame, syncing its
 //! visibility, face, revealed text, transparency, and the blinking continue
 //! arrow to the [`Dialogue`](super::Dialogue) state.
+//!
+//! Every dimension is RM2000's own, scaled ×3 (our 960×720 window is exactly three
+//! times RM2000's 320×240). The box is `Window_Message`'s full-width bottom strip
+//! (`MESSAGE_BOX_WIDTH`×`MESSAGE_BOX_HEIGHT` = 320×80 → 960×240); the frame is the
+//! 8px `System.png` windowskin border (→ 24px); the face is a 48×48 FaceSet cell
+//! (→ 144) drawn at (`LeftMargin`,`TopMargin`) inside the border, i.e. window
+//! (16,16) → (48,48); text starts at `LeftMargin+FaceSize+RightFaceMargin` = 72
+//! past the border → window 80 → 240 with a face, or at the border (8 → 24)
+//! without one; the font is RM2000's 12px on a 16px line pitch (→ 36 / 48).
 
 use super::{Dialogue, MessagePosition, MessageTransparent};
 use crate::assets::resolve_png;
 use crate::font::GameFont;
 use bevy::prelude::*;
-use bevy::text::FontSource;
+use bevy::text::{FontSource, LineHeight};
 
-/// One RM2000 FaceSet face is 48×48 pixels, laid out in a 4×4 grid.
-const FACE_SIZE: f32 = 48.0;
+/// A FaceSet cell is 48×48 in the source sheet; the box renders it at ×3.
+const FACE_CELL: f32 = 48.0;
+const FACE_BOX: f32 = 144.0;
+/// The `System.png` windowskin frame is an 8px border in 320×240 → 24px at ×3.
+const BORDER: f32 = 24.0;
+/// RM2000 message text: a 12px font on a 16px line pitch → 36 / 48 at ×3.
+const FONT_PX: f32 = 36.0;
+const LINE_PX: f32 = 48.0;
+/// `MESSAGE_BOX_HEIGHT` (80) at ×3: the fixed full-width bottom strip.
+const BOX_H: f32 = 240.0;
+/// Face origin (window (16,16) at ×3) and the text's left with / without a face.
+const FACE_X: f32 = 48.0;
+const FACE_Y: f32 = 48.0;
+const TEXT_X: f32 = 24.0;
+const TEXT_X_FACE: f32 = 240.0;
+const TEXT_Y: f32 = 24.0;
 
 /// Frames the continue arrow stays visible, then hidden, per blink half-cycle
 /// (EasyRPG's `arrow_animation_frames`).
@@ -34,9 +57,9 @@ pub(super) struct DialogueFrame;
 #[derive(Component)]
 pub(super) struct DialogueArrow;
 
-/// Spawn the initially hidden dialogue box pinned to the bottom of the screen,
-/// styled with the original RM2000 windowskin from `System.png`: a 9-sliced
-/// frame behind an opaque blue fill, the face and text on top, and the continue
+/// Spawn the initially hidden dialogue box: RM2000's full-width bottom strip
+/// (`Window_Message`) styled with the `System.png` windowskin — a 9-sliced frame
+/// over the stretched background fill, the face and text on top, and the continue
 /// arrow at the bottom edge.
 pub(super) fn spawn_ui(
     mut commands: Commands,
@@ -48,11 +71,10 @@ pub(super) fn spawn_ui(
         .spawn((
             Node {
                 position_type: PositionType::Absolute,
-                left: Val::Px(16.0),
-                right: Val::Px(16.0),
-                bottom: Val::Px(16.0),
-                min_height: Val::Px(96.0),
-                padding: UiRect::all(Val::Px(14.0)),
+                left: Val::Px(0.0),
+                right: Val::Px(0.0),
+                bottom: Val::Px(0.0),
+                height: Val::Px(BOX_H),
                 ..default()
             },
             Visibility::Hidden,
@@ -68,14 +90,15 @@ pub(super) fn spawn_ui(
                         border: BorderRect::all(8.0),
                         center_scale_mode: SliceScaleMode::Stretch,
                         sides_scale_mode: SliceScaleMode::Stretch,
-                        max_corner_scale: 1.0,
+                        // 8px source border × the ×3 scale = RM2000's 24px frame.
+                        max_corner_scale: 3.0,
                     }),
                     ..default()
                 },
                 DialogueFrame,
             ));
             panel.spawn((
-                inset_node(4.0),
+                fill_node(),
                 ImageNode {
                     image: system.clone(),
                     rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
@@ -87,10 +110,10 @@ pub(super) fn spawn_ui(
             panel.spawn((
                 Node {
                     position_type: PositionType::Absolute,
-                    left: Val::Px(4.0),
-                    top: Val::Px(4.0),
-                    width: Val::Px(FACE_SIZE),
-                    height: Val::Px(FACE_SIZE),
+                    left: Val::Px(FACE_X),
+                    top: Val::Px(FACE_Y),
+                    width: Val::Px(FACE_BOX),
+                    height: Val::Px(FACE_BOX),
                     ..default()
                 },
                 ImageNode::default(),
@@ -101,21 +124,28 @@ pub(super) fn spawn_ui(
                 Text::new(String::new()),
                 TextFont {
                     font: FontSource::Handle(font.0.clone()),
-                    font_size: FontSize::Px(20.0),
+                    font_size: FontSize::Px(FONT_PX),
                     ..default()
                 },
                 TextColor(Color::WHITE),
-                Node { ..default() },
+                LineHeight::Px(LINE_PX),
+                Node {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(TEXT_X),
+                    top: Val::Px(TEXT_Y),
+                    right: Val::Px(BORDER),
+                    ..default()
+                },
                 DialogueText,
             ));
             panel.spawn((
                 Node {
                     position_type: PositionType::Absolute,
-                    bottom: Val::Px(2.0),
+                    bottom: Val::Px(0.0),
                     left: Val::Percent(50.0),
-                    margin: UiRect::left(Val::Px(-11.0)),
-                    width: Val::Px(22.0),
-                    height: Val::Px(11.0),
+                    margin: UiRect::left(Val::Px(-24.0)),
+                    width: Val::Px(48.0),
+                    height: Val::Px(24.0),
                     ..default()
                 },
                 ImageNode {
@@ -131,24 +161,19 @@ pub(super) fn spawn_ui(
 
 /// An absolutely-positioned node filling its parent (the windowskin frame).
 fn fill_node() -> Node {
-    inset_node(0.0)
-}
-
-/// An absolutely-positioned node inset by `px` on every side.
-fn inset_node(px: f32) -> Node {
     Node {
         position_type: PositionType::Absolute,
-        left: Val::Px(px),
-        right: Val::Px(px),
-        top: Val::Px(px),
-        bottom: Val::Px(px),
+        left: Val::Px(0.0),
+        right: Val::Px(0.0),
+        top: Val::Px(0.0),
+        bottom: Val::Px(0.0),
         ..default()
     }
 }
 
 /// Sync the box's per-page presentation when the shown box, its face, or the
 /// transparent-box flag changes: panel visibility, the face graphic, the text's
-/// face-offset margin, and whether the windowskin frame is drawn. Guarded by a
+/// face-offset left edge, and whether the windowskin frame is drawn. Guarded by a
 /// remembered snapshot so it does no work while a page reveals letter by letter.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub(super) fn render_box(
@@ -207,10 +232,10 @@ pub(super) fn render_box(
                 image.image = asset_server.load(resolve_png("FaceSet", name));
                 let (col, row) = ((index % 4) as f32, (index / 4) as f32);
                 image.rect = Some(Rect::new(
-                    col * FACE_SIZE,
-                    row * FACE_SIZE,
-                    col * FACE_SIZE + FACE_SIZE,
-                    row * FACE_SIZE + FACE_SIZE,
+                    col * FACE_CELL,
+                    row * FACE_CELL,
+                    col * FACE_CELL + FACE_CELL,
+                    row * FACE_CELL + FACE_CELL,
                 ));
                 *visibility = Visibility::Visible;
             }
@@ -218,11 +243,7 @@ pub(super) fn render_box(
         }
     }
     if let Ok(mut node) = texts.single_mut() {
-        node.margin.left = if face.is_some() {
-            Val::Px(FACE_SIZE + 8.0)
-        } else {
-            Val::Px(0.0)
-        };
+        node.left = Val::Px(if face.is_some() { TEXT_X_FACE } else { TEXT_X });
     }
 }
 
@@ -264,9 +285,9 @@ pub(super) fn render_reveal(
 }
 
 /// Anchor the dialogue box to the top, middle, or bottom of the screen when
-/// [`MessagePosition`] changes. Bottom (the spawn default) pins it to the
-/// bottom; Top pins it to the top; Middle centres it, nudged up by half the
-/// box's min height so the box straddles the centre line.
+/// [`MessagePosition`] changes, mirroring `Window_Message`'s three fixed slots for
+/// its 240px-tall box: top edge, screen centre ((240−80)/2 = 80 → 240 at ×3), or
+/// flush against the bottom (the spawn default).
 pub(super) fn update_position(
     position: Res<MessagePosition>,
     mut panels: Query<&mut Node, With<DialoguePanel>>,
@@ -279,19 +300,16 @@ pub(super) fn update_position(
     };
     match *position {
         MessagePosition::Top => {
-            node.top = Val::Px(16.0);
+            node.top = Val::Px(0.0);
             node.bottom = Val::Auto;
-            node.margin.top = Val::Px(0.0);
         }
         MessagePosition::Middle => {
-            node.top = Val::Percent(50.0);
+            node.top = Val::Px(240.0);
             node.bottom = Val::Auto;
-            node.margin.top = Val::Px(-48.0);
         }
         MessagePosition::Bottom => {
             node.top = Val::Auto;
-            node.bottom = Val::Px(16.0);
-            node.margin.top = Val::Px(0.0);
+            node.bottom = Val::Px(0.0);
         }
     }
 }
