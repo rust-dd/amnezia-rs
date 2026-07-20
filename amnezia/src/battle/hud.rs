@@ -1,7 +1,8 @@
 //! The battle HUD: the three windowskin panels (command, status, log/message)
 //! styled with the same `System.png` 9-slice as the dialogue box, laid along the
-//! bottom of the screen. They render on a dedicated order-3 [`HudCamera`] (spawned
-//! in [`super`]) so they sit ABOVE the order-2 effect overlay the backdrop,
+//! bottom of the screen. They render on a dedicated order-3
+//! [`super::systems::HudCamera`] (spawned in [`super::systems`]) so they sit ABOVE
+//! the order-2 effect overlay the backdrop,
 //! battlers, and animations draw on — bound to it with [`UiTargetCamera`] since
 //! the front camera owns the default UI. The panels are hidden until a fight runs
 //! and their text is recomposed whenever the [`Battle`] changes.
@@ -29,13 +30,13 @@ struct CommandText;
 struct StatusText;
 
 /// Spawn the hidden HUD windows and bind them to the order-2 HUD camera, so they
-/// composite above the effect overlay. Runs after [`super::spawn_hud_camera`], so
-/// the camera entity exists to target.
+/// composite above the effect overlay. Runs after [`super::systems::spawn_hud_camera`],
+/// so the camera entity exists to target.
 fn spawn_hud(
     mut commands: Commands,
     font: Res<GameFont>,
     asset_server: Res<AssetServer>,
-    camera: Query<Entity, With<super::HudCamera>>,
+    camera: Query<Entity, With<super::systems::HudCamera>>,
 ) {
     let Ok(hud_camera) = camera.single() else {
         return;
@@ -303,6 +304,6 @@ fn log_node() -> Node {
 /// Register the battle HUD: spawn its windows after the HUD camera exists, then
 /// keep them in sync with the live battle.
 pub fn register(app: &mut App) {
-    app.add_systems(Startup, spawn_hud.after(super::spawn_hud_camera))
+    app.add_systems(Startup, spawn_hud.after(super::systems::spawn_hud_camera))
         .add_systems(Update, update_hud);
 }
