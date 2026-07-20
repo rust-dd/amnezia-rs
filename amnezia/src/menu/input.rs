@@ -390,13 +390,16 @@ mod tests {
     }
 
     #[test]
-    fn save_command_sets_the_save_request_and_shows_the_confirmation() {
-        // Cursor 3 is "Mentés" (Save) in the RM2000 command order.
+    fn save_command_saves_and_confirms_when_save_access_is_enabled() {
+        // Cursor 3 is "Mentés" (Save) in the RM2000 command order. Manual save is
+        // disabled by default (a crystal-save game); enable it as a save crystal
+        // transiently does, and the Save command then writes and confirms.
         let mut app = app_on(3, MenuScreen::Command);
+        app.world_mut().insert_resource(SaveAccess(true));
         confirm(&mut app, KeyCode::Enter);
         assert!(
             app.world().resource::<SaveRequest>().0,
-            "the Save command must raise SaveRequest (the F5/Esc-S path)"
+            "with save access on, the Save command must raise SaveRequest"
         );
         assert_eq!(
             app.world().resource::<MenuState>().screen,

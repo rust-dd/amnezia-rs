@@ -77,18 +77,15 @@ pub struct SaveRequest(pub bool);
 pub struct EventSaveRequest(pub bool);
 
 /// Whether the in-menu Save command is allowed (RM2000 `ChangeSaveAccess`, opcode
-/// 11930). Defaults enabled; a cutscene disables it to block manual saves and
-/// re-enables it afterwards. Only the menu's Save entry (and the `Esc`-`S` quick
-/// save) honour this — the save crystal ([`EventSaveRequest`], `OpenSaveMenu`) and
-/// the `F5` dev hotkey are deliberately ungated, matching RPG_RT's `SetAllowSave`.
-#[derive(Resource)]
+/// 11930). Amnézia is a crystal-save game: it forbids manual saves everywhere and
+/// enables them only for the instant a save crystal runs `OpenSaveMenu` (the 16
+/// crystals `enable`, 35 sites `disable`), so this starts **disabled** — unlike
+/// RPG_RT's enabled default — and the player can never save from the menu. Only the
+/// menu's Save entry (and the `Esc`-`S` quick save) honour it; the save crystal
+/// ([`EventSaveRequest`], `OpenSaveMenu`) and the `F5` dev hotkey are deliberately
+/// ungated, matching RPG_RT's `SetAllowSave`.
+#[derive(Resource, Default)]
 pub struct SaveAccess(pub bool);
-
-impl Default for SaveAccess {
-    fn default() -> Self {
-        Self(true)
-    }
-}
 
 /// The resolved path the save/load systems read and write. Held as a resource so a
 /// headless test can point them at a temp file; the real game uses the
