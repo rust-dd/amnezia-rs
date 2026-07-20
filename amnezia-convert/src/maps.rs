@@ -2,7 +2,8 @@
 //! common events) into their clean RON assets.
 
 use amnezia_data::{
-    Chipset, CommonEvent, Event, EventCommand, EventPage, Map, MapInfoDef, MusicDef, Start,
+    Chipset, CommonEvent, Event, EventCommand, EventPage, Map, MapInfoDef, MoveCommandDef,
+    MoveRouteDef, MusicDef, Start,
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -52,6 +53,20 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
                         move_type: p.move_type,
                         move_frequency: p.move_frequency,
                         move_speed: p.move_speed,
+                        move_route: MoveRouteDef {
+                            commands: p
+                                .move_route
+                                .commands
+                                .into_iter()
+                                .map(|c| MoveCommandDef {
+                                    code: c.code,
+                                    params: c.params,
+                                    string: c.string,
+                                })
+                                .collect(),
+                            repeat: p.move_route.repeat,
+                            skippable: p.move_route.skippable,
+                        },
                         layer: p.layer,
                         condition: amnezia_data::EventCondition {
                             flags: p.condition.flags,

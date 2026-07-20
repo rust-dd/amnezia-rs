@@ -26,7 +26,7 @@ use crate::text::HeroName;
 use crate::timer::GameClock;
 use crate::title::TitleActive;
 use crate::vitals::Vitals;
-use crate::world::{MapData, MapEvents, MoveQueue, StartMap};
+use crate::world::{MapData, MapEvents, MoveQueue, RouteStepper, StartMap};
 use amnezia_data::{CommonEvent, Event, EventCommand, EventPage};
 use bevy::prelude::*;
 
@@ -76,6 +76,7 @@ fn map_event(id: u32, trigger: u32, commands: Vec<EventCommand>) -> Event {
             move_type: 0,
             move_frequency: 3,
             move_speed: 3,
+            move_route: Default::default(),
             layer: 0,
             condition: amnezia_data::EventCondition::default(),
             commands,
@@ -149,6 +150,7 @@ fn interp_app() -> App {
             index: 0,
         },
         MoveQueue::default(),
+        RouteStepper::default(),
     ));
     app
 }
@@ -320,5 +322,36 @@ fn parallel_writes_are_visible_to_the_foreground() {
     assert!(
         switch_on(&app, 31),
         "the foreground interpreter observed the parallel event's switch write"
+    );
+}
+
+#[test]
+fn move_event_is_fire_and_forget() {
+    let mut app = interp_app();
+    // A trigger-3 autorun: a hero MoveEvent (11330) followed by a switch. RM2000's
+    // MoveEvent does not block, so the switch after it runs in the same command
+    // burst — were 11330 blocking, switch 40 would stay off until the route drained.
+    app.insert_resource(MapEvents {
+        events: vec![map_event(
+            1,
+            3,
+            vec![
+                cmd(11330, 0, vec![10001, 8, 0, 0, 2]),
+                switch_cmd(40, 0, 0),
+                cmd(0, 0, vec![]),
+            ],
+        )],
+    });
+    app.update();
+    assert!(
+        switch_on(&app, 40),
+        "MoveEvent must not block the command that follows it"
+    );
+    // The route was loaded onto the hero's stepper (fire-and-forget), not dropped.
+    let world = app.world_mut();
+    let mut q = world.query_filtered::<&RouteStepper, With<Player>>();
+    assert!(
+        q.single(world).unwrap().active(),
+        "the decoded route is armed on the hero for the background stepper"
     );
 }

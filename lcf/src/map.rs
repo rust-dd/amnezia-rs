@@ -3,7 +3,14 @@
 //! parsed by the sibling `map_tree` module.
 
 use crate::LcfError;
-use crate::{Reader, decode_cp1250};
+use crate::Reader;
+
+mod events;
+mod move_route;
+
+pub(crate) use events::parse_commands;
+pub use events::{Event, EventCommand, EventCondition, EventPage};
+pub use move_route::{MoveCommand, MoveRoute};
 
 const DEFAULT_WIDTH: u32 = 20;
 const DEFAULT_HEIGHT: u32 = 15;
@@ -69,7 +76,7 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
             0x03 => height = Reader::new(data).varint()?,
             0x47 => lower = Some(data),
             0x48 => upper = Some(data),
-            0x51 => events = parse_events(data)?,
+            0x51 => events = events::parse_events(data)?,
             _ => {}
         }
     }
@@ -88,196 +95,6 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
         upper_layer,
         events,
     })
-}
-
-/// A map event: its id, tile position, name, and pages.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Event {
-    pub id: u32,
-    pub x: u32,
-    pub y: u32,
-    pub name: String,
-    pub pages: Vec<EventPage>,
-}
-
-/// One page of an event: its trigger, graphic, layer, condition, and commands.
-/// The layer (0 = below hero, 1 = same as hero, 2 = above hero) decides
-/// collision: a `layer == 1` page blocks the player. `direction` is the CharSet
-/// facing row (Up=0, Right=1, Down=2, Left=3; default 2 = down) and `pattern`
-/// the walk frame column (default 1 = the standing middle frame).
-///
-/// `move_type` is the page's autonomous movement (0 stationary, 1 random,
-/// 2 vertical pace, 3 horizontal pace, 4 toward hero, 5 away from hero, 6 custom
-/// route); RM2000 always writes it, so its default only guards a malformed page
-/// (liblcf's default is 1). `move_frequency` (1–8, default 3) sets how often the
-/// event steps and `move_speed` (1–6, default 3) how fast each step moves; both
-/// are omitted from the file when equal to their default.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventPage {
-    pub trigger: u32,
-    pub graphic_name: String,
-    pub graphic_index: u32,
-    pub direction: u32,
-    pub pattern: u32,
-    pub move_type: u32,
-    pub move_frequency: u32,
-    pub move_speed: u32,
-    pub layer: u32,
-    pub condition: EventCondition,
-    pub commands: Vec<EventCommand>,
-}
-
-/// A page's activation condition. `flags` bits: 0 switch_a, 1 switch_b,
-/// 2 variable, 3 item, 4 actor, 5 timer. A page is active when every enabled
-/// flag's condition holds; `flags == 0` is always active.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct EventCondition {
-    pub flags: u32,
-    pub switch_a: u32,
-    pub switch_b: u32,
-    pub variable_id: u32,
-    pub variable_value: u32,
-    pub item_id: u32,
-    pub actor_id: u32,
-}
-
-fn parse_condition(data: &[u8]) -> Result<EventCondition, LcfError> {
-    let mut reader = Reader::new(data);
-    let mut condition = EventCondition::default();
-    loop {
-        let id = reader.varint()?;
-        if id == 0 {
-            break;
-        }
-        let size = reader.varint()? as usize;
-        let field = reader.take(size)?;
-        let value = Reader::new(field).varint().unwrap_or(0);
-        match id {
-            0x01 => condition.flags = value,
-            0x02 => condition.switch_a = value,
-            0x03 => condition.switch_b = value,
-            0x04 => condition.variable_id = value,
-            0x05 => condition.variable_value = value,
-            0x06 => condition.item_id = value,
-            0x07 => condition.actor_id = value,
-            _ => {}
-        }
-    }
-    Ok(condition)
-}
-
-/// One event command: RM2000 opcode, nesting indent, string, and int params.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct EventCommand {
-    pub code: u32,
-    pub indent: u32,
-    pub string: String,
-    pub params: Vec<i32>,
-}
-
-fn parse_events(data: &[u8]) -> Result<Vec<Event>, LcfError> {
-    let mut reader = Reader::new(data);
-    let count = reader.varint()?;
-    let mut events = Vec::with_capacity(count as usize);
-    for _ in 0..count {
-        let id = reader.varint()?;
-        let mut event = Event {
-            id,
-            x: 0,
-            y: 0,
-            name: String::new(),
-            pages: Vec::new(),
-        };
-        loop {
-            let sub_id = reader.varint()?;
-            if sub_id == 0 {
-                break;
-            }
-            let sub_size = reader.varint()? as usize;
-            let sub_data = reader.take(sub_size)?;
-            match sub_id {
-                0x01 => event.name = decode_cp1250(sub_data),
-                0x02 => event.x = Reader::new(sub_data).varint()?,
-                0x03 => event.y = Reader::new(sub_data).varint()?,
-                0x05 => event.pages = parse_pages(sub_data)?,
-                _ => {}
-            }
-        }
-        events.push(event);
-    }
-    Ok(events)
-}
-
-fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
-    let mut reader = Reader::new(data);
-    let count = reader.varint()?;
-    let mut pages = Vec::with_capacity(count as usize);
-    for _ in 0..count {
-        let _page_id = reader.varint()?;
-        let mut page = EventPage {
-            trigger: 0,
-            graphic_name: String::new(),
-            graphic_index: 0,
-            direction: 2,
-            pattern: 1,
-            move_type: 1,
-            move_frequency: 3,
-            move_speed: 3,
-            layer: 0,
-            condition: EventCondition::default(),
-            commands: Vec::new(),
-        };
-        loop {
-            let sub_id = reader.varint()?;
-            if sub_id == 0 {
-                break;
-            }
-            let sub_size = reader.varint()? as usize;
-            let sub_data = reader.take(sub_size)?;
-            match sub_id {
-                0x02 => page.condition = parse_condition(sub_data)?,
-                0x15 => page.graphic_name = decode_cp1250(sub_data),
-                0x16 => page.graphic_index = Reader::new(sub_data).varint()?,
-                0x17 => page.direction = Reader::new(sub_data).varint()?,
-                0x18 => page.pattern = Reader::new(sub_data).varint()?,
-                0x1F => page.move_type = Reader::new(sub_data).varint()?,
-                0x20 => page.move_frequency = Reader::new(sub_data).varint()?,
-                0x21 => page.trigger = Reader::new(sub_data).varint()?,
-                0x22 => page.layer = Reader::new(sub_data).varint()?,
-                0x25 => page.move_speed = Reader::new(sub_data).varint()?,
-                0x34 => page.commands = parse_commands(sub_data)?,
-                _ => {}
-            }
-        }
-        pages.push(page);
-    }
-    Ok(pages)
-}
-
-/// Parse a flat event-command stream: repeated
-/// `[code][indent][strlen][CP1250 string][paramcount][params]` records read
-/// until the buffer is exhausted. Shared by map event pages and common events.
-pub(crate) fn parse_commands(data: &[u8]) -> Result<Vec<EventCommand>, LcfError> {
-    let mut reader = Reader::new(data);
-    let mut commands = Vec::new();
-    while !reader.is_empty() {
-        let code = reader.varint()?;
-        let indent = reader.varint()?;
-        let string_len = reader.varint()? as usize;
-        let string = decode_cp1250(reader.take(string_len)?);
-        let param_count = reader.varint()?;
-        let mut params = Vec::with_capacity(param_count as usize);
-        for _ in 0..param_count {
-            params.push(reader.varint()? as i32);
-        }
-        commands.push(EventCommand {
-            code,
-            indent,
-            string,
-            params,
-        });
-    }
-    Ok(commands)
 }
 
 #[cfg(test)]
@@ -566,6 +383,56 @@ mod tests {
             ),
             (1, 3, 3)
         );
+    }
+
+    #[test]
+    fn parses_page_move_route() {
+        // A move_type-6 page carrying a route chunk (0x29): commands move-down (2)
+        // and change_graphic "Torch" frame 1, with the repeat flag set.
+        let cmds = {
+            let mut c = varint(2);
+            c.extend(varint(34));
+            c.extend(varint(5));
+            c.extend_from_slice(b"Torch");
+            c.extend(varint(1));
+            c
+        };
+        let route = {
+            let mut r = subchunk(0x0C, &cmds);
+            r.extend(subchunk(0x15, &varint(1)));
+            r.push(0);
+            r
+        };
+        let mut page = varint(1);
+        page.extend(subchunk(0x1F, &varint(6)));
+        page.extend(subchunk(0x29, &route));
+        page.push(0);
+        let mut pages = varint(1);
+        pages.extend_from_slice(&page);
+        let mut event = varint(7);
+        event.extend(subchunk(0x05, &pages));
+        event.push(0);
+        let mut section = varint(1);
+        section.extend_from_slice(&event);
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[
+                (0x02, varint(2)),
+                (0x03, varint(1)),
+                (0x47, layer_bytes(&[0, 0])),
+                (0x48, layer_bytes(&[0, 0])),
+                (0x51, section),
+            ],
+        );
+        let map = parse_map(&file).unwrap();
+        let page = &map.events[0].pages[0];
+        assert_eq!(page.move_type, 6);
+        assert!(page.move_route.repeat);
+        assert_eq!(page.move_route.commands.len(), 2);
+        assert_eq!(page.move_route.commands[0].code, 2);
+        assert_eq!(page.move_route.commands[1].code, 34);
+        assert_eq!(page.move_route.commands[1].string, "Torch");
+        assert_eq!(page.move_route.commands[1].params, vec![1]);
     }
 
     #[test]

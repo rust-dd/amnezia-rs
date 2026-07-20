@@ -20,16 +20,6 @@ pub(super) const MAX_STEPS_PER_FRAME: usize = 10_000;
 /// cycle of pages) from growing the call stack without bound.
 pub(super) const MAX_CALL_DEPTH: usize = 64;
 
-/// The character a `MoveEvent` set walking, so the frame that issued it resumes
-/// only once *that* character's queue drains — not when every queue on the map
-/// happens to be idle. A global "all idle" test would let one parallel mover
-/// stall behind another's ambient pacing.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum MoveWait {
-    Hero,
-    Event(u32),
-}
-
 /// A caller frame suspended by `CallEvent` (12330): the interrupted command list,
 /// the instruction pointer to resume at, and the event id in scope. The callee
 /// runs in place; reaching its end pops the frame and resumes the caller.
@@ -48,8 +38,10 @@ pub(super) struct Frame {
     pub(super) ip: usize,
     pub(super) active: bool,
     pub(super) wait: f32,
-    /// The character a `MoveEvent` is waiting on, if any.
-    pub(super) wait_move: Option<MoveWait>,
+    /// Set by `ProceedWithMovement` (11340): hold the frame until every forced
+    /// move route on the map has finished. `MoveEvent` itself is fire-and-forget;
+    /// only this opcode blocks, mirroring RM2000's "wait until movement complete".
+    pub(super) wait_movement: bool,
     pub(super) event_id: u32,
     pub(super) choices: HashMap<u32, i32>,
     /// Suspended caller frames from `CallEvent`; a finished callee pops back to the
@@ -105,7 +97,7 @@ impl Frame {
         self.commands.clear();
         self.ip = 0;
         self.wait = 0.0;
-        self.wait_move = None;
+        self.wait_movement = false;
         self.event_id = 0;
         self.choices.clear();
         self.call_stack.clear();

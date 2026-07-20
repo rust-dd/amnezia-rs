@@ -10,7 +10,7 @@ mod dispatch;
 mod handlers;
 
 use super::commands::key_code;
-use super::frame::{Frame, MAX_STEPS_PER_FRAME, MoveWait};
+use super::frame::{Frame, MAX_STEPS_PER_FRAME};
 use super::params::SubsystemIo;
 use crate::audio::AudioRequest;
 use crate::battle::BattleOutcome;
@@ -19,7 +19,7 @@ use crate::dialogue::Dialogue;
 use crate::player::Player;
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::teleport::PendingTeleport;
-use crate::world::{EventSprite, MoveQueue};
+use crate::world::{EventSprite, MoveQueue, RouteStepper};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use dispatch::dispatch;
@@ -39,9 +39,18 @@ pub(super) struct Exec<'w, 's> {
     pub(super) inventory: ResMut<'w, Inventory>,
     pub(super) party: ResMut<'w, Party>,
     pub(super) pending: ResMut<'w, PendingTeleport>,
-    pub(super) hero_queue: Query<'w, 's, &'static mut MoveQueue, With<Player>>,
-    pub(super) event_movers:
-        Query<'w, 's, (&'static EventSprite, &'static mut MoveQueue), Without<Player>>,
+    pub(super) hero_queue:
+        Query<'w, 's, (&'static mut MoveQueue, &'static mut RouteStepper), With<Player>>,
+    pub(super) event_movers: Query<
+        'w,
+        's,
+        (
+            &'static EventSprite,
+            &'static mut MoveQueue,
+            &'static mut RouteStepper,
+        ),
+        Without<Player>,
+    >,
     pub(super) audio: MessageWriter<'w, AudioRequest>,
     pub(super) subsystems: SubsystemIo<'w, 's>,
 }
@@ -165,14 +174,13 @@ pub(super) fn run_frame(
         frame.wait -= dt;
         return RunOutcome::Yielded;
     }
-    // Hold until the specific character a `MoveEvent` set walking has drained its
-    // queue — not every mover on the map, so concurrent movers don't stall each
-    // other.
-    if let Some(target) = frame.wait_move {
-        if move_target_busy(target, &x.hero_queue, &x.event_movers) {
+    // `ProceedWithMovement` holds the frame until every forced move route has
+    // finished — the hero's and every event's stepper drained.
+    if frame.wait_movement {
+        if any_route_running(&x.hero_queue, &x.event_movers) {
             return RunOutcome::Yielded;
         }
-        frame.wait_move = None;
+        frame.wait_movement = false;
     }
     for _ in 0..MAX_STEPS_PER_FRAME {
         let Some(command) = frame.commands.get(frame.ip).cloned() else {
@@ -199,21 +207,21 @@ pub(super) fn run_frame(
     RunOutcome::Yielded
 }
 
-/// Whether the character a frame is `MoveEvent`-waiting on is still walking. A
-/// target that has since vanished (a despawned event) counts as drained, so the
-/// frame never hangs on a mover that no longer exists.
-fn move_target_busy(
-    target: MoveWait,
-    hero_queue: &Query<&'static mut MoveQueue, With<Player>>,
-    event_movers: &Query<(&'static EventSprite, &'static mut MoveQueue), Without<Player>>,
+/// Whether any forced move route is still running — the hero's stepper or any
+/// event's. `ProceedWithMovement` (11340) yields on this until all have drained.
+fn any_route_running(
+    hero_queue: &Query<(&'static mut MoveQueue, &'static mut RouteStepper), With<Player>>,
+    event_movers: &Query<
+        (
+            &'static EventSprite,
+            &'static mut MoveQueue,
+            &'static mut RouteStepper,
+        ),
+        Without<Player>,
+    >,
 ) -> bool {
-    match target {
-        MoveWait::Hero => hero_queue.single().is_ok_and(|queue| queue.busy()),
-        MoveWait::Event(id) => event_movers
-            .iter()
-            .find(|(sprite, _)| sprite.id == id)
-            .is_some_and(|(_, queue)| queue.busy()),
-    }
+    hero_queue.iter().any(|(_, stepper)| stepper.active())
+        || event_movers.iter().any(|(_, _, stepper)| stepper.active())
 }
 
 /// Resolve an RM2000 character reference — 10001 the hero, 10005 this event, any
@@ -225,7 +233,7 @@ pub(super) fn resolve_character(
     char_ref: i32,
     this_event: u32,
     players: &Query<&Player>,
-    events: &Query<(&EventSprite, &mut MoveQueue), Without<Player>>,
+    events: &Query<(&EventSprite, &mut MoveQueue, &mut RouteStepper), Without<Player>>,
 ) -> Option<(i32, i32, u32)> {
     if char_ref == 10001 {
         players.single().ok().map(|p| (p.tile_x, p.tile_y, p.dir))
@@ -237,7 +245,7 @@ pub(super) fn resolve_character(
         };
         events
             .iter()
-            .find(|(e, _)| e.id as i32 == id)
-            .map(|(e, _)| (e.tile_x, e.tile_y, e.dir))
+            .find(|(e, _, _)| e.id as i32 == id)
+            .map(|(e, _, _)| (e.tile_x, e.tile_y, e.dir))
     }
 }

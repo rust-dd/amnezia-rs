@@ -24,7 +24,7 @@ use crate::events::message_boxes;
 use crate::screenfx::Weather;
 use crate::shop::ShopRequest;
 use crate::text;
-use crate::world::MoveQueue;
+use crate::world::{MoveQueue, RouteStepper};
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
@@ -266,6 +266,13 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         MOVE_EVENT => handlers::move_event(frame, &command, x),
+        PROCEED_WITH_MOVEMENT => {
+            // The blocking half of a "wait until movement complete" Move Event: hold
+            // here until every forced route has drained (see `run_frame`).
+            frame.wait_movement = true;
+            frame.ip += 1;
+            Flow::Yield
+        }
         ENEMY_ENCOUNTER => {
             // Resumed (outcome in hand): fall into the handlers. Fresh: start the
             // fight and pause until it publishes a result; `params[1]` is the troop
@@ -414,13 +421,15 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Yield
         }
         HALT_ALL_MOVEMENT => {
-            if let Ok(mut queue) = x.hero_queue.single_mut() {
+            if let Ok((mut queue, mut stepper)) = x.hero_queue.single_mut() {
                 *queue = MoveQueue::default();
+                *stepper = RouteStepper::default();
             }
-            for (_, mut queue) in &mut x.event_movers {
+            for (_, mut queue, mut stepper) in &mut x.event_movers {
                 *queue = MoveQueue::default();
+                *stepper = RouteStepper::default();
             }
-            frame.wait_move = None;
+            frame.wait_movement = false;
             frame.ip += 1;
             Flow::Advance
         }

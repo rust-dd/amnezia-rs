@@ -22,7 +22,9 @@ pub use database::{
     parse_chipsets, parse_common_events, parse_items, parse_monsters, parse_skills, parse_states,
     parse_system, parse_terms, parse_troops,
 };
-pub use map::{Event, EventCommand, EventCondition, EventPage, MapUnit, parse_map};
+pub use map::{
+    Event, EventCommand, EventCondition, EventPage, MapUnit, MoveCommand, MoveRoute, parse_map,
+};
 pub use map_tree::{MapInfo, Start, parse_map_infos, parse_start};
 
 /// Errors returned while parsing an LCF file.

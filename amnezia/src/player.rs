@@ -11,7 +11,9 @@ use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::Fade;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::title::TitleActive;
-use crate::world::{Character, MainCamera, MapData, MapEvents, MoveQueue, RouteAction, walk};
+use crate::world::{
+    Character, MainCamera, MapData, MapEvents, MoveQueue, RouteAction, RouteStepper, walk,
+};
 use amnezia_data::EventPage;
 use bevy::prelude::*;
 
@@ -122,6 +124,7 @@ pub fn spawn_player(
             index: PLAYER_INDEX,
         },
         MoveQueue::default(),
+        RouteStepper::default(),
         Sprite {
             image,
             rect: Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H)),
@@ -163,15 +166,20 @@ fn move_player(
     battle: Res<BattleActive>,
     title: Res<TitleActive>,
     mut running: ResMut<RunningEvent>,
-    mut players: Query<(&mut Player, &mut MoveQueue)>,
+    mut players: Query<(&mut Player, &mut MoveQueue, &RouteStepper)>,
 ) {
     if dialogue.active || fade.busy() || running.active() || menu.0 || shop.0 || battle.0 || title.0
     {
         return;
     }
-    let Ok((mut player, mut queue)) = players.single_mut() else {
+    let Ok((mut player, mut queue, stepper)) = players.single_mut() else {
         return;
     };
+    // A forced move route (a MoveEvent on the hero) owns the hero until it drains,
+    // exactly as RM2000 ignores input while a route is overwritten.
+    if stepper.active() {
+        return;
+    }
     // Held (not tapped) so the hero keeps walking; the queue paces it one tile at
     // a time via a smooth tween rather than an instant snap.
     let step = if keys.pressed(KeyCode::ArrowUp) {

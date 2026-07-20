@@ -15,10 +15,12 @@ use bevy::prelude::*;
 mod autonomy;
 mod movement;
 mod render;
+mod route;
 mod water;
 
 pub use autonomy::AutoMove;
-pub use movement::{Character, MoveQueue, RouteAction, decode_route, walk};
+pub use movement::{Character, MoveQueue, RouteAction, walk};
+pub use route::RouteStepper;
 
 /// Developer start override. `None` uses the faithful LMT start (`start.ron`,
 /// the intro map_0005), whose autorun cutscene the interpreter now runs; set it
@@ -187,11 +189,13 @@ impl Plugin for WorldPlugin {
                 Update,
                 (
                     (
+                        route::route_events,
                         autonomy::autonomous_movement,
                         walk::<EventSprite>,
                         update_event_sprites,
                     )
                         .chain(),
+                    route::route_hero,
                     water::animate_water,
                     apply_relocate,
                 ),

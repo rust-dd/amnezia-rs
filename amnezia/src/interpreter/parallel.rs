@@ -240,6 +240,7 @@ mod tests {
             move_type: 0,
             move_frequency: 3,
             move_speed: 3,
+            move_route: Default::default(),
             layer: 0,
             condition,
             commands: vec![cmd(10210)],

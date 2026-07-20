@@ -9,11 +9,11 @@ use super::super::branch::branch_holds;
 use super::super::commands::{anim_frame_count, battle_anim_wait, resolve_anim_target};
 use super::super::control_vars::{apply_control_variables, resolve_operand};
 use super::super::flow::skip_true_body;
-use super::super::frame::{Frame, MoveWait};
+use super::super::frame::Frame;
 use super::super::present::{Present, parse_present};
 use super::{Exec, Flow, resolve_character};
 use crate::animation::ShowMapAnimation;
-use crate::world::{RelocateEvent, decode_route};
+use crate::world::{RelocateEvent, RouteStepper};
 use amnezia_data::EventCommand;
 
 /// `ControlVariables` (10220): resolve the operand from live state, then assign it
@@ -141,31 +141,33 @@ pub(super) fn change_event_location(
     Flow::Advance
 }
 
-/// `MoveEvent` (11330): enqueue the decoded route onto its target and pause until
-/// that target's queue drains. `10001` is the hero, `10005` this event, else an
-/// event id.
+/// `MoveEvent` (11330): decode the inline route and load it onto its target's
+/// stepper, then continue — RM2000's `MoveEvent` is fire-and-forget (the route
+/// runs in the background). `10001` is the hero, `10005` this event, else an event
+/// id. A following `ProceedWithMovement` (11340) is what waits for it.
 pub(super) fn move_event(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -> Flow {
     let target = command.params.first().copied().unwrap_or(0);
-    let steps = decode_route(&command.params);
-    let wait = if target == 10001 {
-        if let Ok(mut queue) = x.hero_queue.single_mut() {
-            queue.enqueue_route(steps);
+    let route = RouteStepper::from_move_event(&command.params);
+    if target == 10001 {
+        if let Ok((_, mut stepper)) = x.hero_queue.single_mut() {
+            *stepper = route;
         }
-        MoveWait::Hero
     } else {
         let id = if target == 10005 {
             frame.event_id as i32
         } else {
             target
         };
-        if let Some((_, mut queue)) = x.event_movers.iter_mut().find(|(e, _)| e.id as i32 == id) {
-            queue.enqueue_route(steps);
+        if let Some((_, _, mut stepper)) = x
+            .event_movers
+            .iter_mut()
+            .find(|(e, _, _)| e.id as i32 == id)
+        {
+            *stepper = route;
         }
-        MoveWait::Event(id.max(0) as u32)
-    };
-    frame.wait_move = Some(wait);
+    }
     frame.ip += 1;
-    Flow::Yield
+    Flow::Advance
 }
 
 /// `ShowBattleAnimation` (11210): play an animation on a character. `params =

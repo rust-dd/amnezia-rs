@@ -9,9 +9,11 @@
 use serde::{Deserialize, Serialize};
 
 mod map_info;
+mod move_route;
 mod terms;
 
 pub use map_info::{MapBgm, MapInfoDef, resolve_map_bgm};
+pub use move_route::{MoveCommandDef, MoveRouteDef};
 pub use terms::{ShopTerms, TermsDef};
 
 /// A converted map: the chipset it uses, its dimensions in tiles, and the two
@@ -61,6 +63,10 @@ pub struct EventPage {
     pub move_frequency: u32,
     #[serde(default = "default_move_speed")]
     pub move_speed: u32,
+    /// The custom route a `move_type == 6` page follows; empty otherwise. Carries
+    /// a `serde` default so map RON written before the field existed still loads.
+    #[serde(default)]
+    pub move_route: MoveRouteDef,
     pub layer: u32,
     pub condition: EventCondition,
     pub commands: Vec<EventCommand>,

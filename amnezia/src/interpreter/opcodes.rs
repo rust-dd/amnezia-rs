@@ -68,6 +68,10 @@ pub(super) const SHOW_CHOICE: u32 = 10140;
 pub(super) const SHOW_CHOICE_OPTION: u32 = 20140;
 pub(super) const SHOW_CHOICE_END: u32 = 20141;
 pub(super) const MOVE_EVENT: u32 = 11330;
+/// Wait until every forced move route has finished (`params` empty). RM2000 emits
+/// this after a Move Event whose "wait until movement complete" box is checked;
+/// `MoveEvent` (11330) alone is fire-and-forget.
+pub(super) const PROCEED_WITH_MOVEMENT: u32 = 11340;
 pub(super) const PLAY_BGM: u32 = 11510;
 pub(super) const FADE_OUT_BGM: u32 = 11520;
 pub(super) const MEMORIZE_BGM: u32 = 11530;

@@ -3,6 +3,7 @@
 //! active-page NPC sprite. Every spawned entity is tagged [`MapScene`] so a
 //! teleport can despawn the whole scene at once.
 
+use super::route::RouteStepper;
 use super::water::WaterQuarter;
 use super::{AutoMove, EventSprite, MapScene, MoveQueue};
 use crate::assets::resolve_png;
@@ -135,6 +136,13 @@ pub(super) fn spawn_event_npc(
             page.move_speed,
             event.id,
         ),
+        // A custom-route page (move_type 6) spawns with its route armed; every
+        // other NPC gets an inert stepper a MoveEvent opcode can later load.
+        if page.move_type == 6 {
+            RouteStepper::from_page(&page.move_route, page.move_speed, page.move_frequency)
+        } else {
+            RouteStepper::default()
+        },
         MapScene,
     ));
 }

@@ -1,0 +1,320 @@
+//! Driving the move-route [`RouteStepper`] each frame: the two Bevy systems that
+//! pump every character's forced route — [`route_events`] for event NPCs (a
+//! `move_type == 6` custom route or a loaded `MoveEvent`) and [`route_hero`] for
+//! the hero. Both gate on the same pauses as autonomous movement, advance the
+//! stepper only while the character stands idle, enqueue the resulting tile step
+//! into the shared [`MoveQueue`] (which `walk` tweens), and apply the command's
+//! side effects — a game-switch toggle, a sound, or a transparency change.
+//!
+//! The stepper state machine itself lives in the [`stepper`] submodule.
+
+mod stepper;
+
+pub use stepper::RouteStepper;
+
+use super::{Character, EventSprite, MapData, MapEvents, MoveQueue, RouteAction};
+use crate::audio::AudioRequest;
+use crate::player::Player;
+use crate::state::{Inventory, Party, Switches, Variables};
+use bevy::prelude::*;
+use stepper::StepEffect;
+
+/// One frame of a character's stepper: the tile delta of the step it enqueued
+/// this tick (for the caller to sync the logical event tile), plus the side
+/// effects to apply.
+struct Driven {
+    moved: Option<(i32, i32)>,
+    effects: Vec<StepEffect>,
+}
+
+impl Driven {
+    /// Nothing happened this tick (inactive, mid-step, or still in its delay).
+    fn idle() -> Self {
+        Self {
+            moved: None,
+            effects: Vec::new(),
+        }
+    }
+}
+
+/// Drive one character's stepper for a frame: yield (nothing) while it is
+/// inactive, mid-step (queue busy), or still in its inter-command delay; otherwise
+/// advance the route, enqueue any resulting step, and return its delta and side
+/// effects for the caller to apply. The effects are returned rather than applied
+/// here so `can_step` — which borrows the switches and events — is dropped before
+/// the caller mutates them.
+fn drive<C: Character>(
+    ch: &mut C,
+    queue: &mut MoveQueue,
+    stepper: &mut RouteStepper,
+    hero: (i32, i32),
+    dt: f32,
+    can_step: impl Fn(i32, i32) -> bool,
+) -> Driven {
+    if !stepper.active() || queue.busy() {
+        return Driven::idle();
+    }
+    if !stepper.tick_ready(dt) {
+        return Driven::idle();
+    }
+    let mut effects = Vec::new();
+    let moved = stepper.advance(ch, hero, &can_step, &mut effects).map(
+        |(RouteAction::Step { dx, dy, face }, secs)| {
+            queue.set_step_secs(secs);
+            queue.enqueue_route([RouteAction::Step { dx, dy, face }]);
+            (dx, dy)
+        },
+    );
+    Driven { moved, effects }
+}
+
+/// Apply the side effects a route command produced: toggle a game switch, play a
+/// sound, or set the character's sprite transparency.
+fn apply_effects(
+    effects: Vec<StepEffect>,
+    switches: &mut Switches,
+    audio: &mut MessageWriter<AudioRequest>,
+    sprite: &mut Sprite,
+) {
+    for effect in effects {
+        match effect {
+            StepEffect::Switch(id, on) => switches.set(id, on),
+            StepEffect::Sound { name, params } => {
+                audio.write(AudioRequest::play_sound(&name, &params));
+            }
+            StepEffect::Transparency(level) => {
+                let alpha = 1.0 - level as f32 / 8.0;
+                sprite.color = sprite.color.with_alpha(alpha);
+            }
+        }
+    }
+}
+
+/// Whether a tile is on the map and enterable from `(ex, ey)` — the shared move
+/// gate: in bounds, passable per `MakeWay`, not the hero's tile, and not a solid
+/// (same-layer) event other than `self_id`.
+#[allow(clippy::too_many_arguments)]
+fn tile_open(
+    ex: i32,
+    ey: i32,
+    dx: i32,
+    dy: i32,
+    self_id: u32,
+    hero: (i32, i32),
+    data: &MapData,
+    map_events: &MapEvents,
+    state: (&Switches, &Variables, &Party, &Inventory),
+) -> bool {
+    let (nx, ny) = (ex + dx, ey + dy);
+    nx >= 0
+        && ny >= 0
+        && nx < data.width
+        && ny < data.height
+        && data.can_move(ex, ey, nx, ny)
+        && (nx, ny) != hero
+        && !super::autonomy::event_solid_at(map_events, state, self_id, nx, ny)
+}
+
+/// Step every event NPC's forced route (custom `move_type == 6` or a loaded
+/// `MoveEvent`). Paused by the same guards as autonomous movement.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn route_events(
+    time: Res<Time>,
+    data: Res<MapData>,
+    mut map_events: ResMut<MapEvents>,
+    mut switches: ResMut<Switches>,
+    variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
+    guards: super::autonomy::MoveGuards,
+    mut audio: MessageWriter<AudioRequest>,
+    players: Query<&Player>,
+    mut movers: Query<
+        (
+            &mut EventSprite,
+            &mut MoveQueue,
+            &mut RouteStepper,
+            &mut Sprite,
+        ),
+        Without<Player>,
+    >,
+) {
+    if guards.paused() {
+        return;
+    }
+    let hero = players
+        .single()
+        .map(|p| (p.tile_x, p.tile_y))
+        .unwrap_or((-1, -1));
+    let dt = time.delta_secs();
+    for (mut sprite_c, mut queue, mut stepper, mut sprite) in &mut movers {
+        let (ex, ey) = (sprite_c.tile_x, sprite_c.tile_y);
+        let self_id = sprite_c.id;
+        // Scope `can_step` (which borrows the switches and events) so it drops
+        // before either is mutated: the logical tile sync and a switch command.
+        let driven = {
+            let can_step = |dx: i32, dy: i32| {
+                tile_open(
+                    ex,
+                    ey,
+                    dx,
+                    dy,
+                    self_id,
+                    hero,
+                    &data,
+                    &map_events,
+                    (&switches, &variables, &party, &inventory),
+                )
+            };
+            drive(&mut *sprite_c, &mut queue, &mut stepper, hero, dt, can_step)
+        };
+        // Keep the logical event tile in step with the sprite so collision, touch,
+        // and interaction use the NPC's live position — the same sync autonomy does.
+        if let Some((dx, dy)) = driven.moved
+            && let Some(event) = map_events.events.iter_mut().find(|e| e.id == self_id)
+        {
+            event.x = (event.x as i32 + dx).max(0) as u32;
+            event.y = (event.y as i32 + dy).max(0) as u32;
+        }
+        apply_effects(driven.effects, &mut switches, &mut audio, &mut sprite);
+    }
+}
+
+/// Step the hero's forced route (a `MoveEvent` targeting the hero). Same guards
+/// as event routes; the hero is `self_id` 0 (no event) for the collision test.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn route_hero(
+    time: Res<Time>,
+    data: Res<MapData>,
+    map_events: Res<MapEvents>,
+    mut switches: ResMut<Switches>,
+    variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
+    guards: super::autonomy::MoveGuards,
+    mut audio: MessageWriter<AudioRequest>,
+    mut hero: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper, &mut Sprite)>,
+) {
+    if guards.paused() {
+        return;
+    }
+    let Ok((mut player, mut queue, mut stepper, mut sprite)) = hero.single_mut() else {
+        return;
+    };
+    let (ex, ey) = (player.tile_x, player.tile_y);
+    let pos = (ex, ey);
+    let dt = time.delta_secs();
+    let driven = {
+        let can_step = |dx: i32, dy: i32| {
+            tile_open(
+                ex,
+                ey,
+                dx,
+                dy,
+                0,
+                pos,
+                &data,
+                &map_events,
+                (&switches, &variables, &party, &inventory),
+            )
+        };
+        drive(&mut *player, &mut queue, &mut stepper, pos, dt, can_step)
+    };
+    // The hero is not a map event, so only its side effects need applying — its
+    // tile is tracked by the `Player` component that `walk` updates.
+    apply_effects(driven.effects, &mut switches, &mut audio, &mut sprite);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::battle::BattleActive;
+    use crate::dialogue::Dialogue;
+    use crate::gameover::GameOverActive;
+    use crate::interpreter::RunningEvent;
+    use crate::menu::MenuOpen;
+    use crate::shop::ShopOpen;
+    use crate::teleport::Fade;
+    use crate::tiles::DIR_DOWN;
+    use crate::title::TitleActive;
+    use amnezia_data::{Event, MoveCommandDef, MoveRouteDef};
+
+    #[test]
+    fn move_type_six_npc_follows_its_route() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins);
+        app.insert_resource(MapData::for_test(10, 10));
+        app.insert_resource(MapEvents {
+            events: vec![Event {
+                id: 1,
+                x: 5,
+                y: 5,
+                name: String::new(),
+                pages: Vec::new(),
+            }],
+        });
+        app.init_resource::<Switches>();
+        app.init_resource::<Variables>();
+        app.init_resource::<Party>();
+        app.init_resource::<Inventory>();
+        app.init_resource::<Dialogue>();
+        app.init_resource::<Fade>();
+        app.init_resource::<MenuOpen>();
+        app.init_resource::<ShopOpen>();
+        app.init_resource::<BattleActive>();
+        app.init_resource::<GameOverActive>();
+        app.init_resource::<RunningEvent>();
+        app.insert_resource(TitleActive(false));
+        app.add_message::<AudioRequest>();
+        app.add_systems(Update, route_events);
+        app.world_mut().spawn(Player {
+            tile_x: 0,
+            tile_y: 0,
+            dir: DIR_DOWN,
+            frame: 1,
+            charset: "C".into(),
+            index: 0,
+        });
+        // A move_type-6 NPC armed with a repeating move-down route.
+        let route = MoveRouteDef {
+            commands: vec![MoveCommandDef {
+                code: 2,
+                params: Vec::new(),
+                string: String::new(),
+            }],
+            repeat: true,
+            skippable: false,
+        };
+        app.world_mut().spawn((
+            EventSprite {
+                id: 1,
+                tile_x: 5,
+                tile_y: 5,
+                dir: DIR_DOWN,
+                frame: 1,
+                charset: "C".into(),
+                index: 0,
+                layer: 1,
+            },
+            MoveQueue::default(),
+            RouteStepper::from_page(&route, 6, 8),
+            Sprite::default(),
+        ));
+        // One update: the stepper advances the route, faces the NPC down, enqueues
+        // its tile step, and syncs the logical MapEvents entry to the new tile.
+        app.update();
+        let world = app.world_mut();
+        let logical = &world.resource::<MapEvents>().events[0];
+        assert_eq!(
+            (logical.x, logical.y),
+            (5, 6),
+            "the routed NPC stepped down and its logical tile followed",
+        );
+        let (sprite, queue) = world
+            .query::<(&EventSprite, &MoveQueue)>()
+            .single(world)
+            .unwrap();
+        assert_eq!(sprite.dir, DIR_DOWN, "faced its move direction");
+        assert!(queue.busy(), "the tile step is queued for the walk tween");
+    }
+}

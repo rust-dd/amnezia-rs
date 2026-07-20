@@ -11,6 +11,7 @@
 //! and custom routes (`move_type` 6) are handled elsewhere or deferred.
 
 use super::movement::{dir_delta, step_secs_for_speed};
+use super::route::RouteStepper;
 use super::{EventSprite, MapData, MapEvents, MoveQueue, RouteAction};
 use crate::battle::BattleActive;
 use crate::dialogue::Dialogue;
@@ -47,7 +48,7 @@ pub(crate) struct MoveGuards<'w> {
 
 impl MoveGuards<'_> {
     /// Whether any pause condition is active, freezing every NPC this frame.
-    fn paused(&self) -> bool {
+    pub(super) fn paused(&self) -> bool {
         self.dialogue.active
             || self.fade.busy()
             || self.running.active()
@@ -226,18 +227,16 @@ fn away_candidates(dx: i32, dy: i32) -> Vec<u32> {
 
 /// Whether an event other than `self_id` occupies `(x, y)` with a solid
 /// (same-layer) active page — the hero's own collision rule, so a routed NPC
-/// can't step onto another solid event.
-#[allow(clippy::too_many_arguments)]
-fn event_solid_at(
+/// can't step onto another solid event. `state` is the switch/variable/party/
+/// inventory context the active-page choice needs. Shared with the route stepper.
+pub(super) fn event_solid_at(
     map_events: &MapEvents,
-    switches: &Switches,
-    variables: &Variables,
-    party: &Party,
-    inventory: &Inventory,
+    state: (&Switches, &Variables, &Party, &Inventory),
     self_id: u32,
     x: i32,
     y: i32,
 ) -> bool {
+    let (switches, variables, party, inventory) = state;
     map_events.events.iter().any(|e| {
         e.id != self_id
             && e.x as i32 == x
@@ -261,7 +260,12 @@ pub(crate) fn autonomous_movement(
     inventory: Res<Inventory>,
     guards: MoveGuards,
     players: Query<&Player>,
-    mut movers: Query<(&mut EventSprite, &mut MoveQueue, &mut AutoMove)>,
+    mut movers: Query<(
+        &mut EventSprite,
+        &mut MoveQueue,
+        &mut AutoMove,
+        Option<&RouteStepper>,
+    )>,
 ) {
     if guards.paused() {
         return;
@@ -271,11 +275,17 @@ pub(crate) fn autonomous_movement(
     };
     let (px, py) = (player.tile_x, player.tile_y);
     let dt = time.delta_secs();
-    for (mut sprite, mut queue, mut auto) in &mut movers {
-        // Stationary (0) and custom-route (6) events never move here; a busy
-        // queue means the previous step is still tweening, and — like EasyRPG's
-        // stop_count — the delay only counts down while the NPC stands still.
-        if auto.move_type == 0 || auto.move_type == 6 || queue.busy() {
+    for (mut sprite, mut queue, mut auto, stepper) in &mut movers {
+        // Stationary (0) and custom-route (6) events never move here; a busy queue
+        // means the previous step is still tweening; and a live forced route (a
+        // MoveEvent override) takes over, as RM2000's move_route_overwritten
+        // suppresses the autonomous move_type. Like EasyRPG's stop_count, the delay
+        // only counts down while the NPC stands still.
+        if auto.move_type == 0
+            || auto.move_type == 6
+            || queue.busy()
+            || stepper.is_some_and(RouteStepper::active)
+        {
             continue;
         }
         auto.timer -= dt;
@@ -298,10 +308,7 @@ pub(crate) fn autonomous_movement(
                     && !(nx == px && ny == py)
                     && !event_solid_at(
                         &map_events,
-                        &switches,
-                        &variables,
-                        &party,
-                        &inventory,
+                        (&switches, &variables, &party, &inventory),
                         self_id,
                         nx,
                         ny,

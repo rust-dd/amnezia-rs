@@ -1,11 +1,13 @@
-//! Shared tile-to-tile movement for the hero and event NPCs: decoding a
-//! RM2000 move route into steps, a per-character queue that tweens one tile per
-//! step, and the generic [`walk`] system that drives any [`Character`].
+//! Shared tile-to-tile movement for the hero and event NPCs: a per-character
+//! queue that tweens one tile per step, and the generic [`walk`] system that
+//! drives any [`Character`].
 //!
-//! Scripted routes (from the interpreter's `MoveEvent`) and the hero's own
-//! keyboard steps share this queue, so both animate smoothly across a tile
-//! instead of teleport-snapping. `Face`/`ChangeGraphic` route steps apply
-//! instantly and consume no tween; only actual moves (and `Wait`) take time.
+//! Forced routes (from the route stepper, driving `MoveEvent` and `move_type` 6),
+//! autonomous NPC steps, and the hero's own keyboard steps all share this queue,
+//! so every kind of movement animates smoothly across a tile instead of
+//! teleport-snapping. The stepper applies a route's facing/graphic changes
+//! directly to the character and paces it via its own timer, so the queue itself
+//! only ever carries tile [`RouteAction::Step`]s.
 
 use super::MapData;
 use crate::assets::resolve_png;
@@ -28,19 +30,12 @@ pub(super) fn step_secs_for_speed(speed: u32) -> f32 {
     STEP_DURATION * 2f32.powi(4 - speed.clamp(1, 6) as i32)
 }
 
-/// The `(dx, dy)` of a diagonal move sub-command (4 upper-right, 5 lower-right,
-/// 6 lower-left, 7 upper-left).
-const DIAGONALS: [(i32, i32); 4] = [(1, -1), (1, 1), (-1, 1), (-1, -1)];
-
-/// One decoded move-route action. Cardinal/diagonal moves carry their tile
-/// delta and resulting facing; `Forward` resolves against the live facing.
+/// One queued tile step: its `(dx, dy)` delta and the facing it leaves the
+/// character in. This is the only action the queue tweens — a route's turns,
+/// graphic swaps, and waits are handled by the stepper, not queued here.
 #[derive(Clone, PartialEq, Debug)]
 pub enum RouteAction {
     Step { dx: i32, dy: i32, face: u32 },
-    Forward,
-    Face(u32),
-    ChangeGraphic(String, u32),
-    Wait,
 }
 
 /// A movable map character (the hero or an event NPC). Lets the shared movement
@@ -151,23 +146,7 @@ impl MoveQueue {
                     }
                     return None;
                 }
-                Some(RouteAction::Face(dir)) => ch.set_dir(dir),
-                Some(RouteAction::ChangeGraphic(name, index)) => ch.set_graphic(name, index),
-                Some(RouteAction::Wait) => {
-                    let (x, y) = ch.tile();
-                    let center = center(data, x, y);
-                    self.active = Some(Tween {
-                        from: center,
-                        to: center,
-                        elapsed: 0.0,
-                    });
-                }
                 Some(RouteAction::Step { dx, dy, face }) => self.begin_step(ch, data, dx, dy, face),
-                Some(RouteAction::Forward) => {
-                    let (dx, dy) = dir_delta(ch.dir());
-                    let face = ch.dir();
-                    self.begin_step(ch, data, dx, dy, face);
-                }
             }
         }
     }
@@ -211,55 +190,6 @@ pub(super) fn dir_delta(dir: u32) -> (i32, i32) {
         DIR_DOWN => (0, 1),
         _ => (-1, 0),
     }
-}
-
-/// Decode a `MoveEvent` route (the ints after `[ref, freq, repeat, skip]`) into
-/// the actions the movement queue runs: cardinal (0-3) and diagonal (4-7) moves,
-/// `Forward` (11), `Face` (12-15), and `Wait` (23). Switch (32/33), change-graphic
-/// (34), and play-SE (35) sub-commands keep their verified argument widths so the
-/// int stream stays aligned; every other sub-command consumes no args.
-pub fn decode_route(params: &[i32]) -> Vec<RouteAction> {
-    let mut actions = Vec::new();
-    let mut i = 4;
-    while i < params.len() {
-        let sub = params[i];
-        i += 1;
-        match sub {
-            0..=3 => {
-                let (dx, dy) = dir_delta(sub as u32);
-                actions.push(RouteAction::Step {
-                    dx,
-                    dy,
-                    face: sub as u32,
-                });
-            }
-            4..=7 => {
-                let (dx, dy) = DIAGONALS[(sub - 4) as usize];
-                let face = if dy < 0 { DIR_UP } else { DIR_DOWN };
-                actions.push(RouteAction::Step { dx, dy, face });
-            }
-            11 => actions.push(RouteAction::Forward),
-            12..=15 => actions.push(RouteAction::Face((sub - 12) as u32)),
-            23 => actions.push(RouteAction::Wait),
-            32 | 33 => i += 1,
-            34 => {
-                let len = params.get(i).copied().unwrap_or(0).max(0) as usize;
-                i += 1;
-                let end = (i + len).min(params.len());
-                let name: String = params[i..end].iter().map(|&b| b as u8 as char).collect();
-                i = end;
-                let frame = params.get(i).copied().unwrap_or(0).max(0) as u32;
-                i += 1;
-                actions.push(RouteAction::ChangeGraphic(name, frame));
-            }
-            35 => {
-                let len = params.get(i).copied().unwrap_or(0).max(0) as usize;
-                i += 1 + len + 3;
-            }
-            _ => {}
-        }
-    }
-    actions
 }
 
 /// Drive every [`Character`]'s move queue: advance the tween, then reflect the
@@ -327,94 +257,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn decodes_two_moves_and_a_face() {
-        // [10005,8,0,0,3,3,12] -> move-left, move-left, face-up.
-        let actions = decode_route(&[10005, 8, 0, 0, 3, 3, 12]);
-        assert_eq!(actions.len(), 3);
-        assert!(matches!(
-            actions[0],
-            RouteAction::Step {
-                dx: -1,
-                dy: 0,
-                face: 3
-            }
-        ));
-        assert!(matches!(
-            actions[1],
-            RouteAction::Step {
-                dx: -1,
-                dy: 0,
-                face: 3
-            }
-        ));
-        assert!(matches!(actions[2], RouteAction::Face(0)));
-    }
-
-    #[test]
-    fn decodes_change_graphic_and_face() {
-        // change_graphic "Torch" frame 1, then face-left (15).
-        let params = vec![10005, 8, 0, 0, 34, 5, 84, 111, 114, 99, 104, 1, 15];
-        let actions = decode_route(&params);
-        assert_eq!(actions.len(), 2);
-        assert!(matches!(&actions[0], RouteAction::ChangeGraphic(n, 1) if n == "Torch"));
-        assert!(matches!(actions[1], RouteAction::Face(3)));
-    }
-
-    #[test]
-    fn decodes_the_intro_hero_route() {
-        // The map_0005 wake-up route: move-left, face-up, gfx Poses/0, wait, wait,
-        // gfx Chara1/0, face-down.
-        let params = vec![
-            10001, 8, 0, 0, 3, 12, 34, 5, 80, 111, 115, 101, 115, 0, 23, 23, 34, 6, 67, 104, 97,
-            114, 97, 49, 0, 14,
-        ];
-        let a = decode_route(&params);
-        assert_eq!(a.len(), 7);
-        assert!(matches!(
-            a[0],
-            RouteAction::Step {
-                dx: -1,
-                dy: 0,
-                face: 3
-            }
-        ));
-        assert!(matches!(a[1], RouteAction::Face(0)));
-        assert!(matches!(&a[2], RouteAction::ChangeGraphic(n, 0) if n == "Poses"));
-        assert!(matches!(a[3], RouteAction::Wait));
-        assert!(matches!(a[4], RouteAction::Wait));
-        assert!(matches!(&a[5], RouteAction::ChangeGraphic(n, 0) if n == "Chara1"));
-        assert!(matches!(a[6], RouteAction::Face(2)));
-    }
-
-    #[test]
-    fn decodes_diagonal_forward_and_skips_switch_arg() {
-        // down-right (5), forward (11), switch-on (32 + 1 arg), then move-down (2).
-        let a = decode_route(&[10005, 8, 0, 0, 5, 11, 32, 7, 2]);
-        assert_eq!(a.len(), 3);
-        assert!(matches!(
-            a[0],
-            RouteAction::Step {
-                dx: 1,
-                dy: 1,
-                face: 2
-            }
-        ));
-        assert!(matches!(a[1], RouteAction::Forward));
-        assert!(matches!(
-            a[2],
-            RouteAction::Step {
-                dx: 0,
-                dy: 1,
-                face: 2
-            }
-        ));
-    }
-
-    #[test]
     fn queue_tracks_busy_and_work() {
         let mut q = MoveQueue::default();
         assert!(!q.busy() && !q.has_work());
-        q.enqueue_route([RouteAction::Face(1)]);
+        q.enqueue_route([RouteAction::Step {
+            dx: 0,
+            dy: 1,
+            face: DIR_DOWN,
+        }]);
         assert!(q.busy() && q.has_work());
     }
 
