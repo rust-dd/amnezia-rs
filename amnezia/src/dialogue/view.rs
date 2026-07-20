@@ -81,20 +81,12 @@ pub(super) fn spawn_ui(
             DialoguePanel,
         ))
         .with_children(|panel| {
-            // Background fill first, then the frame on top: Bevy draws later
-            // siblings above earlier ones, and the 9-sliced frame's centre is
-            // transparent, so the fill shows through the middle while the 24px
-            // border stays visible. (Spawning the fill last painted over it.)
-            panel.spawn((
-                fill_node(),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
-                    image_mode: NodeImageMode::Stretch,
-                    ..default()
-                },
-                DialogueFrame,
-            ));
+            // The frame's 9-slice fills its centre with a stretched smear of the
+            // windowskin's middle pixels (EasyRPG only ever blits the 8px border
+            // strips, never the centre). So draw the frame first, then cover that
+            // centre with the background fill inset by the 24px border: the border
+            // edges stay visible, the interior is the clean windowskin fill, and the
+            // face and text (spawned after) draw on top of the fill.
             panel.spawn((
                 fill_node(),
                 ImageNode {
@@ -107,6 +99,16 @@ pub(super) fn spawn_ui(
                         // 8px source border × the ×3 scale = RM2000's 24px frame.
                         max_corner_scale: 3.0,
                     }),
+                    ..default()
+                },
+                DialogueFrame,
+            ));
+            panel.spawn((
+                inset_node(BORDER),
+                ImageNode {
+                    image: system.clone(),
+                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
+                    image_mode: NodeImageMode::Stretch,
                     ..default()
                 },
                 DialogueFrame,
@@ -165,12 +167,18 @@ pub(super) fn spawn_ui(
 
 /// An absolutely-positioned node filling its parent (the windowskin frame).
 fn fill_node() -> Node {
+    inset_node(0.0)
+}
+
+/// An absolutely-positioned node inset by `px` on every side of its parent (the
+/// background fill, tucked inside the frame's border).
+fn inset_node(px: f32) -> Node {
     Node {
         position_type: PositionType::Absolute,
-        left: Val::Px(0.0),
-        right: Val::Px(0.0),
-        top: Val::Px(0.0),
-        bottom: Val::Px(0.0),
+        left: Val::Px(px),
+        right: Val::Px(px),
+        top: Val::Px(px),
+        bottom: Val::Px(px),
         ..default()
     }
 }
