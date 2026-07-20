@@ -3,15 +3,17 @@
 //! (Skill), Felszerelés (Equipment), Mentés (Save), Kilépés (End Game) — beside a
 //! party status window listing each member's name, level, and HP/SP. Confirming a
 //! command drills into its flow: the held-item list and field-use for Item; a
-//! party-member prompt then a skill list (and a field heal) for Skill; a
-//! read-only equipment view for Equipment; a save request for Save; and a
+//! party-member prompt then a skill list (and a field heal) for Skill; an
+//! interactive equipment screen for Equipment; a save request for Save; and a
 //! return-to-title confirmation for End Game. Selecting a member from the party
 //! window (→ from the command list) opens that member's status detail.
 //!
 //! The Skill list shows only the chosen caster's known skills — the actor
 //! `learnings` at or below its current level (their SP is what a cast spends).
-//! Field skill-use is limited to HP-recovery ally skills healing a flat `power`,
-//! and equipment is view-only — both noted where they live ([`skills`], [`equip`]).
+//! Field skill-use is limited to HP-recovery ally skills healing a flat `power`;
+//! the equipment screen picks a slot then an inventory item for it, swapping gear
+//! through the runtime [`crate::equipment::Equipment`] store — both noted where
+//! they live ([`skills`], [`equip`]).
 //!
 //! State and input live in [`input`]; the movement/interpreter pause guard that
 //! freezes the world while the menu is open (keyed on [`MenuOpen`]) is wired by
@@ -91,6 +93,11 @@ enum MenuScreen {
     },
     Equip {
         member: usize,
+        /// The highlighted equipment slot (0..5, in `ActorDef` slot order).
+        slot: usize,
+        /// `None` while choosing which slot to change; `Some(cursor)` while
+        /// choosing the item to put in `slot` (the candidate-list cursor).
+        picking: Option<usize>,
     },
     Status {
         member: usize,

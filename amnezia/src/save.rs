@@ -7,6 +7,7 @@
 //! events.
 
 use crate::dialogue::Dialogue;
+use crate::equipment::Equipment;
 use crate::interpreter::RunningEvent;
 use crate::player::Player;
 use crate::progression::Progression;
@@ -155,6 +156,12 @@ struct SaveGame {
     weather: i32,
     #[serde(default)]
     weather_strength: i32,
+    // The runtime equipment store (per-actor five-slot loadouts), so a Continue
+    // keeps gear changed on the equip screen. `#[serde(default)]` keeps pre-#47
+    // slots loadable — they carry no entries, so every actor restores to its
+    // `ActorDef` starting gear, exactly the state those saves were written in.
+    #[serde(default)]
+    equipment: Vec<(u32, [u32; 5])>,
 }
 
 /// The RM2000 neutral screen tone (every channel 100), the [`SaveGame::tone`]
@@ -188,6 +195,10 @@ struct SaveIo<'w> {
     event_save: ResMut<'w, EventSaveRequest>,
     resumed: ResMut<'w, ResumedFromSave>,
     location: Res<'w, SaveLocation>,
+    // The runtime equipment store, snapshotted on save and restored on load
+    // beside the party and inventory. Bundled here so [`save_or_load`] stays
+    // within Bevy's 16-parameter cap.
+    equipment: ResMut<'w, Equipment>,
 }
 
 /// The scene resources a save now also snapshots and restores beyond the core
@@ -301,6 +312,7 @@ fn save_or_load(
                 ),
                 weather: scene.weather.code(),
                 weather_strength: scene.weather_strength.0,
+                equipment: save_io.equipment.entries(),
             };
             match write_save(&save_io.location.0, &game) {
                 Ok(()) => info!("saved game to {}", save_io.location.0.display()),
@@ -322,6 +334,7 @@ fn save_or_load(
             inventory.restore(game.items, game.gold);
             progression.load(game.progression);
             vitals.load(game.vitals);
+            save_io.equipment.load(game.equipment);
             // An empty name/charset is a pre-#46 slot that never stored them; leave
             // the boot default in place rather than blanking it.
             if !game.hero_name.is_empty() {

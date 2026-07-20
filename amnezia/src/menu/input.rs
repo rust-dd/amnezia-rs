@@ -8,6 +8,7 @@ use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::battle::BattleActive;
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
+use crate::equipment::Equipment;
 use crate::gamedata::GameData;
 use crate::gameover::GameOverActive;
 use crate::inputnumber::InputNumber;
@@ -27,8 +28,8 @@ use super::nav::{
     confirm_pressed, end_game_transition, escape_transition, item_target, skill_target, step,
 };
 use super::{
-    MemberAction, MenuAccess, MenuOpen, MenuScreen, MenuState, command, items, render, skills,
-    use_item,
+    MemberAction, MenuAccess, MenuOpen, MenuScreen, MenuState, command, equip, items, render,
+    skills, use_item,
 };
 
 /// The transient overlays and flows that must not be interrupted by *opening* the
@@ -57,6 +58,19 @@ impl OpenBlockers<'_> {
             || self.fade.busy()
             || self.gameover.0
     }
+}
+
+/// The resources that gate *opening* the menu and its save entry: a live shop or
+/// battle, the title screen, and the cutscene menu/save access flags. Bundled into
+/// one `SystemParam` so [`menu_input`] stays within Bevy's 16-parameter cap (the
+/// interactive equip screen added the runtime [`Equipment`] store). `title` stays a
+/// separate parameter because End Game mutates it.
+#[derive(SystemParam)]
+pub(super) struct MenuGates<'w> {
+    shop: Res<'w, ShopOpen>,
+    battle: Res<'w, BattleActive>,
+    menu_access: Res<'w, MenuAccess>,
+    save_access: Res<'w, SaveAccess>,
 }
 
 /// The menu's navigation sound-effect channel: the audio writer and the loaded
@@ -103,10 +117,8 @@ pub(super) fn menu_input(
     progression: Res<Progression>,
     mut inventory: ResMut<Inventory>,
     mut vitals: ResMut<Vitals>,
-    shop: Res<ShopOpen>,
-    battle: Res<BattleActive>,
-    menu_access: Res<MenuAccess>,
-    save_access: Res<SaveAccess>,
+    mut equipment: ResMut<Equipment>,
+    gates: MenuGates,
     mut title: ResMut<TitleActive>,
     mut open: ResMut<MenuOpen>,
     mut state: ResMut<MenuState>,
@@ -118,7 +130,9 @@ pub(super) fn menu_input(
     // 11960), or any live overlay/flow (message box, event, choice, number prompt,
     // fade, game over) owns the input, so the menu can't open over it. Only opening
     // is gated — a menu already up stays usable and closable.
-    if !open.0 && (shop.0 || battle.0 || title.0 || !menu_access.0 || blockers.any()) {
+    if !open.0
+        && (gates.shop.0 || gates.battle.0 || title.0 || !gates.menu_access.0 || blockers.any())
+    {
         return;
     }
     if keys.just_pressed(KeyCode::Escape) {
@@ -143,7 +157,7 @@ pub(super) fn menu_input(
     }
     // The F5 / Esc-S quick save from anywhere in the menu (silent, no prompt),
     // blocked while a cutscene has disabled save access (opcode 11930).
-    if save_access.0 && keys.just_pressed(KeyCode::KeyS) {
+    if gates.save_access.0 && keys.just_pressed(KeyCode::KeyS) {
         save_request.0 = true;
     }
     let confirm = confirm_pressed(&keys);
@@ -171,7 +185,7 @@ pub(super) fn menu_input(
                 match command::dispatch(command::COMMANDS[state.cursor]) {
                     command::CommandAction::Open(screen) => state.screen = screen,
                     // Save access disabled (opcode 11930) makes the Save entry inert.
-                    command::CommandAction::Save if save_access.0 => {
+                    command::CommandAction::Save if gates.save_access.0 => {
                         save_request.0 = true;
                         state.screen = MenuScreen::Saved;
                     }
@@ -245,7 +259,60 @@ pub(super) fn menu_input(
                 state.screen = MenuScreen::SkillList { member, cursor: 0 };
             }
         }
-        MenuScreen::Equip { .. } | MenuScreen::Status { .. } => {}
+        MenuScreen::Equip {
+            member,
+            slot,
+            picking: None,
+        } => {
+            // Slot selection: move over the five gear rows; a confirm opens the
+            // item picker for the slot, unless the actor's gear is fixed.
+            let slot = step(slot, up, down, 4);
+            state.screen = MenuScreen::Equip {
+                member,
+                slot,
+                picking: None,
+            };
+            if confirm && equip::can_change(member, &data, &party) {
+                state.screen = MenuScreen::Equip {
+                    member,
+                    slot,
+                    picking: Some(0),
+                };
+            }
+        }
+        MenuScreen::Equip {
+            member,
+            slot,
+            picking: Some(cursor),
+        } => {
+            // Item selection: move over the slot's candidate items (unequip plus
+            // the held gear of that type); a confirm swaps and returns to the slot
+            // list.
+            let count = equip::candidates(member, slot, &data, &party, &inventory).len();
+            let cursor = step(cursor, up, down, count.saturating_sub(1));
+            state.screen = MenuScreen::Equip {
+                member,
+                slot,
+                picking: Some(cursor),
+            };
+            if confirm {
+                equip::apply(
+                    member,
+                    slot,
+                    cursor,
+                    &data,
+                    &party,
+                    &mut inventory,
+                    &mut equipment,
+                );
+                state.screen = MenuScreen::Equip {
+                    member,
+                    slot,
+                    picking: None,
+                };
+            }
+        }
+        MenuScreen::Status { .. } => {}
         MenuScreen::Saved => {
             if confirm {
                 state.screen = MenuScreen::Command;
@@ -278,6 +345,7 @@ mod tests {
             .init_resource::<Progression>()
             .init_resource::<Inventory>()
             .init_resource::<Vitals>()
+            .init_resource::<Equipment>()
             .insert_resource(ShopOpen(false))
             .insert_resource(BattleActive(false))
             .insert_resource(TitleActive(false))
@@ -305,6 +373,19 @@ mod tests {
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(key);
+        app.update();
+    }
+
+    /// Release every held key, press `key` afresh, and run one frame — so a
+    /// multi-step interaction sees a genuine just-pressed each step (no input plugin
+    /// runs to reset it in these headless apps, and `press` only re-arms
+    /// `just_pressed` for a newly held key).
+    fn press_frame(app: &mut App, key: KeyCode) {
+        {
+            let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+            input.reset_all();
+            input.press(key);
+        }
         app.update();
     }
 
@@ -378,6 +459,56 @@ mod tests {
             MenuScreen::Command,
             "and the menu stays on the command list"
         );
+    }
+
+    #[test]
+    fn the_equip_screen_swaps_gear_through_the_runtime_store() {
+        let mut app = app_on(
+            0,
+            MenuScreen::Equip {
+                member: 0,
+                slot: 0,
+                picking: None,
+            },
+        );
+        {
+            let mut data = app.world_mut().resource_mut::<GameData>();
+            data.actors[0].weapon = 10; // starting short-sword
+            data.items.push(testkit::weapon(10, "Rövidkard", 4));
+            data.items.push(testkit::weapon(12, "Hosszúkard", 12));
+        }
+        app.world_mut().resource_mut::<Inventory>().add_item(12, 1);
+
+        // Confirm the weapon slot -> the item picker opens.
+        press_frame(&mut app, KeyCode::Enter);
+        assert!(
+            matches!(
+                app.world().resource::<MenuState>().screen,
+                MenuScreen::Equip {
+                    picking: Some(_),
+                    ..
+                }
+            ),
+            "confirming a slot opens the item picker"
+        );
+        // Move to the long-sword candidate (row 1; row 0 is unequip), then confirm.
+        press_frame(&mut app, KeyCode::ArrowDown);
+        press_frame(&mut app, KeyCode::Enter);
+
+        // Back on the slot list, with the swap done through the store + inventory.
+        assert!(matches!(
+            app.world().resource::<MenuState>().screen,
+            MenuScreen::Equip { picking: None, .. }
+        ));
+        let worn = {
+            let data = app.world().resource::<GameData>();
+            let def = data.actor(1).unwrap();
+            app.world().resource::<Equipment>().slots(def)[0]
+        };
+        assert_eq!(worn, 12, "the long-sword is now worn");
+        let inv = app.world().resource::<Inventory>();
+        assert_eq!(inv.count(12), 0, "it left the bag");
+        assert_eq!(inv.count(10), 1, "the short-sword returned to the bag");
     }
 
     #[test]

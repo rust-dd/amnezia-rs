@@ -81,16 +81,17 @@ pub fn actor_hp_sp_at(
 
 /// The stat bonus an actor's five equipment slots (weapon, shield, armor, helmet,
 /// accessory) add on top of the curve-derived base: the summed `atk`/`def`/`spi`/
-/// `agi` of each equipped item. Empty slots (id `0`) and ids absent from `items`
-/// contribute nothing.
+/// `agi` of each equipped item. Reads the actor's *starting* gear; the battle
+/// builds from the runtime loadout via [`equipment_bonus_slots`].
 pub fn equipment_bonus(actor: &ActorDef, items: &[ItemDef]) -> Stats {
-    let slots = [
-        actor.weapon,
-        actor.shield,
-        actor.armor,
-        actor.helmet,
-        actor.accessory,
-    ];
+    equipment_bonus_slots(actor_slots(actor), items)
+}
+
+/// The stat bonus of an explicit five-slot loadout (weapon, shield, armor,
+/// helmet, accessory): the summed `atk`/`def`/`spi`/`agi` of each equipped item.
+/// Empty slots (id `0`) and ids absent from `items` contribute nothing. This is
+/// the runtime-equipment entry point [`super::model::Battle::build`] uses.
+pub fn equipment_bonus_slots(slots: [u32; 5], items: &[ItemDef]) -> Stats {
     let mut bonus = Stats::default();
     for id in slots {
         if id == 0 {
@@ -106,19 +107,12 @@ pub fn equipment_bonus(actor: &ActorDef, items: &[ItemDef]) -> Stats {
     bonus
 }
 
-/// The 1-based attribute (element) ids an actor's five equipment slots (weapon,
-/// shield, armor, helmet, accessory) guard against: the de-duplicated union of
-/// each equipped item's `attribute_defense`. Empty slots (id `0`) and ids absent
-/// from `items` contribute nothing. Consumed by [`super::resolve`] to halve a
-/// matching enemy skill's damage against the wearer.
-pub fn equipment_resist(actor: &ActorDef, items: &[ItemDef]) -> Vec<u32> {
-    let slots = [
-        actor.weapon,
-        actor.shield,
-        actor.armor,
-        actor.helmet,
-        actor.accessory,
-    ];
+/// The 1-based attribute (element) ids an explicit five-slot loadout guards
+/// against: the de-duplicated union of each equipped item's `attribute_defense`.
+/// Empty slots (id `0`) and ids absent from `items` contribute nothing. Consumed
+/// by [`super::resolve`] to halve a matching enemy skill's damage against the
+/// wearer.
+pub fn equipment_resist_slots(slots: [u32; 5], items: &[ItemDef]) -> Vec<u32> {
     let mut resist: Vec<u32> = Vec::new();
     for id in slots {
         if id == 0 {
@@ -133,6 +127,18 @@ pub fn equipment_resist(actor: &ActorDef, items: &[ItemDef]) -> Vec<u32> {
         }
     }
     resist
+}
+
+/// An actor's starting five-slot loadout in slot order (weapon, shield, armor,
+/// helmet, accessory), the fallback when no runtime loadout is supplied.
+fn actor_slots(actor: &ActorDef) -> [u32; 5] {
+    [
+        actor.weapon,
+        actor.shield,
+        actor.armor,
+        actor.helmet,
+        actor.accessory,
+    ]
 }
 
 /// RM2000-style physical damage: half the attacker's attack, less a quarter of
@@ -1092,7 +1098,6 @@ mod tests {
 
     #[test]
     fn equipment_resist_unions_attribute_defense_and_dedups() {
-        use super::super::model::testkit::actor;
         let mut weapon = gear(1, 0, 0, 0, 0);
         weapon.attribute_defense = vec![3];
         let mut armor = gear(2, 0, 0, 0, 0);
@@ -1100,15 +1105,11 @@ mod tests {
         let mut unequipped = gear(9, 0, 0, 0, 0);
         unequipped.attribute_defense = vec![7];
         let items = vec![weapon, armor, unequipped];
-        let mut a = actor(1, 2, 60, 30);
-        a.weapon = 1;
-        a.armor = 2; // shield/helmet/accessory stay empty
-        let mut resist = equipment_resist(&a, &items);
+        // Weapon (1) and armor (2) equipped; shield/helmet/accessory empty.
+        let mut resist = equipment_resist_slots([1, 0, 2, 0, 0], &items);
         resist.sort();
         assert_eq!(resist, vec![3, 5]); // deduped union; unequipped 7 excluded
         // No gear -> nothing guarded.
-        a.weapon = 0;
-        a.armor = 0;
-        assert!(equipment_resist(&a, &items).is_empty());
+        assert!(equipment_resist_slots([0, 0, 0, 0, 0], &items).is_empty());
     }
 }

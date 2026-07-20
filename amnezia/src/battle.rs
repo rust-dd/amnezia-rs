@@ -28,6 +28,7 @@ pub(crate) use logic::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus};
 use crate::animation::{ActiveAnimations, AnimAnchor, PlayAnimation};
 use crate::assets::{asset_root, load_ron};
 use crate::audio::{AudioRequest, BgmTrack, CurrentBgm};
+use crate::equipment::Equipment;
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
@@ -192,6 +193,7 @@ fn start_on_request(
     party: Res<Party>,
     vitals: Res<Vitals>,
     progression: Res<Progression>,
+    equipment: Res<Equipment>,
     terms: Res<Terms>,
     current_bgm: Res<CurrentBgm>,
     mut map_bgm: ResMut<MapBgm>,
@@ -217,11 +219,15 @@ fn start_on_request(
     if actors.is_empty() {
         return;
     }
+    // Resolve each member's runtime loadout so the fight reads the gear the equip
+    // menu changed, not the static ActorDef starting gear.
+    let equipped: Vec<[u32; 5]> = actors.iter().map(|a| equipment.slots(a)).collect();
     let seed = seed_now() ^ (request.troop_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
     *battle = Battle::build(
         troop,
         &battle_data.monsters,
         &actors,
+        &equipped,
         &data.items,
         &battle_data.attributes,
         &battle_data.states,
@@ -588,6 +594,7 @@ mod tests {
         app.init_resource::<Inventory>();
         app.init_resource::<Vitals>();
         app.init_resource::<Progression>();
+        app.init_resource::<Equipment>();
         app.init_resource::<Battle>();
         app.init_resource::<BattleActive>();
         app.init_resource::<BattleResult>();
@@ -748,6 +755,7 @@ mod tests {
             &troop,
             &monsters,
             &[&ron],
+            &[[0, 0, 0, 0, 0]],
             &[],
             &[],
             &[],

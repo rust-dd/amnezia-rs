@@ -75,7 +75,11 @@ pub(super) fn dispatch(command: Command) -> CommandAction {
 pub(super) fn member_screen(action: MemberAction, member: usize) -> MenuScreen {
     match action {
         MemberAction::Skill => MenuScreen::SkillList { member, cursor: 0 },
-        MemberAction::Equip => MenuScreen::Equip { member },
+        MemberAction::Equip => MenuScreen::Equip {
+            member,
+            slot: 0,
+            picking: None,
+        },
         MemberAction::Status => MenuScreen::Status { member },
     }
 }
@@ -150,7 +154,11 @@ mod tests {
         );
         assert_eq!(
             member_screen(MemberAction::Equip, 1),
-            MenuScreen::Equip { member: 1 }
+            MenuScreen::Equip {
+                member: 1,
+                slot: 0,
+                picking: None
+            }
         );
         assert_eq!(
             member_screen(MemberAction::Status, 0),

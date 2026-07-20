@@ -8,6 +8,7 @@
 //! this one builds the nodes and reflects [`MenuState`] into them.
 
 use crate::assets::resolve_png;
+use crate::equipment::Equipment;
 use crate::font::GameFont;
 use crate::gamedata::GameData;
 use crate::progression::Progression;
@@ -375,6 +376,7 @@ pub(super) fn update_ui(
     progression: Res<Progression>,
     inventory: Res<Inventory>,
     vitals: Res<Vitals>,
+    equipment: Res<Equipment>,
     terms: Res<Terms>,
     asset_server: Res<AssetServer>,
     mut windows: Query<
@@ -394,7 +396,11 @@ pub(super) fn update_ui(
         (Without<MenuWindow>, Without<MenuCursor>, Without<MenuText>),
     >,
 ) {
-    if !open.is_changed() && !state.is_changed() && !inventory.is_changed() && !vitals.is_changed()
+    if !open.is_changed()
+        && !state.is_changed()
+        && !inventory.is_changed()
+        && !vitals.is_changed()
+        && !equipment.is_changed()
     {
         return;
     }
@@ -420,6 +426,7 @@ pub(super) fn update_ui(
         &progression,
         &inventory,
         &vitals,
+        &equipment,
         &terms,
     );
 

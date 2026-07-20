@@ -6,6 +6,7 @@
 //! scrolling item and skill lists, the line its windowskin cursor sits on — this
 //! module composes ([`content`]).
 
+use crate::equipment::Equipment;
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::progression::Progression;
@@ -124,6 +125,7 @@ pub(super) fn content(
     progression: &Progression,
     inventory: &Inventory,
     vitals: &Vitals,
+    equipment: &Equipment,
     terms: &Terms,
 ) -> ContentView {
     match screen {
@@ -160,12 +162,33 @@ pub(super) fn content(
             ),
             cursor_line: None,
         },
-        MenuScreen::Equip { member } => ContentView {
-            text: equip::compose(member, data, party, progression),
-            cursor_line: None,
-        },
+        MenuScreen::Equip {
+            member,
+            slot,
+            picking,
+        } => {
+            let (text, cursor_line) = equip::compose(
+                member,
+                slot,
+                picking,
+                data,
+                party,
+                progression,
+                inventory,
+                equipment,
+            );
+            ContentView { text, cursor_line }
+        }
         MenuScreen::Status { member } => ContentView {
-            text: status::compose_status(member, data, party, progression, vitals, terms),
+            text: status::compose_status(
+                member,
+                data,
+                party,
+                progression,
+                vitals,
+                equipment,
+                terms,
+            ),
             cursor_line: None,
         },
         MenuScreen::Saved => ContentView {
@@ -243,6 +266,7 @@ mod tests {
             &Progression::default(),
             &inv,
             &Vitals::default(),
+            &Equipment::default(),
             &Terms::default(),
         );
         assert!(view.text.contains("Gyógyfű ×3"), "item row: {}", view.text);
@@ -258,6 +282,7 @@ mod tests {
             &Progression::default(),
             &Inventory::default(),
             &Vitals::default(),
+            &Equipment::default(),
             &Terms::default(),
         );
         assert!(
@@ -282,6 +307,7 @@ mod tests {
             &Progression::default(),
             &Inventory::default(),
             &Vitals::default(),
+            &Equipment::default(),
             &Terms::default(),
         );
         assert!(

@@ -425,6 +425,7 @@ impl Battle {
         troop: &TroopDef,
         monsters: &[MonsterDef],
         actors: &[&ActorDef],
+        equipped: &[[u32; 5]],
         items: &[ItemDef],
         attributes: &[AttributeDef],
         states: &[StateDef],
@@ -461,7 +462,8 @@ impl Battle {
             .collect();
         let members: Vec<Fighter> = actors
             .iter()
-            .map(|a| {
+            .enumerate()
+            .map(|(idx, a)| {
                 let level = progression.level(a);
                 let (max_hp, max_sp) = logic::actor_hp_sp_at(&a.curves, level, a.hp, a.sp);
                 let (max_hp, max_sp) = (max_hp as i32, max_sp as i32);
@@ -471,16 +473,26 @@ impl Battle {
                     Some((h, s)) => (h.min(max_hp), s.min(max_sp)),
                     None => (max_hp, max_sp),
                 };
+                // The runtime loadout (`Equipment` resource), resolved per member
+                // at the call site; an out-of-range member falls back to the
+                // actor's starting gear so a bare test caller stays correct.
+                let slots = equipped.get(idx).copied().unwrap_or([
+                    a.weapon,
+                    a.shield,
+                    a.armor,
+                    a.helmet,
+                    a.accessory,
+                ]);
                 let mut stats = logic::actor_stats_at(&a.curves, level);
-                let bonus = logic::equipment_bonus(a, items);
+                let bonus = logic::equipment_bonus_slots(slots, items);
                 stats.attack += bonus.attack;
                 stats.defense += bonus.defense;
                 stats.spirit += bonus.spirit;
                 stats.agility += bonus.agility;
-                // The equipped weapon lends its hit, crit, and first element for
-                // later resolution; id `0` matches no real item, so an empty
-                // weapon slot resolves to `None`.
-                let weapon = items.iter().find(|i| i.id == a.weapon);
+                // The equipped weapon (slot 0) lends its hit, crit, and first
+                // element for later resolution; id `0` matches no real item, so an
+                // empty weapon slot resolves to `None`.
+                let weapon = items.iter().find(|i| i.id == slots[0]);
                 Fighter {
                     actor_id: a.id,
                     name: a.name.clone(),
@@ -501,7 +513,7 @@ impl Battle {
                         None => a.unarmed_animation,
                     },
                     states: Vec::new(),
-                    resist_attributes: logic::equipment_resist(a, items),
+                    resist_attributes: logic::equipment_resist_slots(slots, items),
                     known_skills: progression.known_skill_ids(a),
                 }
             })
@@ -828,6 +840,12 @@ pub(super) mod testkit {
         }
     }
 
+    /// An actor's starting five-slot loadout, for a `Battle::build` test caller
+    /// that wants the runtime equipment to match the actor's `ActorDef` gear.
+    pub fn slots(a: &ActorDef) -> [u32; 5] {
+        [a.weapon, a.shield, a.armor, a.helmet, a.accessory]
+    }
+
     pub fn troop(members: &[(u32, u32, u32)]) -> TroopDef {
         TroopDef {
             id: 1,
@@ -844,11 +862,13 @@ pub(super) mod testkit {
         let monsters = vec![monster(1, 30, 10, 30)];
         let ron = actor(1, 2, 63, 37);
         let actors = vec![&ron];
+        let equipped = [slots(&ron)];
         let troop = troop(&[(1, 100, 100), (1, 200, 100)]);
         Battle::build(
             &troop,
             &monsters,
             &actors,
+            &equipped,
             &[],
             &[],
             &[],
@@ -866,12 +886,14 @@ pub(super) mod testkit {
         let ron = actor(1, 2, 63, 37);
         let tiff = actor(2, 3, 38, 75);
         let actors = vec![&ron, &tiff];
+        let equipped = [slots(&ron), slots(&tiff)];
         let monsters = vec![monster(1, 30, 10, 30)];
         let troop = troop(&[(1, 100, 100)]);
         Battle::build(
             &troop,
             &monsters,
             &actors,
+            &equipped,
             &[],
             &[],
             &[],

@@ -20,6 +20,7 @@ fn save_game_ron_round_trip() {
         tone: (70, 60, 70, 100),
         weather: 2,
         weather_strength: 5,
+        equipment: vec![(1, [10, 0, 5, 0, 0]), (3, [7, 0, 0, 0, 0])],
     };
     let ron = ron::ser::to_string_pretty(&game, PrettyConfig::default()).unwrap();
     let decoded: SaveGame = ron::from_str(&ron).unwrap();
@@ -51,6 +52,7 @@ fn save_app(location: PathBuf) -> App {
         .init_resource::<EventSaveRequest>()
         .init_resource::<Vitals>()
         .init_resource::<Progression>()
+        .init_resource::<Equipment>()
         .init_resource::<ResumedFromSave>()
         .init_resource::<Weather>()
         .init_resource::<WeatherStrength>()
@@ -168,6 +170,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
         tone: (100, 100, 100, 100),
         weather: 0,
         weather_strength: 0,
+        equipment: vec![],
     };
     write_save(&path, &game).unwrap();
 
@@ -236,6 +239,7 @@ fn load_restores_name_charset_and_screen_state() {
         tone: (70, 60, 70, 100),
         weather: 2,
         weather_strength: 8,
+        equipment: vec![],
     };
     write_save(&path, &game).unwrap();
 
@@ -331,6 +335,42 @@ fn old_slot_without_scene_fields_keeps_boot_defaults() {
 }
 
 #[test]
+fn save_and_load_restore_the_runtime_equipment_store() {
+    let path = temp_slot("equipment");
+    let _ = std::fs::remove_file(&path);
+    let mut app = save_app(path.clone());
+    app.insert_resource(MapData::for_test(20, 15));
+    app.insert_resource(RunningEvent::default());
+    app.world_mut().spawn(Player {
+        tile_x: 3,
+        tile_y: 4,
+        dir: 2,
+        frame: 1,
+        charset: "Chara1".into(),
+        index: 0,
+    });
+    // A member's gear was changed at runtime; the save must capture it.
+    app.world_mut()
+        .resource_mut::<Equipment>()
+        .load(vec![(1, [7, 0, 3, 0, 0])]);
+    app.world_mut().resource_mut::<SaveRequest>().0 = true;
+    app.update();
+    assert!(path.exists(), "the save was written");
+
+    // Wipe the live store, then Continue: the saved loadout must come back so a
+    // resume keeps the changed gear.
+    app.world_mut().resource_mut::<Equipment>().load(vec![]);
+    app.world_mut().resource_mut::<LoadRequest>().0 = true;
+    app.update();
+    assert_eq!(
+        app.world().resource::<Equipment>().entries(),
+        vec![(1, [7, 0, 3, 0, 0])],
+        "the load restores the saved equipment store"
+    );
+    let _ = std::fs::remove_file(&path);
+}
+
+#[test]
 fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
     let path = temp_slot("roundtrip");
     let _ = std::fs::remove_file(&path);
@@ -352,6 +392,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
         tone: (100, 100, 100, 100),
         weather: 0,
         weather_strength: 0,
+        equipment: vec![],
     };
     write_save(&path, &game).unwrap();
     // "Restart": a fresh read at the same resolved path finds and decodes it.

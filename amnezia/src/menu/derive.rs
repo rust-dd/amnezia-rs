@@ -16,10 +16,17 @@ pub(super) fn max_hp_sp(def: &ActorDef, level: u32) -> (i32, i32) {
     (hp as i32, sp as i32)
 }
 
-/// A member's `[atk, def, spi, agi]` at `level`: the curve value (or battle's
-/// linear fallback when the curve is empty) plus the summed stat bonus of the
-/// five equipped items. Mirrors battle's `actor_stats_at` + `equipment_bonus`.
-pub(super) fn stats_at(def: &ActorDef, level: u32, items: &[ItemDef]) -> [u32; 4] {
+/// A member's `[atk, def, spi, agi]` at `level` with an explicit five-slot
+/// loadout: the curve value (or battle's linear fallback when the curve is empty)
+/// plus the summed stat bonus of the equipped items. Mirrors battle's
+/// `actor_stats_at` + `equipment_bonus_slots`, so the menu's figures — and its
+/// stat-change preview — match a real fight built from the same loadout.
+pub(super) fn stats_with_slots(
+    def: &ActorDef,
+    level: u32,
+    items: &[ItemDef],
+    slots: [u32; 5],
+) -> [u32; 4] {
     let i = (level.max(1) - 1) as usize;
     let c = &def.curves;
     let mut out = match (
@@ -31,7 +38,7 @@ pub(super) fn stats_at(def: &ActorDef, level: u32, items: &[ItemDef]) -> [u32; 4
         (Some(&a), Some(&d), Some(&s), Some(&g)) => [a, d, s, g],
         _ => [16 + level * 6, 8 + level * 4, 8 + level * 3, 8 + level * 2],
     };
-    for id in [def.weapon, def.shield, def.armor, def.helmet, def.accessory] {
+    for id in slots {
         if id == 0 {
             continue;
         }
@@ -146,21 +153,22 @@ mod tests {
     }
 
     #[test]
-    fn stats_at_reads_curve_and_adds_equipment_bonus() {
+    fn stats_with_slots_reads_curve_and_adds_equipment_bonus() {
         let mut d = def();
         d.curves.attack = vec![20, 30];
         d.curves.defense = vec![10, 15];
         d.curves.spirit = vec![8, 12];
         d.curves.agility = vec![6, 9];
-        d.weapon = 7;
         let items = vec![weapon(7, 5)];
-        // Level 2 -> index 1 curve value, plus the +5 attack weapon.
-        assert_eq!(stats_at(&d, 2, &items), [35, 15, 12, 9]);
-        // Empty curve -> battle's linear fallback, still plus equipment.
-        let mut bare = def();
-        bare.weapon = 7;
+        // Level 2 -> index 1 curve value, plus the +5 attack weapon in slot 0.
         assert_eq!(
-            stats_at(&bare, 1, &items),
+            stats_with_slots(&d, 2, &items, [7, 0, 0, 0, 0]),
+            [35, 15, 12, 9]
+        );
+        // Empty curve -> battle's linear fallback, still plus equipment.
+        let bare = def();
+        assert_eq!(
+            stats_with_slots(&bare, 1, &items, [7, 0, 0, 0, 0]),
             [16 + 6 + 5, 8 + 4, 8 + 3, 8 + 2]
         );
     }

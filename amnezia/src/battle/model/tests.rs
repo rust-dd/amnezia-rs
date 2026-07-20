@@ -32,6 +32,7 @@ fn undo_choice_steps_back_to_the_previous_committed_member() {
         &troop,
         &monsters,
         &actors,
+        &[testkit::slots(&ron), testkit::slots(&tiff)],
         &[],
         &[],
         &[],
@@ -102,6 +103,7 @@ fn build_adds_equipment_bonuses_and_captures_the_weapon() {
         &troop,
         &monsters,
         &actors,
+        &[testkit::slots(&ron)],
         &items,
         &[],
         &[],
@@ -117,6 +119,46 @@ fn build_adds_equipment_bonuses_and_captures_the_weapon() {
     assert_eq!(f.weapon_hit, 85);
     assert_eq!(f.weapon_crit, 5);
     assert_eq!(f.weapon_element, Some(4));
+}
+
+#[test]
+fn build_reads_the_runtime_loadout_not_the_actor_default() {
+    // The actor's ActorDef default weapon is item 1, but the runtime loadout the
+    // equip menu produced has swapped in item 2. The fighter must reflect item 2.
+    let mut ron = testkit::actor(1, 1, 50, 10);
+    ron.weapon = 1;
+    let default_weapon = testkit::item(1, 5, 0, 80, 0, 0); // +5 atk, hit 80
+    let mut swapped_weapon = testkit::item(2, 30, 0, 95, 0, 0); // +30 atk, hit 95
+    swapped_weapon.weapon_animation = 9;
+    let items = vec![default_weapon, swapped_weapon];
+    let actors = vec![&ron];
+    let equipped = [[2u32, 0, 0, 0, 0]]; // weapon slot holds item 2, not the def's 1
+    let monsters = vec![testkit::monster(1, 30, 10, 30)];
+    let troop = testkit::troop(&[(1, 100, 100)]);
+    let prog = Progression::default();
+    let base = logic::actor_stats_at(&ron.curves, prog.level(&ron));
+    let battle = Battle::build(
+        &troop,
+        &monsters,
+        &actors,
+        &equipped,
+        &items,
+        &[],
+        &[],
+        &[],
+        &Vitals::default(),
+        &prog,
+        "Cave1".into(),
+        1,
+    );
+    let f = &battle.members[0];
+    assert_eq!(
+        f.stats.attack,
+        base.attack + 30,
+        "the swapped weapon's +30 atk"
+    );
+    assert_eq!(f.weapon_hit, 95, "the swapped weapon's hit rate");
+    assert_eq!(f.attack_animation, 9, "the swapped weapon's animation");
 }
 
 #[test]
@@ -158,6 +200,7 @@ fn build_2v1(seed: u64) -> Battle {
         &troop,
         &monsters,
         &actors,
+        &[testkit::slots(&ron), testkit::slots(&tiff)],
         &[],
         &[],
         &[],
@@ -206,6 +249,7 @@ fn turn_order_for(seed: u64) -> Vec<(u8, usize)> {
         &troop,
         &monsters,
         &actors,
+        &[testkit::slots(&ron), testkit::slots(&tiff)],
         &[],
         &[],
         &[],

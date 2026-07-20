@@ -41,7 +41,21 @@ pub(super) fn escape_transition(open: bool, screen: MenuScreen) -> (bool, MenuSc
         MenuScreen::SkillTarget { member, .. } => {
             (open, MenuScreen::SkillList { member, cursor: 0 })
         }
-        MenuScreen::Equip { member } => (
+        // From the item picker, back out to the slot list (same slot); from the
+        // slot list, back out to the member picker.
+        MenuScreen::Equip {
+            member,
+            slot,
+            picking: Some(_),
+        } => (
+            open,
+            MenuScreen::Equip {
+                member,
+                slot,
+                picking: None,
+            },
+        ),
+        MenuScreen::Equip { member, .. } => (
             open,
             MenuScreen::MemberSelect {
                 action: MemberAction::Equip,
@@ -151,12 +165,38 @@ mod tests {
             )
         );
         assert_eq!(
-            escape_transition(true, MenuScreen::Equip { member: 1 }),
+            escape_transition(
+                true,
+                MenuScreen::Equip {
+                    member: 1,
+                    slot: 2,
+                    picking: None
+                }
+            ),
             (
                 true,
                 MenuScreen::MemberSelect {
                     action: MemberAction::Equip,
                     cursor: 1
+                }
+            )
+        );
+        // From the item picker, Escape returns to the slot list (same slot).
+        assert_eq!(
+            escape_transition(
+                true,
+                MenuScreen::Equip {
+                    member: 1,
+                    slot: 2,
+                    picking: Some(3)
+                }
+            ),
+            (
+                true,
+                MenuScreen::Equip {
+                    member: 1,
+                    slot: 2,
+                    picking: None
                 }
             )
         );

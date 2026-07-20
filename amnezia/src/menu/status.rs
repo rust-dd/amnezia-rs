@@ -4,6 +4,7 @@
 //! the battle system derives it (see [`super::derive`]), so the numbers match a
 //! real fight.
 
+use crate::equipment::Equipment;
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::progression::Progression;
@@ -22,12 +23,14 @@ const SLOT_FALLBACKS: [&str; 5] = ["Fegyver", "Pajzs", "Vért", "Sisak", "Kiegé
 /// short placeholder when the member index or actor id is unknown. The field
 /// labels (level, HP/SP, the four battle stats, the five equipment slots) come
 /// from the real RM2000 Terms, each falling back to its Hungarian placeholder.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn compose_status(
     member: usize,
     data: &GameData,
     party: &Party,
     progression: &Progression,
     vitals: &Vitals,
+    equipment: &Equipment,
     terms: &Terms,
 ) -> String {
     let roster = party.snapshot();
@@ -42,7 +45,10 @@ pub(super) fn compose_status(
     let level = progression.level(def);
     let (max_hp, max_sp) = derive::max_hp_sp(def, level);
     let (hp, sp) = vitals.get_stored(id).unwrap_or((max_hp, max_sp));
-    let stats = derive::stats_at(def, level, &data.items);
+    // The runtime loadout is the source of truth, so the stats and slot names
+    // here reflect a gear change made on the equip screen.
+    let slots = equipment.slots(def);
+    let stats = derive::stats_with_slots(def, level, &data.items, slots);
     let total = progression.total(def);
     let exp_label = terms.label(&t.exp_short, "EXP");
     let exp = match derive::exp_to_next(def, total, level) {
@@ -78,7 +84,6 @@ pub(super) fn compose_status(
         .zip(SLOT_FALLBACKS.iter())
         .map(|(term, fallback)| terms.label(term, fallback))
         .collect();
-    let slots = [def.weapon, def.shield, def.armor, def.helmet, def.accessory];
     for (label, &slot) in slot_labels.iter().zip(slots.iter()) {
         let gear = if slot == 0 {
             "—".to_string()
@@ -119,6 +124,7 @@ mod tests {
             &Party::default(),
             &Progression::default(),
             &vitals,
+            &Equipment::default(),
             &Terms::default(),
         );
 
@@ -141,8 +147,40 @@ mod tests {
             &Party::default(),
             &Progression::default(),
             &Vitals::default(),
+            &Equipment::default(),
             &Terms::default(),
         );
         assert!(text.contains("HP 63/63"), "defaults to full: {text}");
+    }
+
+    #[test]
+    fn status_reflects_a_runtime_equipment_change() {
+        let mut d = testkit::data();
+        d.actors[0].weapon = 10; // ActorDef starting weapon
+        d.items.push(testkit::weapon(10, "Rövidkard", 4));
+        d.items.push(testkit::weapon(12, "Hosszúkard", 12));
+        // The runtime store swapped in the long-sword; status must show it.
+        let mut eq = Equipment::default();
+        eq.set_slot(d.actor(1).unwrap(), 0, 12);
+
+        let text = compose_status(
+            0,
+            &d,
+            &Party::default(),
+            &Progression::default(),
+            &Vitals::default(),
+            &eq,
+            &Terms::default(),
+        );
+        assert!(text.contains("Hosszúkard"), "runtime weapon name: {text}");
+        assert!(
+            !text.contains("Rövidkard"),
+            "not the ActorDef default: {text}"
+        );
+        // Level-2 base 28 + the +12 long-sword = 40.
+        assert!(
+            text.contains("Támadás 40"),
+            "runtime-derived attack: {text}"
+        );
     }
 }
