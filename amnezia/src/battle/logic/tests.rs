@@ -328,6 +328,7 @@ fn state_infliction_chance_maps_ranks_a_through_e() {
 
 fn state(id: u32, restriction: u32, hold_turn: u32, auto: u32, by_damage: u32) -> StateDef {
     StateDef {
+        persistence: 0,
         id,
         name: format!("S{id}"),
         restriction,
@@ -406,6 +407,7 @@ fn release_on_damage_lifts_by_chance_and_spares_the_death_state() {
 
 fn state_hp(id: u32, hp_change_type: u32, hp_change_max: u32, hp_change_val: u32) -> StateDef {
     StateDef {
+        persistence: 0,
         id,
         name: format!("S{id}"),
         restriction: 0,

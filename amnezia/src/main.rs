@@ -10,6 +10,7 @@ mod assets;
 mod audio;
 mod battle;
 mod choice;
+mod conditions;
 mod debug;
 mod dialogue;
 mod equipment;
@@ -109,6 +110,7 @@ fn main() -> AppExit {
         .add_plugins(timer::GameClockPlugin)
         .add_plugins(session::SessionPlugin)
         .add_plugins(vehicles::VehiclePlugin)
+        .add_plugins(conditions::ConditionsPlugin)
         .add_plugins(smoke::SmokePlugin)
         .run()
 }

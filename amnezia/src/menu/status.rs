@@ -57,6 +57,10 @@ pub(super) fn compose_status(
     };
 
     let mut out = format!("{} — {}\n", i18n::tr(&def.name), i18n::tr(&def.title));
+    let conditions = crate::conditions::names(vitals, id);
+    if !conditions.is_empty() {
+        out.push_str(&format!("{conditions}\n"));
+    }
     out.push_str(&format!(
         "{} {level}   {exp}\n\n",
         terms.label(&t.level, "Szint")

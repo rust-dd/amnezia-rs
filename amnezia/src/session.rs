@@ -32,6 +32,7 @@ fn start_new_game(world: &mut World) {
     reset::<crate::progression::Progression>(world);
     reset::<crate::equipment::Equipment>(world);
     reset::<crate::vitals::Vitals>(world);
+    reset::<crate::conditions::FieldSteps>(world);
     reset::<crate::vehicles::Vehicles>(world);
     reset::<crate::appearance::Appearance>(world);
     reset::<crate::audio::MemorizedBgm>(world);

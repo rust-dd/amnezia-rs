@@ -34,6 +34,34 @@ fn test_system() -> SystemDef {
     }
 }
 
+#[test]
+fn poison_survives_battles_but_temporary_sleep_does_not() {
+    let mut app = logic_app();
+    app.world_mut().resource_mut::<BattleData>().states = crate::conditions::definitions().to_vec();
+    app.world_mut()
+        .resource_mut::<Vitals>()
+        .set_states(1, vec![2]);
+    app.world_mut().write_message(BattleRequest {
+        troop_id: DEBUG_TROOP,
+        ..default()
+    });
+    app.update();
+    assert_eq!(
+        app.world().resource::<Battle>().members[0].states,
+        vec![(2, 0)]
+    );
+    {
+        let mut battle = app.world_mut().resource_mut::<Battle>();
+        battle.members[0].states.push((7, 0));
+        battle.finish(BattleOutcome::Escape);
+    }
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::Enter);
+    app.update();
+    assert_eq!(app.world().resource::<Vitals>().states(1), vec![2]);
+}
+
 /// A headless app wired with just the battle logic systems (no UI, which
 /// needs an asset server) plus the resources they read.
 fn logic_app() -> App {

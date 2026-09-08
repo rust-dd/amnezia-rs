@@ -9,6 +9,27 @@ fn game_app() -> App {
     app
 }
 
+#[test]
+fn scripted_defeat_revival_restores_one_hp_without_healing_other_actors() {
+    let mut app = game_app();
+    app.world_mut().resource_mut::<Vitals>().set(1, 0, 7);
+    app.world_mut().resource_mut::<Vitals>().set(2, 0, 9);
+    run(&mut app, vec![cmd(10480, 0, vec![1, 1, 1, 1])]);
+    let vitals = app.world().resource::<Vitals>();
+    assert_eq!(vitals.get_stored(1), Some((1, 7)));
+    assert_eq!(vitals.get_stored(2), Some((0, 9)));
+}
+
+#[test]
+fn original_poison_removal_cures_the_party() {
+    let mut app = game_app();
+    app.world_mut()
+        .resource_mut::<Vitals>()
+        .set_states(1, vec![2]);
+    run(&mut app, vec![cmd(10480, 0, vec![0, 0, 1, 2])]);
+    assert!(app.world().resource::<Vitals>().states(1).is_empty());
+}
+
 fn run(app: &mut App, commands: Vec<EventCommand>) {
     app.world_mut()
         .resource_mut::<RunningEvent>()

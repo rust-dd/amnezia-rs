@@ -92,6 +92,7 @@ fn converts_ldb_to_states_ron() {
     assert_eq!(
         states[0],
         StateDef {
+            persistence: 0,
             id: 1,
             name: "Alvas".to_string(),
             restriction: 1,

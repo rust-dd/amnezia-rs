@@ -8,42 +8,103 @@ use std::collections::HashMap;
 
 /// Stored `(hp, sp)` per actor id. An absent actor is at full health.
 #[derive(Resource, Default)]
-pub struct Vitals(HashMap<u32, (i32, i32)>);
+pub struct Vitals {
+    pools: HashMap<u32, (i32, i32)>,
+    conditions: HashMap<u32, Vec<u32>>,
+}
 
 impl Vitals {
     /// Store an actor's `(hp, sp)` after a battle.
     pub fn set(&mut self, actor_id: u32, hp: i32, sp: i32) {
-        self.0.insert(actor_id, (hp, sp));
+        self.pools.insert(actor_id, (hp.max(0), sp.max(0)));
+        if hp <= 0 {
+            self.conditions.remove(&actor_id);
+        }
     }
 
     /// Restore every party member to full HP/SP by dropping all stored damage,
     /// so each actor's `get()` returns its full ActorDef values again.
     pub fn heal_all(&mut self) {
-        self.0.clear();
+        self.pools.clear();
+        self.conditions.clear();
     }
 
     /// Restore one actor without changing anyone else's HP or SP.
     pub fn heal(&mut self, actor_id: u32) {
-        self.0.remove(&actor_id);
+        self.pools.remove(&actor_id);
+        self.conditions.remove(&actor_id);
     }
 
     /// The actor's stored `(hp, sp)`, or `None` when it has none yet — so a caller
     /// can default to full at the actor's current level rather than its
     /// starting-level HP/SP.
     pub fn get_stored(&self, actor_id: u32) -> Option<(i32, i32)> {
-        self.0.get(&actor_id).copied()
+        self.pools.get(&actor_id).copied()
     }
 
     /// Snapshot `(actor_id, (hp, sp))` pairs for the save file, in id order.
     pub fn entries(&self) -> Vec<(u32, (i32, i32))> {
-        let mut entries: Vec<(u32, (i32, i32))> = self.0.iter().map(|(&k, &v)| (k, v)).collect();
+        let mut entries = self.pools.iter().map(|(&k, &v)| (k, v)).collect::<Vec<_>>();
         entries.sort_by_key(|&(k, _)| k);
         entries
     }
 
     /// Replace all stored vitals from a loaded save.
     pub fn load(&mut self, entries: Vec<(u32, (i32, i32))>) {
-        self.0 = entries.into_iter().collect();
+        self.pools = entries.into_iter().collect();
+        self.conditions.clear();
+    }
+
+    pub fn states(&self, actor_id: u32) -> Vec<u32> {
+        if self.get_stored(actor_id).is_some_and(|(hp, _)| hp == 0) {
+            vec![1]
+        } else {
+            self.conditions.get(&actor_id).cloned().unwrap_or_default()
+        }
+    }
+
+    pub fn set_states(&mut self, actor_id: u32, mut states: Vec<u32>) {
+        states.retain(|id| *id > 1);
+        states.sort_unstable();
+        states.dedup();
+        self.conditions.insert(actor_id, states);
+    }
+
+    pub fn change_condition(&mut self, actor_id: u32, state: u32, add: bool, full: (i32, i32)) {
+        let (hp, sp) = self.get_stored(actor_id).unwrap_or(full);
+        if state == 1 {
+            if add {
+                self.set(actor_id, 0, sp);
+            } else if hp == 0 {
+                self.set(actor_id, 1, sp);
+            }
+        } else if hp > 0 && state > 1 {
+            let mut states = self.states(actor_id);
+            if add {
+                states.push(state);
+            } else {
+                states.retain(|id| *id != state);
+            }
+            self.set_states(actor_id, states);
+        }
+    }
+
+    pub fn condition_entries(&self) -> Vec<(u32, Vec<u32>)> {
+        let mut entries = self
+            .conditions
+            .iter()
+            .filter(|(_, states)| !states.is_empty())
+            .map(|(&id, states)| (id, states.clone()))
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|(id, _)| *id);
+        entries
+    }
+
+    pub fn load_conditions(&mut self, entries: Vec<(u32, Vec<u32>)>) {
+        self.conditions.clear();
+        for (id, states) in entries {
+            self.set_states(id, states);
+        }
     }
 }
 

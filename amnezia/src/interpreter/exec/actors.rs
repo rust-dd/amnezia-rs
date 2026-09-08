@@ -1,6 +1,6 @@
 use super::super::commands::{actor_targets, operate_value};
 use super::super::frame::Frame;
-use super::super::opcodes::{CHANGE_EQUIPMENT, CHANGE_SKILLS, FULL_HEAL};
+use super::super::opcodes::{CHANGE_CONDITION, CHANGE_EQUIPMENT, CHANGE_SKILLS, FULL_HEAL};
 use super::{Exec, Flow};
 use amnezia_data::EventCommand;
 
@@ -12,6 +12,19 @@ pub(super) fn execute(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -
                 continue;
             };
             match (command.code, command.params.as_slice()) {
+                (CHANGE_CONDITION, [_, _, remove, state, ..]) => {
+                    let level = edits.progression.level(def).max(1) as usize - 1;
+                    let full = (
+                        def.curves.max_hp.get(level).copied().unwrap_or(def.hp) as i32,
+                        def.curves.max_sp.get(level).copied().unwrap_or(def.sp) as i32,
+                    );
+                    x.subsystems.vitals.change_condition(
+                        id,
+                        (*state).max(0) as u32,
+                        *remove == 0,
+                        full,
+                    );
+                }
                 (CHANGE_SKILLS, [_, _, remove, operand_type, operand, ..]) => {
                     let skill = operate_value(0, *operand_type, *operand, &x.variables);
                     if skill > 0 && edits.game_data.skills.iter().any(|s| s.id == skill as u32) {

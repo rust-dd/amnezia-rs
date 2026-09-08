@@ -101,7 +101,7 @@ impl Battle {
                         Some(w) => w.weapon_animation,
                         None => a.unarmed_animation,
                     },
-                    states: Vec::new(),
+                    states: vitals.states(a.id).into_iter().map(|id| (id, 0)).collect(),
                     resist_attributes: logic::equipment_resist_slots(slots, items),
                     known_skills: progression.known_skill_ids(a),
                 }

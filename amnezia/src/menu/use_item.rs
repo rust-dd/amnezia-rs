@@ -44,8 +44,6 @@ pub(super) fn held_item_ids(data: &GameData, inventory: &Inventory) -> Vec<u32> 
 /// The `(hp, sp)` a member reaches after `item` is applied: each pool gains the
 /// item's flat amount plus its percent-of-maximum, clamped to the maximum and
 /// only when that pool's gain is positive. Mirrors the battle item formula.
-/// `cure_states` is intentionally a no-op here: the field tracks no persistent
-/// states to lift.
 pub(super) fn heal(hp: i32, sp: i32, max_hp: i32, max_sp: i32, item: &ItemDef) -> (i32, i32) {
     let hp_gain = item.recover_hp as i32 + max_hp * item.recover_hp_rate as i32 / 100;
     let sp_gain = item.recover_sp as i32 + max_sp * item.recover_sp_rate as i32 / 100;
@@ -83,12 +81,36 @@ pub(super) fn apply_field_item(
     let (Some(def), Some(item)) = (data.actor(actor_id), data.item(item_id)) else {
         return false;
     };
-    let level = progression.level(def);
-    let (max_hp, max_sp) = derive::max_hp_sp(def, level);
-    let (hp, sp) = vitals.get_stored(actor_id).unwrap_or((max_hp, max_sp));
-    let (hp, sp) = heal(hp, sp, max_hp, max_sp, item);
-    vitals.set(actor_id, hp, sp);
-    inventory.remove_item(item_id, 1);
+    if inventory.count(item_id) == 0 || !field_usable(item) {
+        return false;
+    }
+    let targets = if item.scope == 1 {
+        roster
+    } else {
+        vec![def.id]
+    };
+    let mut changed = false;
+    for actor_id in targets {
+        let Some(def) = data.actor(actor_id) else {
+            continue;
+        };
+        let full = derive::max_hp_sp(def, progression.level(def));
+        let (hp, sp) = vitals.get_stored(actor_id).unwrap_or(full);
+        if hp == 0 && !item.cure_states.contains(&1) {
+            continue;
+        }
+        let before = vitals.states(actor_id);
+        let (new_hp, new_sp) = heal(hp, sp, full.0, full.1, item);
+        let new_hp = if hp == 0 { new_hp.max(1) } else { new_hp };
+        vitals.set(actor_id, new_hp, new_sp);
+        for state in &item.cure_states {
+            vitals.change_condition(actor_id, *state, false, full);
+        }
+        changed |= (hp, sp) != (new_hp, new_sp) || before != vitals.states(actor_id);
+    }
+    if changed {
+        inventory.remove_item(item_id, 1);
+    }
     inventory.count(item_id) == 0
 }
 
@@ -129,6 +151,41 @@ pub(super) fn compose_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn antidote_cures_poison_and_ordinary_herbs_cannot_revive() {
+        let mut data = testkit::data();
+        let mut antidote = testkit::blank_item(12, 6);
+        antidote.cure_states = vec![2];
+        data.items.push(antidote);
+        let mut inventory = Inventory::default();
+        inventory.add_item(12, 1);
+        inventory.add_item(ITEM_HERB, 1);
+        let mut vitals = Vitals::default();
+        vitals.set_states(1, vec![2]);
+        assert!(apply_field_item(
+            12,
+            0,
+            &data,
+            &Party::default(),
+            &Progression::default(),
+            &mut inventory,
+            &mut vitals
+        ));
+        assert!(vitals.states(1).is_empty());
+        vitals.set(1, 0, 5);
+        assert!(!apply_field_item(
+            ITEM_HERB,
+            0,
+            &data,
+            &Party::default(),
+            &Progression::default(),
+            &mut inventory,
+            &mut vitals
+        ));
+        assert_eq!(inventory.count(ITEM_HERB), 1);
+        assert_eq!(vitals.get_stored(1), Some((0, 5)));
+    }
     use crate::menu::testkit::{self, ITEM_HERB};
 
     #[test]

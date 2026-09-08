@@ -374,6 +374,18 @@ pub(super) fn outcome_input(
     let outcome = battle.outcome.unwrap_or(BattleOutcome::Escape);
     for fighter in &battle.members {
         vitals.set(fighter.actor_id, fighter.hp.max(0), fighter.sp);
+        let states = fighter
+            .states
+            .iter()
+            .filter(|(id, _)| {
+                battle
+                    .states
+                    .iter()
+                    .any(|state| state.id == *id && state.persistence == 1)
+            })
+            .map(|(id, _)| *id)
+            .collect::<Vec<_>>();
+        vitals.set_states(fighter.actor_id, states);
     }
     result.0 = Some(outcome);
     active.0 = false;

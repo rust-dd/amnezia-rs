@@ -127,8 +127,7 @@ pub(super) const RETURN_TO_TITLE: u32 = 12510;
 pub(super) const CHANGE_SKILLS: u32 = 10440;
 /// Equip or unequip the selected actors, moving displaced gear to the inventory.
 pub(super) const CHANGE_EQUIPMENT: u32 = 10450;
-/// Add or remove an actor state/condition. A no-op: the remake carries no
-/// persistent field conditions (every observed use is a state removal).
+/// Add or remove an actor condition, including revival when removing death.
 pub(super) const CHANGE_CONDITION: u32 = 10480;
 /// Override a scene's system BGM (battle, victory, inn, vehicles, or game over).
 pub(super) const CHANGE_SYSTEM_BGM: u32 = 10660;

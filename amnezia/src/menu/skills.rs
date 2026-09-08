@@ -26,12 +26,12 @@ use super::items::viewport_start;
 const VISIBLE_ROWS: usize = 12;
 
 /// Whether `skill` can be cast on an ally from the field menu: a normal
-/// HP-recovery skill aimed at an ally (scope 3/4) with positive power.
+/// recovery skill aimed at the caster or allies.
 pub(super) fn field_usable(skill: &SkillDef) -> bool {
     skill.skill_type == 0
-        && skill.affect_hp
-        && (skill.scope == 3 || skill.scope == 4)
-        && skill.power > 0
+        && (2..=4).contains(&skill.scope)
+        && (((skill.affect_hp || skill.affect_sp) && skill.power > 0)
+            || !skill.affected_states.is_empty())
 }
 
 /// The `member`'s known skills in database (id) order: the skill defs whose ids
@@ -96,28 +96,49 @@ pub(super) fn apply_field_skill(
         .get_stored(caster_id)
         .unwrap_or((caster_max_hp, caster_max_sp));
     let cost = skill.sp_cost as i32;
-    if caster_sp < cost {
+    if caster_sp < cost || caster_hp <= 0 {
         return false;
     }
-    let caster_sp = caster_sp - cost;
-    let power = skill.power as i32;
-    if caster_id == target_id {
-        let hp = (caster_hp + power).min(caster_max_hp);
-        vitals.set(caster_id, hp, caster_sp);
-        return true;
-    }
-    let Some(target_def) = data.actor(target_id) else {
-        return false;
+    let targets = match skill.scope {
+        2 => vec![caster_id],
+        4 => roster,
+        _ => vec![target_id],
     };
-    let target_level = progression.level(target_def);
-    let (target_max_hp, target_max_sp) = derive::max_hp_sp(target_def, target_level);
-    let (target_hp, target_sp) = vitals
-        .get_stored(target_id)
-        .unwrap_or((target_max_hp, target_max_sp));
-    let target_hp = (target_hp + power).min(target_max_hp);
-    vitals.set(caster_id, caster_hp, caster_sp);
-    vitals.set(target_id, target_hp, target_sp);
-    true
+    let mut changed = false;
+    for id in targets {
+        let Some(def) = data.actor(id) else { continue };
+        let full = derive::max_hp_sp(def, progression.level(def));
+        let (hp, sp) = vitals.get_stored(id).unwrap_or(full);
+        if hp == 0 && !skill.affected_states.contains(&1) {
+            continue;
+        }
+        let before = vitals.states(id);
+        let mut new_hp = if skill.affect_hp {
+            (hp + skill.power as i32).min(full.0)
+        } else {
+            hp
+        };
+        if hp == 0 {
+            new_hp = new_hp.max(1);
+        }
+        let new_sp = if skill.affect_sp {
+            (sp + skill.power as i32).min(full.1)
+        } else {
+            sp
+        };
+        vitals.set(id, new_hp, new_sp);
+        for state in &skill.affected_states {
+            vitals.change_condition(id, *state, false, full);
+        }
+        changed |= (hp, sp) != (new_hp, new_sp) || before != vitals.states(id);
+    }
+    if changed {
+        let (hp, sp) = vitals
+            .get_stored(caster_id)
+            .unwrap_or((caster_hp, caster_sp));
+        vitals.set(caster_id, hp, sp - cost);
+    }
+    changed
 }
 
 /// Compose the caster's skill list and the composed-text line its windowskin

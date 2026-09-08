@@ -29,6 +29,7 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// default to `0` (a zero-amount no-op); Poison sets them to bleed HP each turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
+    pub persistence: u32,
     pub id: u32,
     pub name: String,
     pub restriction: u32,
@@ -76,6 +77,7 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut state = State {
+            persistence: 0,
             id,
             name: String::new(),
             restriction: 0,
@@ -98,6 +100,7 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
             let sub_data = reader.take(sub_size)?;
             match sub_id {
                 STATE_NAME => state.name = decode_cp1250(sub_data),
+                0x02 => state.persistence = Reader::new(sub_data).varint()?,
                 STATE_PRIORITY => state.priority = Reader::new(sub_data).varint()?,
                 STATE_RESTRICTION => state.restriction = Reader::new(sub_data).varint()?,
                 STATE_HOLD_TURN => state.hold_turn = Reader::new(sub_data).varint()?,
@@ -149,6 +152,7 @@ mod tests {
         assert_eq!(
             states[0],
             State {
+                persistence: 0,
                 id: 1,
                 name: "Alvas".to_string(),
                 restriction: 1,

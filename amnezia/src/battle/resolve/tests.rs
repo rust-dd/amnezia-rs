@@ -48,6 +48,7 @@ fn heal_skill(id: u32, power: u32) -> SkillDef {
 
 fn poison_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        persistence: 0,
         id,
         name: "Méreg".into(),
         restriction: 0,
@@ -70,6 +71,7 @@ fn hp_change_state(
     hp_change_val: u32,
 ) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        persistence: 0,
         id,
         name: "Méreg".into(),
         restriction: 0,
@@ -117,6 +119,7 @@ fn build_weapon_anim(weapon_animation: u32) -> Battle {
 
 fn damage_release_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        persistence: 0,
         id,
         name: "Bódulat".into(),
         restriction: 0,
@@ -134,6 +137,7 @@ fn damage_release_state(id: u32) -> amnezia_data::StateDef {
 
 fn confusion_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        persistence: 0,
         id,
         name: "Zavar".into(),
         restriction: 3,
@@ -214,6 +218,7 @@ fn wind_enemy_hits(battle: &mut Battle, offsets: &[usize]) {
 /// A can't-act (restriction 1) state — asleep or paralyzed.
 fn sleep_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        persistence: 0,
         id,
         name: "Alvás".into(),
         restriction: 1,

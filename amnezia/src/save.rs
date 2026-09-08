@@ -133,6 +133,10 @@ struct SaveGame {
     #[serde(default)]
     vitals: Vec<(u32, (i32, i32))>,
     #[serde(default)]
+    conditions: Vec<(u32, Vec<u32>)>,
+    #[serde(default)]
+    field_steps: u64,
+    #[serde(default)]
     hero_name: String,
     #[serde(default)]
     charset: String,
@@ -214,6 +218,7 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    field_steps: Option<ResMut<'w, crate::conditions::FieldSteps>>,
     vehicles: Option<ResMut<'w, crate::vehicles::Vehicles>>,
     system_bgm: Option<ResMut<'w, crate::system_bgm::SystemBgm>>,
     hero_name: ResMut<'w, HeroName>,
@@ -318,6 +323,8 @@ fn save_or_load(
                 progression: progression.entries(),
                 learned_skills: progression.skill_entries(),
                 vitals: vitals.entries(),
+                conditions: vitals.condition_entries(),
+                field_steps: scene.field_steps.as_ref().map_or(0, |s| s.count),
                 hero_name: scene.hero_name.0.clone(),
                 charset: player.charset.clone(),
                 charset_index: player.index,
@@ -367,6 +374,11 @@ fn save_or_load(
             progression.load(game.progression);
             progression.load_skills(game.learned_skills);
             vitals.load(game.vitals);
+            vitals.load_conditions(game.conditions);
+            if let Some(steps) = scene.field_steps.as_deref_mut() {
+                *steps = default();
+                steps.count = game.field_steps;
+            }
             save_io.equipment.load(game.equipment);
             scene.playtime.seconds = game.playtime;
             scene.game_clock.remaining = game.timer_remaining;

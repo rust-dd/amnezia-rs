@@ -359,6 +359,8 @@ pub struct SkillDef {
 /// 0 (a zero-amount no-op); Poison sets them to bleed HP each battle turn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateDef {
+    #[serde(default)]
+    pub persistence: u32,
     pub id: u32,
     pub name: String,
     pub restriction: u32,

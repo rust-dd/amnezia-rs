@@ -188,6 +188,7 @@ fn foe_attribute_rank_reads_the_vector_then_defaults_to_neutral_c() {
 
 fn state_def(id: u32, restriction: u32, auto_release_prob: u32) -> StateDef {
     StateDef {
+        persistence: 0,
         id,
         name: format!("S{id}"),
         restriction,
