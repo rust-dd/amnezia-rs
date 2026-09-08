@@ -92,6 +92,15 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
             })
             .collect();
         let map = Map {
+            panorama: unit.panorama.map(|p| amnezia_data::PanoramaDef {
+                name: p.name,
+                loop_x: p.loop_x,
+                loop_y: p.loop_y,
+                auto_x: p.auto_x,
+                auto_y: p.auto_y,
+                speed_x: p.speed_x,
+                speed_y: p.speed_y,
+            }),
             chipset_id: unit.chipset_id,
             width: unit.width,
             height: unit.height,

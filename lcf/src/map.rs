@@ -7,6 +7,8 @@ use crate::Reader;
 
 mod events;
 mod move_route;
+mod panorama;
+pub use panorama::Panorama;
 
 pub(crate) use events::parse_commands;
 pub use events::{Event, EventCommand, EventCondition, EventPage};
@@ -17,6 +19,7 @@ const DEFAULT_HEIGHT: u32 = 15;
 
 /// A parsed RPG Maker 2000 map unit (only the fields the renderer needs).
 pub struct MapUnit {
+    pub panorama: Option<Panorama>,
     pub chipset_id: u32,
     pub width: u32,
     pub height: u32,
@@ -62,6 +65,8 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     let mut lower: Option<&[u8]> = None;
     let mut upper: Option<&[u8]> = None;
     let mut events = Vec::new();
+    let mut panorama_enabled = false;
+    let mut panorama = Panorama::default();
 
     while !reader.is_empty() {
         let id = reader.varint()?;
@@ -74,6 +79,14 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
             0x01 => chipset_id = Reader::new(data).varint()?,
             0x02 => width = Reader::new(data).varint()?,
             0x03 => height = Reader::new(data).varint()?,
+            0x1F => panorama_enabled = Reader::new(data).varint()? != 0,
+            0x20 => panorama.name = crate::decode_cp1250(data),
+            0x21 => panorama.loop_x = Reader::new(data).varint()? != 0,
+            0x22 => panorama.loop_y = Reader::new(data).varint()? != 0,
+            0x23 => panorama.auto_x = Reader::new(data).varint()? != 0,
+            0x24 => panorama.speed_x = Reader::new(data).varint()? as i32,
+            0x25 => panorama.auto_y = Reader::new(data).varint()? != 0,
+            0x26 => panorama.speed_y = Reader::new(data).varint()? as i32,
             0x47 => lower = Some(data),
             0x48 => upper = Some(data),
             0x51 => events = events::parse_events(data)?,
@@ -88,6 +101,7 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     let upper_layer = decode_layer(upper, "upper", expected)?;
 
     Ok(MapUnit {
+        panorama: panorama_enabled.then_some(panorama),
         chipset_id,
         width,
         height,
@@ -151,6 +165,28 @@ mod tests {
         assert_eq!((map.width, map.height), (20, 15));
         assert_eq!(map.lower_layer.len(), 300);
         assert_eq!(map.upper_layer.len(), 300);
+    }
+
+    #[test]
+    fn reads_panorama_switches_and_signed_scroll_speed() {
+        let file = make_lmu(
+            b"LcfMapUnit",
+            &[
+                (0x02, varint(1)),
+                (0x03, varint(1)),
+                (0x1F, varint(1)),
+                (0x20, b"Sky".to_vec()),
+                (0x21, varint(1)),
+                (0x23, varint(1)),
+                (0x24, varint((-3_i32) as u32)),
+                (0x47, layer_bytes(&[0])),
+                (0x48, layer_bytes(&[10000])),
+            ],
+        );
+        let panorama = parse_map(&file).unwrap().panorama.unwrap();
+        assert_eq!(panorama.name, "Sky");
+        assert!(panorama.loop_x && panorama.auto_x);
+        assert_eq!(panorama.speed_x, -3);
     }
 
     #[test]

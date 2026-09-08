@@ -17,6 +17,9 @@ struct Args {
     /// Regenerate structured data without reconverting graphics or synthesizing music.
     #[arg(long)]
     data_only: bool,
+    /// Regenerate graphics without changing structured data or audio.
+    #[arg(long, conflicts_with = "data_only")]
+    graphics_only: bool,
 }
 
 fn main() -> Result<()> {
@@ -26,6 +29,10 @@ fn main() -> Result<()> {
     } else {
         amnezia_convert::convert_graphics(&args.input, &args.output)?
     };
+    if args.graphics_only {
+        println!("converted {images} images");
+        return Ok(());
+    }
     let maps = amnezia_convert::convert_maps(&args.input, &args.output)?;
     let map_info = amnezia_convert::convert_map_info(&args.input, &args.output)?;
     let chipsets = amnezia_convert::convert_chipsets(&args.input, &args.output)?;

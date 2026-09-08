@@ -1,4 +1,4 @@
-//! Conversion of the original `.xyz` image assets into PNG files.
+//! Conversion of XYZ graphics and preservation of the original PNG assets.
 
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -12,7 +12,7 @@ const TRANSPARENT_CATEGORIES: &[&str] = &[
     "Battle", "CharSet", "ChipSet", "Monster", "Picture", "System",
 ];
 
-/// Convert every `.xyz` graphic under `input`'s category directories into a
+/// Convert every XYZ or PNG graphic under `input`'s category directories into a
 /// PNG under `output/graphics/<Category>/`, returning the number written.
 /// Categories in `TRANSPARENT_CATEGORIES` map palette index 0 to a
 /// transparent alpha; the rest stay fully opaque.
@@ -30,6 +30,19 @@ pub fn convert_graphics(input: &Path, output: &Path) -> Result<usize> {
         let out_dir = output.join("graphics").join(category);
         for entry in std::fs::read_dir(&dir)? {
             let path = entry?.path();
+            if path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| e.eq_ignore_ascii_case("png"))
+            {
+                std::fs::create_dir_all(&out_dir)?;
+                std::fs::copy(
+                    &path,
+                    out_dir.join(path.file_name().context("graphic has no filename")?),
+                )?;
+                count += 1;
+                continue;
+            }
             let is_xyz = path
                 .extension()
                 .and_then(|e| e.to_str())

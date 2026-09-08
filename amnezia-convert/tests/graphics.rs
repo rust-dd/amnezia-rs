@@ -3,6 +3,24 @@ use flate2::write::ZlibEncoder;
 use std::io::Write;
 use std::path::Path;
 
+#[test]
+fn retains_original_png_panoramas_without_reencoding() {
+    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR")).join("original_png_panoramas");
+    let input = tmp.join("in");
+    let output = tmp.join("out");
+    std::fs::create_dir_all(input.join("Panorama")).unwrap();
+    let original = Path::new(env!("CARGO_MANIFEST_DIR")).join("../original/Panorama/Ground.png");
+    std::fs::copy(&original, input.join("Panorama/Ground.png")).unwrap();
+    assert_eq!(
+        amnezia_convert::convert_graphics(&input, &output).unwrap(),
+        1
+    );
+    assert_eq!(
+        std::fs::read(original).unwrap(),
+        std::fs::read(output.join("graphics/Panorama/Ground.png")).unwrap()
+    );
+}
+
 fn make_xyz(width: u16, height: u16, palette: &[u8; 768], indices: &[u8]) -> Vec<u8> {
     let mut raw = palette.to_vec();
     raw.extend_from_slice(indices);

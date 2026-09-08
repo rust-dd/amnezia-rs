@@ -66,6 +66,7 @@ fn converts_lmu_to_map_ron() {
     assert_eq!(
         map,
         Map {
+            panorama: None,
             chipset_id: 7,
             width: 2,
             height: 1,
