@@ -20,7 +20,7 @@ use bevy::prelude::*;
 /// The troop the debug key spawns: troop 2 "Rablo2x", two bandits.
 const DEBUG_TROOP: u32 = 2;
 
-/// The backdrop every fight uses in v1 (per-troop terrain backdrops are deferred).
+/// Fallback backdrop for the developer's test encounter.
 const BACKDROP: &str = "Cave1";
 
 /// The RM2000 screen offset a screen-scope battle animation centres its cells on:
@@ -83,14 +83,18 @@ pub(super) fn start_on_request(
         return;
     }
     let Some(troop) = battle_data.troops.iter().find(|t| t.id == request.troop_id) else {
+        warn!("cannot start undefined troop {}", request.troop_id);
+        result.0 = Some(BattleOutcome::Defeat);
         return;
     };
     if troop.members.is_empty() {
+        result.0 = Some(BattleOutcome::Victory);
         return;
     }
     let roster = party.snapshot();
     let actors: Vec<&ActorDef> = roster.iter().filter_map(|id| data.actor(*id)).collect();
     if actors.is_empty() {
+        result.0 = Some(BattleOutcome::Defeat);
         return;
     }
     // Resolve each member's runtime loadout so the fight reads the gear the equip
@@ -108,9 +112,15 @@ pub(super) fn start_on_request(
         &data.skills,
         &vitals,
         &progression,
-        BACKDROP.to_string(),
+        if request.background.is_empty() {
+            BACKDROP.to_string()
+        } else {
+            request.background.clone()
+        },
         seed,
     );
+    battle.allow_escape = request.allow_escape;
+    battle.first_strike = request.first_strike;
     // Capture the real RM2000 battle-end message terms for the outcome/reward
     // log lines the resolution code (which has no resources) composes.
     battle.text.apply(&terms.0);
@@ -144,6 +154,8 @@ pub(super) fn debug_trigger(
     if !active.0 && keys.just_pressed(KeyCode::F6) {
         requests.write(BattleRequest {
             troop_id: DEBUG_TROOP,
+            allow_escape: true,
+            ..default()
         });
     }
 }

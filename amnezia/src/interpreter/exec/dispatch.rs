@@ -270,18 +270,23 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Yield
         }
         ENEMY_ENCOUNTER => {
-            // Resumed (outcome in hand): fall into the handlers. Fresh: start the
-            // fight and pause until it publishes a result; `params[1]` is the troop
-            // id (`params[0]` is always 0).
-            if frame.battle_outcome.is_some() {
-                frame.ip += 1;
-                Flow::Advance
-            } else {
-                let troop_id = command.params.get(1).copied().unwrap_or(0) as u32;
-                x.subsystems.battle_writer.write(BattleRequest { troop_id });
-                frame.battle_pending = true;
-                Flow::Yield
-            }
+            let troop_id = super::super::commands::operate_value(
+                0,
+                command.params.first().copied().unwrap_or(0),
+                command.params.get(1).copied().unwrap_or(0),
+                &x.variables,
+            )
+            .max(0) as u32;
+            x.subsystems.battle_writer.write(BattleRequest {
+                troop_id,
+                background: command.string.clone(),
+                allow_escape: command.params.get(3).copied().unwrap_or(0) != 0,
+                first_strike: command.params.get(5).copied().unwrap_or(0) != 0,
+            });
+            frame.battle_outcome = None;
+            frame.battle_pending = true;
+            frame.ip += 1;
+            Flow::Yield
         }
         VICTORY_HANDLER => {
             frame.select_battle_handler(command.indent, BattleOutcome::Victory);

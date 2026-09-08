@@ -362,8 +362,15 @@ fn battle_start_plays_battle_music_and_stores_the_prior_bgm() {
     // Request the fight directly (avoids the debug-key intra-frame ordering).
     app.world_mut().write_message(BattleRequest {
         troop_id: DEBUG_TROOP,
+        background: "Town".into(),
+        first_strike: true,
+        ..default()
     });
     app.update();
+    let battle = app.world().resource::<Battle>();
+    assert_eq!(battle.background, "Town");
+    assert!(!battle.allow_escape);
+    assert!(battle.first_strike);
     // The pre-battle map BGM is remembered for the teardown restore.
     assert_eq!(
         app.world().resource::<MapBgm>().0,

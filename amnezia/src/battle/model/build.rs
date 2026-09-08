@@ -117,6 +117,7 @@ impl Battle {
         Battle {
             phase: Phase::PartyCommand,
             background,
+            allow_escape: true,
             members,
             enemies,
             attributes: attributes.to_vec(),

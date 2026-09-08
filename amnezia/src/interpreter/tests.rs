@@ -31,6 +31,7 @@ use amnezia_data::{CommonEvent, Event, EventCommand, EventPage};
 use bevy::prelude::*;
 
 mod actor_commands;
+mod outcomes;
 
 const CONTROL_SWITCHES: u32 = 10210;
 const CONDITIONAL_BRANCH: u32 = 12010;

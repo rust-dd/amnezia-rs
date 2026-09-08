@@ -161,7 +161,11 @@ fn layout_panel(panel: Panel, battle: &Battle, node: &mut Node) -> bool {
 /// The party-option window body: Fight / Auto / Escape, cursor-marked (RM2000
 /// `Window_BattleOption`).
 fn compose_options(battle: &Battle, terms: &Terms) -> String {
-    menu_rows(party_labels(terms).iter().cloned(), battle.cursor)
+    let mut labels = party_labels(terms);
+    if !battle.allow_escape {
+        labels[2] = format!("{} ×", labels[2]);
+    }
+    menu_rows(labels.into_iter(), battle.cursor)
 }
 
 /// The actor command window body: the four commands, or — once a sub-menu is open —

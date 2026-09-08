@@ -35,11 +35,18 @@ use amnezia_data::{AttributeDef, MonsterDef, StateDef, SystemDef, TroopDef};
 use bevy::prelude::*;
 use model::Battle;
 
-/// Start a fight with the given troop. The interpreter emits this from opcode
-/// 10710; the debug key emits it too until that wiring lands.
-#[derive(Message)]
+/// Encounter settings supplied by the map event that starts a fight.
+#[derive(Message, Default)]
 pub struct BattleRequest {
     pub troop_id: u32,
+    pub background: String,
+    pub allow_escape: bool,
+    pub first_strike: bool,
+}
+
+pub(crate) fn reset_session(world: &mut World) {
+    world.insert_resource(Battle::default());
+    world.insert_resource(MapBgm::default());
 }
 
 /// Whether a battle is running. The movement/interpreter pause guards OR this in

@@ -54,6 +54,7 @@ pub enum MenuLevel {
 pub struct Battle {
     pub phase: Phase,
     pub background: String,
+    pub allow_escape: bool,
     pub members: Vec<Fighter>,
     pub enemies: Vec<Foe>,
     /// The attribute (element) table, consulted by the elemental damage step.
@@ -74,9 +75,7 @@ pub struct Battle {
     /// escape (see [`Battle::attempt_escape`]).
     pub(in crate::battle) escape_chance: u32,
     /// Whether the party opened with a first strike (RM2000 preemptive attack): it
-    /// grants a guaranteed escape and the `+9999` turn-order bonus. No encounter
-    /// path sets it yet (there is no ambush/initiative plumbing), so it stays
-    /// `false`; the mechanism is honoured wherever the flag is raised.
+    /// grants a guaranteed escape and the `+9999` turn-order bonus.
     pub(in crate::battle) first_strike: bool,
     pub turn: usize,
     pub menu: MenuLevel,

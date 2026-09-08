@@ -106,16 +106,16 @@ pub(super) fn run_frame(
     dt: f32,
     scene_blocked: bool,
 ) -> RunOutcome {
-    // Resume after a fight: consume the published outcome and drop the pause, so
-    // the EnemyEncounter re-executes past the trigger and its handlers self-select.
-    // A wipe the encounter can't recover from (no DefeatHandler) ends the game.
-    // Runs before the guard because `battle_pending` is part of it.
     if frame.battle_pending
         && let Some(outcome) = x.subsystems.battle_result.0.take()
     {
         frame.battle_pending = false;
         if outcome == BattleOutcome::Defeat && frame.defeat_is_unhandled() {
             x.subsystems.gameover.0 = true;
+            frame.stop();
+            return RunOutcome::Finished;
+        }
+        if outcome == BattleOutcome::Escape && frame.escape_ends_event() {
             frame.stop();
             return RunOutcome::Finished;
         }

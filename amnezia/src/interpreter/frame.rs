@@ -7,7 +7,7 @@
 
 use super::commands::KeyAccept;
 use crate::battle::BattleOutcome;
-use crate::interpreter::flow::{has_defeat_handler, skip_battle_handler};
+use crate::interpreter::flow::{skip_battle_handler, skip_shop_handler};
 use amnezia_data::EventCommand;
 use std::collections::HashMap;
 
@@ -129,14 +129,24 @@ impl Frame {
         if self.shop_transacted == Some(want) {
             self.ip += 1;
         } else {
-            self.ip = skip_battle_handler(&self.commands, self.ip, indent);
+            self.ip = skip_shop_handler(&self.commands, self.ip, indent);
         }
     }
 
-    /// Whether a party wipe reaching the `EnemyEncounter` at the cursor has no
-    /// `DefeatHandler` — an unrecoverable loss the caller routes to Game Over.
+    /// The encounter's defeat mode is independent of any later battle's handlers.
     pub(super) fn defeat_is_unhandled(&self) -> bool {
-        let indent = self.commands.get(self.ip).map_or(0, |c| c.indent);
-        !has_defeat_handler(&self.commands, self.ip, indent)
+        self.encounter_option(4) == 0
+    }
+
+    pub(super) fn escape_ends_event(&self) -> bool {
+        self.encounter_option(3) == 1
+    }
+
+    fn encounter_option(&self, index: usize) -> i32 {
+        self.commands
+            .get(self.ip.saturating_sub(1))
+            .and_then(|c| c.params.get(index))
+            .copied()
+            .unwrap_or(0)
     }
 }

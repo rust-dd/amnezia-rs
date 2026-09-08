@@ -71,6 +71,7 @@ pub(crate) fn clear_transient(world: &mut World) {
     reset::<crate::shop::ShopOutcome>(world);
     reset::<crate::battle::BattleActive>(world);
     reset::<crate::battle::BattleResult>(world);
+    crate::battle::reset_session(world);
     reset::<crate::gameover::GameOverActive>(world);
     reset::<CameraPan>(world);
     reset::<HeroTransparency>(world);
