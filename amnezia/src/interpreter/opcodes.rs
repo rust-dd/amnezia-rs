@@ -130,8 +130,7 @@ pub(super) const CHANGE_EQUIPMENT: u32 = 10450;
 /// Add or remove an actor state/condition. A no-op: the remake carries no
 /// persistent field conditions (every observed use is a state removal).
 pub(super) const CHANGE_CONDITION: u32 = 10480;
-/// Set a system BGM slot (battle, victory, …). A no-op: music is driven by
-/// explicit `PlayBgm` events, and the system slots have no consumer.
+/// Override a scene's system BGM (battle, victory, inn, vehicles, or game over).
 pub(super) const CHANGE_SYSTEM_BGM: u32 = 10660;
 /// Choose the map/battle transition style. A cosmetic no-op: the fade is fixed.
 pub(super) const CHANGE_SCREEN_TRANSITIONS: u32 = 10690;

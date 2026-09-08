@@ -26,6 +26,7 @@ fn save_game_ron_round_trip() {
         timer_remaining: 45.5,
         timer_running: true,
         vehicles: default(),
+        system_bgm: default(),
     };
     let ron = ron::ser::to_string_pretty(&game, PrettyConfig::default()).unwrap();
     let decoded: SaveGame = ron::from_str(&ron).unwrap();
@@ -198,6 +199,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
         timer_remaining: 0.0,
         timer_running: false,
         vehicles: default(),
+        system_bgm: default(),
     };
     write_save(&path, &game).unwrap();
 
@@ -273,6 +275,7 @@ fn load_restores_name_charset_and_screen_state() {
         timer_remaining: 0.0,
         timer_running: false,
         vehicles: default(),
+        system_bgm: default(),
     };
     write_save(&path, &game).unwrap();
 
@@ -433,6 +436,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
         timer_remaining: 0.0,
         timer_running: false,
         vehicles: default(),
+        system_bgm: default(),
     };
     write_save(&path, &game).unwrap();
     // "Restart": a fresh read at the same resolved path finds and decodes it.

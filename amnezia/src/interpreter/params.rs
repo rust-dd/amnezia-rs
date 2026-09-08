@@ -59,6 +59,7 @@ pub(super) struct MapFx<'w> {
     pub(super) game_clock: ResMut<'w, GameClock>,
     pub(super) vehicles: ResMut<'w, crate::vehicles::Vehicles>,
     pub(super) current_bgm: Option<Res<'w, crate::audio::CurrentBgm>>,
+    pub(super) system_bgm: ResMut<'w, crate::system_bgm::SystemBgm>,
 }
 
 /// The player-access toggles the interpreter flips: whether the in-menu Save

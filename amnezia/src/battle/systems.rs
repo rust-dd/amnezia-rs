@@ -70,6 +70,7 @@ pub(super) fn start_on_request(
     equipment: Res<Equipment>,
     terms: Res<Terms>,
     current_bgm: Res<CurrentBgm>,
+    system_bgm: Option<Res<crate::system_bgm::SystemBgm>>,
     mut map_bgm: ResMut<MapBgm>,
     mut audio: MessageWriter<AudioRequest>,
     mut battle: ResMut<Battle>,
@@ -137,11 +138,11 @@ pub(super) fn start_on_request(
     ) {
         audio.write(se);
     }
-    audio.write(AudioRequest::bgm(
-        &system.battle_music.name,
-        system.battle_music.volume,
-        system.battle_music.tempo,
-    ));
+    audio.write(AudioRequest::from_music(crate::system_bgm::resolve(
+        system_bgm.as_deref(),
+        0,
+        &system.battle_music,
+    )));
 }
 
 /// Debug-only: F6 starts a sample fight so the battle can be exercised before the
@@ -168,6 +169,7 @@ pub(super) fn resolve_tick(
     time: Res<Time>,
     battle_data: Res<BattleData>,
     active_anims: Res<ActiveAnimations>,
+    system_bgm: Option<Res<crate::system_bgm::SystemBgm>>,
     mut audio: MessageWriter<AudioRequest>,
     mut battle: ResMut<Battle>,
 ) {
@@ -199,7 +201,12 @@ pub(super) fn resolve_tick(
     let more = battle.resolve_next();
     if let Some(outcome) = battle.end_state() {
         battle.finish(outcome);
-        play_outcome_music(&mut audio, &battle_data.system, outcome);
+        play_outcome_music(
+            &mut audio,
+            &battle_data.system,
+            system_bgm.as_deref(),
+            outcome,
+        );
     } else if !more {
         battle.new_round();
     }
@@ -212,14 +219,17 @@ pub(super) fn resolve_tick(
 fn play_outcome_music(
     audio: &mut MessageWriter<AudioRequest>,
     system: &SystemDef,
+    overrides: Option<&crate::system_bgm::SystemBgm>,
     outcome: BattleOutcome,
 ) {
-    let music = match outcome {
-        BattleOutcome::Victory => &system.battle_end_music,
-        BattleOutcome::Defeat => &system.gameover_music,
+    let (slot, music) = match outcome {
+        BattleOutcome::Victory => (1, &system.battle_end_music),
+        BattleOutcome::Defeat => (6, &system.gameover_music),
         BattleOutcome::Escape => return,
     };
-    audio.write(AudioRequest::bgm(&music.name, music.volume, music.tempo));
+    audio.write(AudioRequest::from_music(crate::system_bgm::resolve(
+        overrides, slot, music,
+    )));
 }
 
 /// Drain the battle's per-hit sound-effect queue into [`AudioRequest`]s, naming

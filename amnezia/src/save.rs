@@ -154,6 +154,8 @@ struct SaveGame {
     timer_running: bool,
     #[serde(default)]
     vehicles: crate::vehicles::VehicleSave,
+    #[serde(default)]
+    system_bgm: crate::system_bgm::SystemBgm,
 }
 
 /// The RM2000 neutral screen tone (every channel 100), the [`SaveGame::tone`]
@@ -213,6 +215,7 @@ struct SaveIo<'w, 's> {
 #[derive(SystemParam)]
 struct SceneState<'w> {
     vehicles: Option<ResMut<'w, crate::vehicles::Vehicles>>,
+    system_bgm: Option<ResMut<'w, crate::system_bgm::SystemBgm>>,
     hero_name: ResMut<'w, HeroName>,
     weather: ResMut<'w, Weather>,
     weather_strength: ResMut<'w, WeatherStrength>,
@@ -334,6 +337,7 @@ fn save_or_load(
                     .vehicles
                     .as_ref()
                     .map_or_else(Default::default, |v| v.save.clone()),
+                system_bgm: scene.system_bgm.as_deref().cloned().unwrap_or_default(),
             };
             match write_save(&save_io.location.0, &game) {
                 Ok(()) => info!("saved game to {}", save_io.location.0.display()),
@@ -369,6 +373,9 @@ fn save_or_load(
             scene.game_clock.running = game.timer_running;
             if let Some(vehicles) = scene.vehicles.as_mut() {
                 vehicles.restore(game.vehicles);
+            }
+            if let Some(music) = scene.system_bgm.as_deref_mut() {
+                *music = game.system_bgm;
             }
             // Older saves omit these fields, so keep the initial graphic and name.
             if !game.hero_name.is_empty() {

@@ -85,7 +85,10 @@ pub(super) fn toggle(frame: &mut Frame, x: &mut Exec) -> Flow {
                 Some(1) => system.ship_music,
                 _ => system.airship_music,
             };
-            x.audio.write(AudioRequest::from_music(&music));
+            let slot = 3 + vehicles.save.riding.unwrap() as u32;
+            x.audio.write(AudioRequest::from_music(
+                x.subsystems.mapfx.system_bgm.get(slot, &music),
+            ));
         }
     }
     Flow::Advance

@@ -513,8 +513,15 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         }
         ENTER_EXIT_VEHICLE => super::vehicles::toggle(frame, x),
         SET_VEHICLE_LOCATION => super::vehicles::locate(frame, &command, x),
+        CHANGE_SYSTEM_BGM => {
+            x.subsystems
+                .mapfx
+                .system_bgm
+                .change(&command.string, &command.params);
+            frame.ip += 1;
+            Flow::Advance
+        }
         CHANGE_CONDITION
-        | CHANGE_SYSTEM_BGM
         | CHANGE_SCREEN_TRANSITIONS
         | FLASH_SPRITE
         | CHANGE_PBG

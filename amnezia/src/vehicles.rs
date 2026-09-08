@@ -106,6 +106,7 @@ fn keyboard(
     party: Res<Party>,
     inventory: Res<Inventory>,
     music: Res<VehicleMusic>,
+    system_bgm: Res<crate::system_bgm::SystemBgm>,
     bgm: Res<CurrentBgm>,
     mut vehicles: ResMut<Vehicles>,
     mut audio: MessageWriter<AudioRequest>,
@@ -136,7 +137,9 @@ fn keyboard(
             if !was_riding {
                 vehicles.save.before_music = bgm.track();
                 let index = vehicles.save.riding.unwrap();
-                audio.write(AudioRequest::from_music(&music.0[index]));
+                audio.write(AudioRequest::from_music(
+                    system_bgm.get(3 + index as u32, &music.0[index]),
+                ));
             } else {
                 audio.write(
                     vehicles

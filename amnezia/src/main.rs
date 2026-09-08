@@ -31,6 +31,7 @@ mod session;
 mod shop;
 mod smoke;
 mod state;
+mod system_bgm;
 mod teleport;
 mod terms;
 mod text;

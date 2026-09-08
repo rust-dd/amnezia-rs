@@ -116,6 +116,7 @@ fn drive(
     mut title: ResMut<TitleActive>,
     mut audio: MessageWriter<AudioRequest>,
     music: Option<Res<SystemMusic>>,
+    overrides: Option<Res<crate::system_bgm::SystemBgm>>,
 ) {
     match *phase {
         Phase::Inactive => {
@@ -124,7 +125,11 @@ fn drive(
                 // The game-over dirge takes over from the map/battle BGM as the
                 // screen appears; the return to the title later swaps in the theme.
                 if let Some(music) = music {
-                    audio.write(AudioRequest::from_music(&music.gameover));
+                    audio.write(AudioRequest::from_music(crate::system_bgm::resolve(
+                        overrides.as_deref(),
+                        6,
+                        &music.gameover,
+                    )));
                 }
             }
         }

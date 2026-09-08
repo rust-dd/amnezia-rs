@@ -25,6 +25,7 @@ pub(super) fn register(app: &mut App) {
 fn drive_inn_music(
     screen: Res<Screen>,
     music: Option<Res<SystemMusic>>,
+    overrides: Option<Res<crate::system_bgm::SystemBgm>>,
     current_bgm: Res<CurrentBgm>,
     mut inn_bgm: ResMut<InnBgm>,
     mut audio: MessageWriter<AudioRequest>,
@@ -41,7 +42,11 @@ fn drive_inn_music(
     if now_resting {
         // Remember the map BGM and switch to the inn jingle for the sleep.
         inn_bgm.0 = current_bgm.track();
-        audio.write(AudioRequest::from_music(&music.inn));
+        audio.write(AudioRequest::from_music(crate::system_bgm::resolve(
+            overrides.as_deref(),
+            2,
+            &music.inn,
+        )));
     } else {
         // Checked out: bring the map BGM back (silence if the map was silent).
         let resume = inn_bgm.0.take();

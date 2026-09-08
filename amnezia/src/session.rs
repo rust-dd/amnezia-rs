@@ -35,6 +35,7 @@ fn start_new_game(world: &mut World) {
     reset::<crate::vehicles::Vehicles>(world);
     reset::<crate::appearance::Appearance>(world);
     reset::<crate::audio::MemorizedBgm>(world);
+    reset::<crate::system_bgm::SystemBgm>(world);
     reset::<crate::screenfx::TintState>(world);
     reset::<crate::screenfx::Weather>(world);
     reset::<crate::screenfx::WeatherStrength>(world);
