@@ -1,5 +1,6 @@
 //! Asset-path helpers shared across the game modules.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::OnceLock;
 
@@ -14,11 +15,28 @@ pub fn asset_root() -> &'static str {
         } else {
             std::env::current_exe()
                 .ok()
-                .and_then(|exe| exe.parent().map(|dir| dir.join("../Resources/assets")))
+                .map(|exe| {
+                    release_assets(
+                        &exe,
+                        Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets")),
+                    )
+                })
                 .map(|p| p.to_string_lossy().into_owned())
                 .unwrap_or_else(|| "assets".to_string())
         }
     })
+}
+
+fn release_assets(executable: &Path, workspace: &Path) -> std::path::PathBuf {
+    let dir = executable.parent().unwrap_or_else(|| Path::new("."));
+    [
+        dir.join("../Resources/assets"),
+        dir.join("assets"),
+        workspace.to_path_buf(),
+    ]
+    .into_iter()
+    .find(|path| path.join("hero.ron").is_file())
+    .unwrap_or_else(|| dir.join("assets"))
 }
 
 /// Load and deserialise a RON file, panicking with context on failure.
@@ -30,16 +48,50 @@ pub fn load_ron<T: serde::de::DeserializeOwned>(path: &str) -> T {
 /// Resolve a graphic name to its PNG path under `graphics/<subdir>/`, matching
 /// the on-disk filename case-insensitively (RM2000 names differ in case).
 pub fn resolve_png(subdir: &str, name: &str) -> String {
-    let dir = format!("{}/graphics/{subdir}", asset_root());
-    let target = format!("{}.png", name.to_lowercase());
-    if let Ok(entries) = std::fs::read_dir(Path::new(&dir)) {
-        for entry in entries.flatten() {
-            let file = entry.file_name();
-            let file = file.to_string_lossy();
-            if file.to_lowercase() == target {
-                return format!("graphics/{subdir}/{file}");
+    static GRAPHICS: OnceLock<HashMap<(String, String), String>> = OnceLock::new();
+    let graphics = GRAPHICS.get_or_init(|| {
+        let mut graphics = HashMap::new();
+        if let Ok(categories) = std::fs::read_dir(Path::new(asset_root()).join("graphics")) {
+            for category in categories.flatten() {
+                let Ok(files) = std::fs::read_dir(category.path()) else {
+                    continue;
+                };
+                let dir = category.file_name().to_string_lossy().into_owned();
+                for file in files.flatten() {
+                    let file = file.file_name().to_string_lossy().into_owned();
+                    if let Some(stem) = file.to_lowercase().strip_suffix(".png") {
+                        graphics
+                            .entry((dir.to_lowercase(), stem.to_string()))
+                            .or_insert_with(|| format!("graphics/{dir}/{file}"));
+                    }
+                }
             }
         }
+        graphics
+    });
+    graphics
+        .get(&(subdir.to_lowercase(), name.to_lowercase()))
+        .cloned()
+        .unwrap_or_else(|| format!("graphics/{subdir}/{name}.png"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn charset_lookup_is_case_insensitive_and_uses_a_real_file() {
+        let path = resolve_png("CharSet", "vehicle");
+        assert_eq!(path, resolve_png("charset", "VEHICLE"));
+        assert!(Path::new(asset_root()).join(path).is_file());
     }
-    format!("graphics/{subdir}/{name}.png")
+
+    #[test]
+    fn standalone_release_can_use_workspace_assets() {
+        let workspace = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets"));
+        assert_eq!(
+            release_assets(Path::new("/nonexistent/amnezia/release/amnezia"), workspace),
+            workspace
+        );
+    }
 }
