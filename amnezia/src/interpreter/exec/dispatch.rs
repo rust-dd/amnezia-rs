@@ -60,7 +60,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         }
         CONTROL_VARIABLES => handlers::control_variables(frame, &command, x),
         CHANGE_GOLD => {
-            apply_change_gold(&mut x.inventory, &command.params);
+            apply_change_gold(&mut x.inventory, &command.params, &x.variables);
             frame.ip += 1;
             Flow::Advance
         }

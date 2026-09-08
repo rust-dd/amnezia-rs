@@ -26,15 +26,15 @@ pub(super) fn apply_control_switches(switches: &mut Switches, params: &[i32]) {
     }
 }
 
-/// Apply a `ChangeGold` command `[op, operand_type, amount]`: op 0 adds gold,
-/// 1 removes it (constant operand, first-pass).
-pub(super) fn apply_change_gold(inventory: &mut Inventory, params: &[i32]) {
-    let [op, _, amount, ..] = params else {
+/// Apply a `ChangeGold` command using a literal amount or a variable's value.
+pub(super) fn apply_change_gold(inventory: &mut Inventory, params: &[i32], variables: &Variables) {
+    let [op, operand_type, amount, ..] = params else {
         return;
     };
+    let amount = operate_value(0, *operand_type, *amount, variables);
     match op {
-        0 => inventory.add_gold(*amount),
-        1 => inventory.remove_gold(*amount),
+        0 => inventory.add_gold(amount),
+        1 => inventory.remove_gold(amount),
         _ => {}
     }
 }
@@ -280,9 +280,20 @@ mod tests {
     #[test]
     fn change_gold_adds_and_removes() {
         let mut inv = Inventory::default();
-        apply_change_gold(&mut inv, &[0, 0, 50]);
-        apply_change_gold(&mut inv, &[1, 0, 30]);
+        apply_change_gold(&mut inv, &[0, 0, 50], &Variables::default());
+        apply_change_gold(&mut inv, &[1, 0, 30], &Variables::default());
         assert_eq!(inv.gold(), 20);
+    }
+
+    #[test]
+    fn gambling_reward_uses_the_winnings_variable() {
+        let mut inventory = Inventory::default();
+        let mut variables = Variables::default();
+        variables.set(84, 1250);
+        apply_change_gold(&mut inventory, &[0, 1, 84], &variables);
+        assert_eq!(inventory.gold(), 1250);
+        apply_change_gold(&mut inventory, &[1, 1, 84], &variables);
+        assert_eq!(inventory.gold(), 0);
     }
 
     #[test]
