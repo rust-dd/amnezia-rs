@@ -3,13 +3,9 @@
 //! active-page NPC sprite. Every spawned entity is tagged [`MapScene`] so a
 //! teleport can despawn the whole scene at once.
 
-use super::route::RouteStepper;
+use super::MapScene;
 use super::water::WaterQuarter;
-use super::{AutoMove, EventSprite, MapScene, MoveQueue};
-use crate::assets::resolve_png;
-use crate::state::{Inventory, Party, Switches, Variables, active_page};
-use crate::tiles::{self, CHAR_Y_OFFSET};
-use amnezia_data::Event;
+use crate::tiles;
 use bevy::prelude::*;
 
 pub(super) fn spawn_tile(
@@ -82,67 +78,4 @@ pub(super) fn spawn_lower_quarters(
             entity.insert(WaterQuarter { id, quarter });
         }
     }
-}
-
-/// Spawn an NPC sprite for an event's active page graphic, if it has one. The
-/// active page is chosen per the current switches/variables at load time.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn spawn_event_npc(
-    commands: &mut Commands,
-    asset_server: &AssetServer,
-    switches: &Switches,
-    variables: &Variables,
-    party: &Party,
-    inventory: &Inventory,
-    event: &Event,
-    offset: (f32, f32),
-) {
-    let Some(page) = active_page(event, switches, variables, party, inventory) else {
-        return;
-    };
-    if page.graphic_name.is_empty() {
-        return;
-    }
-    let image = asset_server.load(resolve_png("CharSet", &page.graphic_name));
-    let (sx, sy) = tiles::charset_source(page.graphic_index, page.direction, page.pattern);
-    let world_x = event.x as f32 * tiles::TILE - offset.0 + tiles::TILE / 2.0;
-    let world_y = offset.1 - event.y as f32 * tiles::TILE - tiles::TILE / 2.0 + CHAR_Y_OFFSET;
-    commands.spawn((
-        Sprite {
-            image,
-            rect: Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H)),
-            custom_size: Some(Vec2::new(tiles::CHAR_W, tiles::CHAR_H)),
-            ..default()
-        },
-        Transform::from_xyz(
-            world_x,
-            world_y,
-            tiles::character_z_layer(event.y as i32, page.layer),
-        ),
-        EventSprite {
-            id: event.id,
-            tile_x: event.x as i32,
-            tile_y: event.y as i32,
-            dir: page.direction,
-            frame: page.pattern,
-            charset: page.graphic_name.clone(),
-            index: page.graphic_index,
-            layer: page.layer,
-        },
-        MoveQueue::default(),
-        AutoMove::new(
-            page.move_type,
-            page.move_frequency,
-            page.move_speed,
-            event.id,
-        ),
-        // A custom-route page (move_type 6) spawns with its route armed; every
-        // other NPC gets an inert stepper a MoveEvent opcode can later load.
-        if page.move_type == 6 {
-            RouteStepper::from_page(&page.move_route, page.move_speed, page.move_frequency)
-        } else {
-            RouteStepper::default()
-        },
-        MapScene,
-    ));
 }

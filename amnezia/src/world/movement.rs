@@ -51,6 +51,9 @@ pub trait Character {
     fn index(&self) -> u32;
     fn charset(&self) -> &str;
     fn set_graphic(&mut self, name: String, index: u32);
+    fn y_offset(&self) -> f32 {
+        CHAR_Y_OFFSET
+    }
     /// The world draw-Z for this character at tile row `tile_y`. The hero uses
     /// the default "same as hero" band; an event NPC overrides it to sit in the
     /// band for its page layer (below/same/above the hero).
@@ -208,16 +211,25 @@ pub fn walk<C: Character + Component<Mutability = Mutable>>(
             continue;
         }
         if let Some(pos) = queue.advance(&mut *ch, &data, dt) {
-            let (sx, sy) = tiles::charset_source(ch.index(), ch.dir(), ch.frame());
-            sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
-            sprite.image = asset_server.load(resolve_png("CharSet", ch.charset()));
+            if !ch.charset().is_empty() {
+                let (sx, sy) = tiles::charset_source(ch.index(), ch.dir(), ch.frame());
+                sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
+                sprite.image = asset_server.load(resolve_png("CharSet", ch.charset()));
+            }
             let z = ch.draw_z(ch.tile().1);
-            transform.translation = Vec3::new(pos.x, pos.y + CHAR_Y_OFFSET, z);
+            transform.translation = Vec3::new(pos.x, pos.y + ch.y_offset(), z);
         }
     }
 }
 
 impl Character for super::EventSprite {
+    fn y_offset(&self) -> f32 {
+        if self.charset.is_empty() {
+            0.0
+        } else {
+            CHAR_Y_OFFSET
+        }
+    }
     fn tile(&self) -> (i32, i32) {
         (self.tile_x, self.tile_y)
     }

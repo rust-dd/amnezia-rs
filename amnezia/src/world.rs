@@ -15,6 +15,7 @@ use bevy::window::PrimaryWindow;
 
 mod autonomy;
 mod movement;
+mod pages;
 mod render;
 mod route;
 mod water;
@@ -184,6 +185,7 @@ impl Plugin for WorldPlugin {
                 Update,
                 (
                     (
+                        pages::refresh_pages,
                         route::route_events,
                         autonomy::autonomous_movement,
                         walk::<EventSprite>,
@@ -310,6 +312,7 @@ pub fn load_map(
         None => (String::new(), vec![0x0F; 162], vec![0x0F; 144]),
     };
     let chipset = asset_server.load(resolve_png("ChipSet", &graphic));
+    commands.insert_resource(pages::EventTileset(chipset.clone()));
 
     let width = map.width as i32;
     let height = map.height as i32;
@@ -363,15 +366,13 @@ pub fn load_map(
         }
     }
     for event in &map.events {
-        render::spawn_event_npc(
+        pages::spawn_event(
             commands,
             asset_server,
-            switches,
-            variables,
-            party,
-            inventory,
+            (switches, variables, party, inventory),
             event,
             offset,
+            &chipset,
         );
     }
 
@@ -394,15 +395,32 @@ pub fn load_map(
 /// [`walk`] owns their rendering while a move tweens.
 fn update_event_sprites(
     asset_server: Res<AssetServer>,
-    mut sprites: Query<(&EventSprite, &MoveQueue, &mut Sprite), Changed<EventSprite>>,
+    data: Res<MapData>,
+    tileset: Option<Res<pages::EventTileset>>,
+    mut sprites: Query<
+        (
+            &EventSprite,
+            &MoveQueue,
+            &mut Sprite,
+            &mut Visibility,
+            &mut Transform,
+        ),
+        Changed<EventSprite>,
+    >,
 ) {
-    for (event, queue, mut sprite) in &mut sprites {
-        if event.charset.is_empty() || queue.busy() {
+    let Some(tileset) = tileset else {
+        return;
+    };
+    for (event, queue, mut sprite, mut visibility, mut transform) in &mut sprites {
+        if queue.busy() {
             continue;
         }
-        sprite.image = asset_server.load(resolve_png("CharSet", &event.charset));
-        let (sx, sy) = tiles::charset_source(event.index, event.dir, event.frame);
-        sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
+        let (mut graphic, visible) = pages::graphic(event, &tileset.0, &asset_server);
+        graphic.color = sprite.color;
+        *sprite = graphic;
+        *visibility = visible;
+        let (x, y) = data.tile_center(event.tile_x, event.tile_y);
+        transform.translation = Vec3::new(x, y + event.y_offset(), event.draw_z(event.tile_y));
     }
 }
 

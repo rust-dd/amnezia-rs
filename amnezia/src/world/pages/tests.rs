@@ -1,0 +1,124 @@
+use super::*;
+use crate::assets::{asset_root, load_ron};
+
+fn page(graphic: &str, index: u32) -> EventPage {
+    let mut page = load_ron::<amnezia_data::Map>(&format!("{}/maps/map_0001.ron", asset_root()))
+        .events[0]
+        .pages[0]
+        .clone();
+    page.graphic_name = graphic.into();
+    page.graphic_index = index;
+    page.condition = Default::default();
+    page.move_type = 0;
+    page.move_route = Default::default();
+    page
+}
+
+fn app_with_event(event: Event) -> App {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+        .init_asset::<Image>()
+        .init_resource::<Switches>()
+        .init_resource::<Variables>()
+        .init_resource::<Party>()
+        .init_resource::<Inventory>()
+        .insert_resource(MapData::for_test(20, 15))
+        .insert_resource(EventTileset(Handle::default()))
+        .insert_resource(MapEvents {
+            events: vec![event],
+        })
+        .add_systems(Startup, setup)
+        .add_systems(
+            Update,
+            (refresh_pages, super::super::update_event_sprites).chain(),
+        );
+    app.update();
+    app
+}
+
+fn setup(
+    mut commands: Commands,
+    server: Res<AssetServer>,
+    events: Res<MapEvents>,
+    switches: Res<Switches>,
+    variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
+) {
+    spawn_event(
+        &mut commands,
+        &server,
+        (&switches, &variables, &party, &inventory),
+        &events.events[0],
+        (160.0, 120.0),
+        &Handle::default(),
+    );
+}
+
+#[test]
+fn switching_pages_updates_graphics_and_keeps_the_events_live_position() {
+    let mut hidden = page("", 0);
+    hidden.condition.flags = 1;
+    hidden.condition.switch_a = 8;
+    let mut app = app_with_event(Event {
+        id: 1,
+        x: 3,
+        y: 4,
+        name: String::new(),
+        pages: vec![page("Chara1", 0), hidden],
+    });
+    let entity = app
+        .world_mut()
+        .query_filtered::<Entity, With<EventSprite>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .get_mut::<EventSprite>(entity)
+        .unwrap()
+        .tile_x = 9;
+    app.world_mut().resource_mut::<Switches>().set(8, true);
+    app.update();
+    assert_eq!(
+        *app.world().get::<Visibility>(entity).unwrap(),
+        Visibility::Hidden
+    );
+    assert_eq!(app.world().get::<EventSprite>(entity).unwrap().tile_x, 9);
+    app.world_mut().resource_mut::<Switches>().set(8, false);
+    app.update();
+    assert_eq!(
+        *app.world().get::<Visibility>(entity).unwrap(),
+        Visibility::Visible
+    );
+    assert_eq!(
+        app.world().get::<EventSprite>(entity).unwrap().charset,
+        "Chara1"
+    );
+}
+
+#[test]
+fn invisible_events_have_movement_components_and_tile_events_render_from_the_chipset() {
+    let mut app = app_with_event(Event {
+        id: 1,
+        x: 3,
+        y: 4,
+        name: String::new(),
+        pages: vec![page("", 80)],
+    });
+    let world = app.world_mut();
+    let (sprite, _, _, transform) = world
+        .query::<(&Sprite, &MoveQueue, &RouteStepper, &Transform)>()
+        .single(world)
+        .unwrap();
+    assert_eq!(sprite.custom_size, Some(Vec2::splat(16.0)));
+    assert_eq!(transform.translation.y, 48.0);
+    let mut invisible = app_with_event(Event {
+        id: 2,
+        x: 1,
+        y: 1,
+        name: String::new(),
+        pages: vec![],
+    });
+    let world = invisible.world_mut();
+    assert_eq!(world.query::<&EventSprite>().iter(world).count(), 1);
+    assert_eq!(world.query::<&RouteStepper>().iter(world).count(), 1);
+}
