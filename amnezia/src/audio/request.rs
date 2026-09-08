@@ -125,7 +125,7 @@ impl AudioRequest {
 /// `volume` and playback `speed` — enough to replay it. The battle system
 /// memorizes the map BGM when a fight starts and restores it when the fight ends;
 /// the inn and `MemorizeBGM` (11530) memorize it the same way.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct BgmTrack {
     pub name: String,
     pub volume: f32,

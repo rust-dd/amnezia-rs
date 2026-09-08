@@ -32,6 +32,7 @@ fn start_new_game(world: &mut World) {
     reset::<crate::progression::Progression>(world);
     reset::<crate::equipment::Equipment>(world);
     reset::<crate::vitals::Vitals>(world);
+    reset::<crate::vehicles::Vehicles>(world);
     reset::<crate::appearance::Appearance>(world);
     reset::<crate::audio::MemorizedBgm>(world);
     reset::<crate::screenfx::TintState>(world);
@@ -87,6 +88,9 @@ pub(crate) fn clear_transient(world: &mut World) {
     clear_messages::<crate::animation::ShowMapAnimation>(world);
     clear_messages::<crate::animation::PlayAnimation>(world);
     crate::screenfx::reset_transient(world);
+    if let Some(mut vehicles) = world.get_resource_mut::<crate::vehicles::Vehicles>() {
+        vehicles.clear_motion();
+    }
     for (mut queue, mut route) in world
         .query::<(&mut MoveQueue, &mut RouteStepper)>()
         .iter_mut(world)

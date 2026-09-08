@@ -135,9 +135,9 @@ pub(super) const CHANGE_CONDITION: u32 = 10480;
 pub(super) const CHANGE_SYSTEM_BGM: u32 = 10660;
 /// Choose the map/battle transition style. A cosmetic no-op: the fade is fixed.
 pub(super) const CHANGE_SCREEN_TRANSITIONS: u32 = 10690;
-/// Board or leave a vehicle. A no-op: the game has no vehicles.
+/// Board the nearby vehicle or disembark from the current one.
 pub(super) const ENTER_EXIT_VEHICLE: u32 = 10840;
-/// Reposition a vehicle. A no-op: the game has no vehicles.
+/// Reposition a vehicle using literal or variable map coordinates.
 pub(super) const SET_VEHICLE_LOCATION: u32 = 10850;
 /// Flash a character sprite. A cosmetic no-op: no per-sprite flash effect exists.
 pub(super) const FLASH_SPRITE: u32 = 11320;

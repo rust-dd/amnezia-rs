@@ -9,6 +9,7 @@
 mod actors;
 mod dispatch;
 mod handlers;
+mod vehicles;
 
 use super::commands::key_code;
 use super::frame::{Frame, MAX_STEPS_PER_FRAME};
@@ -178,7 +179,8 @@ pub(super) fn run_frame(
     // `ProceedWithMovement` holds the frame until every forced move route has
     // finished — the hero's and every event's stepper drained.
     if frame.wait_movement {
-        if any_route_running(&x.hero_queue, &x.event_movers) {
+        if any_route_running(&x.hero_queue, &x.event_movers) || x.subsystems.mapfx.vehicles.moving()
+        {
             return RunOutcome::Yielded;
         }
         frame.wait_movement = false;
@@ -235,9 +237,15 @@ pub(super) fn resolve_character(
     this_event: u32,
     players: &Query<&Player>,
     events: &Query<(&EventSprite, &mut MoveQueue, &mut RouteStepper), Without<Player>>,
+    vehicles: &crate::vehicles::Vehicles,
 ) -> Option<(i32, i32, u32)> {
-    if char_ref == 10001 {
-        players.single().ok().map(|p| (p.tile_x, p.tile_y, p.dir))
+    if (10002..=10004).contains(&char_ref) {
+        vehicles.character(char_ref)
+    } else if char_ref == 10001 {
+        players
+            .single()
+            .ok()
+            .map(|p| vehicles.hero_position((p.tile_x, p.tile_y, p.dir)))
     } else {
         let id = if char_ref == 10005 {
             this_event as i32

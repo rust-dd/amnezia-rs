@@ -76,6 +76,7 @@ impl Plugin for InterpreterPlugin {
         app.init_resource::<RunningEvent>()
             .init_resource::<EventRng>()
             .init_resource::<ParallelPool>()
+            .init_resource::<crate::vehicles::Vehicles>()
             .insert_resource(CommonEvents::load())
             .add_systems(
                 Update,

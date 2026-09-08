@@ -152,6 +152,8 @@ struct SaveGame {
     timer_remaining: f32,
     #[serde(default)]
     timer_running: bool,
+    #[serde(default)]
+    vehicles: crate::vehicles::VehicleSave,
 }
 
 /// The RM2000 neutral screen tone (every channel 100), the [`SaveGame::tone`]
@@ -210,6 +212,7 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    vehicles: Option<ResMut<'w, crate::vehicles::Vehicles>>,
     hero_name: ResMut<'w, HeroName>,
     weather: ResMut<'w, Weather>,
     weather_strength: ResMut<'w, WeatherStrength>,
@@ -327,6 +330,10 @@ fn save_or_load(
                 playtime: scene.playtime.seconds,
                 timer_remaining: scene.game_clock.remaining,
                 timer_running: scene.game_clock.running,
+                vehicles: scene
+                    .vehicles
+                    .as_ref()
+                    .map_or_else(Default::default, |v| v.save.clone()),
             };
             match write_save(&save_io.location.0, &game) {
                 Ok(()) => info!("saved game to {}", save_io.location.0.display()),
@@ -360,6 +367,9 @@ fn save_or_load(
             scene.playtime.seconds = game.playtime;
             scene.game_clock.remaining = game.timer_remaining;
             scene.game_clock.running = game.timer_running;
+            if let Some(vehicles) = scene.vehicles.as_mut() {
+                vehicles.restore(game.vehicles);
+            }
             // Older saves omit these fields, so keep the initial graphic and name.
             if !game.hero_name.is_empty() {
                 scene.hero_name.0 = game.hero_name;

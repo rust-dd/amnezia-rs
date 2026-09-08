@@ -165,10 +165,18 @@ fn move_player(
     shop: Res<ShopOpen>,
     battle: Res<BattleActive>,
     title: Res<TitleActive>,
+    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut running: ResMut<RunningEvent>,
     mut players: Query<(&mut Player, &mut MoveQueue, &RouteStepper)>,
 ) {
-    if dialogue.active || fade.busy() || running.active() || menu.0 || shop.0 || battle.0 || title.0
+    if dialogue.active
+        || fade.busy()
+        || running.active()
+        || menu.0
+        || shop.0
+        || battle.0
+        || title.0
+        || vehicles.as_ref().is_some_and(|v| v.riding())
     {
         return;
     }

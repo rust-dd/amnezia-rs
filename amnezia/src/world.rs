@@ -21,8 +21,11 @@ mod route;
 mod water;
 
 pub use autonomy::AutoMove;
+pub(crate) use autonomy::MoveGuards;
 pub use movement::{Character, MoveQueue, RouteAction, walk};
+pub(crate) use movement::{dir_delta, step_secs_for_speed};
 pub use route::RouteStepper;
+pub(crate) use route::{StepEffect, drive as drive_route};
 
 /// Developer start override. `None` uses the faithful LMT start (`start.ron`,
 /// the intro map_0005), whose autorun cutscene the interpreter now runs; set it

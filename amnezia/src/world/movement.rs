@@ -19,14 +19,11 @@ use std::collections::VecDeque;
 /// Seconds a character spends tweening across one tile at RM2000 move speed 4
 /// (the hero's pace, and every scripted route's). Autonomous event movement
 /// scales this per the event's move speed via [`step_secs_for_speed`].
-const STEP_DURATION: f32 = 0.18;
+const STEP_DURATION: f32 = 8.0 / 60.0;
 
 /// Tween seconds for one tile at RM2000 move `speed` (1 slowest … 6 fastest).
-/// EasyRPG advances a move by `1 << (1 + speed)` per frame, so each speed step
-/// halves the time; anchoring speed 4 at [`STEP_DURATION`] keeps the hero's feel
-/// while scaling the rest by that same power of two (speed 3 = 0.36s, speed 5 =
-/// 0.09s). The speed is clamped to the valid 1–6 range.
-pub(super) fn step_secs_for_speed(speed: u32) -> f32 {
+/// Each tile is 256 subpixels; movement advances `1 << (1 + speed)` per 60 Hz frame.
+pub(crate) fn step_secs_for_speed(speed: u32) -> f32 {
     STEP_DURATION * 2f32.powi(4 - speed.clamp(1, 6) as i32)
 }
 
@@ -127,7 +124,12 @@ impl MoveQueue {
     /// Advance the current step by `dt`, applying instant actions in order and
     /// starting the next tween. Returns the world-space tile-center position to
     /// render at this frame, or `None` when the character is idle.
-    fn advance<C: Character>(&mut self, ch: &mut C, data: &MapData, dt: f32) -> Option<Vec2> {
+    pub(crate) fn advance<C: Character>(
+        &mut self,
+        ch: &mut C,
+        data: &MapData,
+        dt: f32,
+    ) -> Option<Vec2> {
         let step = self.step_secs;
         loop {
             if let Some(tween) = self.active.as_mut() {
@@ -186,7 +188,7 @@ fn center(data: &MapData, x: i32, y: i32) -> Vec2 {
 }
 
 /// The tile delta for a facing direction.
-pub(super) fn dir_delta(dir: u32) -> (i32, i32) {
+pub(crate) fn dir_delta(dir: u32) -> (i32, i32) {
     match dir {
         DIR_UP => (0, -1),
         DIR_RIGHT => (1, 0),

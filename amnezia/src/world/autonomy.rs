@@ -48,7 +48,7 @@ pub(crate) struct MoveGuards<'w> {
 
 impl MoveGuards<'_> {
     /// Whether any pause condition is active, freezing every NPC this frame.
-    pub(super) fn paused(&self) -> bool {
+    pub(crate) fn paused(&self) -> bool {
         self.dialogue.active
             || self.fade.busy()
             || self.running.active()
@@ -66,7 +66,7 @@ impl MoveGuards<'_> {
     /// every frame regardless of both (see `Game_Character::Update`, where
     /// `IsMoveRouteOverwritten` short-circuits the interpreter/message stop gate), so
     /// cutscene movement (the intro walking the hero in) plays while the event runs.
-    pub(super) fn forced_route_paused(&self) -> bool {
+    pub(crate) fn forced_route_paused(&self) -> bool {
         self.fade.busy()
             || self.menu.0
             || self.shop.0

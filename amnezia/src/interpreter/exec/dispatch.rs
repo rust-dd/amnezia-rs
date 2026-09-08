@@ -401,8 +401,13 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                 && let Ok(player) = x.subsystems.flow.players.single()
             {
                 x.variables.set(*vm as u32, map.map_id as i32);
-                x.variables.set(*vx as u32, player.tile_x);
-                x.variables.set(*vy as u32, player.tile_y);
+                let (px, py, _) = x.subsystems.mapfx.vehicles.hero_position((
+                    player.tile_x,
+                    player.tile_y,
+                    player.dir,
+                ));
+                x.variables.set(*vx as u32, px);
+                x.variables.set(*vy as u32, py);
             }
             frame.ip += 1;
             Flow::Advance
@@ -422,6 +427,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Yield
         }
         HALT_ALL_MOVEMENT => {
+            x.subsystems.mapfx.vehicles.clear_motion();
             if let Ok((mut queue, mut stepper)) = x.hero_queue.single_mut() {
                 *queue = MoveQueue::default();
                 *stepper = RouteStepper::default();
@@ -505,13 +511,13 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             x.subsystems.flow.title.0 = true;
             Flow::Stop
         }
+        ENTER_EXIT_VEHICLE => super::vehicles::toggle(frame, x),
+        SET_VEHICLE_LOCATION => super::vehicles::locate(frame, &command, x),
         CHANGE_CONDITION
         | CHANGE_SYSTEM_BGM
         | CHANGE_SCREEN_TRANSITIONS
         | FLASH_SPRITE
         | CHANGE_PBG
-        | ENTER_EXIT_VEHICLE
-        | SET_VEHICLE_LOCATION
         | COMMENT
         | COMMENT_2
         | END_MARKER => {

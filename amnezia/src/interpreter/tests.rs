@@ -32,6 +32,7 @@ use bevy::prelude::*;
 
 mod actor_commands;
 mod outcomes;
+mod vehicles;
 
 const CONTROL_SWITCHES: u32 = 10210;
 const CONDITIONAL_BRANCH: u32 = 12010;

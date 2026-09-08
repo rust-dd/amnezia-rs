@@ -36,6 +36,7 @@ mod text;
 mod tiles;
 mod timer;
 mod title;
+mod vehicles;
 mod vitals;
 mod world;
 
@@ -105,5 +106,6 @@ fn main() -> AppExit {
         .add_plugins(terms::TermsPlugin)
         .add_plugins(timer::GameClockPlugin)
         .add_plugins(session::SessionPlugin)
+        .add_plugins(vehicles::VehiclePlugin)
         .run()
 }

@@ -113,6 +113,7 @@ fn interact(
     shop: Res<ShopOpen>,
     battle: Res<BattleActive>,
     title: Res<TitleActive>,
+    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut dialogue: ResMut<Dialogue>,
     mut running: ResMut<RunningEvent>,
     players: Query<&Player>,
@@ -137,6 +138,9 @@ fn interact(
         return;
     }
     if running.active() {
+        return;
+    }
+    if vehicles.as_ref().is_some_and(|v| v.blocks_action()) {
         return;
     }
     let Ok(player) = players.single() else {

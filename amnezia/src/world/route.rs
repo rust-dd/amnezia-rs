@@ -17,14 +17,14 @@ use crate::audio::AudioRequest;
 use crate::player::Player;
 use crate::state::{Inventory, Party, Switches, Variables};
 use bevy::prelude::*;
-use stepper::StepEffect;
+pub(crate) use stepper::StepEffect;
 
 /// One frame of a character's stepper: the tile delta of the step it enqueued
 /// this tick (for the caller to sync the logical event tile), plus the side
 /// effects to apply.
-struct Driven {
-    moved: Option<(i32, i32)>,
-    effects: Vec<StepEffect>,
+pub(crate) struct Driven {
+    pub(crate) moved: Option<(i32, i32)>,
+    pub(crate) effects: Vec<StepEffect>,
 }
 
 impl Driven {
@@ -43,7 +43,7 @@ impl Driven {
 /// effects for the caller to apply. The effects are returned rather than applied
 /// here so `can_step` — which borrows the switches and events — is dropped before
 /// the caller mutates them.
-fn drive<C: Character>(
+pub(crate) fn drive<C: Character>(
     ch: &mut C,
     queue: &mut MoveQueue,
     stepper: &mut RouteStepper,

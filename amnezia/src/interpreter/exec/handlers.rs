@@ -26,6 +26,7 @@ pub(super) fn control_variables(frame: &mut Frame, command: &EventCommand, x: &m
             frame.event_id,
             &x.subsystems.flow.players,
             &x.event_movers,
+            &x.subsystems.mapfx.vehicles,
         )
     } else {
         None
@@ -78,6 +79,7 @@ pub(super) fn conditional_branch(frame: &mut Frame, command: &EventCommand, x: &
                 frame.event_id,
                 &x.subsystems.flow.players,
                 &x.event_movers,
+                &x.subsystems.mapfx.vehicles,
             )
             .map(|(_, _, dir)| dir)
         } else {
@@ -148,9 +150,14 @@ pub(super) fn change_event_location(
 pub(super) fn move_event(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -> Flow {
     let target = command.params.first().copied().unwrap_or(0);
     let route = RouteStepper::from_move_event(&command.params);
-    if target == 10001 {
+    if (10002..=10004).contains(&target) {
+        x.subsystems.mapfx.vehicles.set_route(target, route);
+    } else if target == 10001 && x.subsystems.mapfx.vehicles.riding() {
+        let target = 10002 + x.subsystems.mapfx.vehicles.save.riding.unwrap() as i32;
+        x.subsystems.mapfx.vehicles.set_route(target, route);
+    } else if target == 10001 {
         if let Ok((_, mut stepper)) = x.hero_queue.single_mut() {
-            *stepper = route;
+            *stepper = route.with_speed(stepper.speed());
         }
     } else {
         let id = if target == 10005 {
@@ -163,7 +170,7 @@ pub(super) fn move_event(frame: &mut Frame, command: &EventCommand, x: &mut Exec
             .iter_mut()
             .find(|(e, _, _)| e.id as i32 == id)
         {
-            *stepper = route;
+            *stepper = route.with_speed(stepper.speed());
         }
     }
     frame.ip += 1;

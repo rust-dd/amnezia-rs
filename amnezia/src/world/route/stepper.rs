@@ -23,7 +23,7 @@ const DIAGONALS: [(i32, i32); 4] = [(1, -1), (1, 1), (-1, 1), (-1, -1)];
 /// A side-effect a route command produces that the driving system applies to
 /// shared state: a game-switch toggle (32/33), a sound effect (35), or a
 /// transparency change (40/41) applied to the character's sprite.
-pub(super) enum StepEffect {
+pub(crate) enum StepEffect {
     Switch(u32, bool),
     Sound { name: String, params: [i32; 3] },
     Transparency(u8),
@@ -63,6 +63,15 @@ impl Default for RouteStepper {
 }
 
 impl RouteStepper {
+    pub fn speed(&self) -> u32 {
+        self.speed
+    }
+
+    pub fn with_speed(mut self, speed: u32) -> Self {
+        self.speed = speed.clamp(1, 6);
+        self
+    }
+
     fn new(
         commands: Vec<MoveCommandDef>,
         repeat: bool,
