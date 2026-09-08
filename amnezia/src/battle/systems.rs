@@ -145,14 +145,22 @@ pub(super) fn start_on_request(
     )));
 }
 
-/// Debug-only: F6 starts a sample fight so the battle can be exercised before the
-/// interpreter emits [`BattleRequest`]. Remove when opcode 10710 is wired.
+/// Opt-in sample fight; never interrupt a scripted scene.
 pub(super) fn debug_trigger(
     keys: Res<ButtonInput<KeyCode>>,
     active: Res<BattleActive>,
+    scene: crate::world::ScenePause,
+    running: Option<Res<crate::interpreter::RunningEvent>>,
+    dialogue: Option<Res<crate::dialogue::Dialogue>>,
     mut requests: MessageWriter<BattleRequest>,
 ) {
-    if !active.0 && keys.just_pressed(KeyCode::F6) {
+    if !active.0
+        && keys.just_pressed(KeyCode::F6)
+        && crate::debug::tools_enabled()
+        && !scene.paused()
+        && !running.as_ref().is_some_and(|r| r.active())
+        && !dialogue.as_ref().is_some_and(|d| d.active)
+    {
         requests.write(BattleRequest {
             troop_id: DEBUG_TROOP,
             allow_escape: true,

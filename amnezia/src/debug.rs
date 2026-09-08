@@ -1,7 +1,4 @@
-//! A developer HUD and passability overlay for diagnosing movement and events.
-//! The HUD (top-left) always shows the current map, the hero's tile and facing,
-//! and whether an event is running; pressing `P` toggles a red overlay marking
-//! every impassable tile of the current map (re-toggle after a map change).
+//! Opt-in developer diagnostics, excluded from release gameplay.
 
 use crate::font::GameFont;
 use crate::interpreter::{ParallelPool, RunningEvent};
@@ -20,10 +17,17 @@ struct PassOverlay;
 #[derive(Resource, Default)]
 struct OverlayShown(bool);
 
+pub(crate) fn tools_enabled() -> bool {
+    cfg!(test) || (cfg!(debug_assertions) && std::env::args().any(|arg| arg == "--debug-tools"))
+}
+
 pub struct DebugPlugin;
 
 impl Plugin for DebugPlugin {
     fn build(&self, app: &mut App) {
+        if !cfg!(debug_assertions) {
+            return;
+        }
         app.init_resource::<OverlayShown>()
             .add_systems(Startup, spawn_hud)
             .add_systems(Update, (update_hud, toggle_overlay));
@@ -47,19 +51,31 @@ fn spawn_hud(mut commands: Commands, font: Res<GameFont>) {
         },
         GlobalZIndex(2000),
         DebugHud,
+        Visibility::Hidden,
     ));
 }
 
 fn update_hud(
+    keys: Res<ButtonInput<KeyCode>>,
     data: Option<Res<MapData>>,
     running: Res<RunningEvent>,
     parallel: Res<ParallelPool>,
     players: Query<&Player>,
-    mut hud: Query<&mut Text, With<DebugHud>>,
+    mut hud: Query<(&mut Text, &mut Visibility), With<DebugHud>>,
 ) {
-    let Ok(mut text) = hud.single_mut() else {
+    let Ok((mut text, mut visibility)) = hud.single_mut() else {
         return;
     };
+    if keys.just_pressed(KeyCode::F3) {
+        *visibility = if *visibility == Visibility::Hidden {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+    if *visibility == Visibility::Hidden {
+        return;
+    }
     let map = data.map(|d| d.map_id).unwrap_or(0);
     let (px, py, dir) = match players.single() {
         Ok(p) => (p.tile_x, p.tile_y, p.dir),
@@ -80,7 +96,7 @@ fn toggle_overlay(
     data: Option<Res<MapData>>,
     existing: Query<Entity, With<PassOverlay>>,
 ) {
-    if !keys.just_pressed(KeyCode::KeyP) {
+    if !tools_enabled() || !keys.just_pressed(KeyCode::KeyP) {
         return;
     }
     shown.0 = !shown.0;

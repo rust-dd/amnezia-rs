@@ -431,7 +431,7 @@ fn position_offset(position: u32, height: f32) -> f32 {
     }
 }
 
-/// Debug-only: F7 plays animation 1 ("Ron pusztakez") at screen centre so the
+/// Debug-only: F4 plays animation 1 ("Ron pusztakez") at screen centre so the
 /// renderer can be verified on the map, but only while nothing else owns input.
 fn debug_preview(
     keys: Res<ButtonInput<KeyCode>>,
@@ -441,10 +441,10 @@ fn debug_preview(
     title: Res<TitleActive>,
     mut plays: MessageWriter<PlayAnimation>,
 ) {
-    if battle.0 || menu.0 || shop.0 || title.0 {
+    if !crate::debug::tools_enabled() || battle.0 || menu.0 || shop.0 || title.0 {
         return;
     }
-    if keys.just_pressed(KeyCode::F7) {
+    if keys.just_pressed(KeyCode::F4) {
         plays.write(PlayAnimation {
             anim_id: 1,
             targets: vec![AnimAnchor {

@@ -252,7 +252,20 @@ pub fn shop_tick(time: Res<Time>, mut screen: ResMut<Screen>) {
 
 /// Debug-only triggers so the shop/inn UI can be exercised without the
 /// interpreter: F7 opens a full buy+sell shop, F8 an inn.
-pub fn debug_triggers(keys: Res<ButtonInput<KeyCode>>, mut requests: MessageWriter<ShopRequest>) {
+pub fn debug_triggers(
+    keys: Res<ButtonInput<KeyCode>>,
+    scene: crate::world::ScenePause,
+    running: Option<Res<crate::interpreter::RunningEvent>>,
+    dialogue: Option<Res<crate::dialogue::Dialogue>>,
+    mut requests: MessageWriter<ShopRequest>,
+) {
+    if !crate::debug::tools_enabled()
+        || scene.paused()
+        || running.as_ref().is_some_and(|r| r.active())
+        || dialogue.as_ref().is_some_and(|d| d.active)
+    {
+        return;
+    }
     if keys.just_pressed(KeyCode::F7) {
         requests.write(ShopRequest::OpenShop {
             items: vec![1, 2, 3, 4],
