@@ -9,6 +9,8 @@ mod appearance;
 mod assets;
 mod audio;
 mod battle;
+#[cfg(test)]
+mod campaign_tests;
 mod choice;
 mod conditions;
 mod debug;

@@ -302,6 +302,7 @@ fn on_title_entered(
 
 /// Hold the title until a new game or loaded map arrives. A failed load returns
 /// control to the title menu and restarts its theme.
+#[allow(clippy::too_many_arguments)]
 fn drive_continue(
     mut title: ResMut<TitleActive>,
     mut state: ResMut<TitleState>,

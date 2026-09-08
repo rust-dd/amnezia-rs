@@ -48,6 +48,7 @@ impl Plugin for ConditionsPlugin {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn step(
     data: Res<MapData>,
     actors: Res<GameData>,

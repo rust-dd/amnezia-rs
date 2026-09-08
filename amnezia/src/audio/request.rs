@@ -80,6 +80,7 @@ impl AudioRequest {
     /// `0..=100` `volume`, and its percent `tempo`. An `(OFF)`/empty name stops
     /// the BGM. Used by the battle system for the battle / victory / game-over
     /// music.
+    #[cfg(test)]
     pub fn bgm(name: &str, volume: u32, tempo: u32) -> Self {
         if name.is_empty() || name == BGM_OFF {
             return Self::StopBgm;
