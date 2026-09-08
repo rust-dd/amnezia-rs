@@ -38,7 +38,7 @@ const MEMBER_TOP: f32 = 8.0;
 
 /// Content-list row pitch: the fixed line height composed text is laid out with,
 /// so the content cursor lands on the right row, and the text's top inset.
-const CONTENT_LINE: f32 = 30.0;
+const CONTENT_LINE: f32 = crate::font::UI_LINE_PX;
 const CONTENT_TOP: f32 = 16.0;
 
 /// The whole-screen overlay; per-window nodes toggle inside it by screen.
@@ -234,6 +234,7 @@ fn spawn_content_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>
                 text_font(font),
                 TextColor(Color::WHITE),
                 LineHeight::Px(CONTENT_LINE),
+                TextLayout::no_wrap(),
                 Node {
                     position_type: PositionType::Absolute,
                     left: Val::Px(16.0),
@@ -341,13 +342,11 @@ fn text_at(font: &GameFont, x: f32, y: f32) -> impl Bundle {
     )
 }
 
-/// The shared 20px game-font styling. RM2000 text is ~12px; at ×3 that would be
-/// ~36px, but 20px keeps the tightly-packed status fields legible and inside their
-/// boxes (the task's blessed compromise).
+/// The native 12px font cell at the UI's threefold coordinate scale.
 fn text_font(font: &GameFont) -> TextFont {
     TextFont {
         font: FontSource::Handle(font.0.clone()),
-        font_size: FontSize::Px(20.0),
+        font_size: FontSize::Px(crate::font::UI_FONT_PX),
         ..default()
     }
 }

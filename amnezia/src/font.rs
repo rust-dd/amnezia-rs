@@ -1,16 +1,14 @@
-//! The game font: RM2000's built-in pixel font, embedded in the binary and
-//! registered as a Bevy asset before any UI is built. RPG Maker 2000 ships no font
-//! of its own — RPG_RT draws text with a built-in bitmap face — so the faithful font
-//! is EasyRPG's free reproduction of it, "RMG2000". `fonts/rmg2000.ttf` is that
-//! bitmap font converted to a TrueType outline by the `build_font` tool in
-//! `amnezia-convert` (the Hungarian ő/ű come from EasyRPG's ttyp0 fallback, and the
-//! menu cursor / arrows / em dash are drawn in since RM2000 renders those
-//! graphically, not as characters).
+//! The database-selected Western font, using EasyRPG's bitmap-compatible faces.
+//! Outlines preserve the 6×12 source cells; UI coordinates are scaled threefold.
 
 use bevy::prelude::*;
 use bevy::text::FontSmoothing;
 
-const FONT_BYTES: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/rmg2000.ttf"));
+const RM2000: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/rm2000.ttf"));
+const RMG2000: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/rmg2000.ttf"));
+
+pub const UI_FONT_PX: f32 = 36.0;
+pub const UI_LINE_PX: f32 = 48.0;
 
 /// Handle to the loaded game font, shared by every text surface.
 #[derive(Resource)]
@@ -21,7 +19,7 @@ pub struct FontPlugin;
 impl Plugin for FontPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PreStartup, load_font)
-            .add_systems(Update, keep_text_crisp);
+            .add_systems(Update, (keep_text_crisp, add_text_shadows));
     }
 }
 
@@ -39,7 +37,43 @@ fn keep_text_crisp(mut text_fonts: Query<&mut TextFont>) {
     }
 }
 
+fn add_text_shadows(
+    mut commands: Commands,
+    text: Query<Entity, (With<Text>, Without<TextShadow>)>,
+) {
+    for entity in &text {
+        commands.entity(entity).insert(TextShadow {
+            offset: Vec2::splat(3.0),
+            color: Color::BLACK,
+        });
+    }
+}
+
 fn load_font(mut commands: Commands, mut fonts: ResMut<Assets<Font>>) {
-    let font = Font::from_bytes(FONT_BYTES.to_vec());
+    let system = crate::assets::load_ron::<amnezia_data::SystemDef>(&format!(
+        "{}/system.ron",
+        crate::assets::asset_root(),
+    ));
+    let font = Font::from_bytes(font_bytes(system.font_id).to_vec());
     commands.insert_resource(GameFont(fonts.add(font)));
+}
+
+fn font_bytes(id: u32) -> &'static [u8] {
+    if id == 1 { RMG2000 } else { RM2000 }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn original_font_selection_uses_rm2000_not_rmg2000() {
+        let system = crate::assets::load_ron::<amnezia_data::SystemDef>(&format!(
+            "{}/system.ron",
+            crate::assets::asset_root(),
+        ));
+        assert_eq!(system.font_id, 0);
+        assert_eq!(font_bytes(system.font_id), RM2000);
+        assert_ne!(font_bytes(0), font_bytes(1));
+    }
 }

@@ -19,9 +19,7 @@ use super::{MenuScreen, derive, equip, items, skills, status, use_item};
 /// The End Game confirmation rows, in cursor order (Igen = yes returns to title).
 pub(super) const END_GAME_ROWS: [&str; 2] = ["Igen", "Nem"];
 
-/// The Hungarian normal-condition term shown in the status window. The game
-/// tracks no persistent field states, so a member on the roster always reads
-/// healthy (RM2000 `Window_Base::DrawActorState` falls back to the normal term).
+/// The normal-condition label when no persistent affliction is present.
 const CONDITION_OK: &str = "Jó";
 
 /// One party member's status-window figures: the FaceSet portrait, identity, and
@@ -70,7 +68,10 @@ pub(super) fn members(
                     name: i18n::tr(&def.name),
                     title: i18n::tr(&def.title),
                     level,
-                    condition: CONDITION_OK.to_string(),
+                    condition: match crate::conditions::names(vitals, id) {
+                        states if states.is_empty() => CONDITION_OK.to_string(),
+                        states => states,
+                    },
                     exp,
                     hp,
                     max_hp,

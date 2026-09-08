@@ -162,7 +162,7 @@ fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<Asset
                 bottom: Val::Px(56.0),
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::Center,
-                row_gap: Val::Px(10.0),
+                row_gap: Val::Px(0.0),
                 ..default()
             })
             .with_children(|menu| {
@@ -172,10 +172,11 @@ fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<Asset
                         Text::new(row_text(label, i == cursor)),
                         TextFont {
                             font: FontSource::Handle(font.0.clone()),
-                            font_size: FontSize::Px(20.0),
+                            font_size: FontSize::Px(crate::font::UI_FONT_PX),
                             ..default()
                         },
                         TextColor(if enabled { ENABLED } else { DISABLED }),
+                        bevy::text::LineHeight::Px(crate::font::UI_LINE_PX),
                         TitleRow(i),
                     ));
                 }

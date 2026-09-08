@@ -29,12 +29,12 @@ pub struct SoundDef {
     pub balance: u32,
 }
 
-/// The audio half of the RM2000 system definition (see `lcf::System`), read by
-/// the battle system (and later the title/inn scenes): the music tracks and
-/// sound effects each scene plays. `enemy_defeated_se` is liblcf's
-/// `enemy_death_se`.
+/// The system font selection and scene audio, converted from `lcf::System`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SystemDef {
+    /// Western font selection: 0 = RM2000-compatible, 1 = RMG2000-compatible.
+    #[serde(default)]
+    pub font_id: u32,
     pub title_music: MusicDef,
     pub battle_music: MusicDef,
     pub battle_end_music: MusicDef,

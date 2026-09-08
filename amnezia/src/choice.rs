@@ -110,10 +110,11 @@ fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<Asset
                 Text::new(String::new()),
                 TextFont {
                     font: FontSource::Handle(font.0.clone()),
-                    font_size: FontSize::Px(20.0),
+                    font_size: FontSize::Px(crate::font::UI_FONT_PX),
                     ..default()
                 },
                 TextColor(Color::WHITE),
+                bevy::text::LineHeight::Px(crate::font::UI_LINE_PX),
                 ChoiceText,
             ));
         });

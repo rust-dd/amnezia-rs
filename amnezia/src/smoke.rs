@@ -20,6 +20,10 @@ impl Plugin for SmokePlugin {
             "battle"
         } else if std::env::args().any(|arg| arg == "--smoke-panorama") {
             "panorama"
+        } else if std::env::args().any(|arg| arg == "--smoke-font") {
+            "font"
+        } else if std::env::args().any(|arg| arg == "--smoke-menu") {
+            "menu"
         } else {
             "intro"
         };
@@ -48,6 +52,7 @@ fn capture(world: &mut World, label: &str) {
 fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let advance = frame > 90
+        && world.resource::<SmokeRun>().scenario != "font"
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active
             || world.resource::<crate::battle::BattleActive>().0);
@@ -74,6 +79,12 @@ fn drive(world: &mut World) {
     let scenario = world.resource::<SmokeRun>().scenario;
     if frame == 150 && scenario != "intro" {
         start_scenario(world, scenario);
+    }
+    if frame == 300 && scenario == "menu" {
+        world.resource_mut::<crate::menu::MenuOpen>().0 = true;
+        world
+            .resource_mut::<crate::state::Party>()
+            .restore(vec![1, 2, 3, 4]);
     }
     if frame.is_multiple_of(300) {
         let map = world.resource::<crate::world::MapData>().map_id;
@@ -116,6 +127,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
     crate::session::clear_transient(world);
     world.insert_resource(crate::teleport::Fade::default());
     world.insert_resource(crate::teleport::PendingTeleport::default());
+    world.insert_resource(crate::player::HeroHidden::default());
     let commands = if scenario == "airship" {
         let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(
             "{}/maps/map_0125.ron",
@@ -148,6 +160,52 @@ fn start_scenario(world: &mut World, scenario: &str) {
             indent: 0,
             string: "Cave1".into(),
             params: vec![0, 2, 1, 0, 0, 0],
+        }]
+    } else if scenario == "font" {
+        vec![
+            EventCommand {
+                code: 10810,
+                indent: 0,
+                string: String::new(),
+                params: vec![3, 15, 6],
+            },
+            EventCommand {
+                code: 10130,
+                indent: 0,
+                string: "Ron".into(),
+                params: vec![0, 0, 0],
+            },
+            EventCommand {
+                code: 10110,
+                indent: 0,
+                string: "Hát... hol vagyok?".into(),
+                params: vec![],
+            },
+            EventCommand {
+                code: 20110,
+                indent: 0,
+                string: "Árvíztűrő tükörfúrógép.".into(),
+                params: vec![],
+            },
+            EventCommand {
+                code: 20110,
+                indent: 0,
+                string: "Őrült éjszaka volt!".into(),
+                params: vec![],
+            },
+            EventCommand {
+                code: 20110,
+                indent: 0,
+                string: "0123456789 ÁÉÍÓÖŐÚÜŰ".into(),
+                params: vec![],
+            },
+        ]
+    } else if scenario == "menu" {
+        vec![EventCommand {
+            code: 10810,
+            indent: 0,
+            string: String::new(),
+            params: vec![3, 15, 6],
         }]
     } else {
         vec![EventCommand {

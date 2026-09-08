@@ -18,6 +18,7 @@ pub fn convert_system(input: &Path, output: &Path) -> Result<()> {
     let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
     let parsed = lcf::parse_system(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
     let system = SystemDef {
+        font_id: parsed.font_id,
         title_music: music(parsed.title_music),
         battle_music: music(parsed.battle_music),
         battle_end_music: music(parsed.battle_end_music),

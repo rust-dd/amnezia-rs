@@ -62,16 +62,16 @@ pub(super) fn compose_status(
         out.push_str(&format!("{conditions}\n"));
     }
     out.push_str(&format!(
-        "{} {level}   {exp}\n\n",
+        "{} {level}   {exp}\n",
         terms.label(&t.level, "Szint")
     ));
     out.push_str(&format!(
-        "{} {hp}/{max_hp}   {} {sp}/{max_sp}\n\n",
+        "{} {hp}/{max_hp}   {} {sp}/{max_sp}\n",
         terms.label(&t.hp_short, "HP"),
         terms.label(&t.sp_short, "SP")
     ));
     out.push_str(&format!(
-        "{} {}   {} {}\n{} {}   {} {}\n\n",
+        "{} {}   {} {}\n{} {}   {} {}\n",
         terms.label(&t.attack, "Támadás"),
         stats[0],
         terms.label(&t.defense, "Védelem"),
@@ -98,7 +98,7 @@ pub(super) fn compose_status(
         };
         out.push_str(&format!("{label}: {gear}\n"));
     }
-    out.push_str("\n[Esc] vissza\n");
+    out.push_str("[Esc] vissza\n");
     out
 }
 

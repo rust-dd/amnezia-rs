@@ -58,6 +58,7 @@ fn converts_ldb_to_system_ron() {
     // battle_music (0x20): "Battle2" volume 90 tempo 100; battle_end_music (0x21):
     // "Victory"; gameover_music (0x26): "GameOver"; a few battle SE.
     let mut section = Vec::new();
+    section.extend(subchunk(0x48, &varint(1)));
     section.extend(subchunk(
         0x20,
         &nested(&[subchunk(0x01, b"Battle2"), subchunk(0x03, &varint(90))]),
@@ -76,7 +77,8 @@ fn converts_ldb_to_system_ron() {
     amnezia_convert::convert_system(&input, &output).unwrap();
 
     let text = std::fs::read_to_string(output.join("system.ron")).unwrap();
-    let system: SystemDef = ron::from_str(&text).unwrap();
+    let system = ron::from_str::<SystemDef>(&text).unwrap();
+    assert_eq!(system.font_id, 1);
 
     assert_eq!(
         system.battle_music,

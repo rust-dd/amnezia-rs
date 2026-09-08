@@ -232,11 +232,18 @@ fn compose_status(battle: &Battle) -> String {
                 " "
             };
             let state = if f.alive() {
-                format!("HP {}/{}  SP {}/{}", f.hp.max(0), f.max_hp, f.sp, f.max_sp)
+                format!(
+                    "HP{:>3}/{:<3} SP{:>3}/{:<3}",
+                    f.hp.max(0),
+                    f.max_hp,
+                    f.sp,
+                    f.max_sp
+                )
             } else {
                 "kiütve".to_string()
             };
-            format!("{mark} {}  {state}", i18n::tr(&f.name))
+            let name = i18n::tr(&f.name).chars().take(10).collect::<String>();
+            format!("{mark}{name:<10} {state}")
         })
         .collect::<Vec<_>>()
         .join("\n")
@@ -245,7 +252,10 @@ fn compose_status(battle: &Battle) -> String {
 /// The full-width message window body: the recent battle log, plus the advance
 /// prompt once the fight has ended.
 fn compose_message(battle: &Battle) -> String {
-    let mut out = battle.log_tail();
+    let log = battle.log_tail();
+    let lines = log.lines().collect::<Vec<_>>();
+    let count = if battle.phase == Phase::Outcome { 3 } else { 4 };
+    let mut out = lines[lines.len().saturating_sub(count)..].join("\n");
     if battle.phase == Phase::Outcome {
         if !out.is_empty() {
             out.push('\n');
@@ -258,8 +268,9 @@ fn compose_message(battle: &Battle) -> String {
 /// Render menu `rows` with a `▶` cursor on the selected one.
 fn menu_rows(rows: impl Iterator<Item = String>, cursor: usize) -> String {
     let mut out = String::new();
-    for (i, row) in rows.enumerate() {
-        out.push_str(if i == cursor { "▶ " } else { "  " });
+    let start = cursor.saturating_sub(3);
+    for (i, row) in rows.enumerate().skip(start).take(4) {
+        out.push_str(if i == cursor { "▶" } else { " " });
         out.push_str(&row);
         out.push('\n');
     }
@@ -304,13 +315,13 @@ fn spawn_panel(
                         border: BorderRect::all(8.0),
                         center_scale_mode: SliceScaleMode::Stretch,
                         sides_scale_mode: SliceScaleMode::Stretch,
-                        max_corner_scale: 1.0,
+                        max_corner_scale: 3.0,
                     }),
                     ..default()
                 },
             ));
             panel.spawn((
-                inset_node(4.0),
+                inset_node(24.0),
                 ImageNode {
                     image: system.clone(),
                     rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
@@ -320,8 +331,10 @@ fn spawn_panel(
             ));
             panel.spawn((
                 Text::new(String::new()),
-                text_font(font, 14.0),
+                text_font(font, crate::font::UI_FONT_PX),
                 TextColor(Color::WHITE),
+                bevy::text::LineHeight::Px(crate::font::UI_LINE_PX),
+                TextLayout::no_wrap(),
                 PanelText(kind),
             ));
         });
@@ -364,7 +377,8 @@ fn strip_node() -> Node {
         position_type: PositionType::Absolute,
         bottom: Val::Px(0.0),
         height: Val::Percent(STRIP_H),
-        padding: UiRect::all(Val::Px(8.0)),
+        padding: UiRect::all(Val::Px(24.0)),
+        overflow: Overflow::clip(),
         ..default()
     }
 }

@@ -11,7 +11,7 @@ use crate::state::Inventory;
 use super::use_item;
 
 /// How many item rows fit before the list scrolls with the cursor.
-const VISIBLE_ROWS: usize = 12;
+const VISIBLE_ROWS: usize = 8;
 
 /// The held item id under `cursor`, or `None` when the cursor sits past the last
 /// held item (the blank spacer or the gold line, which select nothing). The order

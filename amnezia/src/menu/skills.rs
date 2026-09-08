@@ -23,7 +23,7 @@ use super::derive;
 use super::items::viewport_start;
 
 /// How many skill rows fit before the list scrolls with the cursor.
-const VISIBLE_ROWS: usize = 12;
+const VISIBLE_ROWS: usize = 8;
 
 /// Whether `skill` can be cast on an ally from the field menu: a normal
 /// recovery skill aimed at the caster or allies.

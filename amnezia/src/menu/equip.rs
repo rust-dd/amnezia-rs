@@ -135,28 +135,25 @@ pub(super) fn compose(
     ];
     let mut cursor_line = None;
 
-    for (i, (label, &sid)) in SLOT_LABELS.iter().zip(slots.iter()).enumerate() {
-        if picking.is_none() && i == slot {
-            cursor_line = Some(lines.len());
-        }
-        lines.push(format!("{label}: {}", item_name(sid, data)));
-    }
-    lines.push(String::new());
-
     match picking {
         None => {
-            for (label, value) in STAT_LABELS.iter().zip(current.iter()) {
-                lines.push(format!("{label} {value}"));
+            for (i, (label, &sid)) in SLOT_LABELS.iter().zip(slots.iter()).enumerate() {
+                if i == slot {
+                    cursor_line = Some(lines.len());
+                }
+                lines.push(format!("{label}: {}", item_name(sid, data)));
             }
+            lines.push(String::new());
+            stat_rows(&mut lines, current, None);
             if def.fix_equipment {
-                lines.push(String::new());
                 lines.push("(a felszerelés rögzített)".to_string());
             }
         }
         Some(cursor) => {
             let cands = candidates(member, slot, data, party, inventory);
             lines.push(format!("{} cseréje:", SLOT_LABELS[slot.min(4)]));
-            for (i, &cid) in cands.iter().enumerate() {
+            let start = super::items::viewport_start(cursor, cands.len(), 6);
+            for (i, &cid) in cands.iter().enumerate().skip(start).take(6) {
                 if i == cursor {
                     cursor_line = Some(lines.len());
                 }
@@ -171,18 +168,24 @@ pub(super) fn compose(
             let new_id = cands.get(cursor).copied().unwrap_or(0);
             let after = equipment::preview_slots(slots, slot, new_id, &data.items);
             let preview = derive::stats_with_slots(def, level, &data.items, after);
-            for i in 0..STAT_LABELS.len() {
-                lines.push(format!(
-                    "{} {} → {}",
-                    STAT_LABELS[i], current[i], preview[i]
-                ));
-            }
+            stat_rows(&mut lines, current, Some(preview));
         }
     }
 
-    lines.push(String::new());
     lines.push("[Esc] vissza".to_string());
     (lines.join("\n"), cursor_line)
+}
+
+fn stat_rows(lines: &mut Vec<String>, current: [u32; 4], preview: Option<[u32; 4]>) {
+    for pair in [0..2, 2..4] {
+        let row = pair
+            .map(|i| match preview {
+                Some(after) => format!("{} {} → {}", STAT_LABELS[i], current[i], after[i]),
+                None => format!("{} {}", STAT_LABELS[i], current[i]),
+            })
+            .collect::<Vec<_>>();
+        lines.push(row.join("   "));
+    }
 }
 
 #[cfg(test)]

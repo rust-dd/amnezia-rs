@@ -22,10 +22,8 @@ const FACE_CELL: f32 = 48.0;
 const FACE_BOX: f32 = 144.0;
 /// The `System.png` windowskin frame is an 8px border in 320×240 → 24px at ×3.
 const BORDER: f32 = 24.0;
-/// RM2000 message text sits on a 16px line pitch → 48px at ×3. The glyphs are a
-/// touch smaller than the full 12px cell (a hair under the faithful 36) so they
-/// read like the original rather than filling the line.
-const FONT_PX: f32 = 32.0;
+/// The native 12px bitmap cell and 16px line pitch, scaled threefold.
+const FONT_PX: f32 = crate::font::UI_FONT_PX;
 const LINE_PX: f32 = 48.0;
 /// `MESSAGE_BOX_HEIGHT` (80) at ×3: the fixed full-width bottom strip.
 const BOX_H: f32 = 240.0;

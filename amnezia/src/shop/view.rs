@@ -129,7 +129,8 @@ fn list_rows(
         out.push_str("  (nincs áru)\n");
         return;
     }
-    for (i, &id) in ids.iter().enumerate() {
+    let start = cursor.saturating_sub(6);
+    for (i, &id) in ids.iter().enumerate().skip(start).take(7) {
         let Some(item) = data.item(id) else {
             continue;
         };
@@ -188,6 +189,7 @@ pub fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<A
                 top: Val::Px(40.0),
                 bottom: Val::Px(40.0),
                 padding: UiRect::all(Val::Px(16.0)),
+                overflow: Overflow::clip(),
                 ..default()
             },
             Visibility::Hidden,
@@ -222,10 +224,12 @@ pub fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<A
                 Text::new(String::new()),
                 TextFont {
                     font: FontSource::Handle(font.0.clone()),
-                    font_size: FontSize::Px(20.0),
+                    font_size: FontSize::Px(crate::font::UI_FONT_PX),
                     ..default()
                 },
                 TextColor(Color::WHITE),
+                bevy::text::LineHeight::Px(crate::font::UI_LINE_PX),
+                TextLayout::no_wrap(),
                 ShopText,
             ));
         });

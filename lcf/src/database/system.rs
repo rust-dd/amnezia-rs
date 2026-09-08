@@ -59,13 +59,11 @@ impl Sound {
     }
 }
 
-/// The audio-relevant half of the RM2000 system definition: the music tracks and
-/// sound effects the title, map, and battle scenes play. The many non-audio
-/// system fields (party, transitions, battle-test data, engine limits) are read
-/// past and dropped. `enemy_defeated_se` is liblcf's `enemy_death_se` (chunk
-/// `0x33`).
+/// The system font selection and scene audio. `enemy_defeated_se` corresponds
+/// to liblcf's `enemy_death_se` (chunk `0x33`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct System {
+    pub font_id: u32,
     pub title_music: Music,
     pub battle_music: Music,
     pub battle_end_music: Music,
@@ -186,6 +184,7 @@ pub fn parse_system(bytes: &[u8]) -> Result<System, LcfError> {
     let section = find_section(bytes, SYSTEM_SECTION, LcfError::MissingSystem)?;
     let mut reader = Reader::new(section);
     let mut system = System {
+        font_id: 0,
         title_music: Music::off(),
         battle_music: Music::off(),
         battle_end_music: Music::off(),
@@ -215,6 +214,7 @@ pub fn parse_system(bytes: &[u8]) -> Result<System, LcfError> {
         let size = reader.varint()? as usize;
         let data = reader.take(size)?;
         match id {
+            0x48 => system.font_id = Reader::new(data).varint()?,
             TITLE_MUSIC => system.title_music = parse_music(data)?,
             BATTLE_MUSIC => system.battle_music = parse_music(data)?,
             BATTLE_END_MUSIC => system.battle_end_music = parse_music(data)?,
@@ -245,6 +245,14 @@ pub fn parse_system(bytes: &[u8]) -> Result<System, LcfError> {
 mod tests {
     use crate::test_util::{make_ldb, subchunk, varint};
     use crate::{LcfError, Music, Sound, parse_system};
+
+    #[test]
+    fn preserves_the_selected_system_font() {
+        for id in [0, 1] {
+            let bytes = make_ldb(&[(0x16, nested(&[subchunk(0x48, &varint(id))]))]);
+            assert_eq!(parse_system(&bytes).unwrap().font_id, id);
+        }
+    }
 
     /// Build a nested `Music`/`Sound` sub-struct: its sub-chunks then the struct's
     /// terminating id 0, as liblcf writes an embedded struct.

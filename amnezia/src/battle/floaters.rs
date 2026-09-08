@@ -25,7 +25,7 @@ const RISE_PX: f32 = 8.0;
 const NUMBER_Z: f32 = 500.0;
 
 /// Point size of the number glyphs on the fixed 320×240 overlay (1 unit = 1 px).
-const NUMBER_FONT_PX: f32 = 14.0;
+const NUMBER_FONT_PX: f32 = 12.0;
 
 /// A live floating number: `base` its RM2000 screen offset from centre (the point
 /// it popped at) and `elapsed` its age, driving the rise and fade.

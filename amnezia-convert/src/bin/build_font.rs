@@ -1,20 +1,8 @@
-//! Convert EasyRPG's RMG2000 bitmap font (the free reproduction of RPG Maker
-//! 2000's built-in font) into a TrueType outline font the Bevy text pipeline can
-//! load. RPG Maker 2000 ships no font of its own — RPG_RT draws text with a
-//! built-in bitmap face — so the faithful font is EasyRPG's reproduction of it.
+//! Convert EasyRPG's Western RM2000-compatible (ttyp0) and RMG2000-compatible
+//! bitmap faces into TrueType outlines without changing their pixel grids.
 //!
-//! Each RMG2000 glyph is 12 rows of a `u16` bitmask (bit 0 = leftmost column, row
-//! 0 = top); half-width glyphs are 6px wide, full-width 12px. RMG2000 letters rest
-//! with their body bottom on row 9, so the baseline sits there. RMG2000 lacks the
-//! Hungarian double-acute letters (ő ű Ő Ű); those come from EasyRPG's ttyp0
-//! fallback, shifted down one row to match its (one-pixel-higher) baseline. The
-//! menu cursor, arrows, and em dash the chrome renders as text are drawn in, since
-//! RM2000 renders those graphically rather than as characters.
-//!
-//! Run from the workspace root; needs the gitignored EasyRPG reference checkout:
-//!     cargo run -p amnezia-convert --bin build_font
-//! Writes amnezia/fonts/rmg2000.ttf (committed, so a normal checkout needs neither
-//! this tool nor the reference).
+//! Run `cargo run -p amnezia-convert --bin build_font` from the workspace root.
+//! The generated fonts are committed; normal builds need no reference checkout.
 
 use std::collections::BTreeMap;
 
@@ -31,6 +19,7 @@ use write_fonts::{
         loca::LocaFormat,
         maxp::Maxp,
         name::{Name, NameRecord},
+        os2::Os2,
         post::Post,
     },
     types::{FWord, GlyphId, NameId, UfWord, Version16Dot16},
@@ -54,39 +43,55 @@ const DRAWN: &[(u32, [u16; 12])] = &[
     (9660, [0, 0, 0, 0, 0, 63, 30, 12, 0, 0, 0, 0]), // ▼
     (8212, [0, 0, 0, 0, 0, 0, 63, 0, 0, 0, 0, 0]),   // — em dash
 ];
-/// Hungarian double-acute letters pulled from ttyp0 (RMG2000 has none): Ő ő Ű ű.
+/// RMG2000 lacks the Hungarian double-acute letters: Ő ő Ű ű.
 const TTYP0_FILL: &[u32] = &[336, 337, 368, 369];
 
 type Bitmap = [u16; 12];
 
 fn main() -> Result<()> {
-    let mut glyphs = parse_header(&format!("{REF}/bitmapfont_rmg2000.h"))?;
+    let mut rmg2000 = parse_header(&format!("{REF}/bitmapfont_rmg2000.h"))?;
     let ttyp0 = parse_header(&format!("{REF}/bitmapfont_ttyp0.h"))?;
     for &code in TTYP0_FILL {
-        if let (false, Some(&(full, rows))) = (glyphs.contains_key(&code), ttyp0.get(&code)) {
-            // Shift down one row so the body's baseline aligns with RMG2000.
-            let mut shifted = [0u16; 12];
-            shifted[1..].copy_from_slice(&rows[..11]);
-            glyphs.insert(code, (full, shifted));
+        if let Some(&glyph) = ttyp0.get(&code) {
+            rmg2000.entry(code).or_insert(glyph);
         }
     }
+    for (file, family, mut glyphs) in [
+        ("rm2000", "Amnezia RM2000", ttyp0),
+        ("rmg2000", "Amnezia RMG2000", rmg2000),
+    ] {
+        add_symbols(&mut glyphs);
+        let bytes = build_font(&glyphs, family)?;
+        let path = format!("amnezia/fonts/{file}.ttf");
+        std::fs::write(&path, &bytes).context("write ttf")?;
+        println!(
+            "wrote {path} ({} glyphs, {} bytes)",
+            glyphs.len(),
+            bytes.len()
+        );
+    }
+    Ok(())
+}
+
+fn add_symbols(glyphs: &mut BTreeMap<u32, (bool, Bitmap)>) {
     for &(code, rows) in DRAWN {
         glyphs.insert(code, (false, rows));
     }
     glyphs.entry(32).or_insert((false, [0; 12]));
+}
 
+fn build_font(glyphs: &BTreeMap<u32, (bool, Bitmap)>, family: &str) -> Result<Vec<u8>> {
     let mut builder = GlyfLocaBuilder::new();
-    let mut mappings: Vec<(char, GlyphId)> = Vec::new();
-    let mut metrics: Vec<LongMetric> = vec![LongMetric::new((6 * PX) as u16, 0)];
-    // Glyph id 0 is `.notdef`, an empty glyph.
+    let mut mappings = Vec::new();
+    let mut metrics = vec![LongMetric::new((6 * PX) as u16, 0)];
     builder
         .add_glyph(&Glyph::Simple(SimpleGlyph::default()))
         .map_err(|e| anyhow!("notdef: {e}"))?;
 
-    let mut gid: u16 = 1;
-    for (&code, &(full, rows)) in &glyphs {
+    let mut gid = 1u16;
+    for (&code, &(full, rows)) in glyphs {
         if code < 32 {
-            continue; // 1-31 are RM2000 control/icon glyphs
+            continue;
         }
         let path = glyph_path(full, &rows);
         let glyph = if path.elements().is_empty() {
@@ -97,7 +102,16 @@ fn main() -> Result<()> {
         builder
             .add_glyph(&Glyph::Simple(glyph))
             .map_err(|e| anyhow!("add U+{code:04X}: {e}"))?;
-        metrics.push(LongMetric::new((if full { 12 } else { 6 } * PX) as u16, 0));
+        let left = rows
+            .iter()
+            .filter(|&&r| r != 0)
+            .map(|r| r.trailing_zeros())
+            .min()
+            .unwrap_or(0);
+        metrics.push(LongMetric::new(
+            (if full { 12 } else { 6 } * PX) as u16,
+            (left as i32 * PX) as i16,
+        ));
         if let Some(ch) = char::from_u32(code) {
             mappings.push((ch, GlyphId::new(u32::from(gid))));
         }
@@ -146,11 +160,19 @@ fn main() -> Result<()> {
     let cmap = Cmap::from_mappings(mappings).map_err(|e| anyhow!("cmap: {e:?}"))?;
     let hmtx = Hmtx::new(metrics, Vec::new());
     let name = Name::new(vec![
-        name_record(NameId::FAMILY_NAME, "RMG2000"),
+        name_record(NameId::FAMILY_NAME, family),
         name_record(NameId::SUBFAMILY_NAME, "Regular"),
-        name_record(NameId::FULL_NAME, "RMG2000"),
-        name_record(NameId::POSTSCRIPT_NAME, "RMG2000"),
+        name_record(NameId::FULL_NAME, family),
+        name_record(NameId::POSTSCRIPT_NAME, &family.replace(' ', "-")),
     ]);
+    let os2 = Os2 {
+        x_avg_char_width: (6 * PX) as i16,
+        s_typo_ascender: ascent,
+        s_typo_descender: descent,
+        us_win_ascent: ascent as u16,
+        us_win_descent: (-descent) as u16,
+        ..Default::default()
+    };
 
     let mut fb = FontBuilder::new();
     fb.add_table(&head).map_err(|e| anyhow!("head: {e}"))?;
@@ -162,13 +184,8 @@ fn main() -> Result<()> {
     fb.add_table(&loca).map_err(|e| anyhow!("loca: {e}"))?;
     fb.add_table(&post).map_err(|e| anyhow!("post: {e}"))?;
     fb.add_table(&name).map_err(|e| anyhow!("name: {e}"))?;
-    let bytes = fb.build();
-    std::fs::write("amnezia/fonts/rmg2000.ttf", &bytes).context("write ttf")?;
-    println!(
-        "wrote amnezia/fonts/rmg2000.ttf ({num_glyphs} glyphs, {} bytes)",
-        bytes.len()
-    );
-    Ok(())
+    fb.add_table(&os2).map_err(|e| anyhow!("OS/2: {e}"))?;
+    Ok(fb.build())
 }
 
 /// A `name` record on the Windows/Unicode-BMP/English platform.
@@ -187,14 +204,14 @@ fn parse_line(line: &str) -> Option<(u32, (bool, Bitmap))> {
     let rest = line.trim().strip_prefix('{')?;
     let inner_open = rest.find('{')?;
     let mut head = rest[..inner_open].split(',');
-    let code: u32 = head.next()?.trim().parse().ok()?;
+    let code = head.next()?.trim().parse::<u32>().ok()?;
     let full = head.next()?.trim() == "true";
     let inner_close = inner_open + rest[inner_open..].find('}')?;
-    let vals: Vec<u16> = rest[inner_open + 1..inner_close]
+    let vals = rest[inner_open + 1..inner_close]
         .split(',')
         .filter_map(|s| s.trim().parse().ok())
-        .collect();
-    let rows: Bitmap = vals.try_into().ok()?;
+        .collect::<Vec<u16>>();
+    let rows = vals.try_into().ok()?;
     Some((code, (full, rows)))
 }
 
@@ -225,4 +242,58 @@ fn glyph_path(full: bool, rows: &Bitmap) -> BezPath {
         }
     }
     path
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const CELLS: &[(char, Bitmap)] = &[
+        ('A', [0, 12, 12, 18, 18, 30, 18, 18, 18, 0, 0, 0]),
+        ('R', [0, 14, 18, 18, 14, 10, 10, 18, 18, 0, 0, 0]),
+        ('Ő', [36, 18, 12, 18, 18, 18, 18, 18, 12, 0, 0, 0]),
+        ('ő', [36, 18, 0, 12, 18, 18, 18, 18, 12, 0, 0, 0]),
+        ('Ű', [36, 18, 0, 18, 18, 18, 18, 18, 12, 0, 0, 0]),
+        ('ű', [36, 18, 0, 18, 18, 18, 18, 18, 28, 0, 0, 0]),
+    ];
+
+    fn assert_cells(bytes: &[u8]) {
+        let font = fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).unwrap();
+        for &(ch, rows) in CELLS {
+            let (metrics, bitmap) = font.rasterize(ch, 12.0);
+            assert_eq!(metrics.advance_width, 6.0, "{ch}");
+            let mut actual = [0u16; 12];
+            for y in 0..metrics.height {
+                for x in 0..metrics.width {
+                    let value = bitmap[y * metrics.width + x];
+                    assert!(value == 0 || value == 255, "blurred pixel in {ch}");
+                    if value != 0 {
+                        let row = 10 - metrics.ymin - metrics.height as i32 + y as i32;
+                        let col = metrics.xmin + x as i32;
+                        assert!((0..12).contains(&row) && (0..6).contains(&col));
+                        actual[row as usize] |= 1 << col;
+                    }
+                }
+            }
+            assert_eq!(actual, rows, "pixel grid for {ch}");
+        }
+    }
+
+    #[test]
+    fn outline_conversion_preserves_bitmap_cells_and_hungarian_accents() {
+        let glyphs = CELLS
+            .iter()
+            .map(|&(ch, rows)| (ch as u32, (false, rows)))
+            .collect();
+        assert_cells(&build_font(&glyphs, "Font Test").unwrap());
+    }
+
+    #[test]
+    fn shipped_rm2000_font_matches_the_reference_cells() {
+        let bytes = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../amnezia/fonts/rm2000.ttf"
+        ));
+        assert_cells(bytes);
+    }
 }
