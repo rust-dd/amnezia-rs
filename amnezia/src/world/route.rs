@@ -127,6 +127,7 @@ pub(super) fn route_events(
     party: Res<Party>,
     inventory: Res<Inventory>,
     guards: super::autonomy::MoveGuards,
+    mut touches: Option<ResMut<super::TouchEvents>>,
     mut audio: MessageWriter<AudioRequest>,
     players: Query<&Player>,
     mut movers: Query<
@@ -157,10 +158,15 @@ pub(super) fn route_events(
         }
         let (ex, ey) = (sprite_c.tile_x, sprite_c.tile_y);
         let self_id = sprite_c.id;
+        let same_layer = sprite_c.layer == 1;
+        let touched = std::cell::Cell::new(false);
         // Scope `can_step` (which borrows the switches and events) so it drops
         // before either is mutated: the logical tile sync and a switch command.
         let driven = {
             let can_step = |dx: i32, dy: i32| {
+                if same_layer && (ex + dx, ey + dy) == hero {
+                    touched.set(true);
+                }
                 tile_open(
                     ex,
                     ey,
@@ -175,6 +181,11 @@ pub(super) fn route_events(
             };
             drive(&mut *sprite_c, &mut queue, &mut stepper, hero, dt, can_step)
         };
+        if touched.get()
+            && let Some(touches) = touches.as_mut()
+        {
+            touches.0.push(self_id);
+        }
         // Keep the logical event tile in step with the sprite so collision, touch,
         // and interaction use the NPC's live position — the same sync autonomy does.
         if let Some((dx, dy)) = driven.moved

@@ -2,17 +2,13 @@
 //! events), player-touch event triggers, walk animation, and camera follow.
 
 use crate::assets::resolve_png;
-use crate::battle::BattleActive;
 use crate::dialogue::Dialogue;
 use crate::interpreter::RunningEvent;
-use crate::menu::MenuOpen;
-use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
-use crate::teleport::Fade;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
-use crate::title::TitleActive;
 use crate::world::{
-    Character, MainCamera, MapData, MapEvents, MoveQueue, RouteAction, RouteStepper, walk,
+    Character, MainCamera, MapData, MapEvents, MoveQueue, RouteAction, RouteStepper, ScenePause,
+    walk,
 };
 use amnezia_data::EventPage;
 use bevy::prelude::*;
@@ -155,37 +151,45 @@ fn move_player(
     keys: Res<ButtonInput<KeyCode>>,
     data: Res<MapData>,
     dialogue: Res<Dialogue>,
-    fade: Res<Fade>,
+    scene: ScenePause,
     map_events: Res<MapEvents>,
     switches: Res<Switches>,
     variables: Res<Variables>,
     party: Res<Party>,
     inventory: Res<Inventory>,
-    menu: Res<MenuOpen>,
-    shop: Res<ShopOpen>,
-    battle: Res<BattleActive>,
-    title: Res<TitleActive>,
-    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut running: ResMut<RunningEvent>,
     mut players: Query<(&mut Player, &mut MoveQueue, &RouteStepper)>,
+    mut arrived: Local<Option<(u32, i32, i32)>>,
 ) {
-    if dialogue.active
-        || fade.busy()
-        || running.active()
-        || menu.0
-        || shop.0
-        || battle.0
-        || title.0
-        || vehicles.as_ref().is_some_and(|v| v.riding())
-    {
-        return;
-    }
     let Ok((mut player, mut queue, stepper)) = players.single_mut() else {
         return;
     };
-    // A forced move route (a MoveEvent on the hero) owns the hero until it drains,
-    // exactly as RM2000 ignores input while a route is overwritten.
-    if stepper.active() {
+    let position = (data.map_id, player.tile_x, player.tile_y);
+    if data.is_changed() {
+        *arrived = Some(position);
+    }
+    if dialogue.active || running.active() || scene.paused() || scene.riding() || stepper.active() {
+        *arrived = Some(position);
+        return;
+    }
+    if queue.busy() {
+        return;
+    }
+    if arrived
+        .replace(position)
+        .is_some_and(|previous| previous.0 == position.0 && previous != position)
+        && let Some((id, page)) = touch_page_at(
+            &map_events,
+            &switches,
+            &variables,
+            &party,
+            &inventory,
+            player.tile_x,
+            player.tile_y,
+            false,
+        )
+    {
+        running.start(id, page.commands.clone());
         return;
     }
     // Held (not tapped) so the hero keeps walking; the queue paces it one tile at
@@ -233,19 +237,18 @@ fn move_player(
     if !blocked {
         queue.push_step(RouteAction::Step { dx, dy, face: dir });
     }
-    // A player-touch event fires on the attempt to enter its tile — after a
-    // passable step onto it, or in place at a solid one (RM2000 doors/exits are
-    // solid). It fires only on input, never on the interpreter's own actions, so
-    // there's no re-trigger loop.
-    if let Some((id, page)) = touch_page_at(
-        &map_events,
-        &switches,
-        &variables,
-        &party,
-        &inventory,
-        nx,
-        ny,
-    ) {
+    if blocked
+        && let Some((id, page)) = touch_page_at(
+            &map_events,
+            &switches,
+            &variables,
+            &party,
+            &inventory,
+            nx,
+            ny,
+            true,
+        )
+    {
         running.start(id, page.commands.clone());
     }
 }
@@ -282,6 +285,7 @@ fn touch_page_at<'a>(
     inventory: &Inventory,
     x: i32,
     y: i32,
+    same_layer: bool,
 ) -> Option<(u32, &'a EventPage)> {
     map_events
         .events
@@ -289,7 +293,7 @@ fn touch_page_at<'a>(
         .filter(|e| e.x as i32 == x && e.y as i32 == y)
         .find_map(|e| {
             active_page(e, switches, variables, party, inventory)
-                .filter(|p| p.trigger == 1 || p.trigger == 2)
+                .filter(|p| (p.trigger == 1 || p.trigger == 2) && (p.layer == 1) == same_layer)
                 .map(|p| (e.id, p))
         })
 }
@@ -389,37 +393,4 @@ fn ease_toward(offset: Vec2, target: Vec2, step: f32) -> Vec2 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{clamp_to_map, ease_toward};
-    use bevy::math::Vec2;
-
-    #[test]
-    fn pan_eases_toward_target_then_snaps() {
-        // A full step moves exactly `step` along the direction to the target.
-        assert_eq!(
-            ease_toward(Vec2::ZERO, Vec2::new(10.0, 0.0), 2.0),
-            Vec2::new(2.0, 0.0)
-        );
-        // Within one step of the target: snap onto it, no overshoot.
-        assert_eq!(
-            ease_toward(Vec2::new(9.0, 0.0), Vec2::new(10.0, 0.0), 5.0),
-            Vec2::new(10.0, 0.0)
-        );
-        // Already at the target: stay put (and don't normalise a zero delta).
-        assert_eq!(
-            ease_toward(Vec2::splat(4.0), Vec2::splat(4.0), 5.0),
-            Vec2::splat(4.0)
-        );
-    }
-
-    #[test]
-    fn camera_clamps_to_map_edges() {
-        // map half-extent 320, viewport half 160: the camera stops at ±160
-        assert_eq!(clamp_to_map(1000.0, 320.0, 160.0), 160.0);
-        assert_eq!(clamp_to_map(-1000.0, 320.0, 160.0), -160.0);
-        // well inside the map: follows the target exactly
-        assert_eq!(clamp_to_map(50.0, 320.0, 160.0), 50.0);
-        // map narrower than the viewport: centered, no gray edge
-        assert_eq!(clamp_to_map(1000.0, 100.0, 160.0), 0.0);
-    }
-}
+mod tests;

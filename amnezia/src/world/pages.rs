@@ -16,7 +16,7 @@ fn route_for(page: Option<&EventPage>) -> RouteStepper {
         Some(page) if page.move_type == 6 => {
             RouteStepper::from_page(&page.move_route, page.move_speed, page.move_frequency)
         }
-        _ => RouteStepper::default(),
+        _ => RouteStepper::default().with_speed(page.map_or(4, |p| p.move_speed)),
     }
 }
 

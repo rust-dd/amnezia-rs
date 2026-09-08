@@ -7,15 +7,10 @@
 mod typewriter;
 mod view;
 
-use crate::battle::BattleActive;
 use crate::events::MessageBox;
 use crate::interpreter::RunningEvent;
-use crate::menu::MenuOpen;
 use crate::player::{Player, facing_tile};
-use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
-use crate::teleport::Fade;
-use crate::title::TitleActive;
 use crate::world::{MapData, MapEvents};
 use bevy::prelude::*;
 use typewriter::Typewriter;
@@ -102,23 +97,18 @@ impl Plugin for DialoguePlugin {
 #[allow(clippy::too_many_arguments)]
 fn interact(
     keys: Res<ButtonInput<KeyCode>>,
-    fade: Res<Fade>,
+    scene: crate::world::ScenePause,
     data: Res<MapData>,
     map_events: Res<MapEvents>,
     switches: Res<Switches>,
     variables: Res<Variables>,
     party: Res<Party>,
     inventory: Res<Inventory>,
-    menu: Res<MenuOpen>,
-    shop: Res<ShopOpen>,
-    battle: Res<BattleActive>,
-    title: Res<TitleActive>,
-    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut dialogue: ResMut<Dialogue>,
     mut running: ResMut<RunningEvent>,
     players: Query<&Player>,
 ) {
-    if fade.busy() || menu.0 || shop.0 || battle.0 || title.0 {
+    if scene.paused() {
         return;
     }
     if !keys.just_pressed(KeyCode::Space) && !keys.just_pressed(KeyCode::Enter) {
@@ -140,7 +130,7 @@ fn interact(
     if running.active() {
         return;
     }
-    if vehicles.as_ref().is_some_and(|v| v.blocks_action()) {
+    if scene.vehicles.as_ref().is_some_and(|v| v.blocks_action()) {
         return;
     }
     let Ok(player) = players.single() else {

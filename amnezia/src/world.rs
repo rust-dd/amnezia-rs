@@ -18,6 +18,8 @@ mod movement;
 mod pages;
 mod render;
 mod route;
+mod scene_pause;
+mod touch;
 mod water;
 
 pub use autonomy::AutoMove;
@@ -26,6 +28,8 @@ pub use movement::{Character, MoveQueue, RouteAction, walk};
 pub(crate) use movement::{dir_delta, step_secs_for_speed};
 pub use route::RouteStepper;
 pub(crate) use route::{StepEffect, drive as drive_route};
+pub(crate) use scene_pause::ScenePause;
+pub(crate) use touch::TouchEvents;
 
 /// Developer start override. `None` uses the faithful LMT start (`start.ron`,
 /// the intro map_0005), whose autorun cutscene the interpreter now runs; set it
@@ -181,6 +185,7 @@ pub struct WorldPlugin;
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<water::WaterAnim>()
+            .init_resource::<TouchEvents>()
             .add_message::<RelocateEvent>()
             .add_message::<MapChanged>()
             .add_systems(Startup, setup)
@@ -192,6 +197,7 @@ impl Plugin for WorldPlugin {
                         route::route_events,
                         autonomy::autonomous_movement,
                         walk::<EventSprite>,
+                        touch::trigger,
                         update_event_sprites,
                     )
                         .chain(),

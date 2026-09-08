@@ -205,8 +205,12 @@ pub fn walk<C: Character + Component<Mutability = Mutable>>(
     time: Res<Time>,
     data: Res<MapData>,
     asset_server: Res<AssetServer>,
+    scene: super::ScenePause,
     mut movers: Query<(&mut C, &mut MoveQueue, &mut Transform, &mut Sprite)>,
 ) {
+    if scene.paused() {
+        return;
+    }
     let dt = time.delta_secs();
     for (mut ch, mut queue, mut transform, mut sprite) in &mut movers {
         if !queue.has_work() {
