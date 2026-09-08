@@ -8,12 +8,13 @@ use crate::player::Player;
 use crate::state::Party;
 use crate::world::Character;
 use bevy::prelude::*;
-use std::collections::HashMap;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Every actor's current CharSet graphic as `(charset, index)`, keyed by actor
 /// id. Actors that were never reskinned simply aren't present.
-#[derive(Resource, Default)]
-pub struct Appearance(HashMap<u32, (String, u32)>);
+#[derive(Resource, Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Appearance(BTreeMap<u32, (String, u32)>);
 
 impl Appearance {
     /// Record `actor_id`'s graphic, replacing any previous one.

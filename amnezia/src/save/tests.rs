@@ -31,6 +31,9 @@ fn save_game_ron_round_trip() {
         vehicles: default(),
         system_bgm: default(),
         panorama: None,
+        appearance: default(),
+        menu_access: None,
+        save_access: false,
     };
     let ron = ron::ser::to_string_pretty(&game, PrettyConfig::default()).unwrap();
     let decoded: SaveGame = ron::from_str(&ron).unwrap();
@@ -39,7 +42,7 @@ fn save_game_ron_round_trip() {
 
 /// A unique temp slot path per test, so file-touching tests never race on a
 /// shared file (cargo runs them in parallel) and never touch the real save.
-fn temp_slot(tag: &str) -> PathBuf {
+pub(super) fn temp_slot(tag: &str) -> PathBuf {
     std::env::temp_dir().join(format!("amnezia_{tag}_{}.ron", std::process::id()))
 }
 
@@ -208,6 +211,9 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
         vehicles: default(),
         system_bgm: default(),
         panorama: None,
+        appearance: default(),
+        menu_access: None,
+        save_access: false,
     };
     write_save(&path, &game).unwrap();
 
@@ -288,6 +294,9 @@ fn load_restores_name_charset_and_screen_state() {
         vehicles: default(),
         system_bgm: default(),
         panorama: None,
+        appearance: default(),
+        menu_access: None,
+        save_access: false,
     };
     write_save(&path, &game).unwrap();
 
@@ -453,6 +462,9 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
         vehicles: default(),
         system_bgm: default(),
         panorama: None,
+        appearance: default(),
+        menu_access: None,
+        save_access: false,
     };
     write_save(&path, &game).unwrap();
     // "Restart": a fresh read at the same resolved path finds and decodes it.

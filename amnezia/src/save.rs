@@ -1,10 +1,9 @@
-//! Single-slot save and load: `F5` snapshots the full game state (switches,
-//! variables, party, inventory, plus the hero's map, tile, and facing) to a RON
-//! file at a fixed, working-directory-independent path (see [`save_dir`]); `F9`
-//! restores it. A load rebuilds the world by restoring the resources and then
-//! reusing the teleport machinery to reload the saved map at the saved tile — the
-//! fade's `swap_map` reads the freshly restored state when it respawns the map's
-//! events.
+//! Save crystals and title-screen loading share a persistent, single-slot snapshot.
+
+mod storage;
+#[cfg(test)]
+use storage::save_dir;
+use storage::{read_save, save_path, slot_exists, write_save};
 
 use crate::dialogue::Dialogue;
 use crate::equipment::Equipment;
@@ -20,42 +19,10 @@ use crate::vitals::Vitals;
 use crate::world::MapData;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+#[cfg(test)]
 use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
-
-/// The save slot's file name within the save directory.
-const SLOT_FILE: &str = "slot1.ron";
-
-/// The directory holding save slots, resolved once and independent of the current
-/// working directory. The old CWD-relative `"saves/slot1.ron"` meant the crystal
-/// save and the title's Continue could resolve *different* files whenever the game
-/// was launched from another directory (notably the packaged `.app`, whose CWD is
-/// not the project root): a fresh save then appeared to vanish, or a stale slot
-/// loaded, so Continue "restarted from the beginning". Debug builds keep the
-/// in-tree `saves/` beside the workspace; release builds resolve it next to the
-/// executable, mirroring [`crate::assets::asset_root`], so a save written on one
-/// launch is found on the next regardless of the working directory.
-fn save_dir() -> &'static Path {
-    static DIR: OnceLock<PathBuf> = OnceLock::new();
-    DIR.get_or_init(|| {
-        if cfg!(debug_assertions) {
-            PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../saves"))
-        } else {
-            std::env::current_exe()
-                .ok()
-                .and_then(|exe| exe.parent().map(|dir| dir.join("saves")))
-                .unwrap_or_else(|| PathBuf::from("saves"))
-        }
-    })
-    .as_path()
-}
-
-/// The single v1 save slot's resolved, working-directory-independent path.
-fn save_path() -> PathBuf {
-    save_dir().join(SLOT_FILE)
-}
+use std::path::PathBuf;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -104,13 +71,7 @@ impl Default for SaveLocation {
 
 /// Whether the single save slot exists on disk, for the title's Continue gate.
 pub fn save_slot_exists() -> bool {
-    slot_exists(&save_path())
-}
-
-/// Whether `path` names an existing file. Split out so the gate is testable
-/// without depending on the resolved [`save_path`].
-fn slot_exists(path: &Path) -> bool {
-    path.exists()
+    slot_exists(&save_path()) || storage::legacy_save_path().is_some_and(|p| slot_exists(&p))
 }
 
 /// A serialisable snapshot of the whole runtime game state. Maps are stored as
@@ -164,6 +125,12 @@ struct SaveGame {
     system_bgm: crate::system_bgm::SystemBgm,
     #[serde(default)]
     panorama: Option<crate::panorama::Panorama>,
+    #[serde(default)]
+    appearance: crate::appearance::Appearance,
+    #[serde(default)]
+    menu_access: Option<bool>,
+    #[serde(default)]
+    save_access: bool,
 }
 
 /// The RM2000 neutral screen tone (every channel 100), the [`SaveGame::tone`]
@@ -222,6 +189,9 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    appearance: Option<ResMut<'w, crate::appearance::Appearance>>,
+    menu_access: Option<ResMut<'w, crate::menu::MenuAccess>>,
+    save_access: Option<ResMut<'w, SaveAccess>>,
     panorama: Option<ResMut<'w, crate::panorama::Panorama>>,
     hero_hidden: Option<ResMut<'w, crate::player::HeroHidden>>,
     field_steps: Option<ResMut<'w, crate::conditions::FieldSteps>>,
@@ -288,8 +258,9 @@ fn save_or_load(
     mut scene: SceneState,
     mut players: Query<&mut Player>,
 ) {
-    let hotkey_save = keys.just_pressed(KeyCode::F5) || save_io.save_request.0;
-    let hotkey_load = keys.just_pressed(KeyCode::F9);
+    let hotkey_save =
+        (crate::debug::tools_enabled() && keys.just_pressed(KeyCode::F5)) || save_io.save_request.0;
+    let hotkey_load = crate::debug::tools_enabled() && keys.just_pressed(KeyCode::F9);
     let menu_load = save_io.load_request.0;
     // The hotkey/menu save is one-shot: cleared whether or not it runs, so a press
     // during a blocked frame is dropped rather than queued.
@@ -353,6 +324,9 @@ fn save_or_load(
                     .map_or_else(Default::default, |v| v.save.clone()),
                 system_bgm: scene.system_bgm.as_deref().cloned().unwrap_or_default(),
                 panorama: scene.panorama.as_deref().cloned(),
+                appearance: scene.appearance.as_deref().cloned().unwrap_or_default(),
+                menu_access: scene.menu_access.as_ref().map(|v| v.0),
+                save_access: scene.save_access.as_ref().is_some_and(|v| v.0),
             };
             match write_save(&save_io.location.0, &game) {
                 Ok(()) => info!("saved game to {}", save_io.location.0.display()),
@@ -403,6 +377,21 @@ fn save_or_load(
             if let Some(panorama) = scene.panorama.as_deref_mut() {
                 *panorama = game.panorama.unwrap_or_default();
             }
+            if let Some(appearance) = scene.appearance.as_deref_mut() {
+                *appearance = game.appearance;
+                if let Some(actor) = party.snapshot().first()
+                    && appearance.get(*actor).is_none()
+                    && !game.charset.is_empty()
+                {
+                    appearance.set(*actor, game.charset.clone(), game.charset_index);
+                }
+            }
+            if let Some(access) = scene.menu_access.as_mut() {
+                access.0 = game.menu_access.unwrap_or(true);
+            }
+            if let Some(access) = scene.save_access.as_mut() {
+                access.0 = game.save_access;
+            }
             // Older saves omit these fields, so keep the initial graphic and name.
             if !game.hero_name.is_empty() {
                 scene.hero_name.0 = game.hero_name;
@@ -427,30 +416,6 @@ fn save_or_load(
             info!("loaded game from {}", save_io.location.0.display());
         }
         None => {}
-    }
-}
-
-/// Serialise `game` to pretty RON and write it to `path`, creating the parent
-/// save directory as needed.
-fn write_save(path: &Path, game: &SaveGame) -> Result<(), String> {
-    let ron =
-        ron::ser::to_string_pretty(game, PrettyConfig::default()).map_err(|e| e.to_string())?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    std::fs::write(path, ron).map_err(|e| e.to_string())
-}
-
-/// Read and deserialise the save slot at `path`, or `None` if it is absent; a
-/// corrupt file is logged and treated as absent.
-fn read_save(path: &Path) -> Option<SaveGame> {
-    let text = std::fs::read_to_string(path).ok()?;
-    match ron::from_str(&text) {
-        Ok(game) => Some(game),
-        Err(e) => {
-            error!("load failed: parsing {}: {e}", path.display());
-            None
-        }
     }
 }
 
