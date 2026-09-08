@@ -22,6 +22,11 @@ impl Vitals {
         self.0.clear();
     }
 
+    /// Restore one actor without changing anyone else's HP or SP.
+    pub fn heal(&mut self, actor_id: u32) {
+        self.0.remove(&actor_id);
+    }
+
     /// The actor's stored `(hp, sp)`, or `None` when it has none yet — so a caller
     /// can default to full at the actor's current level rather than its
     /// starting-level HP/SP.

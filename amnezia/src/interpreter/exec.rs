@@ -6,6 +6,7 @@
 //! foreground while others run concurrently in the background, all sharing the
 //! same game state through `Exec`.
 
+mod actors;
 mod dispatch;
 mod handlers;
 

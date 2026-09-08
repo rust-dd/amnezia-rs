@@ -21,6 +21,7 @@ fn save_game_ron_round_trip() {
         weather: 2,
         weather_strength: 5,
         equipment: vec![(1, [10, 0, 5, 0, 0]), (3, [7, 0, 0, 0, 0])],
+        learned_skills: vec![(1, vec![3, 4]), (3, vec![16])],
         playtime: 3661,
         timer_remaining: 45.5,
         timer_running: true,
@@ -175,6 +176,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
         weather: 0,
         weather_strength: 0,
         equipment: vec![],
+        learned_skills: vec![(1, vec![3, 4])],
         playtime: 0,
         timer_remaining: 0.0,
         timer_running: false,
@@ -211,6 +213,10 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     );
     assert_eq!(world.resource::<Variables>().get(3), 42);
     assert_eq!(world.resource::<Party>().snapshot(), vec![1, 3]);
+    assert_eq!(
+        world.resource::<Progression>().skill_entries(),
+        vec![(1, vec![3, 4])]
+    );
     assert!(
         !world.resource::<LoadRequest>().0,
         "the Continue request must be consumed"
@@ -243,6 +249,7 @@ fn load_restores_name_charset_and_screen_state() {
         weather: 2,
         weather_strength: 8,
         equipment: vec![],
+        learned_skills: vec![],
         playtime: 0,
         timer_remaining: 0.0,
         timer_running: false,
@@ -399,6 +406,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
         weather: 0,
         weather_strength: 0,
         equipment: vec![],
+        learned_skills: vec![],
         playtime: 0,
         timer_remaining: 0.0,
         timer_running: false,

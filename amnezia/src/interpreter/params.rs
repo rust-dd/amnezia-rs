@@ -8,6 +8,7 @@ use crate::animation::{AnimationLibrary, ShowMapAnimation};
 use crate::appearance::SpriteChange;
 use crate::battle::{BattleActive, BattleRequest, BattleResult};
 use crate::dialogue::{MessagePosition, MessageTransparent};
+use crate::equipment::Equipment;
 use crate::gamedata::GameData;
 use crate::gameover::GameOverActive;
 use crate::inputnumber::InputNumber;
@@ -75,6 +76,7 @@ pub(super) struct AccessFlags<'w> {
 pub(super) struct ActorEdits<'w> {
     pub(super) hero_name: ResMut<'w, HeroName>,
     pub(super) progression: ResMut<'w, Progression>,
+    pub(super) equipment: ResMut<'w, Equipment>,
     pub(super) game_data: Res<'w, GameData>,
 }
 

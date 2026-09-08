@@ -386,9 +386,8 @@ mod tests {
         // [mode 1 (actor 1), add, constant, +5, show_msg] -> level 2 + 5 = 7.
         apply_change_level(&mut prog, &data, &[1, 1, 0, 0, 5, 0], &vars, &party);
         assert_eq!(prog.level(&data.actors[0]), 7);
-        // Subtract clamps to the actor's starting level (2), never below.
         apply_change_level(&mut prog, &data, &[1, 1, 1, 0, 99, 0], &vars, &party);
-        assert_eq!(prog.level(&data.actors[0]), 2);
+        assert_eq!(prog.level(&data.actors[0]), 1);
     }
 
     #[test]

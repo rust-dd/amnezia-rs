@@ -123,10 +123,9 @@ pub(super) const CALL_EVENT: u32 = 12330;
 /// Return to the title screen (`params` empty); ends the running event.
 pub(super) const RETURN_TO_TITLE: u32 = 12510;
 
-/// Learn or forget an actor skill. Decoded but a no-op: the game has no per-actor
-/// skill state (the menu casts from the whole skill database).
+/// Learn or forget an actor skill independently of level-based learning.
 pub(super) const CHANGE_SKILLS: u32 = 10440;
-/// Equip or unequip an actor. Decoded but a no-op: equipment is view-only here.
+/// Equip or unequip the selected actors, moving displaced gear to the inventory.
 pub(super) const CHANGE_EQUIPMENT: u32 = 10450;
 /// Add or remove an actor state/condition. A no-op: the remake carries no
 /// persistent field conditions (every observed use is a state removal).

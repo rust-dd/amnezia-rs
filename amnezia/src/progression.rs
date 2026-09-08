@@ -1,8 +1,7 @@
 //! Persistent per-actor experience and the level it maps to. The battle system
 //! reads a member's current level to build its stats from the actor's curve, and
-//! adds the fight's reward experience on a win. Level rises with total experience
-//! per the RM2000 (RPG2000) exp curve; it never drops below the actor's starting
-//! level nor rises above its max level.
+//! adds the fight's reward experience on a win. Levels follow the RM2000 curve;
+//! learned skills persist through level changes and scripted rewards.
 
 use amnezia_data::ActorDef;
 use bevy::prelude::*;
@@ -15,14 +14,17 @@ const MAX_EXP: u32 = 999_999;
 /// Stored total experience per actor id. An absent actor sits at the experience
 /// of its starting level (see [`Progression::total`]).
 #[derive(Resource, Default)]
-pub struct Progression(HashMap<u32, u32>);
+pub struct Progression {
+    experience: HashMap<u32, u32>,
+    skills: HashMap<u32, Vec<u32>>,
+}
 
 impl Progression {
     /// The actor's stored total experience, defaulting to the experience needed
     /// to reach its starting level when it has earned none yet (so it never has
     /// to re-earn the levels it began the game with).
     pub fn total(&self, def: &ActorDef) -> u32 {
-        self.0
+        self.experience
             .get(&def.id)
             .copied()
             .unwrap_or_else(|| exp_for_level(def.level, def))
@@ -32,16 +34,19 @@ impl Progression {
     /// baseline the first time. The stored total is clamped to [`MAX_EXP`], as
     /// EasyRPG `Game_Actor::SetExp` clamps to the experience ceiling.
     pub fn add(&mut self, def: &ActorDef, amount: u32) {
+        let previous_level = self.level(def);
+        let known = self.known_skill_ids(def);
         let next = self.total(def).saturating_add(amount).min(MAX_EXP);
-        self.0.insert(def.id, next);
+        self.experience.insert(def.id, next);
+        self.learn_between(def, previous_level, known);
     }
 
-    /// The skill ids the actor knows at its current level: every `Learning` whose
-    /// `level` is at or below it, in learning order (EasyRPG
-    /// `Game_Actor::LearnLevelSkills` accumulates exactly this set as the actor
-    /// climbs). The skill menu and the battle command list build a member's usable
-    /// skills from this instead of the whole skill database.
+    /// Known skills, including scripted changes. An actor without stored skills
+    /// starts with the database learnings at or below its current level.
     pub fn known_skill_ids(&self, def: &ActorDef) -> Vec<u32> {
+        if let Some(skills) = self.skills.get(&def.id) {
+            return skills.clone();
+        }
         let level = self.level(def);
         def.learnings
             .iter()
@@ -50,11 +55,37 @@ impl Progression {
             .collect()
     }
 
+    /// Learn or forget a skill independently of the actor's level.
+    pub fn change_skill(&mut self, def: &ActorDef, skill_id: u32, learn: bool) {
+        let mut known = self.known_skill_ids(def);
+        if learn {
+            known.push(skill_id);
+            known.sort_unstable();
+            known.dedup();
+        } else {
+            known.retain(|&id| id != skill_id);
+        }
+        self.skills.insert(def.id, known);
+    }
+
+    fn learn_between(&mut self, def: &ActorDef, previous_level: u32, mut known: Vec<u32>) {
+        let level = self.level(def);
+        known.extend(
+            def.learnings
+                .iter()
+                .filter(|l| l.level > previous_level && l.level <= level)
+                .map(|l| l.skill_id),
+        );
+        known.sort_unstable();
+        known.dedup();
+        self.skills.insert(def.id, known);
+    }
+
     /// The actor's current level: the highest level whose cumulative experience
-    /// requirement its total meets, clamped to `[def.level, def.max_level]`.
+    /// requirement its total meets, clamped to `[1, def.max_level]`.
     pub fn level(&self, def: &ActorDef) -> u32 {
         let total = self.total(def);
-        let mut level = def.level.max(1);
+        let mut level = 1;
         while level < def.max_level && exp_for_level(level + 1, def) <= total {
             level += 1;
         }
@@ -62,24 +93,46 @@ impl Progression {
     }
 
     /// Set the actor's stored experience so its level becomes `target`, clamped to
-    /// `[def.level, def.max_level]` (RM2000 `ChangeLevel` clamps the same way). The
+    /// `[1, def.max_level]`. The
     /// total is set to exactly the target level's cumulative requirement, so the
     /// next fight's stats derive from the new level.
     pub fn set_level(&mut self, def: &ActorDef, target: u32) {
-        let clamped = target.clamp(def.level.max(1), def.max_level);
-        self.0.insert(def.id, exp_for_level(clamped, def));
+        let previous_level = self.level(def);
+        let known = self.known_skill_ids(def);
+        let clamped = target.clamp(1, def.max_level.max(1));
+        self.experience.insert(def.id, exp_for_level(clamped, def));
+        self.learn_between(def, previous_level, known);
     }
 
     /// Snapshot `(actor_id, exp)` pairs for the save file, in id order.
     pub fn entries(&self) -> Vec<(u32, u32)> {
-        let mut entries: Vec<(u32, u32)> = self.0.iter().map(|(&k, &v)| (k, v)).collect();
+        let mut entries = self
+            .experience
+            .iter()
+            .map(|(&k, &v)| (k, v))
+            .collect::<Vec<_>>();
         entries.sort_by_key(|&(k, _)| k);
         entries
     }
 
     /// Replace all stored experience from a loaded save.
     pub fn load(&mut self, entries: Vec<(u32, u32)>) {
-        self.0 = entries.into_iter().collect();
+        self.experience = entries.into_iter().collect();
+        self.skills.clear();
+    }
+
+    pub fn skill_entries(&self) -> Vec<(u32, Vec<u32>)> {
+        let mut entries = self
+            .skills
+            .iter()
+            .map(|(&id, skills)| (id, skills.clone()))
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|&(id, _)| id);
+        entries
+    }
+
+    pub fn load_skills(&mut self, entries: Vec<(u32, Vec<u32>)>) {
+        self.skills = entries.into_iter().collect();
     }
 }
 

@@ -94,6 +94,21 @@ impl Equipment {
         if def.fix_equipment || slot >= SLOTS {
             return false;
         }
+        self.equip_from_event(def, slot, new_id, items, inventory)
+    }
+
+    /// Scripted equipment changes also apply to actors whose menu loadout is fixed.
+    pub fn equip_from_event(
+        &mut self,
+        def: &ActorDef,
+        slot: usize,
+        new_id: u32,
+        items: &[ItemDef],
+        inventory: &mut Inventory,
+    ) -> bool {
+        if slot >= SLOTS {
+            return false;
+        }
         let before = self.slots(def);
         let after = preview_slots(before, slot, new_id, items);
         if before == after {

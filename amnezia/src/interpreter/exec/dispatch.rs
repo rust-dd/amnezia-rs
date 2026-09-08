@@ -78,11 +78,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             frame.ip += 1;
             Flow::Advance
         }
-        FULL_HEAL => {
-            x.subsystems.vitals.heal_all();
-            frame.ip += 1;
-            Flow::Advance
-        }
+        FULL_HEAL | CHANGE_SKILLS | CHANGE_EQUIPMENT => super::actors::execute(frame, &command, x),
         INPUT_NUMBER => {
             let digits = command.params.first().copied().unwrap_or(0).max(0) as u32;
             let var_id = command.params.get(1).copied().unwrap_or(0) as u32;
@@ -504,9 +500,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             x.subsystems.flow.title.0 = true;
             Flow::Stop
         }
-        CHANGE_SKILLS
-        | CHANGE_EQUIPMENT
-        | CHANGE_CONDITION
+        CHANGE_CONDITION
         | CHANGE_SYSTEM_BGM
         | CHANGE_SCREEN_TRANSITIONS
         | FLASH_SPRITE

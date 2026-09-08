@@ -126,11 +126,9 @@ struct SaveGame {
     #[serde(default)]
     progression: Vec<(u32, u32)>,
     #[serde(default)]
+    learned_skills: Vec<(u32, Vec<u32>)>,
+    #[serde(default)]
     vitals: Vec<(u32, (i32, i32))>,
-    // Added after #46; every field is `#[serde(default)]` so slots written before
-    // them still load. The hero's name and current CharSet graphic default empty —
-    // an old slot then keeps the boot default rather than being blanked — and the
-    // tone defaults to neutral so an untinted slot isn't blacked out on load.
     #[serde(default)]
     hero_name: String,
     #[serde(default)]
@@ -143,14 +141,8 @@ struct SaveGame {
     weather: i32,
     #[serde(default)]
     weather_strength: i32,
-    // The runtime equipment store (per-actor five-slot loadouts), so a Continue
-    // keeps gear changed on the equip screen. `#[serde(default)]` keeps pre-#47
-    // slots loadable — they carry no entries, so every actor restores to its
-    // `ActorDef` starting gear, exactly the state those saves were written in.
     #[serde(default)]
     equipment: Vec<(u32, [u32; 5])>,
-    // Playtime and the RM2000 game timer, added after #48. `#[serde(default)]` keeps
-    // older slots loadable — they resume with a zeroed playtime and a stopped timer.
     #[serde(default)]
     playtime: u64,
     #[serde(default)]
@@ -295,6 +287,7 @@ fn save_or_load(
                 items,
                 gold,
                 progression: progression.entries(),
+                learned_skills: progression.skill_entries(),
                 vitals: vitals.entries(),
                 hero_name: scene.hero_name.0.clone(),
                 charset: player.charset.clone(),
@@ -329,13 +322,13 @@ fn save_or_load(
             party.restore(game.party);
             inventory.restore(game.items, game.gold);
             progression.load(game.progression);
+            progression.load_skills(game.learned_skills);
             vitals.load(game.vitals);
             save_io.equipment.load(game.equipment);
             scene.playtime.seconds = game.playtime;
             scene.game_clock.remaining = game.timer_remaining;
             scene.game_clock.running = game.timer_running;
-            // An empty name/charset is a pre-#46 slot that never stored them; leave
-            // the boot default in place rather than blanking it.
+            // Older saves omit these fields, so keep the initial graphic and name.
             if !game.hero_name.is_empty() {
                 scene.hero_name.0 = game.hero_name;
             }

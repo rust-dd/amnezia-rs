@@ -30,6 +30,8 @@ use crate::world::{MapData, MapEvents, MoveQueue, RouteStepper};
 use amnezia_data::{CommonEvent, Event, EventCommand, EventPage};
 use bevy::prelude::*;
 
+mod actor_commands;
+
 const CONTROL_SWITCHES: u32 = 10210;
 const CONDITIONAL_BRANCH: u32 = 12010;
 const END_BRANCH: u32 = 22011;
@@ -113,6 +115,7 @@ fn interp_app() -> App {
         .init_resource::<SaveAccess>()
         .init_resource::<MenuAccess>()
         .init_resource::<Progression>()
+        .init_resource::<crate::equipment::Equipment>()
         .init_resource::<Fade>()
         .init_resource::<MenuOpen>()
         .init_resource::<ShopOpen>()
