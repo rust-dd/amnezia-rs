@@ -139,7 +139,7 @@ pub(super) const ENTER_EXIT_VEHICLE: u32 = 10840;
 pub(super) const SET_VEHICLE_LOCATION: u32 = 10850;
 /// Flash a character sprite. A cosmetic no-op: no per-sprite flash effect exists.
 pub(super) const FLASH_SPRITE: u32 = 11320;
-/// Change the panorama background. A no-op: no parallax/panorama renderer exists.
+/// Change the map panorama and its horizontal/vertical scrolling.
 pub(super) const CHANGE_PBG: u32 = 11720;
 /// An editor comment; carries no runtime effect.
 pub(super) const COMMENT: u32 = 12410;

@@ -162,6 +162,8 @@ struct SaveGame {
     vehicles: crate::vehicles::VehicleSave,
     #[serde(default)]
     system_bgm: crate::system_bgm::SystemBgm,
+    #[serde(default)]
+    panorama: Option<crate::panorama::Panorama>,
 }
 
 /// The RM2000 neutral screen tone (every channel 100), the [`SaveGame::tone`]
@@ -220,6 +222,7 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    panorama: Option<ResMut<'w, crate::panorama::Panorama>>,
     hero_hidden: Option<ResMut<'w, crate::player::HeroHidden>>,
     field_steps: Option<ResMut<'w, crate::conditions::FieldSteps>>,
     vehicles: Option<ResMut<'w, crate::vehicles::Vehicles>>,
@@ -349,6 +352,7 @@ fn save_or_load(
                     .as_ref()
                     .map_or_else(Default::default, |v| v.save.clone()),
                 system_bgm: scene.system_bgm.as_deref().cloned().unwrap_or_default(),
+                panorama: scene.panorama.as_deref().cloned(),
             };
             match write_save(&save_io.location.0, &game) {
                 Ok(()) => info!("saved game to {}", save_io.location.0.display()),
@@ -395,6 +399,9 @@ fn save_or_load(
             }
             if let Some(music) = scene.system_bgm.as_deref_mut() {
                 *music = game.system_bgm;
+            }
+            if let Some(panorama) = scene.panorama.as_deref_mut() {
+                *panorama = game.panorama.unwrap_or_default();
             }
             // Older saves omit these fields, so keep the initial graphic and name.
             if !game.hero_name.is_empty() {

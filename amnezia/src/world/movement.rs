@@ -327,6 +327,7 @@ mod tests {
 
     fn test_map() -> MapData {
         MapData {
+            panorama: None,
             map_id: 0,
             width: 5,
             height: 5,

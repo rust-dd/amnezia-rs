@@ -514,6 +514,19 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         }
         ENTER_EXIT_VEHICLE => super::vehicles::toggle(frame, x),
         SET_VEHICLE_LOCATION => super::vehicles::locate(frame, &command, x),
+        CHANGE_PBG => {
+            if let Some(data) = x.subsystems.flow.map_data.as_ref() {
+                x.subsystems.mapfx.panorama.change(
+                    data.map_id,
+                    amnezia_data::PanoramaDef::from_command(
+                        command.string.clone(),
+                        &command.params,
+                    ),
+                );
+            }
+            frame.ip += 1;
+            Flow::Advance
+        }
         CHANGE_SYSTEM_BGM => {
             x.subsystems
                 .mapfx
@@ -522,12 +535,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             frame.ip += 1;
             Flow::Advance
         }
-        CHANGE_SCREEN_TRANSITIONS
-        | FLASH_SPRITE
-        | CHANGE_PBG
-        | COMMENT
-        | COMMENT_2
-        | END_MARKER => {
+        CHANGE_SCREEN_TRANSITIONS | FLASH_SPRITE | COMMENT | COMMENT_2 | END_MARKER => {
             // Faithfully decoded but deliberately inert in this remake (each
             // rationale is on its constant in `opcodes`).
             frame.ip += 1;

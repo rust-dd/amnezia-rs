@@ -75,6 +75,7 @@ pub struct EventSprite {
 /// The active map's geometry, tile layers, and passability, for movement.
 #[derive(Resource)]
 pub struct MapData {
+    pub panorama: Option<amnezia_data::PanoramaDef>,
     pub map_id: u32,
     pub width: i32,
     pub height: i32,
@@ -144,6 +145,7 @@ impl MapData {
     /// headless tests: offsets centered as on a real load, all tiles empty.
     pub(crate) fn for_test(width: i32, height: i32) -> MapData {
         MapData {
+            panorama: None,
             map_id: 0,
             width,
             height,
@@ -386,6 +388,7 @@ pub fn load_map(
     }
 
     let data = MapData {
+        panorama: map.panorama,
         map_id,
         width,
         height,

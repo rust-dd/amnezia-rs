@@ -38,6 +38,7 @@ fn start_new_game(world: &mut World) {
     reset::<HeroHidden>(world);
     reset::<crate::audio::MemorizedBgm>(world);
     reset::<crate::system_bgm::SystemBgm>(world);
+    reset::<crate::panorama::Panorama>(world);
     reset::<crate::screenfx::TintState>(world);
     reset::<crate::screenfx::Weather>(world);
     reset::<crate::screenfx::WeatherStrength>(world);

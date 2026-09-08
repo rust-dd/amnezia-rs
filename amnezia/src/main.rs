@@ -23,6 +23,7 @@ mod inputnumber;
 mod interpreter;
 mod map_bgm;
 mod menu;
+mod panorama;
 mod picture;
 mod player;
 mod progression;
@@ -111,6 +112,7 @@ fn main() -> AppExit {
         .add_plugins(session::SessionPlugin)
         .add_plugins(vehicles::VehiclePlugin)
         .add_plugins(conditions::ConditionsPlugin)
+        .add_plugins(panorama::PanoramaPlugin)
         .add_plugins(smoke::SmokePlugin)
         .run()
 }
