@@ -1,7 +1,7 @@
 use crate::assets::{asset_root, load_ron};
 use crate::dialogue::{Dialogue, MessagePosition, MessageTransparent};
 use crate::interpreter::{ParallelPool, RunningEvent};
-use crate::player::{CameraPan, HeroTransparency, Player};
+use crate::player::{CameraPan, HeroHidden, Player};
 use crate::save::{EventSaveRequest, LoadRequest, SaveAccess, SaveRequest};
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::teleport::PendingTeleport;
@@ -35,6 +35,7 @@ fn start_new_game(world: &mut World) {
     reset::<crate::conditions::FieldSteps>(world);
     reset::<crate::vehicles::Vehicles>(world);
     reset::<crate::appearance::Appearance>(world);
+    reset::<HeroHidden>(world);
     reset::<crate::audio::MemorizedBgm>(world);
     reset::<crate::system_bgm::SystemBgm>(world);
     reset::<crate::screenfx::TintState>(world);
@@ -77,7 +78,6 @@ pub(crate) fn clear_transient(world: &mut World) {
     crate::battle::reset_session(world);
     reset::<crate::gameover::GameOverActive>(world);
     reset::<CameraPan>(world);
-    reset::<HeroTransparency>(world);
     reset::<EventSaveRequest>(world);
     reset::<SaveRequest>(world);
     clear_messages::<crate::audio::AudioRequest>(world);

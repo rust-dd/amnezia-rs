@@ -15,7 +15,7 @@ use crate::gameover::GameOverActive;
 use crate::inputnumber::InputNumber;
 use crate::menu::{MenuAccess, MenuOpen};
 use crate::picture::PictureCommand;
-use crate::player::{CameraPan, HeroTransparency, Player};
+use crate::player::{CameraPan, HeroHidden, Player};
 use crate::progression::Progression;
 use crate::save::{EventSaveRequest, SaveAccess};
 use crate::screenfx::{ScreenEffect, Weather, WeatherStrength};
@@ -107,7 +107,7 @@ fn interp_app() -> App {
         .init_resource::<Vitals>()
         .init_resource::<InputNumber>()
         .init_resource::<CameraPan>()
-        .init_resource::<HeroTransparency>()
+        .init_resource::<HeroHidden>()
         .init_resource::<Weather>()
         .init_resource::<WeatherStrength>()
         .init_resource::<MessagePosition>()

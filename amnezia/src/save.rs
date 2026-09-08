@@ -142,6 +142,8 @@ struct SaveGame {
     charset: String,
     #[serde(default)]
     charset_index: u32,
+    #[serde(default)]
+    hero_hidden: bool,
     #[serde(default = "neutral_tone")]
     tone: (i32, i32, i32, i32),
     #[serde(default)]
@@ -218,6 +220,7 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    hero_hidden: Option<ResMut<'w, crate::player::HeroHidden>>,
     field_steps: Option<ResMut<'w, crate::conditions::FieldSteps>>,
     vehicles: Option<ResMut<'w, crate::vehicles::Vehicles>>,
     system_bgm: Option<ResMut<'w, crate::system_bgm::SystemBgm>>,
@@ -328,6 +331,7 @@ fn save_or_load(
                 hero_name: scene.hero_name.0.clone(),
                 charset: player.charset.clone(),
                 charset_index: player.index,
+                hero_hidden: scene.hero_hidden.as_ref().is_some_and(|h| h.0),
                 tone: (
                     tr.round() as i32,
                     tg.round() as i32,
@@ -383,6 +387,9 @@ fn save_or_load(
             scene.playtime.seconds = game.playtime;
             scene.game_clock.remaining = game.timer_remaining;
             scene.game_clock.running = game.timer_running;
+            if let Some(hidden) = scene.hero_hidden.as_mut() {
+                hidden.0 = game.hero_hidden;
+            }
             if let Some(vehicles) = scene.vehicles.as_mut() {
                 vehicles.restore(game.vehicles);
             }

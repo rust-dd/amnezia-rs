@@ -73,29 +73,31 @@ pub struct CameraPan {
     pub speed: f32,
 }
 
-/// The hero's transparency on the RM2000 0..7 scale (`PlayerTransparency`
-/// 11310): 0 is opaque, 7 the most see-through. [`update_hero_transparency`]
-/// maps it to the sprite's alpha.
+/// Scripted visibility is independent of move-route transparency.
 #[derive(Resource, Default)]
-pub struct HeroTransparency(pub u8);
+pub struct HeroHidden(pub bool);
 
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CameraPan>()
-            .init_resource::<HeroTransparency>()
+            .init_resource::<HeroHidden>()
             .add_systems(
                 Update,
                 (
                     move_player,
                     walk::<Player>,
                     update_player_sprite,
-                    update_hero_transparency,
                     ease_camera_pan,
                     camera_follow,
                 )
                     .chain(),
+            )
+            .add_systems(
+                PostUpdate,
+                update_hero_hidden
+                    .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
             );
     }
 }
@@ -319,19 +321,18 @@ fn update_player_sprite(
     }
 }
 
-/// Fade the hero sprite to match [`HeroTransparency`]: alpha `1 - t/8` on the
-/// RM2000 0..7 scale. Runs on change (and once at startup), independent of the
-/// per-tile sprite refresh so it holds while the hero walks or stands.
-fn update_hero_transparency(
-    transparency: Res<HeroTransparency>,
-    mut players: Query<&mut Sprite, With<Player>>,
+fn update_hero_hidden(
+    hidden: Res<HeroHidden>,
+    vehicles: Option<Res<crate::vehicles::Vehicles>>,
+    mut players: Query<&mut Visibility, With<Player>>,
 ) {
-    if !transparency.is_changed() {
-        return;
-    }
-    let alpha = 1.0 - transparency.0 as f32 / 8.0;
-    for mut sprite in &mut players {
-        sprite.color = sprite.color.with_alpha(alpha);
+    let invisible = hidden.0 || vehicles.as_ref().is_some_and(|v| v.riding());
+    for mut visibility in &mut players {
+        *visibility = if invisible {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
     }
 }
 

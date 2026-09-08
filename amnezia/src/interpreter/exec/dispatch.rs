@@ -155,8 +155,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         PLAYER_TRANSPARENCY => {
-            x.subsystems.mapfx.hero_transparency.0 =
-                u8::from(command.params.first().copied().unwrap_or(0) != 0) * 7;
+            x.subsystems.mapfx.hero_hidden.0 = command.params.first().copied().unwrap_or(0) == 0;
             frame.ip += 1;
             Flow::Advance
         }

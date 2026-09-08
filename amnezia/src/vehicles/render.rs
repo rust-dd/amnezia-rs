@@ -11,9 +11,9 @@ pub(super) struct VehicleSprite(usize);
 pub(super) fn sync_hero(
     data: Res<MapData>,
     mut vehicles: ResMut<Vehicles>,
-    mut players: Query<(&mut Player, &mut Transform, &mut MoveQueue, &mut Visibility)>,
+    mut players: Query<(&mut Player, &mut Transform, &mut MoveQueue)>,
 ) {
-    let Ok((mut hero, mut transform, mut queue, mut visibility)) = players.single_mut() else {
+    let Ok((mut hero, mut transform, mut queue)) = players.single_mut() else {
         return;
     };
     let transferred = vehicles.last_map.is_some_and(|id| id != data.map_id);
@@ -40,9 +40,7 @@ pub(super) fn sync_hero(
         transform.translation.x = pixel.x;
         transform.translation.y = pixel.y + CHAR_Y_OFFSET;
         *queue = default();
-        *visibility = Visibility::Hidden;
     } else {
-        *visibility = Visibility::Inherited;
         if let Some((x, y, dir)) = vehicles.disembark.take() {
             hero.tile_x = x;
             hero.tile_y = y;

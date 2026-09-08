@@ -10,6 +10,15 @@ fn game_app() -> App {
 }
 
 #[test]
+fn player_visibility_zero_hides_and_one_shows() {
+    let mut app = game_app();
+    run(&mut app, vec![cmd(11310, 0, vec![0])]);
+    assert!(app.world().resource::<HeroHidden>().0);
+    run(&mut app, vec![cmd(11310, 0, vec![1])]);
+    assert!(!app.world().resource::<HeroHidden>().0);
+}
+
+#[test]
 fn scripted_defeat_revival_restores_one_hp_without_healing_other_actors() {
     let mut app = game_app();
     app.world_mut().resource_mut::<Vitals>().set(1, 0, 7);

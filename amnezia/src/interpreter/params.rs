@@ -14,7 +14,7 @@ use crate::gameover::GameOverActive;
 use crate::inputnumber::InputNumber;
 use crate::menu::{MenuAccess, MenuOpen};
 use crate::picture::PictureCommand;
-use crate::player::{CameraPan, HeroTransparency, Player};
+use crate::player::{CameraPan, HeroHidden, Player};
 use crate::progression::Progression;
 use crate::save::{EventSaveRequest, SaveAccess};
 use crate::screenfx::{ScreenEffect, Weather, WeatherStrength};
@@ -51,7 +51,7 @@ impl Blockers<'_> {
 #[derive(SystemParam)]
 pub(super) struct MapFx<'w> {
     pub(super) camera_pan: ResMut<'w, CameraPan>,
-    pub(super) hero_transparency: ResMut<'w, HeroTransparency>,
+    pub(super) hero_hidden: ResMut<'w, HeroHidden>,
     pub(super) weather: ResMut<'w, Weather>,
     pub(super) weather_strength: ResMut<'w, WeatherStrength>,
     pub(super) message_position: ResMut<'w, MessagePosition>,
