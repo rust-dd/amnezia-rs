@@ -1,6 +1,8 @@
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
+mod scenarios;
+
 pub struct SmokePlugin;
 
 #[derive(Resource)]
@@ -52,7 +54,7 @@ fn capture(world: &mut World, label: &str) {
 fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let advance = frame > 90
-        && world.resource::<SmokeRun>().scenario != "font"
+        && !matches!(world.resource::<SmokeRun>().scenario, "font" | "panorama")
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active
             || world.resource::<crate::battle::BattleActive>().0);
@@ -117,6 +119,15 @@ fn drive(world: &mut World) {
                 .character(10004)
                 .unwrap();
             assert_eq!((x, y), (28, 101));
+        } else if scenario == "panorama" {
+            assert_eq!(world.resource::<crate::world::MapData>().map_id, 94);
+            assert!(world.resource::<crate::player::HeroHidden>().0);
+            let (hero, visibility) = world
+                .query::<(&crate::player::Player, &Visibility)>()
+                .single(world)
+                .unwrap();
+            assert_eq!((hero.tile_x, hero.tile_y), (9, 4));
+            assert_eq!(*visibility, Visibility::Hidden);
         }
         world.write_message(AppExit::Success);
     }
@@ -207,13 +218,10 @@ fn start_scenario(world: &mut World, scenario: &str) {
             string: String::new(),
             params: vec![3, 15, 6],
         }]
+    } else if scenario == "panorama" {
+        scenarios::airship_interior_entry()
     } else {
-        vec![EventCommand {
-            code: 10810,
-            indent: 0,
-            string: String::new(),
-            params: vec![94, 10, 7],
-        }]
+        unreachable!("unknown smoke scenario: {scenario}")
     };
     world
         .resource_mut::<crate::interpreter::RunningEvent>()
