@@ -27,6 +27,7 @@ mod player;
 mod progression;
 mod save;
 mod screenfx;
+mod session;
 mod shop;
 mod state;
 mod teleport;
@@ -103,5 +104,6 @@ fn main() -> AppExit {
         .add_plugins(i18n::I18nPlugin)
         .add_plugins(terms::TermsPlugin)
         .add_plugins(timer::GameClockPlugin)
+        .add_plugins(session::SessionPlugin)
         .run()
 }

@@ -127,6 +127,10 @@ struct Fx {
     shake_offset: Vec2,
 }
 
+pub(crate) fn reset_transient(world: &mut World) {
+    world.insert_resource(Fx::default());
+}
+
 pub struct ScreenFxPlugin;
 
 impl Plugin for ScreenFxPlugin {

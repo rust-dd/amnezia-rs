@@ -6,7 +6,7 @@
 use crate::player::{CameraPan, Player};
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::tiles::CHAR_Y_OFFSET;
-use crate::world::{MapChanged, MapData, MapEvents, MapScene, load_map};
+use crate::world::{MapChanged, MapData, MapEvents, MapScene, MoveQueue, RouteStepper, load_map};
 use bevy::prelude::*;
 
 /// Frames (at 60 fps) each fade phase runs — RM2000's map-transfer transition
@@ -21,7 +21,15 @@ const FADE_SPEED: f32 = 60.0 / FADE_FRAMES;
 /// A pending teleport `(map_id, x, y)`, set by an interaction or a touch, and
 /// picked up by the fade. At most one is queued at a time.
 #[derive(Resource, Default)]
-pub struct PendingTeleport(pub Option<(u32, u32, u32)>);
+pub struct PendingTeleport(pub Option<(u32, u32, u32)>, bool);
+
+impl PendingTeleport {
+    /// Rebuild the destination even when a save or new game uses the current map.
+    pub fn reload(&mut self, map_id: u32, x: u32, y: u32) {
+        self.0 = Some((map_id, x, y));
+        self.1 = true;
+    }
+}
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 enum Phase {
@@ -36,6 +44,7 @@ pub struct Fade {
     phase: Phase,
     alpha: f32,
     target: Option<(u32, u32, u32)>,
+    reload: bool,
 }
 
 impl Fade {
@@ -51,6 +60,7 @@ impl Default for Fade {
             phase: Phase::Idle,
             alpha: 0.0,
             target: None,
+            reload: false,
         }
     }
 }
@@ -102,13 +112,19 @@ fn drive_fade(
     mut pan: ResMut<CameraPan>,
     mut map_changed: MessageWriter<MapChanged>,
     scene: Query<Entity, With<MapScene>>,
-    mut players: Query<(&mut Player, &mut Transform)>,
+    mut players: Query<(
+        &mut Player,
+        &mut Transform,
+        &mut MoveQueue,
+        &mut RouteStepper,
+    )>,
     mut overlay: Query<&mut BackgroundColor, With<FadeOverlay>>,
 ) {
     if fade.phase == Phase::Idle
         && let Some(target) = pending.0.take()
     {
         fade.target = Some(target);
+        fade.reload = std::mem::take(&mut pending.1);
         fade.phase = Phase::Out;
     }
     let step = FADE_SPEED * time.delta_secs();
@@ -133,6 +149,7 @@ fn drive_fade(
                         map_id,
                         x,
                         y,
+                        fade.reload,
                     );
                     map_changed.write(MapChanged);
                 }
@@ -165,16 +182,22 @@ fn swap_map(
     map_events: &mut MapEvents,
     pan: &mut CameraPan,
     scene: &Query<Entity, With<MapScene>>,
-    players: &mut Query<(&mut Player, &mut Transform)>,
+    players: &mut Query<(
+        &mut Player,
+        &mut Transform,
+        &mut MoveQueue,
+        &mut RouteStepper,
+    )>,
     map_id: u32,
     x: u32,
     y: u32,
+    reload: bool,
 ) {
     let (tile_x, tile_y) = (x as i32, y as i32);
     // A teleport whose destination is the current map (RM2000 same-map transfer)
     // keeps the loaded map, its events, and their state — only the hero moves.
     // Rebuilding the scene would reset every event's position and page state.
-    if map_id == map_data.map_id {
+    if map_id == map_data.map_id && !reload {
         reposition_hero(players, map_data, tile_x, tile_y);
         // A transfer re-centers the screen on the hero (RM2000), so drop any
         // cutscene camera pan carried in — the cross-map path below does the same.
@@ -209,12 +232,19 @@ fn swap_map(
 /// logical tile and snap its transform to the tile center. Facing is retained —
 /// the teleport target carries no direction, matching RM2000's "retain heading".
 fn reposition_hero(
-    players: &mut Query<(&mut Player, &mut Transform)>,
+    players: &mut Query<(
+        &mut Player,
+        &mut Transform,
+        &mut MoveQueue,
+        &mut RouteStepper,
+    )>,
     data: &MapData,
     tile_x: i32,
     tile_y: i32,
 ) {
-    if let Ok((mut player, mut transform)) = players.single_mut() {
+    if let Ok((mut player, mut transform, mut queue, mut route)) = players.single_mut() {
+        *queue = MoveQueue::default();
+        *route = RouteStepper::default();
         player.tile_x = tile_x;
         player.tile_y = tile_y;
         let (world_x, world_y) = data.tile_center(tile_x, tile_y);
@@ -229,7 +259,15 @@ mod tests {
     use super::*;
 
     /// Reposition the single hero to tile (4, 6) — the same-map teleport path.
-    fn run_reposition(data: Res<MapData>, mut players: Query<(&mut Player, &mut Transform)>) {
+    fn run_reposition(
+        data: Res<MapData>,
+        mut players: Query<(
+            &mut Player,
+            &mut Transform,
+            &mut MoveQueue,
+            &mut RouteStepper,
+        )>,
+    ) {
         reposition_hero(&mut players, &data, 4, 6);
     }
 
@@ -258,6 +296,8 @@ mod tests {
                     index: 0,
                 },
                 Transform::default(),
+                MoveQueue::default(),
+                RouteStepper::default(),
             ))
             .id();
 

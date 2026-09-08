@@ -64,6 +64,9 @@ fn save_path() -> PathBuf {
 #[derive(Resource, Default)]
 pub struct LoadRequest(pub bool);
 
+#[derive(Resource, Default)]
+pub struct LoadOutcome(pub Option<bool>);
+
 /// A request to save, honoured by [`save_or_load`] as if `F5` had been pressed.
 /// The in-game menu's Save action sets it, reusing the same snapshot path.
 #[derive(Resource, Default)]
@@ -160,14 +163,23 @@ fn neutral_tone() -> (i32, i32, i32, i32) {
 
 pub struct SavePlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct SaveSet;
+
 impl Plugin for SavePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<LoadRequest>()
+            .init_resource::<LoadOutcome>()
             .init_resource::<SaveRequest>()
             .init_resource::<EventSaveRequest>()
             .init_resource::<SaveAccess>()
             .init_resource::<SaveLocation>()
-            .add_systems(Update, save_or_load);
+            .add_systems(
+                PreUpdate,
+                save_or_load
+                    .in_set(SaveSet)
+                    .after(bevy::input::InputSystems),
+            );
     }
 }
 
@@ -175,7 +187,9 @@ impl Plugin for SavePlugin {
 /// bundled into one `SystemParam` so [`save_or_load`] stays within Bevy's
 /// 16-parameter cap.
 #[derive(SystemParam)]
-struct SaveIo<'w> {
+struct SaveIo<'w, 's> {
+    commands: Commands<'w, 's>,
+    outcome: ResMut<'w, LoadOutcome>,
     load_request: ResMut<'w, LoadRequest>,
     save_request: ResMut<'w, SaveRequest>,
     event_save: ResMut<'w, EventSaveRequest>,
@@ -184,6 +198,10 @@ struct SaveIo<'w> {
     // beside the party and inventory. Bundled here so [`save_or_load`] stays
     // within Bevy's 16-parameter cap.
     equipment: ResMut<'w, Equipment>,
+    battle: Option<Res<'w, crate::battle::BattleActive>>,
+    title: Option<Res<'w, crate::title::TitleActive>>,
+    gameover: Option<Res<'w, crate::gameover::GameOverActive>>,
+    shop: Option<Res<'w, crate::shop::ShopOpen>>,
 }
 
 /// The scene resources a save now also snapshots and restores beyond the core
@@ -265,7 +283,12 @@ fn save_or_load(
         return;
     }
     let event_save = std::mem::take(&mut save_io.event_save.0);
-    let gated = dialogue.active || running.active();
+    let gated = dialogue.active
+        || running.active()
+        || save_io.battle.as_ref().is_some_and(|s| s.0)
+        || save_io.title.as_ref().is_some_and(|s| s.0)
+        || save_io.gameover.as_ref().is_some_and(|s| s.0)
+        || save_io.shop.as_ref().is_some_and(|s| s.0);
     match resolve(event_save, hotkey_save, menu_load, hotkey_load, gated) {
         Some(Action::Save) => {
             let Some(map_data) = map_data else {
@@ -314,9 +337,18 @@ fn save_or_load(
             // Consume the request whether or not the slot reads back, so a missing
             // or corrupt file can't wedge a waiting Continue on the title screen.
             save_io.load_request.0 = false;
+            save_io.outcome.0 = Some(false);
             let Some(game) = read_save(&save_io.location.0) else {
                 return;
             };
+            if !valid_destination(&game) {
+                error!(
+                    "load failed: invalid map or party in {}",
+                    save_io.location.0.display()
+                );
+                return;
+            }
+            save_io.commands.queue(crate::session::clear_transient);
             switches.load(game.switches);
             variables.load(game.variables);
             party.restore(game.party);
@@ -347,7 +379,8 @@ fn save_or_load(
             }
             // The teleport picks this up next, reloading the saved map at the saved
             // tile; `swap_map` reads the state we just restored above.
-            pending.0 = Some((game.map_id, game.x, game.y));
+            pending.reload(game.map_id, game.x, game.y);
+            save_io.outcome.0 = Some(true);
             info!("loaded game from {}", save_io.location.0.display());
         }
         None => {}
@@ -376,6 +409,20 @@ fn read_save(path: &Path) -> Option<SaveGame> {
             None
         }
     }
+}
+
+fn valid_destination(game: &SaveGame) -> bool {
+    let path = format!(
+        "{}/maps/map_{:04}.ron",
+        crate::assets::asset_root(),
+        game.map_id
+    );
+    let map = std::fs::read_to_string(path)
+        .ok()
+        .and_then(|text| ron::from_str::<amnezia_data::Map>(&text).ok());
+    !game.party.is_empty()
+        && game.timer_remaining.is_finite()
+        && map.is_some_and(|map| game.x < map.width && game.y < map.height)
 }
 
 #[cfg(test)]

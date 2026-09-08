@@ -13,7 +13,8 @@
 use crate::assets::resolve_png;
 use crate::audio::{AudioRequest, SystemMusic, SystemSounds, play_system_se};
 use crate::font::GameFont;
-use crate::save::{LoadRequest, save_slot_exists};
+use crate::save::{LoadOutcome, LoadRequest, save_slot_exists};
+use crate::session::NewGameRequest;
 use crate::teleport::{Fade, PendingTeleport};
 use crate::world::MapChanged;
 use amnezia_data::SoundDef;
@@ -299,19 +300,18 @@ fn on_title_entered(
     }
 }
 
-/// While a Continue is resolving, hold the overlay up until the loaded map has
-/// actually been swapped in, then drop the title. The restore reuses the teleport
-/// fade, which emits [`MapChanged`] at the black peak once the saved map is in
-/// place — the one moment it is safe to reveal what is behind the overlay (black,
-/// then the saved map fading in) instead of the frozen intro map. A slot that
-/// fails to read produces no teleport at all, so an idle fallback still releases
-/// the overlay and a corrupt save can never wedge it.
+/// Hold the title until a new game or loaded map arrives. A failed load returns
+/// control to the title menu and restarts its theme.
 fn drive_continue(
     mut title: ResMut<TitleActive>,
     mut state: ResMut<TitleState>,
     load_request: Res<LoadRequest>,
     fade: Res<Fade>,
     pending: Res<PendingTeleport>,
+    new_game: Res<NewGameRequest>,
+    mut load_outcome: ResMut<LoadOutcome>,
+    music: Res<SystemMusic>,
+    mut audio: MessageWriter<AudioRequest>,
     mut map_changed: MessageReader<MapChanged>,
 ) {
     if !state.continuing {
@@ -321,20 +321,24 @@ fn drive_continue(
     }
     let swapped = !map_changed.is_empty();
     map_changed.clear();
-    let stalled = !load_request.0 && !fade.busy() && pending.0.is_none();
-    if swapped || stalled {
+    if load_outcome.0.take() == Some(false) {
+        state.continuing = false;
+        audio.write(AudioRequest::from_music(&music.title));
+        return;
+    }
+    let settled = !load_request.0 && !new_game.0 && !fade.busy() && pending.0.is_none();
+    if swapped || settled {
         state.continuing = false;
         title.0 = false;
     }
 }
 
-/// Ramp the black cover up over a New Game so the title fades into the (also
-/// black) intro map, then release the world once it is fully black. The overlay
-/// stays up — the world frozen — for the whole fade.
+/// Fade to black before resetting the session, keeping the world paused until
+/// the starting map is rebuilt.
 fn drive_start_fade(
     time: Res<Time>,
-    mut title: ResMut<TitleActive>,
     mut state: ResMut<TitleState>,
+    mut new_game: ResMut<NewGameRequest>,
     mut covers: Query<&mut BackgroundColor, With<TitleFadeCover>>,
 ) {
     if !state.starting {
@@ -346,7 +350,8 @@ fn drive_start_fade(
     }
     if state.start_alpha >= 1.0 {
         state.starting = false;
-        title.0 = false;
+        state.continuing = true;
+        new_game.0 = true;
     }
 }
 
@@ -392,6 +397,29 @@ fn wrap_cursor(cursor: usize, delta: i32, len: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failed_continue_keeps_the_title_open() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<TitleActive>()
+            .init_resource::<LoadRequest>()
+            .init_resource::<NewGameRequest>()
+            .init_resource::<Fade>()
+            .init_resource::<PendingTeleport>()
+            .init_resource::<SystemMusic>()
+            .insert_resource(LoadOutcome(Some(false)))
+            .insert_resource(TitleState {
+                continuing: true,
+                ..default()
+            })
+            .add_message::<AudioRequest>()
+            .add_message::<MapChanged>()
+            .add_systems(Update, drive_continue);
+        app.update();
+        assert!(app.world().resource::<TitleActive>().0);
+        assert!(!app.world().resource::<TitleState>().continuing);
+    }
 
     #[test]
     fn title_starts_active_so_the_world_boots_paused() {

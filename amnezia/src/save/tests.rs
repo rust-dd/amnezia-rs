@@ -52,6 +52,7 @@ fn save_app(location: PathBuf) -> App {
         .init_resource::<Party>()
         .init_resource::<Inventory>()
         .init_resource::<LoadRequest>()
+        .init_resource::<LoadOutcome>()
         .init_resource::<SaveRequest>()
         .init_resource::<EventSaveRequest>()
         .init_resource::<Vitals>()
@@ -76,6 +77,21 @@ fn slot_exists_tracks_the_file() {
     std::fs::write(&path, "x").unwrap();
     assert!(slot_exists(&path));
     let _ = std::fs::remove_file(&path);
+}
+
+#[test]
+fn corrupt_continue_does_not_mutate_the_current_session() {
+    let path = temp_slot("corrupt");
+    std::fs::write(&path, "broken save").unwrap();
+    let mut app = save_app(path.clone());
+    app.init_resource::<RunningEvent>();
+    app.world_mut().resource_mut::<Switches>().set(8, true);
+    app.world_mut().resource_mut::<LoadRequest>().0 = true;
+    app.update();
+    assert_eq!(app.world().resource::<LoadOutcome>().0, Some(false));
+    assert!(app.world().resource::<PendingTeleport>().0.is_none());
+    assert!(app.world().resource::<Switches>().get(8));
+    std::fs::remove_file(path).unwrap();
 }
 
 #[test]
@@ -213,6 +229,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     );
     assert_eq!(world.resource::<Variables>().get(3), 42);
     assert_eq!(world.resource::<Party>().snapshot(), vec![1, 3]);
+    assert!(!world.resource::<RunningEvent>().active());
     assert_eq!(
         world.resource::<Progression>().skill_entries(),
         vec![(1, vec![3, 4])]
@@ -352,7 +369,9 @@ fn save_and_load_restore_the_runtime_equipment_store() {
     let path = temp_slot("equipment");
     let _ = std::fs::remove_file(&path);
     let mut app = save_app(path.clone());
-    app.insert_resource(MapData::for_test(20, 15));
+    let mut map = MapData::for_test(20, 15);
+    map.map_id = 2;
+    app.insert_resource(map);
     app.insert_resource(RunningEvent::default());
     app.world_mut().spawn(Player {
         tile_x: 3,
