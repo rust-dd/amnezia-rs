@@ -6,11 +6,12 @@
 //! stats folding in equipped gear — the same combination a battle builds a
 //! fighter from. Kept Bevy-free so it unit-tests against plain state resources.
 
-use crate::battle::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus};
+use crate::battle::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus_slots};
+use crate::equipment::Equipment;
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::vitals::Vitals;
-use amnezia_data::{ActorDef, ItemDef};
+use amnezia_data::ActorDef;
 
 /// The read-only actor state the actor operand and the actor conditional
 /// sub-checks share: the database (defs and equipment), the level/exp store,
@@ -19,6 +20,7 @@ pub(super) struct ActorCtx<'a> {
     pub(super) data: &'a GameData,
     pub(super) progression: &'a Progression,
     pub(super) vitals: &'a Vitals,
+    pub(super) equipment: &'a Equipment,
     pub(super) hero_name: &'a str,
 }
 
@@ -38,24 +40,20 @@ pub(super) fn actor_param(sub_op: i32, actor_id: u32, ctx: &ActorCtx) -> i32 {
         3 => current_sp(def, level, ctx.vitals),
         4 => actor_hp_sp_at(&def.curves, level, def.hp, def.sp).0 as i32,
         5 => actor_hp_sp_at(&def.curves, level, def.hp, def.sp).1 as i32,
-        6 => stat(def, level, &ctx.data.items).attack as i32,
-        7 => stat(def, level, &ctx.data.items).defense as i32,
-        8 => stat(def, level, &ctx.data.items).spirit as i32,
-        9 => stat(def, level, &ctx.data.items).agility as i32,
-        10 => def.weapon as i32,
-        11 => def.shield as i32,
-        12 => def.armor as i32,
-        13 => def.helmet as i32,
-        14 => def.accessory as i32,
+        6 => stat(def, level, ctx).attack as i32,
+        7 => stat(def, level, ctx).defense as i32,
+        8 => stat(def, level, ctx).spirit as i32,
+        9 => stat(def, level, ctx).agility as i32,
+        10..=14 => ctx.equipment.slots(def)[(sub_op - 10) as usize] as i32,
         _ => 0,
     }
 }
 
 /// An actor's curve-derived battle stats at `level` plus its equipped-gear bonus,
 /// the same combination the battle builds a fighter from.
-fn stat(def: &ActorDef, level: u32, items: &[ItemDef]) -> Stats {
+fn stat(def: &ActorDef, level: u32, ctx: &ActorCtx) -> Stats {
     let mut s = actor_stats_at(&def.curves, level);
-    let bonus = equipment_bonus(def, items);
+    let bonus = equipment_bonus_slots(ctx.equipment.slots(def), &ctx.data.items);
     s.attack += bonus.attack;
     s.defense += bonus.defense;
     s.spirit += bonus.spirit;
@@ -82,7 +80,13 @@ fn current_sp(def: &ActorDef, level: u32, vitals: &Vitals) -> i32 {
 #[cfg(test)]
 pub(super) mod fixtures {
     use super::*;
-    use amnezia_data::{ActorCurves, Learning};
+    use amnezia_data::{ActorCurves, ItemDef, Learning};
+
+    pub(in crate::interpreter) fn equipment() -> &'static Equipment {
+        static EQUIPMENT: std::sync::LazyLock<Equipment> =
+            std::sync::LazyLock::new(Equipment::default);
+        &EQUIPMENT
+    }
 
     pub(in crate::interpreter) fn actor_def() -> ActorDef {
         ActorDef {
@@ -168,6 +172,7 @@ mod tests {
             data,
             progression: prog,
             vitals: vit,
+            equipment: fixtures::equipment(),
             hero_name: "Ron",
         }
     }
@@ -189,6 +194,17 @@ mod tests {
             "attack folds in the equipped weapon"
         );
         assert_eq!(actor_param(10, 1, &c), 2, "the equipped weapon id");
+    }
+
+    #[test]
+    fn queries_use_the_current_loadout_after_unequipping() {
+        let (data, prog, vit) = (game_data(), Progression::default(), Vitals::default());
+        let mut equipment = Equipment::default();
+        equipment.set_slot(&data.actors[0], 0, 0);
+        let mut c = ctx(&data, &prog, &vit);
+        c.equipment = &equipment;
+        assert_eq!(actor_param(10, 1, &c), 0);
+        assert_eq!(actor_param(6, 1, &c), 20);
     }
 
     #[test]

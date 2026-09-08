@@ -34,9 +34,10 @@ pub(crate) use state::{
     cure, has_state, inflict, release_on_damage, state_hp_delta, state_infliction_chance,
     tick_recovery, worst_restriction,
 };
+#[cfg(test)]
+pub(crate) use stats::equipment_bonus;
 pub(crate) use stats::{
-    Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus, equipment_bonus_slots,
-    equipment_resist_slots,
+    Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus_slots, equipment_resist_slots,
 };
 
 pub(super) use super::model::Command;

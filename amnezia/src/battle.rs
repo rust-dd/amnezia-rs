@@ -26,7 +26,7 @@ mod resolve;
 mod scene;
 mod systems;
 
-pub(crate) use logic::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus};
+pub(crate) use logic::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus_slots};
 
 use crate::assets::{asset_root, load_ron};
 use crate::audio::{AudioRequest, BgmTrack};

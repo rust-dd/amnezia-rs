@@ -58,9 +58,14 @@ pub(super) fn branch_holds(
             }
         }
         4 => {
-            // Item: params[2] is 0 = having, 1 = NOT having. The "not having" sense
-            // was previously dropped, so a "does not have" branch always failed.
-            let has = inventory.has(params.get(1).copied().unwrap_or(0) as u32);
+            let id = params.get(1).copied().unwrap_or(0) as u32;
+            let has = inventory.has(id)
+                || party.snapshot().iter().any(|actor| {
+                    actors
+                        .data
+                        .actor(*actor)
+                        .is_some_and(|def| id > 0 && actors.equipment.slots(def).contains(&id))
+                });
             if params.get(2).copied().unwrap_or(0) == 0 {
                 has
             } else {
@@ -78,11 +83,7 @@ pub(super) fn branch_holds(
     }
 }
 
-/// The actor conditional sub-checks (EasyRPG `case 5`, `params[2]`): in party (0),
-/// name is (1), level ≥ (2), HP ≥ (3), skill learned (4), equipment worn (5). The
-/// EasyRPG "state affliction" sub-check (6) has no persistent out-of-battle store
-/// in this remake and reads false. An id with no actor behind it fails every
-/// non-party check. The compared value is `params[3]`.
+/// Actor predicates read live progression, equipment and conditions.
 fn actor_branch(params: &[i32], string: &str, actors: &ActorCtx, party: &Party) -> bool {
     let actor_id = params.get(1).copied().unwrap_or(0).max(0) as u32;
     let sub = params.get(2).copied().unwrap_or(0);
@@ -109,7 +110,10 @@ fn actor_branch(params: &[i32], string: &str, actors: &ActorCtx, party: &Party) 
             .progression
             .known_skill_ids(def)
             .contains(&(arg.max(0) as u32)),
-        5 => [def.weapon, def.shield, def.armor, def.helmet, def.accessory]
+        5 => actors.equipment.slots(def).contains(&(arg.max(0) as u32)),
+        6 => actors
+            .vitals
+            .states(actor_id)
             .contains(&(arg.max(0) as u32)),
         _ => false,
     }
@@ -133,8 +137,41 @@ mod tests {
             data,
             progression,
             vitals,
+            equipment: super::super::actor_query::fixtures::equipment(),
             hero_name,
         }
+    }
+
+    #[test]
+    fn equipment_and_affliction_conditions_follow_runtime_changes() {
+        let (data, prog, mut vit) = (game_data(), Progression::default(), Vitals::default());
+        let party = Party::default();
+        let mut equipment = crate::equipment::Equipment::default();
+        equipment.set_slot(&data.actors[0], 0, 9);
+        vit.set_states(1, vec![2]);
+        let mut c = ctx(&data, &prog, &vit, "Ron");
+        c.equipment = &equipment;
+        assert!(!actor_branch(&[5, 1, 5, 2], "", &c, &party));
+        assert!(actor_branch(&[5, 1, 5, 9], "", &c, &party));
+        assert!(actor_branch(&[5, 1, 6, 2], "", &c, &party));
+        assert!(!actor_branch(&[5, 1, 6, 1], "", &c, &party));
+        assert!(branch_holds(
+            &[4, 9, 0],
+            "",
+            &Switches::default(),
+            &Variables::default(),
+            &party,
+            &Inventory::default(),
+            &c,
+            None,
+        ));
+        vit.set(1, 0, 3);
+        assert!(actor_branch(
+            &[5, 1, 6, 1],
+            "",
+            &ctx(&data, &prog, &vit, "Ron"),
+            &party
+        ));
     }
 
     #[test]

@@ -220,6 +220,7 @@ mod tests {
             data,
             progression: prog,
             vitals: vit,
+            equipment: super::super::actor_query::fixtures::equipment(),
             hero_name: "Ron",
         }
     }

@@ -1,7 +1,9 @@
 //! Party-member battle stats: the level/curve-derived base and the equipment
 //! bonuses layered on top, plus the enemy stats read straight from a monster.
 
-use amnezia_data::{ActorCurves, ActorDef, ItemDef, MonsterDef};
+#[cfg(test)]
+use amnezia_data::ActorDef;
+use amnezia_data::{ActorCurves, ItemDef, MonsterDef};
 
 /// A combatant's four battle stats. Enemies read them straight from their
 /// [`MonsterDef`]; party members, whose `ActorDef` carries only a level, get
@@ -78,6 +80,7 @@ pub fn actor_hp_sp_at(
 /// accessory) add on top of the curve-derived base: the summed `atk`/`def`/`spi`/
 /// `agi` of each equipped item. Reads the actor's *starting* gear; the battle
 /// builds from the runtime loadout via [`equipment_bonus_slots`].
+#[cfg(test)]
 pub fn equipment_bonus(actor: &ActorDef, items: &[ItemDef]) -> Stats {
     equipment_bonus_slots(actor_slots(actor), items)
 }
@@ -126,6 +129,7 @@ pub fn equipment_resist_slots(slots: [u32; 5], items: &[ItemDef]) -> Vec<u32> {
 
 /// An actor's starting five-slot loadout in slot order (weapon, shield, armor,
 /// helmet, accessory), the fallback when no runtime loadout is supplied.
+#[cfg(test)]
 fn actor_slots(actor: &ActorDef) -> [u32; 5] {
     [
         actor.weapon,

@@ -35,6 +35,7 @@ pub(super) fn control_variables(frame: &mut Frame, command: &EventCommand, x: &m
         data: &x.subsystems.actor_edits.game_data,
         progression: &x.subsystems.actor_edits.progression,
         vitals: &x.subsystems.vitals,
+        equipment: &x.subsystems.actor_edits.equipment,
         hero_name: &x.subsystems.actor_edits.hero_name.0,
     };
     let operand = resolve_operand(
@@ -89,6 +90,7 @@ pub(super) fn conditional_branch(frame: &mut Frame, command: &EventCommand, x: &
             data: &x.subsystems.actor_edits.game_data,
             progression: &x.subsystems.actor_edits.progression,
             vitals: &x.subsystems.vitals,
+            equipment: &x.subsystems.actor_edits.equipment,
             hero_name: &x.subsystems.actor_edits.hero_name.0,
         };
         branch_holds(
