@@ -11,10 +11,12 @@ use serde::{Deserialize, Serialize};
 mod map_info;
 mod move_route;
 mod terms;
+mod vehicle;
 
 pub use map_info::{MapBgm, MapInfoDef, resolve_map_bgm};
 pub use move_route::{MoveCommandDef, MoveRouteDef};
 pub use terms::{ShopTerms, TermsDef};
+pub use vehicle::VehicleDef;
 
 /// A converted map: the chipset it uses, its dimensions in tiles, and the two
 /// tile layers (each `width * height` tile ids, row-major). `lower` is the
@@ -539,8 +541,7 @@ pub struct SoundDef {
 /// The audio half of the RM2000 system definition (see `lcf::System`), read by
 /// the battle system (and later the title/inn scenes): the music tracks and
 /// sound effects each scene plays. `enemy_defeated_se` is liblcf's
-/// `enemy_death_se`. Vehicle music (`boat`/`ship`/`airship`) is carried for
-/// completeness though this game has no vehicles.
+/// `enemy_death_se`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SystemDef {
     pub title_music: MusicDef,

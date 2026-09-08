@@ -14,11 +14,18 @@ struct Args {
     /// Output directory for the clean assets (e.g. `assets`).
     #[arg(long)]
     output: PathBuf,
+    /// Regenerate structured data without reconverting graphics or synthesizing music.
+    #[arg(long)]
+    data_only: bool,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
-    let images = amnezia_convert::convert_graphics(&args.input, &args.output)?;
+    let images = if args.data_only {
+        0
+    } else {
+        amnezia_convert::convert_graphics(&args.input, &args.output)?
+    };
     let maps = amnezia_convert::convert_maps(&args.input, &args.output)?;
     let map_info = amnezia_convert::convert_map_info(&args.input, &args.output)?;
     let chipsets = amnezia_convert::convert_chipsets(&args.input, &args.output)?;
@@ -33,9 +40,14 @@ fn main() -> Result<()> {
     let common_events = amnezia_convert::convert_common_events(&args.input, &args.output)?;
     let start_map = amnezia_convert::convert_start(&args.input, &args.output)?;
     let hero = amnezia_convert::convert_hero(&args.input, &args.output)?;
-    let (effects, music) = amnezia_convert::convert_audio(&args.input, &args.output)?;
+    let (effects, music) = if args.data_only {
+        (0, 0)
+    } else {
+        amnezia_convert::convert_audio(&args.input, &args.output)?
+    };
     amnezia_convert::convert_system(&args.input, &args.output)?;
     amnezia_convert::convert_terms(&args.input, &args.output)?;
+    amnezia_convert::convert_vehicles(&args.input, &args.output)?;
     println!(
         "converted {images} images, {maps} maps, {map_info} map-info nodes, {chipsets} chipsets, \
          {actors} actors, {items} items, {skills} skills, {states} states, \

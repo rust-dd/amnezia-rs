@@ -11,6 +11,7 @@ mod graphics;
 mod maps;
 mod system;
 mod terms;
+mod vehicles;
 
 pub use animations::convert_animations;
 pub use audio::convert_audio;
@@ -22,3 +23,4 @@ pub use maps::{
 };
 pub use system::convert_system;
 pub use terms::convert_terms;
+pub use vehicles::convert_vehicles;

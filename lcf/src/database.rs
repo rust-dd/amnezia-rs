@@ -33,7 +33,11 @@ pub use troops::{Troop, TroopMember, parse_troops};
 
 /// Locate one top-level LDB section (`ChunkData`) by id, returning its raw
 /// bytes. Verifies the `LcfDataBase` signature and skips every other section.
-fn find_section(bytes: &[u8], section_id: u32, missing: LcfError) -> Result<&[u8], LcfError> {
+pub(crate) fn find_section(
+    bytes: &[u8],
+    section_id: u32,
+    missing: LcfError,
+) -> Result<&[u8], LcfError> {
     let mut reader = Reader::new(bytes);
     let signature_len = reader.byte()? as usize;
     let signature = reader.take(signature_len)?;

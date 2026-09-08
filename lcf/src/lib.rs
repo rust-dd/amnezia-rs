@@ -14,6 +14,7 @@
 mod database;
 mod map;
 mod map_tree;
+mod vehicles;
 
 pub use database::{
     Actor, Animation, AnimationCell, AnimationFrame, AnimationTiming, Attribute, Chipset,
@@ -26,6 +27,7 @@ pub use map::{
     Event, EventCommand, EventCondition, EventPage, MapUnit, MoveCommand, MoveRoute, parse_map,
 };
 pub use map_tree::{MapInfo, Start, parse_map_infos, parse_start};
+pub use vehicles::{Vehicle, parse_vehicles};
 
 /// Errors returned while parsing an LCF file.
 #[derive(Debug, thiserror::Error)]
