@@ -17,28 +17,32 @@ pub struct MessageBox {
     pub lines: Vec<String>,
 }
 
+#[derive(Default)]
+pub struct MessageFace {
+    name: Option<String>,
+    index: u32,
+}
+
 /// Collect the sequence of message boxes a command run displays, in order.
 /// `ShowMessage` starts a new box; `ShowMessage_2` appends a line to the
 /// current box; `ChangeFaceGraphic` sets the face (name + `params[0]` index)
 /// for boxes that follow.
-pub fn message_boxes(commands: &[EventCommand]) -> Vec<MessageBox> {
+pub fn message_boxes(commands: &[EventCommand], face: &mut MessageFace) -> Vec<MessageBox> {
     let mut boxes = Vec::new();
-    let mut face: Option<String> = None;
-    let mut face_index = 0;
     for command in commands {
         match command.code {
             CHANGE_FACE => {
-                face = if command.string.is_empty() {
+                face.name = if command.string.is_empty() {
                     None
                 } else {
                     Some(command.string.clone())
                 };
-                face_index = command.params.first().copied().unwrap_or(0).max(0) as u32;
+                face.index = command.params.first().copied().unwrap_or(0).max(0) as u32;
             }
             SHOW_MESSAGE => {
                 boxes.push(MessageBox {
-                    face: face.clone(),
-                    face_index,
+                    face: face.name.clone(),
+                    face_index: face.index,
                     lines: vec![command.string.clone()],
                 });
             }
@@ -73,7 +77,7 @@ mod tests {
             cmd(20110, "Line 2"),
             cmd(10110, "Second box"),
         ];
-        let boxes = message_boxes(&commands);
+        let boxes = message_boxes(&commands, &mut MessageFace::default());
         assert_eq!(boxes.len(), 2);
         assert_eq!(boxes[0].lines, vec!["Line 1", "Line 2"]);
         assert_eq!(boxes[1].lines, vec!["Second box"]);
@@ -91,7 +95,7 @@ mod tests {
     #[test]
     fn face_applies_to_following_boxes() {
         let commands = vec![cmd_params(10130, "Ron", vec![6, 0, 0]), cmd(10110, "Hi")];
-        let boxes = message_boxes(&commands);
+        let boxes = message_boxes(&commands, &mut MessageFace::default());
         assert_eq!(boxes[0].face, Some("Ron".to_string()));
         assert_eq!(boxes[0].face_index, 6);
     }
@@ -99,6 +103,21 @@ mod tests {
     #[test]
     fn ignores_unrelated_commands() {
         let commands = vec![cmd(10210, "switch"), cmd(11330, "move")];
-        assert!(message_boxes(&commands).is_empty());
+        assert!(message_boxes(&commands, &mut MessageFace::default()).is_empty());
+    }
+
+    #[test]
+    fn face_persists_across_separate_message_runs_until_cleared() {
+        let mut face = MessageFace::default();
+        message_boxes(&[cmd_params(10130, "Ron", vec![6])], &mut face);
+        let boxes = message_boxes(&[cmd(10110, "After the switch")], &mut face);
+        assert_eq!(boxes[0].face.as_deref(), Some("Ron"));
+        assert_eq!(boxes[0].face_index, 6);
+        message_boxes(&[cmd(10130, "")], &mut face);
+        assert!(
+            message_boxes(&[cmd(10110, "Narration")], &mut face)[0]
+                .face
+                .is_none()
+        );
     }
 }

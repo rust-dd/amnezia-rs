@@ -19,6 +19,7 @@ use typewriter::Typewriter;
 /// current page's letter-by-letter reveal (rebuilt when the box changes).
 #[derive(Resource, Default)]
 pub struct Dialogue {
+    pub(crate) face: crate::events::MessageFace,
     pub boxes: Vec<MessageBox>,
     pub index: usize,
     pub active: bool,
@@ -106,7 +107,7 @@ fn interact(
     inventory: Res<Inventory>,
     mut dialogue: ResMut<Dialogue>,
     mut running: ResMut<RunningEvent>,
-    players: Query<&Player>,
+    players: Query<(&Player, Option<&crate::world::MoveQueue>)>,
 ) {
     if scene.paused() {
         return;
@@ -133,9 +134,12 @@ fn interact(
     if scene.vehicles.as_ref().is_some_and(|v| v.blocks_action()) {
         return;
     }
-    let Ok(player) = players.single() else {
+    let Ok((player, queue)) = players.single() else {
         return;
     };
+    if queue.is_some_and(|q| q.busy()) {
+        return;
+    }
     let (fx, fy) = facing_tile(player);
     let (dx, dy) = (fx - player.tile_x, fy - player.tile_y);
     // RM2000 `CheckActionEvent`: a trigger-0 event on the tile the hero faces

@@ -36,7 +36,10 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                 .iter()
                 .take_while(|c| is_message(c.code))
                 .count();
-            let mut boxes = message_boxes(&frame.commands[frame.ip..frame.ip + run_len]);
+            let mut boxes = message_boxes(
+                &frame.commands[frame.ip..frame.ip + run_len],
+                &mut x.dialogue.face,
+            );
             frame.ip += run_len;
             if boxes.is_empty() {
                 Flow::Advance
