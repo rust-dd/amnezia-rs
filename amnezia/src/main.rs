@@ -29,6 +29,7 @@ mod save;
 mod screenfx;
 mod session;
 mod shop;
+mod smoke;
 mod state;
 mod teleport;
 mod terms;
@@ -107,5 +108,6 @@ fn main() -> AppExit {
         .add_plugins(timer::GameClockPlugin)
         .add_plugins(session::SessionPlugin)
         .add_plugins(vehicles::VehiclePlugin)
+        .add_plugins(smoke::SmokePlugin)
         .run()
 }
