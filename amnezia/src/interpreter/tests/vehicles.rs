@@ -2,6 +2,27 @@ use super::*;
 use crate::vehicles::Vehicles;
 
 #[test]
+fn airship_minimap_condition_is_false_when_walking() {
+    let mut app = interp_app();
+    let commands = vec![
+        cmd(12010, 0, vec![7, 2, 0, 0, 0, 1]),
+        switch_cmd(610, 0, 1),
+        cmd(22011, 0, vec![]),
+    ];
+    app.world_mut()
+        .resource_mut::<RunningEvent>()
+        .start(1, commands.clone());
+    app.update();
+    assert!(!switch_on(&app, 610));
+    app.world_mut().resource_mut::<Vehicles>().save.riding = Some(2);
+    app.world_mut()
+        .resource_mut::<RunningEvent>()
+        .start(1, commands);
+    app.update();
+    assert!(switch_on(&app, 610));
+}
+
+#[test]
 fn locate_board_and_query_airship_in_one_interpreter_frame() {
     let mut app = interp_app();
     let mut data = MapData::for_test(100, 110);

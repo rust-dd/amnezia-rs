@@ -73,6 +73,10 @@ pub(super) fn conditional_branch(frame: &mut Frame, command: &EventCommand, x: &
         } else {
             secs <= target
         }
+    } else if kind == 7 {
+        command.params.get(1).is_some_and(|wanted| {
+            x.subsystems.mapfx.vehicles.save.riding.map(|id| id as i32) == Some(*wanted)
+        })
     } else {
         let facing = if kind == 6 {
             resolve_character(
