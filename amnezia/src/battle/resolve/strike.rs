@@ -37,7 +37,11 @@ impl Battle {
             Source::Enemy(ti),
             &self.members[pi].weapon_attributes,
         );
-        let crit = ((rng_next(&mut self.rng) % 100) as u32) < self.members[pi].weapon_crit;
+        let chance = logic::critical_chance(
+            self.members[pi].base_critical_denominator,
+            self.members[pi].weapon_crit,
+        );
+        let crit = ((rng_next(&mut self.rng) % 100) as u32) < chance;
         let base = if crit {
             logic::critical_damage(base)
         } else {

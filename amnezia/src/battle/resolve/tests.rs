@@ -2,6 +2,7 @@ use super::*;
 use crate::battle::model::testkit::{build_1v2, build_party2};
 
 mod attributes;
+mod criticals;
 
 fn fire_attr() -> amnezia_data::AttributeDef {
     amnezia_data::AttributeDef {

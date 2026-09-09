@@ -10,6 +10,7 @@
 //! AI), and [`escape`] (turn order, flee, and rewards).
 
 mod attribute;
+mod critical;
 mod damage;
 mod enemy;
 mod escape;
@@ -21,6 +22,7 @@ mod stats;
 mod tests;
 
 pub(crate) use attribute::attribute_damage;
+pub(crate) use critical::critical_chance;
 pub(crate) use damage::{
     critical_damage, defended, physical_damage, skill_effect, variance_adjust,
 };

@@ -130,6 +130,7 @@ impl Fighter {
             command: None,
             weapon_hit: logic::effective_hit(weapon.map(|w| w.hit)),
             weapon_crit: weapon.map_or(0, |w| w.crit),
+            base_critical_denominator: actor.critical_hit.then_some(actor.critical_hit_chance),
             weapon_attributes: weapon.map_or_else(Vec::new, |w| w.attribute_defense.clone()),
             attack_animation: weapon.map_or(actor.unarmed_animation, |w| w.weapon_animation),
             states: vitals

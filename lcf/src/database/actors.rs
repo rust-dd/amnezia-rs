@@ -49,6 +49,8 @@ pub struct StatCurves {
 /// `Learning` list: the `(level, skill_id)` pairs it learns as it levels up.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Actor {
+    pub critical_hit: bool,
+    pub critical_hit_chance: u32,
     pub attribute_ranks: Vec<u8>,
     pub state_ranks: Vec<u8>,
     pub id: u32,
@@ -220,6 +222,8 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
         let mut unarmed_animation = 0;
         let mut state_ranks = Vec::new();
         let mut attribute_ranks = Vec::new();
+        let mut critical_hit = true;
+        let mut critical_hit_chance = 30;
         loop {
             let sub_id = reader.varint()?;
             if sub_id == 0 {
@@ -234,6 +238,8 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
                 ACTOR_FACE_INDEX => face_index = Reader::new(sub_data).varint()?,
                 ACTOR_INITIAL_LEVEL => initial_level = Reader::new(sub_data).varint()?,
                 ACTOR_FINAL_LEVEL => final_level = Some(Reader::new(sub_data).varint()?),
+                0x09 => critical_hit = Reader::new(sub_data).varint()? != 0,
+                0x0A => critical_hit_chance = Reader::new(sub_data).varint()?,
                 ACTOR_TWO_WEAPON => two_weapons = Reader::new(sub_data).varint()? != 0,
                 ACTOR_LOCK_EQUIPMENT => fix_equipment = Reader::new(sub_data).varint()? != 0,
                 ACTOR_PARAMETERS => parameters = sub_data,
@@ -259,6 +265,8 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
         let initial_hp = stat_curves.max_hp.get(level_index).copied().unwrap_or(0) as u32;
         let initial_sp = stat_curves.max_sp.get(level_index).copied().unwrap_or(0) as u32;
         actors.push(Actor {
+            critical_hit,
+            critical_hit_chance,
             attribute_ranks,
             state_ranks,
             id,
@@ -551,5 +559,30 @@ mod tests {
         let actors = parse_actors(&ldb).unwrap();
         assert_eq!(actors[0].attribute_ranks, [2, 1, 4]);
         assert!(actors[1].attribute_ranks.is_empty());
+    }
+
+    #[test]
+    fn actor_criticals_preserve_defaults_and_explicit_values() {
+        let ldb = make_ldb(&[(
+            0x0B,
+            section(&[
+                element(1, &[]),
+                element(2, &[subchunk(9, &[0]), subchunk(10, &[20])]),
+                element(3, &[subchunk(9, &[1]), subchunk(10, &[0])]),
+            ]),
+        )]);
+        let actors = parse_actors(&ldb).unwrap();
+        assert_eq!(
+            (actors[0].critical_hit, actors[0].critical_hit_chance),
+            (true, 30)
+        );
+        assert_eq!(
+            (actors[1].critical_hit, actors[1].critical_hit_chance),
+            (false, 20)
+        );
+        assert_eq!(
+            (actors[2].critical_hit, actors[2].critical_hit_chance),
+            (true, 0)
+        );
     }
 }

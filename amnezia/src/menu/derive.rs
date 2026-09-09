@@ -88,6 +88,8 @@ mod tests {
 
     fn def() -> ActorDef {
         ActorDef {
+            critical_hit: false,
+            critical_hit_chance: 30,
             state_ranks: Vec::new(),
             attribute_ranks: Vec::new(),
             id: 1,

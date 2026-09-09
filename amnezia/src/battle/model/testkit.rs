@@ -4,6 +4,8 @@ use super::*;
 
 pub fn actor(id: u32, level: u32, hp: u32, sp: u32) -> ActorDef {
     ActorDef {
+        critical_hit: false,
+        critical_hit_chance: 30,
         state_ranks: Vec::new(),
         attribute_ranks: Vec::new(),
         id,

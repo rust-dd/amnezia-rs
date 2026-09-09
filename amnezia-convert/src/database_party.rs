@@ -44,6 +44,8 @@ pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
     let actors: Vec<ActorDef> = parsed
         .into_iter()
         .map(|a| ActorDef {
+            critical_hit: a.critical_hit,
+            critical_hit_chance: a.critical_hit_chance,
             state_ranks: a.state_ranks,
             attribute_ranks: a.attribute_ranks,
             id: a.id,

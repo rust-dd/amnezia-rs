@@ -7,6 +7,8 @@ fn legacy_actor_ron_retains_an_empty_state_rank_tail() {
     let actor = ron::from_str::<ActorDef>(legacy).unwrap();
     assert!(actor.state_ranks.is_empty());
     assert!(actor.attribute_ranks.is_empty());
+    assert!(actor.critical_hit);
+    assert_eq!(actor.critical_hit_chance, 30);
 }
 
 fn varint(mut v: u32) -> Vec<u8> {
@@ -101,6 +103,8 @@ fn converts_ldb_to_actors_ron() {
             subchunk(0x0F, b"Ron"),
             subchunk(0x10, &varint(0)),
             subchunk(0x07, &varint(2)),
+            subchunk(0x09, &varint(0)),
+            subchunk(0x0A, &varint(20)),
             subchunk(0x15, &varint(1)),
             subchunk(0x1F, &params),
             subchunk(0x3F, &learnings(&[(1, 10), (5, 12)])),
@@ -124,6 +128,8 @@ fn converts_ldb_to_actors_ron() {
     assert_eq!(
         actors[0],
         ActorDef {
+            critical_hit: false,
+            critical_hit_chance: 20,
             attribute_ranks: vec![2, 1, 4],
             state_ranks: vec![0, 4, 2],
             id: 1,

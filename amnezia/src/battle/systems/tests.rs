@@ -73,6 +73,8 @@ fn logic_app() -> App {
     app.add_message::<AudioRequest>();
     app.insert_resource(GameData {
         actors: vec![ActorDef {
+            critical_hit: false,
+            critical_hit_chance: 30,
             state_ranks: Vec::new(),
             attribute_ranks: Vec::new(),
             id: 1,
@@ -205,6 +207,8 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     let ron = ActorDef {
+        critical_hit: false,
+        critical_hit_chance: 30,
         state_ranks: Vec::new(),
         attribute_ranks: Vec::new(),
         id: 1,

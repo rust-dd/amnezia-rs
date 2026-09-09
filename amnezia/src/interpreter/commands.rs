@@ -358,6 +358,8 @@ mod tests {
 
     fn level_def() -> amnezia_data::ActorDef {
         amnezia_data::ActorDef {
+            critical_hit: false,
+            critical_hit_chance: 30,
             state_ranks: Vec::new(),
             attribute_ranks: Vec::new(),
             id: 1,

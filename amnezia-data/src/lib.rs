@@ -76,6 +76,10 @@ pub struct ActorCurves {
 /// usable in battle) are exactly those learnings at or below its current level.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorDef {
+    #[serde(default = "default_true")]
+    pub critical_hit: bool,
+    #[serde(default = "default_critical_denominator")]
+    pub critical_hit_chance: u32,
     #[serde(default)]
     pub attribute_ranks: Vec<u8>,
     #[serde(default)]
@@ -351,6 +355,10 @@ pub struct AnimationCellDef {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_critical_denominator() -> u32 {
+    30
 }
 
 fn default_audio_level() -> u32 {

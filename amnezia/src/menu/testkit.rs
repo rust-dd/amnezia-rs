@@ -12,6 +12,8 @@ pub(super) const ITEM_HERB: u32 = 5;
 /// starting HP/SP and battle's linear stat formula, no equipment.
 pub(super) fn actor() -> ActorDef {
     ActorDef {
+        critical_hit: false,
+        critical_hit_chance: 30,
         state_ranks: Vec::new(),
         attribute_ranks: Vec::new(),
         id: 1,

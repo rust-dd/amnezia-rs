@@ -20,6 +20,7 @@ pub struct Fighter {
     /// Empty-handed defaults to 90% hit; an explicit weapon zero stays zero.
     pub weapon_hit: u32,
     pub weapon_crit: u32,
+    pub base_critical_denominator: Option<u32>,
     pub weapon_attributes: Vec<u32>,
     /// The animation this member's normal attack plays on its target: the
     /// equipped weapon's `weapon_animation`, or the actor's `unarmed_animation`
