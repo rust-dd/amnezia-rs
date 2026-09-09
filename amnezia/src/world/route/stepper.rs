@@ -453,3 +453,6 @@ mod tests;
 
 #[cfg(test)]
 mod packed_tests;
+
+#[cfg(test)]
+mod page_tests;

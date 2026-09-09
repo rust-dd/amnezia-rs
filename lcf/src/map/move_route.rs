@@ -21,11 +21,21 @@ pub struct MoveCommand {
 /// An RM2000 move route: the ordered commands, whether the route loops
 /// (`repeat`), and whether a blocked step is skipped rather than waited on
 /// (`skippable`).
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MoveRoute {
     pub commands: Vec<MoveCommand>,
     pub repeat: bool,
     pub skippable: bool,
+}
+
+impl Default for MoveRoute {
+    fn default() -> Self {
+        Self {
+            commands: Vec::new(),
+            repeat: true,
+            skippable: false,
+        }
+    }
 }
 
 /// Parse an event page's move-route sub-chunk stream (LMU chunk 0x29): sub-chunk
@@ -95,8 +105,7 @@ mod tests {
 
     #[test]
     fn parses_plain_move_and_turn_commands() {
-        // move-left (3), face-up (12), wait (23) — none carry a tail.
-        let bytes: Vec<u8> = [varint(3), varint(12), varint(23)].concat();
+        let bytes = [varint(3), varint(12), varint(23)].concat();
         let commands = parse_move_commands(&bytes).unwrap();
         assert_eq!(commands.len(), 3);
         assert_eq!(commands[0].code, 3);
@@ -106,7 +115,6 @@ mod tests {
 
     #[test]
     fn parses_switch_graphic_and_sound_tails() {
-        // switch_on 7; change_graphic "Torch" frame 1; play_se "Bird" 90/100/50.
         let mut bytes = varint(32);
         bytes.extend(varint(7));
         bytes.extend(varint(34));
@@ -132,8 +140,7 @@ mod tests {
 
     #[test]
     fn parses_route_with_flags() {
-        // A route chunk: command array (0x0C), repeat (0x15), skippable (0x16).
-        let cmds: Vec<u8> = [varint(2), varint(2)].concat();
+        let cmds = [varint(2), varint(2)].concat();
         let mut chunk = subchunk(0x0B, &varint(2));
         chunk.extend(subchunk(0x0C, &cmds));
         chunk.extend(subchunk(0x15, &varint(1)));
@@ -145,12 +152,21 @@ mod tests {
     }
 
     #[test]
-    fn defaults_flags_off_when_omitted() {
-        let cmds: Vec<u8> = varint(11);
+    fn defaults_to_repeating_non_skippable_when_flags_are_omitted() {
+        let cmds = varint(11);
         let mut chunk = subchunk(0x0C, &cmds);
         chunk.push(0);
         let route = parse_move_route(&chunk).unwrap();
         assert_eq!(route.commands.len(), 1);
+        assert!(route.repeat && !route.skippable);
+    }
+
+    #[test]
+    fn preserves_explicit_non_repeating_route() {
+        let mut chunk = subchunk(0x0C, &varint(11));
+        chunk.extend(subchunk(0x15, &varint(0)));
+        chunk.push(0);
+        let route = parse_move_route(&chunk).unwrap();
         assert!(!route.repeat && !route.skippable);
     }
 }
