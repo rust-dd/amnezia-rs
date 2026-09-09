@@ -122,3 +122,65 @@ fn invisible_events_have_movement_components_and_tile_events_render_from_the_chi
     assert_eq!(world.query::<&EventSprite>().iter(world).count(), 1);
     assert_eq!(world.query::<&RouteStepper>().iter(world).count(), 1);
 }
+
+#[test]
+fn page_refresh_during_a_forced_route_installs_the_new_autonomous_program() {
+    let mut next = page("Chara1", 1);
+    next.condition.flags = 1;
+    next.condition.switch_a = 8;
+    next.move_type = 6;
+    next.move_frequency = 8;
+    next.move_speed = 5;
+    next.move_route = amnezia_data::MoveRouteDef {
+        commands: vec![
+            amnezia_data::MoveCommandDef {
+                code: 32,
+                params: vec![9],
+                string: String::new(),
+            },
+            amnezia_data::MoveCommandDef {
+                code: 23,
+                ..default()
+            },
+        ],
+        repeat: true,
+        skippable: false,
+    };
+    let mut app = app_with_event(Event {
+        id: 1,
+        x: 3,
+        y: 4,
+        name: String::new(),
+        pages: vec![page("Chara1", 0), next],
+    });
+    let world = app.world_mut();
+    world
+        .query::<&mut RouteStepper>()
+        .single_mut(world)
+        .unwrap()
+        .force_route(RouteStepper::from_move_event(&[1, 8, 0, 0, 23]));
+    world.resource_mut::<Switches>().set(8, true);
+    app.update();
+    let world = app.world_mut();
+    let (mut character, mut queue, mut route) = world
+        .query::<(&mut EventSprite, &mut MoveQueue, &mut RouteStepper)>()
+        .single_mut(world)
+        .unwrap();
+    assert!(route.forced());
+    assert_eq!(route.speed(), 5);
+    route.force_route(RouteStepper::from_move_event(&[1, 8, 0, 0]));
+    assert!(!route.forced());
+    assert!(route.active());
+    let driven = crate::world::drive_route(
+        &mut *character,
+        &mut queue,
+        &mut route,
+        (0, 0),
+        1.0 / 60.0,
+        |_, _, _| true,
+    );
+    assert!(matches!(
+        driven.effects.as_slice(),
+        [crate::world::StepEffect::Switch(9, true)]
+    ));
+}

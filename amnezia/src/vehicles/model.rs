@@ -133,14 +133,13 @@ impl Vehicles {
         if let Ok(index) = usize::try_from(reference - 10002)
             && let Some(motion) = self.motion.get_mut(index)
         {
-            motion.route = route.with_speed(self.save.vehicles[index].speed);
+            motion.route.set_speed(self.save.vehicles[index].speed);
+            motion.route.force_route(route);
         }
     }
 
-    pub fn moving(&self) -> bool {
-        self.motion
-            .iter()
-            .any(|m| m.route.active() || m.queue.busy())
+    pub fn routes_pending(&self) -> bool {
+        self.motion.iter().any(|m| m.route.pending())
     }
 
     pub fn restore(&mut self, save: VehicleSave) {

@@ -65,6 +65,47 @@ fn movement_app(events: Vec<Event>) -> App {
 }
 
 #[test]
+fn keyboard_movement_keeps_scripted_speed_through_and_facing_lock() {
+    let mut app = movement_app(vec![event(1, 0)]);
+    let world = app.world_mut();
+    let (mut player, mut queue, mut route) = world
+        .query::<(&mut Player, &mut MoveQueue, &mut RouteStepper)>()
+        .single_mut(world)
+        .unwrap();
+    route.force_route(RouteStepper::from_move_event(&[
+        10001, 8, 0, 0, 36, 26, 29, 29,
+    ]));
+    crate::world::drive_route(
+        &mut *player,
+        &mut queue,
+        &mut route,
+        (0, 0),
+        1.0 / 60.0,
+        |_, _, _| false,
+    );
+    assert!(!route.forced());
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ArrowRight);
+    app.update();
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .release(KeyCode::ArrowRight);
+    for _ in 0..10 {
+        app.update();
+    }
+    let world = app.world_mut();
+    assert!(world.query::<&MoveQueue>().single(world).unwrap().busy());
+    for _ in 0..30 {
+        app.update();
+    }
+    let world = app.world_mut();
+    let player = world.query::<&Player>().single(world).unwrap();
+    assert_eq!((player.tile_x, player.tile_y, player.dir), (4, 3, DIR_DOWN));
+    assert!(!world.resource::<RunningEvent>().active());
+}
+
+#[test]
 fn floor_touch_waits_for_arrival_and_does_not_fire_again_at_rest() {
     let mut app = movement_app(vec![event(0, 1)]);
     app.world_mut()

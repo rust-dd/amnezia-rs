@@ -163,7 +163,7 @@ pub(super) fn move_event(frame: &mut Frame, command: &EventCommand, x: &mut Exec
         x.subsystems.mapfx.vehicles.set_route(target, route);
     } else if target == 10001 {
         if let Ok((_, mut stepper)) = x.hero_queue.single_mut() {
-            *stepper = route.with_speed(stepper.speed());
+            stepper.force_route(route);
         }
     } else {
         let id = if target == 10005 {
@@ -176,7 +176,7 @@ pub(super) fn move_event(frame: &mut Frame, command: &EventCommand, x: &mut Exec
             .iter_mut()
             .find(|(e, _, _)| e.id as i32 == id)
         {
-            *stepper = route.with_speed(stepper.speed());
+            stepper.force_route(route);
         }
     }
     frame.ip += 1;

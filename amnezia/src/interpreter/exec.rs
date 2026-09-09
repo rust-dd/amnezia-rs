@@ -177,7 +177,8 @@ pub(super) fn run_frame(
         return RunOutcome::Yielded;
     }
     if frame.wait_movement {
-        if any_route_running(&x.hero_queue, &x.event_movers) || x.subsystems.mapfx.vehicles.moving()
+        if any_route_running(&x.hero_queue, &x.event_movers)
+            || x.subsystems.mapfx.vehicles.routes_pending()
         {
             return RunOutcome::Yielded;
         }
@@ -221,12 +222,8 @@ fn any_route_running(
         Without<Player>,
     >,
 ) -> bool {
-    hero_queue
-        .iter()
-        .any(|(_, stepper)| stepper.forced() && stepper.active())
-        || event_movers
-            .iter()
-            .any(|(_, _, stepper)| stepper.forced() && stepper.active())
+    hero_queue.iter().any(|(_, stepper)| stepper.pending())
+        || event_movers.iter().any(|(_, _, stepper)| stepper.pending())
 }
 
 /// Resolve an RM2000 character reference — 10001 the hero, 10005 this event, any

@@ -51,7 +51,10 @@ pub(crate) fn drive<C: Character>(
     dt: f32,
     can_step: impl Fn(i32, i32, bool) -> bool,
 ) -> Driven {
-    if !stepper.active() || queue.busy() {
+    if queue.busy() {
+        return Driven::idle();
+    }
+    if stepper.settle_movement() || !stepper.active() {
         return Driven::idle();
     }
     if !stepper.tick_ready(dt) {

@@ -160,10 +160,10 @@ fn move_player(
     party: Res<Party>,
     inventory: Res<Inventory>,
     mut running: ResMut<RunningEvent>,
-    mut players: Query<(&mut Player, &mut MoveQueue, &RouteStepper)>,
+    mut players: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper)>,
     mut arrived: Local<Option<(u32, i32, i32)>>,
 ) {
-    let Ok((mut player, mut queue, stepper)) = players.single_mut() else {
+    let Ok((mut player, mut queue, mut stepper)) = players.single_mut() else {
         return;
     };
     let position = (data.map_id, player.tile_x, player.tile_y);
@@ -214,30 +214,31 @@ fn move_player(
         }
         return;
     };
-    // Finish the tile in flight before deciding the next one, so a step is one
-    // whole tile and facing doesn't flip mid-stride.
-    if queue.busy() {
-        return;
-    }
-    player.dir = dir;
+    stepper.set_direction(&mut *player, dir);
     let (nx, ny) = (player.tile_x + dx, player.tile_y + dy);
     if nx < 0 || ny < 0 || nx >= data.width || ny >= data.height {
         return;
     }
     // RM2000 MakeWay: the tile being left must permit exit toward the move and
     // the destination must permit entry from the opposite side.
-    let blocked = !data.can_move(player.tile_x, player.tile_y, nx, ny)
-        || event_blocks_at(
-            &map_events,
-            &switches,
-            &variables,
-            &party,
-            &inventory,
-            nx,
-            ny,
-        );
+    let blocked = !stepper.through()
+        && (!data.can_move(player.tile_x, player.tile_y, nx, ny)
+            || event_blocks_at(
+                &map_events,
+                &switches,
+                &variables,
+                &party,
+                &inventory,
+                nx,
+                ny,
+            ));
     if !blocked {
-        queue.push_step(RouteAction::Step { dx, dy, face: dir });
+        queue.set_step_secs(crate::world::step_secs_for_speed(stepper.speed()));
+        queue.push_step(RouteAction::Step {
+            dx,
+            dy,
+            face: player.dir,
+        });
     }
     if blocked
         && let Some((id, page)) = touch_page_at(

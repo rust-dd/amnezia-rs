@@ -15,6 +15,7 @@ use bevy::prelude::Component;
 
 mod decode;
 mod jump;
+mod lifecycle;
 
 /// Logical frames per second the RM2000 stop-count delays are measured in.
 const FPS: f32 = 60.0;
@@ -59,6 +60,11 @@ pub struct RouteStepper {
     forced: bool,
     facing_lock: Option<u32>,
     direction: Option<u32>,
+    suspended: Option<lifecycle::Suspended>,
+    page_present: bool,
+    first_pass_complete: bool,
+    moving: bool,
+    autonomy_reset: bool,
 }
 
 impl Default for RouteStepper {
@@ -68,84 +74,6 @@ impl Default for RouteStepper {
 }
 
 impl RouteStepper {
-    pub fn speed(&self) -> u32 {
-        self.speed
-    }
-
-    pub fn with_speed(mut self, speed: u32) -> Self {
-        self.speed = speed.clamp(1, 6);
-        self
-    }
-
-    fn new(
-        commands: Vec<MoveCommandDef>,
-        repeat: bool,
-        skippable: bool,
-        speed: u32,
-        frequency: u32,
-        forced: bool,
-    ) -> Self {
-        Self {
-            active: !commands.is_empty(),
-            commands,
-            index: 0,
-            repeat,
-            skippable,
-            speed: speed.clamp(1, 6),
-            frequency: frequency.clamp(1, 8),
-            through: false,
-            transparency: 0,
-            timer: 0.0,
-            rng: 0x9E37_79B9,
-            forced,
-            facing_lock: None,
-            direction: None,
-        }
-    }
-
-    /// Arm a page's custom route (`move_type == 6`) at the page's speed/frequency.
-    pub fn from_page(route: &MoveRouteDef, speed: u32, frequency: u32) -> Self {
-        Self::new(
-            route.commands.clone(),
-            route.repeat,
-            route.skippable,
-            speed,
-            frequency,
-            false,
-        )
-    }
-
-    /// Decode a `MoveEvent` (11330) route: `params = [char_ref, freq, repeat,
-    /// skippable, commands…]`. An out-of-range frequency falls back to 6 (RM2000);
-    /// the speed is the default hero pace (4), since the opcode carries none.
-    pub fn from_move_event(params: &[i32]) -> Self {
-        let freq = match params.get(1).copied().unwrap_or(6) {
-            f @ 1..=8 => f as u32,
-            _ => 6,
-        };
-        let repeat = params.get(2).copied().unwrap_or(0) != 0;
-        let skippable = params.get(3).copied().unwrap_or(0) != 0;
-        let tail = params.get(4..).unwrap_or(&[]);
-        let commands = decode::commands(tail).unwrap_or_else(|| {
-            bevy::log::warn!("Ignoring malformed MoveEvent route");
-            Vec::new()
-        });
-        Self::new(commands, repeat, skippable, 4, freq, true)
-    }
-
-    /// Whether a route is loaded and still running — the flag the driving systems
-    /// and the autonomy/player guards test to yield control to the stepper.
-    pub fn active(&self) -> bool {
-        self.active
-    }
-
-    /// Whether this is a forced `MoveEvent` route (vs a page's custom route). The
-    /// route drivers keep a forced route advancing during a running event or an open
-    /// message while pausing a page route like autonomous movement.
-    pub fn forced(&self) -> bool {
-        self.forced
-    }
-
     /// Count down the inter-command delay by `dt` and report whether the next
     /// command may run now. Called by the driving system only while the character
     /// stands idle, so the delay measures idle frames as RM2000's stop count does.
@@ -167,24 +95,29 @@ impl RouteStepper {
         effects: &mut Vec<StepEffect>,
     ) -> Option<(RouteAction, f32)> {
         let len = self.commands.len();
+        self.moving = false;
         if len == 0 {
-            self.active = false;
+            self.finish_pass();
             return None;
         }
         // At most one full pass per call: instant commands chain, a gate returns,
         // and an all-instant route can't spin the loop forever.
-        for _ in 0..=len {
+        for processed in 0..=len {
             if self.index >= len {
-                if !self.repeat {
-                    self.active = false;
+                let repeat = self.repeat;
+                self.finish_pass();
+                if !repeat {
                     return None;
                 }
-                self.index = 0;
+            }
+            if processed == len {
+                return None;
             }
             let cmd = self.commands[self.index].clone();
             match self.step_one(ch, hero, can_step, effects, &cmd) {
                 Step::Gate(action) => {
                     self.index += 1;
+                    self.moving = action.is_some();
                     return action;
                 }
                 Step::Retry => return None,
@@ -346,11 +279,11 @@ impl RouteStepper {
         self.gate_turn()
     }
 
-    fn direction<C: Character>(&self, ch: &C) -> u32 {
+    pub(crate) fn direction<C: Character>(&self, ch: &C) -> u32 {
         self.direction.unwrap_or_else(|| ch.dir())
     }
 
-    fn set_direction<C: Character>(&mut self, ch: &mut C, dir: u32) {
+    pub(crate) fn set_direction<C: Character>(&mut self, ch: &mut C, dir: u32) {
         self.direction = Some(dir);
         if self.facing_lock.is_none() {
             ch.set_dir(dir);

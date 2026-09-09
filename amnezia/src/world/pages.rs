@@ -11,15 +11,6 @@ pub(super) struct PageState(Option<usize>);
 #[derive(Resource)]
 pub(super) struct EventTileset(pub Handle<Image>);
 
-fn route_for(page: Option<&EventPage>) -> RouteStepper {
-    match page {
-        Some(page) if page.move_type == 6 => {
-            RouteStepper::from_page(&page.move_route, page.move_speed, page.move_frequency)
-        }
-        _ => RouteStepper::default().with_speed(page.map_or(4, |p| p.move_speed)),
-    }
-}
-
 fn auto_for(page: Option<&EventPage>, id: u32) -> AutoMove {
     page.map_or_else(
         || AutoMove::new(0, 3, 3, id),
@@ -95,7 +86,7 @@ pub(super) fn spawn_event(
         PageState(index),
         MoveQueue::default(),
         auto_for(page, event.id),
-        route_for(page),
+        RouteStepper::from_event_page(page),
         MapScene,
     ));
 }
@@ -146,12 +137,7 @@ pub(super) fn refresh_pages(
         let page = index.map(|i| &event.pages[i]);
         selected.0 = index;
         *auto = auto_for(page, ch.id);
-        if !route.forced()
-            && (old.map(|p| &p.move_route) != page.map(|p| &p.move_route)
-                || old.map(|p| p.move_type) != page.map(|p| p.move_type))
-        {
-            *route = route_for(page);
-        }
+        route.refresh_page(page);
         ch.charset = page.map_or_else(String::new, |p| p.graphic_name.clone());
         ch.index = page.map_or(0, |p| p.graphic_index);
         ch.layer = page.map_or(0, |p| p.layer);

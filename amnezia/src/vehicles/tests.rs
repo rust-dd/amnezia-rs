@@ -48,14 +48,14 @@ fn original_airship_move_route_advances_character_and_survives_save() {
         );
         motion.queue.advance(vehicle, &data, 1.0 / 60.0);
     }
-    assert!(!vehicles.moving());
+    assert!(!vehicles.routes_pending());
     assert_eq!(vehicles.character(10004), Some((53, 101, DIR_DOWN)));
     let saved = ron::to_string(&vehicles.save).unwrap();
     let mut restored = Vehicles::default();
     restored.restore(ron::from_str(&saved).unwrap());
     assert_eq!(restored.save, vehicles.save);
     assert!(restored.riding());
-    assert!(!restored.moving());
+    assert!(!restored.routes_pending());
 }
 
 #[test]
@@ -80,5 +80,5 @@ fn original_fortress_flight_finishes_before_its_four_second_wait() {
         motion.queue.advance(vehicle, &data, 1.0 / 60.0);
     }
     assert_eq!(vehicles.character(10004), Some((28, 100, DIR_LEFT)));
-    assert!(!vehicles.moving());
+    assert!(!vehicles.routes_pending());
 }

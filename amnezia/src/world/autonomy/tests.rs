@@ -1,8 +1,7 @@
 use super::*;
 use amnezia_data::Event;
 
-#[test]
-fn chasing_enemy_starts_its_touch_event_when_it_reaches_the_hero() {
+fn chasing_app() -> App {
     let mut page = crate::assets::load_ron::<amnezia_data::Map>(&format!(
         "{}/maps/map_0001.ron",
         crate::assets::asset_root()
@@ -74,8 +73,65 @@ fn chasing_enemy_starts_its_touch_event_when_it_reaches_the_hero() {
         MoveQueue::default(),
         AutoMove::new(4, 8, 4, 1),
     ));
+    app
+}
+
+#[test]
+fn chasing_enemy_starts_its_touch_event_when_it_reaches_the_hero() {
+    let mut app = chasing_app();
     app.update();
     assert_eq!(app.world().resource::<RunningEvent>().debug_id(), Some(1));
+}
+
+#[test]
+fn autonomous_movement_keeps_scripted_through_facing_and_speed() {
+    let mut app = chasing_app();
+    let world = app.world_mut();
+    let npc = world
+        .query_filtered::<Entity, With<EventSprite>>()
+        .single(world)
+        .unwrap();
+    world.entity_mut(npc).insert(RouteStepper::from_page(
+        &amnezia_data::MoveRouteDef::default(),
+        4,
+        8,
+    ));
+    let (mut character, mut queue, mut route) = world
+        .query::<(&mut EventSprite, &mut MoveQueue, &mut RouteStepper)>()
+        .single_mut(world)
+        .unwrap();
+    character.dir = DIR_DOWN;
+    route.force_route(RouteStepper::from_move_event(&[1, 8, 0, 0, 36, 26, 29]));
+    crate::world::drive_route(
+        &mut *character,
+        &mut queue,
+        &mut route,
+        (5, 5),
+        1.0 / 60.0,
+        |_, _, _| false,
+    );
+    assert!(!route.forced());
+    app.update();
+    assert!(!app.world().resource::<RunningEvent>().active());
+    let world = app.world_mut();
+    let (mut character, mut queue) = world
+        .query::<(&mut EventSprite, &mut MoveQueue)>()
+        .single_mut(world)
+        .unwrap();
+    assert!(queue.busy());
+    let data = MapData::for_test(10, 10);
+    for _ in 0..8 {
+        queue.advance(&mut *character, &data, 1.0 / 60.0);
+    }
+    assert!(queue.busy());
+    for _ in 0..10 {
+        queue.advance(&mut *character, &data, 1.0 / 60.0);
+    }
+    assert!(!queue.busy());
+    assert_eq!(
+        (character.tile_x, character.tile_y, character.dir),
+        (5, 5, DIR_DOWN)
+    );
 }
 
 /// A passability closure that blocks the listed directions and allows the rest.

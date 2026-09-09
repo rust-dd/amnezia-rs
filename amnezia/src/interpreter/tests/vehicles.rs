@@ -49,7 +49,7 @@ fn locate_board_and_query_airship_in_one_interpreter_frame() {
     app.update();
     let vehicles = app.world().resource::<Vehicles>();
     assert!(vehicles.riding());
-    assert!(vehicles.moving());
+    assert!(vehicles.routes_pending());
     assert_eq!(
         vehicles.character(10004),
         Some((55, 100, crate::tiles::DIR_LEFT))
