@@ -207,7 +207,13 @@ fn advance(
         return;
     }
     let vehicles = &mut *vehicles;
-    for (vehicle, motion) in vehicles.save.vehicles.iter_mut().zip(&mut vehicles.motion) {
+    for (index, (vehicle, motion)) in vehicles
+        .save
+        .vehicles
+        .iter_mut()
+        .zip(&mut vehicles.motion)
+        .enumerate()
+    {
         if vehicle.definition.map_id != data.map_id {
             continue;
         }
@@ -233,8 +239,14 @@ fn advance(
                 StepEffect::Transparency(level) => motion.alpha = 1.0 - level as f32 / 8.0,
             }
         }
+        let moving = motion.queue.busy();
         if let Some(pixel) = motion.queue.advance(vehicle, &data, time.delta_secs()) {
             motion.pixel = Some(pixel);
         }
+        let animated = !motion.queue.jumping() && (index != 2 || vehicles.save.riding == Some(2));
+        motion
+            .route
+            .animation
+            .advance_vehicle(vehicle, animated, moving, time.delta_secs());
     }
 }

@@ -92,10 +92,11 @@ pub const CHAR_H: f32 = 32.0;
 
 /// Source rectangle top-left (charset pixels) for a character sprite:
 /// `char_index` selects one of the 8 blocks (4×2), `dir_row` the facing row
-/// (Up=0, Right=1, Down=2, Left=3), `frame_col` the walk frame (0/1/2).
+/// (Up=0, Right=1, Down=2, Left=3). Animation state 3 reuses the middle frame.
 pub fn charset_source(char_index: u32, dir_row: u32, frame_col: u32) -> (f32, f32) {
     let block_x = (char_index % 4) * 72;
     let block_y = (char_index / 4) * 128;
+    let frame_col = if frame_col >= 3 { 1 } else { frame_col };
     let x = block_x + frame_col * 24;
     let y = block_y + dir_row * 32;
     (x as f32, y as f32)

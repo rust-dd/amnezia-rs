@@ -42,6 +42,39 @@ fn advance(route: &mut RouteStepper) -> Option<RouteAction> {
 }
 
 #[test]
+fn animation_pause_is_character_state_across_forced_routes_and_page_changes() {
+    let mut source = page(&[]);
+    source.animation_type = 1;
+    let mut route = RouteStepper::from_event_page(Some(&source));
+    route.force_route(RouteStepper::from_move_event(&[0, 8, 0, 0, 38]));
+    advance(&mut route);
+    assert!(route.animation.paused);
+    assert!(!route.forced());
+    source.animation_type = 3;
+    route.refresh_page(Some(&source));
+    assert_eq!(route.animation.mode, 3);
+    assert!(route.animation.paused);
+    route.force_route(RouteStepper::from_move_event(&[0, 8, 0, 0, 39]));
+    advance(&mut route);
+    assert!(!route.animation.paused);
+    assert_eq!(route.animation.mode, 3);
+}
+
+#[test]
+fn route_unlock_and_turn_commands_cannot_override_a_pages_fixed_or_spinning_facing() {
+    for mode in 0..=5 {
+        let mut source = page(&[]);
+        source.animation_type = mode;
+        let mut route = RouteStepper::from_event_page(Some(&source));
+        let mut ch = player();
+        route.force_route(RouteStepper::from_move_event(&[0, 8, 0, 0, 27, 12]));
+        route.advance(&mut ch, (0, 0), &|_, _, _| true, &mut Vec::new());
+        assert_eq!(ch.dir, if mode >= 2 { 2 } else { 0 });
+        assert_eq!(route.direction(&ch), 0);
+    }
+}
+
+#[test]
 fn forced_route_restores_page_index_and_frequency_but_keeps_live_speed() {
     let mut route = RouteStepper::from_event_page(Some(&page(&[1, 3])));
     assert_eq!(advance(&mut route).unwrap().delta(), (1, 0));

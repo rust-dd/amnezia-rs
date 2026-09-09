@@ -43,6 +43,7 @@ impl RouteStepper {
     ) -> Self {
         Self {
             active: !commands.is_empty(),
+            animation: Default::default(),
             forced: forced && !commands.is_empty(),
             commands,
             index: 0,
@@ -89,6 +90,7 @@ impl RouteStepper {
     pub(crate) fn from_event_page(page: Option<&EventPage>) -> Self {
         if let Some(page) = page {
             let mut route = Self::from_page(&page.move_route, page.move_speed, page.move_frequency);
+            route.animation.mode = page.animation_type;
             route.active &= page.move_type == 6;
             route.timer = if page.move_type == 6 {
                 turn_delay_secs(route.frequency)
@@ -227,6 +229,7 @@ impl RouteStepper {
             next.index = previous.index;
         }
         self.speed = next.speed;
+        self.animation.mode = next.animation.mode;
         self.frequency = next.frequency;
         self.timer = next.timer;
         self.transparency = 0;

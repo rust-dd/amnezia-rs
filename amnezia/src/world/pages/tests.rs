@@ -1,6 +1,118 @@
 use super::*;
 use crate::assets::{asset_root, load_ron};
 
+#[test]
+fn fixed_graphic_pages_keep_their_pose_while_moving() {
+    let mut fixed = page("Chara1", 0);
+    fixed.animation_type = 4;
+    fixed.pattern = 0;
+    fixed.direction = 2;
+    let mut app = app_with_event(Event {
+        id: 1,
+        x: 3,
+        y: 4,
+        name: String::new(),
+        pages: vec![fixed],
+    });
+    app.add_systems(Update, crate::world::walk::<EventSprite>);
+    let world = app.world_mut();
+    world
+        .query::<&mut MoveQueue>()
+        .single_mut(world)
+        .unwrap()
+        .enqueue_route([crate::world::RouteAction::Step {
+            dx: 1,
+            dy: 0,
+            face: 1,
+        }]);
+    app.update();
+    let world = app.world_mut();
+    let event = world.query::<&EventSprite>().single(world).unwrap();
+    assert_eq!((event.frame, event.dir), (0, 2));
+}
+
+#[test]
+fn idle_continuous_pages_update_the_displayed_sprite_at_the_original_rate() {
+    let mut continuous = page("Chara1", 0);
+    continuous.animation_type = 1;
+    continuous.pattern = 1;
+    continuous.direction = 2;
+    continuous.move_speed = 4;
+    let mut app = app_with_event(Event {
+        id: 1,
+        x: 3,
+        y: 4,
+        name: String::new(),
+        pages: vec![continuous],
+    });
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f64(1.0 / 60.0),
+    ));
+    app.add_systems(
+        Update,
+        crate::world::walk::<EventSprite>
+            .after(refresh_pages)
+            .before(super::super::update_event_sprites),
+    );
+    for _ in 0..8 {
+        app.update();
+    }
+    let world = app.world_mut();
+    let (event, sprite) = world
+        .query::<(&EventSprite, &Sprite)>()
+        .single(world)
+        .unwrap();
+    assert_eq!((event.tile_x, event.tile_y, event.frame), (3, 4, 2));
+    assert_eq!(sprite.rect.unwrap().min, Vec2::new(48.0, 64.0));
+}
+
+#[test]
+fn changing_to_a_fixed_page_during_movement_immediately_installs_its_direction_and_pose() {
+    let mut fixed = page("Chara1", 1);
+    fixed.animation_type = 4;
+    fixed.pattern = 0;
+    fixed.direction = 3;
+    fixed.condition.flags = 1;
+    fixed.condition.switch_a = 8;
+    let mut app = app_with_event(Event {
+        id: 1,
+        x: 3,
+        y: 4,
+        name: String::new(),
+        pages: vec![page("Chara1", 0), fixed],
+    });
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f64(1.0 / 60.0),
+    ));
+    app.add_systems(
+        Update,
+        crate::world::walk::<EventSprite>
+            .after(refresh_pages)
+            .before(super::super::update_event_sprites),
+    );
+    let world = app.world_mut();
+    world
+        .query::<&mut MoveQueue>()
+        .single_mut(world)
+        .unwrap()
+        .enqueue_route([crate::world::RouteAction::Step {
+            dx: 1,
+            dy: 0,
+            face: 1,
+        }]);
+    app.update();
+    app.world_mut().resource_mut::<Switches>().set(8, true);
+    app.update();
+    let world = app.world_mut();
+    let (event, queue, sprite) = world
+        .query::<(&EventSprite, &MoveQueue, &Sprite)>()
+        .single(world)
+        .unwrap();
+    assert!(queue.busy());
+    assert_eq!((event.frame, event.dir), (0, 3));
+    assert_eq!(sprite.rect.unwrap().min, Vec2::new(72.0, 96.0));
+}
+
 fn page(graphic: &str, index: u32) -> EventPage {
     let mut page = load_ron::<amnezia_data::Map>(&format!("{}/maps/map_0001.ron", asset_root()))
         .events[0]

@@ -14,6 +14,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
 mod autonomy;
+mod character_animation;
 mod collision;
 mod movement;
 mod pages;

@@ -148,6 +148,14 @@ pub(super) fn refresh_pages(
             ch.dir = page.direction;
             ch.frame = page.pattern;
         }
+        if let Some(page) = page {
+            if matches!(page.animation_type, 2..=4) {
+                ch.dir = page.direction;
+            }
+            if matches!(page.animation_type, 4 | 5) {
+                ch.frame = page.pattern;
+            }
+        }
         (*sprite, *visibility) = graphic(&ch, &tileset.0, &server);
         if !queue.busy() {
             let (x, y) = data.tile_center(ch.tile_x, ch.tile_y);

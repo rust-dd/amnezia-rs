@@ -38,6 +38,7 @@ pub(crate) enum StepEffect {
 /// any target; a `move_type == 6` NPC spawns with its page route already armed.
 #[derive(Component)]
 pub struct RouteStepper {
+    pub(crate) animation: crate::world::character_animation::CharacterAnimation,
     commands: Vec<MoveCommandDef>,
     index: usize,
     repeat: bool,
@@ -229,6 +230,10 @@ impl RouteStepper {
                 self.through = false;
                 Step::Next
             }
+            38 | 39 => {
+                self.animation.paused = cmd.code == 38;
+                Step::Next
+            }
             40 => {
                 self.transparency = (self.transparency + 1).min(7);
                 effects.push(StepEffect::Transparency(self.transparency));
@@ -285,7 +290,7 @@ impl RouteStepper {
 
     pub(crate) fn set_direction<C: Character>(&mut self, ch: &mut C, dir: u32) {
         self.direction = Some(dir);
-        if self.facing_lock.is_none() {
+        if self.facing_lock.is_none() && !self.animation.keeps_facing() {
             ch.set_dir(dir);
         }
     }

@@ -85,15 +85,12 @@ impl Tween {
     }
 }
 
-/// A character's pending route steps plus the tween of the step in flight. The
-/// interpreter enqueues scripted routes; the player system pushes keyboard
-/// steps. `route` marks a scripted run so the character settles to its standing
-/// frame when the route drains (keyboard idling settles separately).
+/// A character's pending steps and current tween. Animation timing belongs to
+/// the character, independently of individual steps and route boundaries.
 #[derive(Component)]
 pub struct MoveQueue {
     steps: VecDeque<RouteAction>,
     active: Option<Tween>,
-    route: bool,
     step_secs: f32,
 }
 
@@ -102,21 +99,18 @@ impl Default for MoveQueue {
         Self {
             steps: VecDeque::new(),
             active: None,
-            route: false,
             step_secs: STEP_DURATION,
         }
     }
 }
 
 impl MoveQueue {
-    /// Append a scripted route and mark it as one, so the character settles to
-    /// its standing frame once the route finishes.
+    /// Append the movements of a scripted route.
     pub fn enqueue_route(&mut self, actions: impl IntoIterator<Item = RouteAction>) {
         self.steps.extend(actions);
-        self.route = true;
     }
 
-    /// Queue a single keyboard step (no scripted-settle).
+    /// Queue a single keyboard step.
     pub fn push_step(&mut self, action: RouteAction) {
         self.steps.push_back(action);
     }
@@ -152,10 +146,8 @@ impl MoveQueue {
         )
     }
 
-    /// Whether [`walk`] still has something to do (busy, or a scripted route to
-    /// settle). Keyboard idling stays out of the movement system.
-    fn has_work(&self) -> bool {
-        self.busy() || self.route
+    pub(crate) fn jumping(&self) -> bool {
+        self.active.as_ref().is_some_and(|t| t.jumping)
     }
 
     /// Advance the current step by `dt`, applying instant actions in order and
@@ -178,24 +170,14 @@ impl MoveQueue {
                 self.active = None;
                 return Some(end);
             }
-            match self.steps.pop_front() {
-                None => {
-                    if self.route {
-                        self.route = false;
-                        if ch.frame() != 1 {
-                            ch.set_frame(1);
-                        }
-                    }
-                    return None;
-                }
-                Some(action) => self.begin_step(ch, data, action),
-            }
+            let action = self.steps.pop_front()?;
+            self.begin_step(ch, data, action);
         }
     }
 
     /// Commit a move to its destination: update the logical tile immediately
-    /// (so y-sorting and lookups use the destination), face and advance the walk
-    /// frame, and start the pixel tween from the old center to the new one.
+    /// (so y-sorting and lookups use the destination), face the move, and start
+    /// the pixel tween from the old center to the new one.
     fn begin_step<C: Character>(&mut self, ch: &mut C, data: &MapData, action: RouteAction) {
         let (dx, dy) = action.delta();
         let jumping = matches!(action, RouteAction::Jump { .. });
@@ -206,9 +188,6 @@ impl MoveQueue {
         let (tile_x, tile_y) = data.normalize_tile(nx, ny);
         ch.set_tile(tile_x, tile_y);
         ch.set_dir(face);
-        if !jumping {
-            ch.set_frame((ch.frame() + 1) % 3);
-        }
         self.active = Some(Tween {
             from,
             to: center(data, nx, ny),
@@ -246,30 +225,57 @@ pub(crate) fn dir_delta(dir: u32) -> (i32, i32) {
 }
 
 /// Drive every [`Character`]'s move queue: advance the tween, then reflect the
-/// interpolated position, walk frame, facing, and graphic onto its sprite. Runs
-/// only while a queue has work, leaving idle characters to their own change-driven
-/// sprite update.
+/// interpolated position and time-driven animation onto its sprite, including
+/// continuous and spinning animation while the character stands still.
+#[allow(clippy::type_complexity)]
 pub fn walk<C: Character + Component<Mutability = Mutable>>(
     time: Res<Time>,
     data: Res<MapData>,
     asset_server: Res<AssetServer>,
     scene: super::ScenePause,
-    mut movers: Query<(&mut C, &mut MoveQueue, &mut Transform, &mut Sprite)>,
+    mut movers: Query<(
+        &mut C,
+        &mut MoveQueue,
+        &mut Transform,
+        &mut Sprite,
+        Option<&mut super::RouteStepper>,
+    )>,
 ) {
     if scene.paused() {
         return;
     }
     let dt = time.delta_secs();
-    for (mut ch, mut queue, mut transform, mut sprite) in &mut movers {
-        if !queue.has_work() {
-            continue;
-        }
-        if let Some(pos) = queue.advance(&mut *ch, &data, dt) {
-            if !ch.charset().is_empty() {
-                let (sx, sy) = tiles::charset_source(ch.index(), ch.dir(), ch.frame());
-                sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
-                sprite.image = asset_server.load(resolve_png("CharSet", ch.charset()));
+    for (mut ch, mut queue, mut transform, mut sprite, route) in &mut movers {
+        let moving = queue.busy();
+        let facing = ch.dir();
+        let position = if moving {
+            queue.advance(&mut *ch, &data, dt)
+        } else {
+            None
+        };
+        if let Some(mut route) = route {
+            if route.animation.keeps_facing() && ch.dir() != facing {
+                ch.set_dir(facing);
             }
+            let speed = route.speed();
+            let previous = (ch.frame(), ch.dir());
+            route.animation.advance(
+                ch.bypass_change_detection(),
+                speed,
+                moving,
+                queue.jumping(),
+                dt,
+            );
+            if previous != (ch.frame(), ch.dir()) {
+                ch.set_changed();
+            }
+        }
+        if (position.is_some() || ch.is_changed()) && !ch.charset().is_empty() {
+            let (sx, sy) = tiles::charset_source(ch.index(), ch.dir(), ch.frame());
+            sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
+            sprite.image = asset_server.load(resolve_png("CharSet", ch.charset()));
+        }
+        if let Some(pos) = position {
             let z = ch.draw_z(ch.tile().1);
             transform.translation = Vec3::new(pos.x, pos.y + ch.y_offset(), z);
         }
@@ -323,15 +329,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn queue_tracks_busy_and_work() {
+    fn queue_tracks_pending_movement() {
         let mut q = MoveQueue::default();
-        assert!(!q.busy() && !q.has_work());
+        assert!(!q.busy());
         q.enqueue_route([RouteAction::Step {
             dx: 0,
             dy: 1,
             face: DIR_DOWN,
         }]);
-        assert!(q.busy() && q.has_work());
+        assert!(q.busy());
     }
 
     struct FakeChar {
@@ -390,13 +396,13 @@ mod tests {
     }
 
     #[test]
-    fn advance_tweens_one_tile_then_settles() {
+    fn advance_tweens_one_tile_without_changing_animation_state() {
         let data = test_map();
         let mut ch = FakeChar {
             x: 2,
             y: 2,
             dir: DIR_DOWN,
-            frame: 1,
+            frame: 2,
             charset: "C".into(),
         };
         let mut q = MoveQueue::default();
@@ -414,11 +420,10 @@ mod tests {
         let mid = q.advance(&mut ch, &data, STEP_DURATION / 2.0).unwrap();
         assert!(mid.x < start.x);
         assert!(q.busy());
-        // Completing the step drains the route and settles to the standing frame.
         q.advance(&mut ch, &data, STEP_DURATION).unwrap();
         assert!(q.advance(&mut ch, &data, 0.0).is_none());
         assert!(!q.busy());
-        assert_eq!(ch.frame(), 1);
+        assert_eq!(ch.frame(), 2);
     }
 
     #[test]

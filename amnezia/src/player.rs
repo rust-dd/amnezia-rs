@@ -204,9 +204,6 @@ fn move_player(
         None
     };
     let Some((dx, dy, dir)) = step else {
-        if !queue.busy() && player.frame != 1 {
-            player.frame = 1;
-        }
         return;
     };
     stepper.set_direction(&mut *player, dir);
