@@ -16,13 +16,11 @@ pub struct Fighter {
     pub(in crate::battle) stat_modifiers: [i32; 4],
     pub defending: bool,
     pub command: Option<Command>,
-    /// The equipped weapon's hit and crit rates (percent) and its element id,
-    /// captured at build time and consumed by the to-hit / critical / elemental
-    /// resolution in [`crate::battle::resolve`]. Empty-handed uses `90` / `0`
-    /// / `None`; an equipped weapon's explicit `0` hit rate remains zero.
+    /// Equipped weapon hit/critical percentages and offensive attributes.
+    /// Empty-handed defaults to 90% hit; an explicit weapon zero stays zero.
     pub weapon_hit: u32,
     pub weapon_crit: u32,
-    pub weapon_element: Option<u32>,
+    pub weapon_attributes: Vec<u32>,
     /// The animation this member's normal attack plays on its target: the
     /// equipped weapon's `weapon_animation`, or the actor's `unarmed_animation`
     /// when it has no weapon. `0` means "no animation" and plays nothing.
@@ -32,14 +30,13 @@ pub struct Fighter {
     /// schedule.
     pub states: Vec<(u32, u32)>,
     pub(in crate::battle) state_ranks: Vec<u8>,
+    pub(in crate::battle) attribute_ranks: Vec<u8>,
     pub(in crate::battle) state_guards: Vec<(u32, u32)>,
     /// The skill ids this member knows at its current level (its actor `learnings`
     /// at or below the level), captured at build time. The battle skill command
     /// offers only these, not the whole database.
     pub(in crate::battle) known_skills: Vec<u32>,
-    /// The 1-based attribute (element) ids this member's equipped gear guards
-    /// against, unioned across its five slots at build time. A matching enemy
-    /// skill's damage is halved once in [`crate::battle::resolve`].
+    /// Armor attributes improve the wearer's rank once, without stacking.
     pub(in crate::battle) resist_attributes: Vec<u32>,
 }
 

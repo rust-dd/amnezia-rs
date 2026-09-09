@@ -20,9 +20,9 @@ pub fn critical_damage(base: i32) -> i32 {
 /// the skill's `power`, plus its physical/magical rates weighting the caster's
 /// attack and spirit — `physical_rate * atk / 20 + magical_rate * spi / 40` — and,
 /// when the skill targets enemies, less the target's defence and spirit —
-/// `physical_rate * def / 40 + magical_rate * spi / 80`. Floored at 0. The
-/// attribute (element) multiplier, an optional critical, and variance are applied
-/// on top by the caller, in that order. `targets_enemies` is true for the
+/// `physical_rate * def / 40 + magical_rate * spi / 80`. Floored at 0.
+/// Attribute multipliers and variance are applied by the caller, in that order.
+/// `targets_enemies` is true for the
 /// offensive scopes (one or all enemies) and false for the ally/heal scopes, which
 /// take no defensive subtraction. `ignore_defense` also skips that subtraction.
 pub fn skill_effect(
@@ -52,30 +52,6 @@ pub fn attribute_percent(attr: &AttributeDef, rank: u8) -> u32 {
         3 => attr.d_rate,
         _ => attr.e_rate,
     }
-}
-
-/// Scale `base` damage by the target's resistance to `attr_id` (100% = unchanged).
-/// A non-elemental hit (`attr_id == 0`) or an unknown id leaves `base` untouched;
-/// otherwise the target's A–E rank for that attribute (neutral C when the id falls
-/// past the truncated `target_ranks` vector) picks the percentage. Consumed by the
-/// weapon-strike resolution in [`crate::battle::resolve`].
-pub fn elemental_damage(
-    base: i32,
-    attr_id: u32,
-    target_ranks: &[u8],
-    attributes: &[AttributeDef],
-) -> i32 {
-    if attr_id == 0 {
-        return base;
-    }
-    let Some(attr) = attributes.iter().find(|a| a.id == attr_id) else {
-        return base;
-    };
-    let rank = target_ranks
-        .get((attr_id - 1) as usize)
-        .copied()
-        .unwrap_or(2);
-    (base * attribute_percent(attr, rank) as i32 / 100).max(0)
 }
 
 /// Apply RM2000 / EasyRPG damage variance (`Algo::VarianceAdjustEffect`): with a

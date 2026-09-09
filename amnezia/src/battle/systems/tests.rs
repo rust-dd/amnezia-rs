@@ -74,6 +74,7 @@ fn logic_app() -> App {
     app.insert_resource(GameData {
         actors: vec![ActorDef {
             state_ranks: Vec::new(),
+            attribute_ranks: Vec::new(),
             id: 1,
             name: "Ron".into(),
             title: "Zsoldos".into(),
@@ -205,6 +206,7 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     app.add_plugins(MinimalPlugins);
     let ron = ActorDef {
         state_ranks: Vec::new(),
+        attribute_ranks: Vec::new(),
         id: 1,
         name: "Ron".into(),
         title: String::new(),

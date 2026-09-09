@@ -5,6 +5,7 @@ use super::*;
 pub fn actor(id: u32, level: u32, hp: u32, sp: u32) -> ActorDef {
     ActorDef {
         state_ranks: Vec::new(),
+        attribute_ranks: Vec::new(),
         id,
         name: format!("A{id}"),
         title: String::new(),

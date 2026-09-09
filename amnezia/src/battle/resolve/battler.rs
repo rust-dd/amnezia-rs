@@ -1,6 +1,36 @@
 use super::*;
 
 impl Battle {
+    pub(in crate::battle::resolve) fn battler_attribute_damage(
+        &self,
+        base: i32,
+        target: Source,
+        attributes: &[u32],
+    ) -> i32 {
+        logic::attribute_damage(base, attributes, &self.attributes, |id| {
+            let Some(index) = id.checked_sub(1) else {
+                return 2;
+            };
+            match target {
+                Source::Party(i) => {
+                    let member = &self.members[i];
+                    let rank = member
+                        .attribute_ranks
+                        .get(index as usize)
+                        .copied()
+                        .unwrap_or(2);
+                    rank.saturating_add(u8::from(member.resist_attributes.contains(&id)))
+                        .min(4)
+                }
+                Source::Enemy(i) => self.enemies[i]
+                    .attribute_ranks
+                    .get(index as usize)
+                    .copied()
+                    .unwrap_or(2),
+            }
+        })
+    }
+
     pub(in crate::battle) fn battler_stats(&self, target: Source) -> logic::Stats {
         let stats = self.battler_base_stats(target);
         let modifiers = match target {

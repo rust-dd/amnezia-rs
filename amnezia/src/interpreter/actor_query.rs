@@ -91,6 +91,7 @@ pub(super) mod fixtures {
     pub(in crate::interpreter) fn actor_def() -> ActorDef {
         ActorDef {
             state_ranks: Vec::new(),
+            attribute_ranks: Vec::new(),
             id: 1,
             name: "Ron".into(),
             title: String::new(),

@@ -131,7 +131,7 @@ fn build_adds_equipment_bonuses_and_captures_the_weapon() {
     assert_eq!(f.stats.defense, base.defense + 20);
     assert_eq!(f.weapon_hit, 85);
     assert_eq!(f.weapon_crit, 5);
-    assert_eq!(f.weapon_element, Some(4));
+    assert_eq!(f.weapon_attributes, [4]);
 }
 
 #[test]

@@ -45,6 +45,7 @@ pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
         .into_iter()
         .map(|a| ActorDef {
             state_ranks: a.state_ranks,
+            attribute_ranks: a.attribute_ranks,
             id: a.id,
             name: a.name,
             title: a.title,

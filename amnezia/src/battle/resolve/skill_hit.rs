@@ -70,24 +70,7 @@ impl Battle {
             &self.battler_stats(target),
             skill.scope < 2,
         );
-        let base = match target {
-            Source::Enemy(i) => logic::elemental_damage(
-                base,
-                skill.attributes.first().copied().unwrap_or(0),
-                &self.enemies[i].attribute_ranks,
-                &self.attributes,
-            ),
-            Source::Party(i)
-                if skill.scope < 2
-                    && skill
-                        .attributes
-                        .iter()
-                        .any(|id| self.members[i].resist_attributes.contains(id)) =>
-            {
-                base / 2
-            }
-            _ => base,
-        };
+        let base = self.battler_attribute_damage(base, target, &skill.attributes);
         if skill.variance == 0 || base <= 0 {
             base
         } else {

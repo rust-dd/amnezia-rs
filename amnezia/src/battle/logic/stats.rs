@@ -105,18 +105,17 @@ pub fn equipment_bonus_slots(slots: [u32; 5], items: &[ItemDef]) -> Stats {
     bonus
 }
 
-/// The 1-based attribute (element) ids an explicit five-slot loadout guards
-/// against: the de-duplicated union of each equipped item's `attribute_defense`.
-/// Empty slots (id `0`) and ids absent from `items` contribute nothing. Consumed
-/// by [`crate::battle::resolve`] to halve a matching enemy skill's damage against
-/// the wearer.
+/// Only defensive gear grants an attribute rank boost; multiple pieces do not stack.
 pub fn equipment_resist_slots(slots: [u32; 5], items: &[ItemDef]) -> Vec<u32> {
-    let mut resist: Vec<u32> = Vec::new();
+    let mut resist = Vec::<u32>::new();
     for id in slots {
         if id == 0 {
             continue;
         }
         if let Some(item) = items.iter().find(|i| i.id == id) {
+            if !matches!(item.item_type, 2..=5) {
+                continue;
+            }
             for &attr in &item.attribute_defense {
                 if !resist.contains(&attr) {
                     resist.push(attr);

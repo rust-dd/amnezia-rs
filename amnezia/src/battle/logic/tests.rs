@@ -276,11 +276,17 @@ fn elemental_damage_amplifies_weak_reduces_resist_and_passes_through() {
         attr(6, 200, 150, 100, 50, 50),
     ];
     let ranks = [0u8, 0, 0, 0, 0, 4];
-    assert_eq!(elemental_damage(100, 5, &ranks, &attrs), 200);
-    assert_eq!(elemental_damage(100, 6, &ranks, &attrs), 50);
-    assert_eq!(elemental_damage(100, 0, &ranks, &attrs), 100);
-    assert_eq!(elemental_damage(100, 42, &ranks, &attrs), 100);
-    assert_eq!(elemental_damage(80, 6, &[0], &attrs), 80);
+    let rank = |id: u32| {
+        ranks
+            .get(id.saturating_sub(1) as usize)
+            .copied()
+            .unwrap_or(2)
+    };
+    assert_eq!(attribute_damage(100, &[5], &attrs, rank), 200);
+    assert_eq!(attribute_damage(100, &[6], &attrs, rank), 50);
+    assert_eq!(attribute_damage(100, &[0], &attrs, rank), 100);
+    assert_eq!(attribute_damage(100, &[42], &attrs, rank), 100);
+    assert_eq!(attribute_damage(80, &[6], &attrs, |_| 2), 80);
 }
 
 #[test]
@@ -475,6 +481,7 @@ fn equipment_resist_unions_attribute_defense_and_dedups() {
     let mut weapon = gear(1, 0, 0, 0, 0);
     weapon.attribute_defense = vec![3];
     let mut armor = gear(2, 0, 0, 0, 0);
+    armor.item_type = 3;
     armor.attribute_defense = vec![5, 3];
     let mut unequipped = gear(9, 0, 0, 0, 0);
     unequipped.attribute_defense = vec![7];

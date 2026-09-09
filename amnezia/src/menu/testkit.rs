@@ -13,6 +13,7 @@ pub(super) const ITEM_HERB: u32 = 5;
 pub(super) fn actor() -> ActorDef {
     ActorDef {
         state_ranks: Vec::new(),
+        attribute_ranks: Vec::new(),
         id: 1,
         name: "Ron".into(),
         title: "Zsoldos".into(),

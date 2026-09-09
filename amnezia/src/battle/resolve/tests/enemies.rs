@@ -5,7 +5,7 @@ fn an_elemental_strike_amplifies_against_a_weak_foe() {
     let mut battle = build_1v2();
     battle.members[0].weapon_hit = 100;
     battle.members[0].weapon_crit = 0;
-    battle.members[0].weapon_element = Some(5);
+    battle.members[0].weapon_attributes = vec![5];
     battle.attributes = vec![fire_attr()];
     battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 0];
     let base = logic::physical_damage(
@@ -22,7 +22,7 @@ fn an_elemental_strike_amplifies_against_a_weak_foe() {
 fn an_elemental_strike_is_nullified_by_an_immune_foe() {
     let mut battle = build_1v2();
     battle.members[0].weapon_hit = 100;
-    battle.members[0].weapon_element = Some(5);
+    battle.members[0].weapon_attributes = vec![5];
     battle.attributes = vec![fire_attr()];
     battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 4];
     let before = battle.enemies[0].hp;
@@ -234,7 +234,9 @@ fn equipped_element_defence_halves_a_matching_enemy_skill_only() {
     let mut ron = testkit::actor(1, 3, 200, 50);
     ron.armor = 2;
     let actors = vec![&ron];
-    let items = vec![testkit::item(2, 0, 0, 0, 0, 5)];
+    let mut armor = testkit::item(2, 0, 0, 0, 0, 5);
+    armor.item_type = 3;
+    let items = vec![armor];
     let monsters = vec![testkit::monster(1, 30, 10, 30)];
     let troop = testkit::troop(&[(1, 100, 100)]);
     let mut battle = Battle::build(
@@ -252,6 +254,7 @@ fn equipped_element_defence_halves_a_matching_enemy_skill_only() {
         5,
     );
     assert!(battle.members[0].resist_attributes.contains(&5));
+    battle.attributes = vec![fire_attr()];
     // With the skill's variance set to 0 the halving is exact: the guarded
     // cast deals base/2 and the unguarded cast deals the full base, so the two
     // compare cleanly without depending on the variance draw.

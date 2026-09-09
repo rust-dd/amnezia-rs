@@ -130,7 +130,7 @@ impl Fighter {
             command: None,
             weapon_hit: logic::effective_hit(weapon.map(|w| w.hit)),
             weapon_crit: weapon.map_or(0, |w| w.crit),
-            weapon_element: weapon.and_then(|w| w.attribute_defense.first().copied()),
+            weapon_attributes: weapon.map_or_else(Vec::new, |w| w.attribute_defense.clone()),
             attack_animation: weapon.map_or(actor.unarmed_animation, |w| w.weapon_animation),
             states: vitals
                 .states(actor.id)
@@ -138,6 +138,7 @@ impl Fighter {
                 .map(|id| (id, 0))
                 .collect(),
             state_ranks: actor.state_ranks.clone(),
+            attribute_ranks: actor.attribute_ranks.clone(),
             state_guards: logic::equipment_state_guards(slots, items),
             resist_attributes: logic::equipment_resist_slots(slots, items),
             known_skills: progression.known_skill_ids(actor),

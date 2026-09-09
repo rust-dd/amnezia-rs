@@ -4,12 +4,9 @@ use std::path::Path;
 #[test]
 fn legacy_actor_ron_retains_an_empty_state_rank_tail() {
     let legacy = r#"(id:1,name:"Ron",title:"",level:1,max_level:50,hp:10,sp:10)"#;
-    assert!(
-        ron::from_str::<ActorDef>(legacy)
-            .unwrap()
-            .state_ranks
-            .is_empty()
-    );
+    let actor = ron::from_str::<ActorDef>(legacy).unwrap();
+    assert!(actor.state_ranks.is_empty());
+    assert!(actor.attribute_ranks.is_empty());
 }
 
 fn varint(mut v: u32) -> Vec<u8> {
@@ -113,6 +110,7 @@ fn converts_ldb_to_actors_ron() {
             subchunk(0x33, &[1, 0, 0, 0, 64, 0, 83, 0, 0, 0]),
             subchunk(0x38, &varint(9)),
             subchunk(0x48, &[0, 4, 2]),
+            subchunk(0x4A, &[2, 1, 4]),
         ],
     );
     let ldb = make_ldb(0x0B, &[ron]);
@@ -126,6 +124,7 @@ fn converts_ldb_to_actors_ron() {
     assert_eq!(
         actors[0],
         ActorDef {
+            attribute_ranks: vec![2, 1, 4],
             state_ranks: vec![0, 4, 2],
             id: 1,
             name: "Ron".to_string(),

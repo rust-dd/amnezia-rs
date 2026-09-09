@@ -32,12 +32,10 @@ impl Battle {
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
             return Strike::Miss;
         }
-        let element = self.members[pi].weapon_element.unwrap_or(0);
-        let base = logic::elemental_damage(
+        let base = self.battler_attribute_damage(
             base,
-            element,
-            &self.enemies[ti].attribute_ranks,
-            &self.attributes,
+            Source::Enemy(ti),
+            &self.members[pi].weapon_attributes,
         );
         let crit = ((rng_next(&mut self.rng) % 100) as u32) < self.members[pi].weapon_crit;
         let base = if crit {

@@ -9,6 +9,7 @@
 //! filter), [`hit`] (to-hit), [`state`] (status effects), [`enemy`] (the enemy
 //! AI), and [`escape`] (turn order, flee, and rewards).
 
+mod attribute;
 mod damage;
 mod enemy;
 mod escape;
@@ -19,8 +20,9 @@ mod stats;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use attribute::attribute_damage;
 pub(crate) use damage::{
-    critical_damage, defended, elemental_damage, physical_damage, skill_effect, variance_adjust,
+    critical_damage, defended, physical_damage, skill_effect, variance_adjust,
 };
 pub(crate) use enemy::{
     EnemyAiContext, check_turn, choose_enemy_action, enemy_command, hp_percent, select_target,

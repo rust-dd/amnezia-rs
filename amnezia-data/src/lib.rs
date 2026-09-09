@@ -77,6 +77,8 @@ pub struct ActorCurves {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorDef {
     #[serde(default)]
+    pub attribute_ranks: Vec<u8>,
+    #[serde(default)]
     pub state_ranks: Vec<u8>,
     pub id: u32,
     pub name: String,
