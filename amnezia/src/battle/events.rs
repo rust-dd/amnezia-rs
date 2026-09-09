@@ -96,6 +96,17 @@ pub(super) fn drive(
     mut battle: ResMut<Battle>,
     mut world: EventWorld,
 ) {
+    if battle.phase != Phase::Inactive && (world.switches.is_changed() || battle.is_changed()) {
+        let switches = world
+            .switches
+            .entries()
+            .into_iter()
+            .filter_map(|(id, enabled)| enabled.then_some(id))
+            .collect();
+        if battle.ai_switches != switches {
+            battle.ai_switches = switches;
+        }
+    }
     if matches!(battle.phase, Phase::Inactive | Phase::Outcome) || !battle.events.blocks_action() {
         return;
     }
@@ -145,4 +156,13 @@ pub(super) fn drive(
         }
     }
     battle.events = events;
+}
+
+pub(super) fn sync_switches(mut battle: ResMut<Battle>, mut switches: ResMut<Switches>) {
+    if battle.pending_switches.is_empty() {
+        return;
+    }
+    for (id, enabled) in battle.pending_switches.drain(..) {
+        switches.set(id, enabled);
+    }
 }

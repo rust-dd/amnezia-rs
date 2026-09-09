@@ -53,6 +53,9 @@ pub enum MenuLevel {
 #[derive(Resource, Default)]
 pub struct Battle {
     pub(in crate::battle) events: crate::battle::events::BattleEvents,
+    pub(in crate::battle) ai_switches: std::collections::BTreeSet<u32>,
+    pub(in crate::battle) pending_switches: Vec<(u32, bool)>,
+    pub(in crate::battle) action_source: Option<Source>,
     pub phase: Phase,
     pub background: String,
     pub allow_escape: bool,
@@ -251,6 +254,7 @@ impl Battle {
     /// plus each living enemy's AI-chosen action (`resolve::enemy_action`), and
     /// start resolving.
     pub(in crate::battle) fn begin_resolve(&mut self) {
+        self.action_source = None;
         self.events.next_turn();
         let alive: Vec<bool> = self.members.iter().map(|f| f.alive()).collect();
         let mut actions: Vec<Action> = Vec::new();
@@ -348,6 +352,7 @@ impl Battle {
     /// wear off timed states, then hand the round to the first member who may
     /// freely choose (auto-ordering and skipping any restricted members).
     pub fn new_round(&mut self) {
+        self.action_source = None;
         self.round += 1;
         for f in &mut self.members {
             f.command = None;

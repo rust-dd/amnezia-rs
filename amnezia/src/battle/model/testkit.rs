@@ -44,7 +44,10 @@ pub fn monster(id: u32, hp: u32, exp: u32, gold: u32) -> MonsterDef {
         gold,
         attribute_ranks: vec![],
         state_ranks: vec![],
-        actions: vec![],
+        actions: vec![amnezia_data::EnemyActionDef {
+            basic: 0,
+            ..Default::default()
+        }],
     }
 }
 

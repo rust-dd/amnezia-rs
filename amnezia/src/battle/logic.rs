@@ -23,7 +23,7 @@ pub(crate) use damage::{
     critical_damage, defended, elemental_damage, physical_damage, skill_effect, variance_adjust,
 };
 pub(crate) use enemy::{
-    AI_PARTY_LEVEL, choose_enemy_action, enemy_command, hp_percent, select_target,
+    EnemyAiContext, check_turn, choose_enemy_action, enemy_command, hp_percent, select_target,
 };
 pub(crate) use escape::{
     average_agility, escape_succeeds, init_escape_chance, total_rewards, turn_order,

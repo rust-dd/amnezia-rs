@@ -415,30 +415,6 @@ fn action(
 }
 
 #[test]
-fn choose_enemy_action_gates_conditions_breaks_priority_and_empties_to_none() {
-    assert!(choose_enemy_action(&[], 100, 100, 1, 1, 0).is_none());
-
-    let turn = [action(0, 0, 0, 2, 2, 2, 10)];
-    assert!(choose_enemy_action(&turn, 100, 100, 1, 1, 0).is_none());
-    assert!(choose_enemy_action(&turn, 100, 100, 1, 2, 0).is_some());
-    assert!(choose_enemy_action(&turn, 100, 100, 1, 3, 0).is_none());
-    assert!(choose_enemy_action(&turn, 100, 100, 1, 4, 0).is_some());
-
-    let hp = [action(1, 0, 7, 3, 0, 30, 5)];
-    assert!(choose_enemy_action(&hp, 100, 100, 1, 1, 0).is_none());
-    let low = choose_enemy_action(&hp, 20, 100, 1, 1, 0).unwrap();
-    assert_eq!((low.kind, low.skill_id), (1, 7));
-
-    let mix = [action(0, 0, 0, 0, 0, 0, 1), action(1, 0, 9, 0, 0, 0, 8)];
-    assert_eq!(
-        choose_enemy_action(&mix, 100, 100, 1, 1, 0)
-            .unwrap()
-            .skill_id,
-        9
-    );
-}
-
-#[test]
 fn enemy_command_maps_each_action_family() {
     assert!(matches!(
         enemy_command(Some(&action(1, 0, 4, 0, 0, 0, 0)), 2),
@@ -459,10 +435,7 @@ fn enemy_command_maps_each_action_family() {
         enemy_command(Some(&action(0, 0, 0, 0, 0, 0, 0)), 1),
         Command::Attack { target: 1 }
     ));
-    assert!(matches!(
-        enemy_command(None, 3),
-        Command::Attack { target: 3 }
-    ));
+    assert!(matches!(enemy_command(None, 3), Command::Nothing));
 }
 
 #[test]

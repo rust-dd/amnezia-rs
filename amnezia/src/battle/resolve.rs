@@ -15,6 +15,7 @@
 mod death;
 mod end;
 mod enemy;
+mod enemy_ai;
 mod enemy_skill;
 mod hit;
 mod item;

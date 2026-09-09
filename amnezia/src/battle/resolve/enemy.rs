@@ -5,65 +5,6 @@
 use super::*;
 
 impl Battle {
-    /// Choose living enemy `i`'s action for the coming round. A status restriction
-    /// overrides the AI: can't-act does nothing, berserk forces a plain attack on a
-    /// party member, confusion an attack on a random other foe (friendly fire).
-    /// Otherwise a random living party target, this foe's and the party's HP
-    /// percentages, and the round number feed [`logic::choose_enemy_action`], whose
-    /// result [`logic::enemy_command`] maps to a [`Command`] (a basic attack when
-    /// nothing is eligible). `None` when the enemy is down or no member is left to
-    /// target.
-    pub(in crate::battle) fn enemy_action(&mut self, i: usize, alive: &[bool]) -> Option<Action> {
-        if !self.enemies[i].alive() {
-            return None;
-        }
-        let agility = self.enemies[i].stats.agility;
-        let restriction = logic::worst_restriction(&self.enemies[i].states, &self.states);
-        let kind = match restriction {
-            1 => Command::Nothing,
-            3 => {
-                // Confusion turns the blow on a random other living foe (resolved
-                // as friendly fire in `apply`); none left -> nothing.
-                let others: Vec<bool> = self
-                    .enemies
-                    .iter()
-                    .enumerate()
-                    .map(|(j, e)| j != i && e.alive())
-                    .collect();
-                match logic::select_target(&others, rng_next(&mut self.rng) as usize) {
-                    Some(target) => Command::Attack { target },
-                    None => Command::Nothing,
-                }
-            }
-            2 => {
-                // Berserk forces a plain attack on a random living party member.
-                let target = logic::select_target(alive, rng_next(&mut self.rng) as usize)?;
-                Command::Attack { target }
-            }
-            _ => {
-                let target = logic::select_target(alive, rng_next(&mut self.rng) as usize)?;
-                let party_hp: i32 = self.members.iter().map(|f| f.hp.max(0)).sum();
-                let party_max: i32 = self.members.iter().map(|f| f.max_hp).sum();
-                let enemy_hp_pct = logic::hp_percent(self.enemies[i].hp, self.enemies[i].max_hp);
-                let party_hp_pct = logic::hp_percent(party_hp, party_max);
-                let chosen = logic::choose_enemy_action(
-                    &self.enemies[i].actions,
-                    enemy_hp_pct,
-                    party_hp_pct,
-                    logic::AI_PARTY_LEVEL,
-                    self.round,
-                    rng_next(&mut self.rng),
-                );
-                logic::enemy_command(chosen.as_ref(), target)
-            }
-        };
-        Some(Action {
-            source: Source::Enemy(i),
-            kind,
-            agility,
-        })
-    }
-
     /// Advance the command phase past every member the game must act for: a
     /// can't-act (restriction 1) member is auto-ordered [`Command::Nothing`]; a
     /// berserk (2) member is forced to strike a random living enemy; a confused (3)

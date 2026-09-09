@@ -47,6 +47,8 @@ impl Battle {
                     fled: false,
                     charging: false,
                     actions: d.actions.clone(),
+                    switch_on_after_action: None,
+                    switch_off_after_action: None,
                     dying: None,
                 })
             })
@@ -115,6 +117,7 @@ impl Fighter {
         let weapon = items.iter().find(|i| i.id == slots[0]);
         Self {
             actor_id: actor.id,
+            level,
             name: actor.name.clone(),
             hp: hp.clamp(0, max_hp),
             max_hp,

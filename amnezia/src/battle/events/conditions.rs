@@ -1,4 +1,5 @@
 use super::{EventWorld, actors};
+use crate::battle::logic::check_turn;
 use crate::battle::model::Battle;
 use amnezia_data::TroopPageConditionDef;
 
@@ -48,15 +49,6 @@ pub(super) fn matches(
 fn hp_in_range(hp: i32, max: i32, min: u32, upper: u32) -> bool {
     let percent = i64::from(hp.max(0)) * 100 / i64::from(max.max(1));
     (i64::from(min)..=i64::from(upper)).contains(&percent)
-}
-
-pub(in crate::battle) fn check_turn(turn: u32, base: u32, multiple: u32) -> bool {
-    turn >= base
-        && if multiple == 0 {
-            turn == base
-        } else {
-            (turn - base).is_multiple_of(multiple)
-        }
 }
 
 #[cfg(test)]

@@ -152,6 +152,9 @@ impl Plugin for BattlePlugin {
                         .before(systems::apply_victory_rewards)
                         .before(systems::outcome_input),
                     systems::resolve_tick,
+                    events::sync_switches
+                        .after(systems::resolve_tick)
+                        .before(systems::outcome_input),
                     systems::apply_victory_rewards
                         .after(systems::resolve_tick)
                         .before(systems::outcome_input),

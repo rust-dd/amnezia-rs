@@ -52,6 +52,8 @@ pub struct Foe {
     /// This foe's RM2000 battle-AI action list, consulted each round to choose
     /// its command (cast a skill, defend, or attack on turn/HP conditions).
     pub actions: Vec<EnemyActionDef>,
+    pub(in crate::battle) switch_on_after_action: Option<u32>,
+    pub(in crate::battle) switch_off_after_action: Option<u32>,
     /// A death or self-destruct fade playing out on this foe's sprite before it
     /// is cleared from view (see [`Dying`]); `None` until the foe is slain.
     pub(in crate::battle) dying: Option<Dying>,

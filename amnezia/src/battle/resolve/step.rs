@@ -20,6 +20,7 @@ impl Battle {
     pub fn resolve_next_with_items(&mut self, mut consume: impl FnMut(u32) -> bool) -> bool {
         if let Some(step) = self.steps.pop_front() {
             self.run_step(step);
+            self.finish_action();
             return true;
         }
         let Some(&action) = self.queue.get(self.queue_at) else {
@@ -37,10 +38,43 @@ impl Battle {
                 {
                     return true;
                 }
+                if let Command::Skill { skill_id, .. } = action.kind
+                    && !self
+                        .skills
+                        .iter()
+                        .find(|skill| skill.id == skill_id)
+                        .is_some_and(|skill| self.skill_usable_by(action.source, skill))
+                {
+                    return true;
+                }
+                self.action_source = Some(action.source);
                 self.apply(action);
+                self.finish_action();
             }
         }
         true
+    }
+
+    fn finish_action(&mut self) {
+        if !self.steps.is_empty() {
+            return;
+        }
+        if let Some(Source::Enemy(i)) = self.action_source.take() {
+            let on = self.enemies[i].switch_on_after_action.take();
+            let off = self.enemies[i].switch_off_after_action.take();
+            for (id, enabled) in on
+                .map(|id| (id, true))
+                .into_iter()
+                .chain(off.map(|id| (id, false)))
+            {
+                if enabled {
+                    self.ai_switches.insert(id);
+                } else {
+                    self.ai_switches.remove(&id);
+                }
+                self.pending_switches.push((id, enabled));
+            }
+        }
     }
 
     /// Resolve one deferred [`Step`] of the action in progress: the next target of

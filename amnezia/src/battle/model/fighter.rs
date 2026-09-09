@@ -6,6 +6,7 @@ use super::{Command, Stats};
 /// chosen this round (if any).
 pub struct Fighter {
     pub actor_id: u32,
+    pub level: u32,
     pub name: String,
     pub hp: i32,
     pub max_hp: i32,
