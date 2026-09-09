@@ -249,11 +249,12 @@ pub(super) fn route_hero(
         Without<EventSprite>,
     >,
     events: Query<(&EventSprite, Option<&RouteStepper>), Without<Player>>,
+    vehicles: Option<Res<crate::vehicles::Vehicles>>,
 ) {
     // The hero's only routes come from a `MoveEvent`, which is always forced, so they
     // must keep advancing through the very cutscene that issued them — RM2000 steps
     // an overwritten route even while the event interpreter runs and a message shows.
-    if guards.forced_route_paused() {
+    if guards.forced_route_paused() || vehicles.is_some_and(|v| v.airship_transitioning()) {
         return;
     }
     let Ok((mut player, mut queue, mut stepper, mut sprite)) = hero.single_mut() else {

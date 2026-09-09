@@ -1,3 +1,4 @@
+mod flight;
 #[cfg(test)]
 mod landing_tests;
 mod model;
@@ -70,8 +71,13 @@ impl Vehicles {
         blocked: impl Fn(i32, i32) -> bool,
     ) -> bool {
         if let Some(index) = self.save.riding {
-            if self.motion[index].queue.busy() {
+            if self.motion[index].queue.busy() || self.airship_transitioning() {
                 return false;
+            }
+            if index == 2 {
+                self.save.vehicles[2].dir = DIR_LEFT;
+                self.save.airship_flight.descend();
+                return true;
             }
             let vehicle = &self.save.vehicles[index];
             let (mut x, mut y) = vehicle.tile();
@@ -81,16 +87,7 @@ impl Vehicles {
                 y += dy;
             }
             let (x, y) = data.normalize_tile(x, y);
-            let terrain_allows = if index == 2 {
-                data.airship_landing_tile(x, y)
-            } else {
-                data.passable(x, y)
-            };
-            let occupied_by_ship = index == 2
-                && self.save.vehicles[..2]
-                    .iter()
-                    .any(|other| other.definition.map_id == data.map_id && other.tile() == (x, y));
-            if !terrain_allows || occupied_by_ship || blocked(x, y) {
+            if !data.passable(x, y) || blocked(x, y) {
                 return false;
             }
             self.disembark = Some((x, y, vehicle.dir));
@@ -111,6 +108,9 @@ impl Vehicles {
             {
                 self.save.riding = Some(index);
                 vehicle.dir = if index == 2 { DIR_LEFT } else { hero.2 };
+                if index == 2 {
+                    self.save.airship_flight.ascend();
+                }
                 self.consumed_action = true;
                 return true;
             }
@@ -144,18 +144,17 @@ fn keyboard(
     let Ok((hero, queue)) = players.single() else {
         return;
     };
-    if queue.busy() {
+    if queue.busy() || vehicles.airship_transitioning() {
         return;
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
         let was_riding = vehicles.riding();
-        let landing_airship = vehicles.save.riding == Some(2);
         if vehicles.toggle(&data, (hero.tile_x, hero.tile_y, hero.dir), |x, y| {
             map_events.events.iter().any(|event| {
                 event.x as i32 == x
                     && event.y as i32 == y
                     && active_page(event, &switches, &variables, &party, &inventory)
-                        .is_some_and(|p| landing_airship || p.layer == 1)
+                        .is_some_and(|p| p.layer == 1)
             })
         }) {
             vehicles.consumed_action = true;
@@ -165,7 +164,7 @@ fn keyboard(
                 audio.write(AudioRequest::from_music(
                     system_bgm.get(3 + index as u32, &music.0[index]),
                 ));
-            } else {
+            } else if !vehicles.riding() {
                 audio.write(
                     vehicles
                         .save
@@ -210,6 +209,7 @@ fn keyboard(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn advance(
     time: Res<Time>,
     data: Res<MapData>,
@@ -217,11 +217,30 @@ fn advance(
     mut vehicles: ResMut<Vehicles>,
     mut switches: ResMut<Switches>,
     mut audio: MessageWriter<AudioRequest>,
+    map_events: Res<MapEvents>,
+    variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
 ) {
     if guards.forced_route_paused() {
         return;
     }
     let vehicles = &mut *vehicles;
+    let transitioning = vehicles.airship_transitioning();
+    if vehicles.advance_flight(time.delta_secs(), &data, |x, y| {
+        map_events.events.iter().any(|event| {
+            (event.x as i32, event.y as i32) == (x, y)
+                && active_page(event, &switches, &variables, &party, &inventory).is_some()
+        })
+    }) {
+        audio.write(
+            vehicles
+                .save
+                .before_music
+                .as_ref()
+                .map_or(AudioRequest::StopBgm, |m| m.replay()),
+        );
+    }
     for (index, (vehicle, motion)) in vehicles
         .save
         .vehicles
@@ -230,6 +249,15 @@ fn advance(
         .enumerate()
     {
         if vehicle.definition.map_id != data.map_id {
+            continue;
+        }
+        if index == 2 && transitioning {
+            motion.route.animation.advance_vehicle(
+                vehicle,
+                vehicles.save.riding == Some(2),
+                false,
+                time.delta_secs(),
+            );
             continue;
         }
         let (x, y) = vehicle.tile();

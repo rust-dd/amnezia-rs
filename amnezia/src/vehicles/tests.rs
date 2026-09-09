@@ -21,10 +21,16 @@ fn airship_boards_on_its_tile_and_lands_at_its_live_position() {
     vehicles.set_location(2, 13, 55, 100);
     assert!(!vehicles.toggle(&data, (54, 100, DIR_RIGHT), |_, _| false));
     assert!(vehicles.toggle(&data, (55, 100, DIR_DOWN), |_, _| false));
+    for _ in 0..32 {
+        vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
+    }
     assert_eq!(vehicles.character(10004), Some((55, 100, DIR_LEFT)));
     vehicles.set_location(2, 13, 28, 100);
     assert!(vehicles.toggle(&data, (55, 100, DIR_DOWN), |_, _| false));
-    assert_eq!(vehicles.disembark, Some((28, 100, DIR_LEFT)));
+    for _ in 0..32 {
+        vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
+    }
+    assert_eq!(vehicles.disembark, Some((28, 100, DIR_DOWN)));
     assert!(!vehicles.riding());
 }
 
@@ -34,7 +40,13 @@ fn airship_cannot_land_on_a_solid_event() {
     let mut vehicles = Vehicles::default();
     vehicles.set_location(2, 0, 4, 4);
     assert!(vehicles.toggle(&data, (4, 4, DIR_DOWN), |_, _| false));
-    assert!(!vehicles.toggle(&data, (4, 4, DIR_DOWN), |_, _| true));
+    for _ in 0..32 {
+        vehicles.advance_flight(1.0 / 60.0, &data, |_, _| true);
+    }
+    assert!(vehicles.toggle(&data, (4, 4, DIR_DOWN), |_, _| true));
+    for _ in 0..32 {
+        vehicles.advance_flight(1.0 / 60.0, &data, |_, _| true);
+    }
     assert!(vehicles.riding());
 }
 

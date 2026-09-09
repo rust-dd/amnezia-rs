@@ -51,6 +51,8 @@ pub struct VehicleSave {
     pub vehicles: [VehicleState; 3],
     pub riding: Option<usize>,
     pub before_music: Option<BgmTrack>,
+    #[serde(default)]
+    pub(super) airship_flight: super::flight::AirshipFlight,
 }
 
 impl Default for VehicleSave {
@@ -65,6 +67,7 @@ impl Default for VehicleSave {
             }),
             riding: None,
             before_music: None,
+            airship_flight: default(),
         }
     }
 }
@@ -131,7 +134,12 @@ impl Vehicles {
         Some(
             self.motion[index].pixel.unwrap_or_else(|| {
                 Vec2::from(data.tile_center(vehicle.tile().0, vehicle.tile().1))
-            }),
+            }) + Vec2::Y
+                * if index == 2 {
+                    self.airship_altitude()
+                } else {
+                    0.0
+                },
         )
     }
 
@@ -160,6 +168,7 @@ impl Vehicles {
 
     pub fn restore(&mut self, save: VehicleSave) {
         *self = Self { save, ..default() };
+        self.save.airship_flight.sanitize();
         if self.save.riding.is_some_and(|index| index >= 3) {
             self.save.riding = None;
         }

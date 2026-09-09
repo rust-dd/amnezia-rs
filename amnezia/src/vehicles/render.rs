@@ -99,7 +99,13 @@ pub(super) fn draw(
         let flying = id.0 == 2 && vehicles.save.riding == Some(2);
         transform.translation = Vec3::new(
             pixel.x,
-            pixel.y + CHAR_Y_OFFSET + if flying { 12.0 } else { 0.0 },
+            pixel.y
+                + CHAR_Y_OFFSET
+                + if flying {
+                    vehicles.airship_altitude()
+                } else {
+                    0.0
+                },
             if flying {
                 250.0
             } else {
