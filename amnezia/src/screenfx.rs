@@ -9,7 +9,7 @@
 //! [`fade`] submodules hold the RM2000-matched motion and timing maths.
 //!
 //! The shake avoids touching `player.rs`: [`apply_camera_shake`] runs in
-//! `PostUpdate` (after the `Update` `camera_follow` has set the base position)
+//! `PostUpdate` (after camera follow has set the base position)
 //! and adds an offset the follow overwrites again next frame, so it never
 //! accumulates.
 

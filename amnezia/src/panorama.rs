@@ -28,7 +28,8 @@ impl Plugin for PanoramaPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Panorama>().add_systems(
             PostUpdate,
-            draw.before(bevy::transform::TransformSystems::Propagate),
+            draw.after(crate::screenfx::ScreenShakeSet)
+                .before(bevy::transform::TransformSystems::Propagate),
         );
     }
 }

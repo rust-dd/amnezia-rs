@@ -7,11 +7,14 @@ use crate::interpreter::RunningEvent;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::{
-    Character, MainCamera, MapData, MapEvents, MoveQueue, RouteAction, RouteStepper, ScenePause,
-    walk,
+    Character, MapData, MapEvents, MoveQueue, RouteAction, RouteStepper, ScenePause, walk,
 };
 use amnezia_data::EventPage;
 use bevy::prelude::*;
+
+mod camera;
+pub(crate) use camera::CameraFollow;
+pub use camera::CameraPan;
 
 const PLAYER_CHARSET: &str = "Chara1";
 const PLAYER_INDEX: u32 = 0;
@@ -61,18 +64,6 @@ impl Character for Player {
     }
 }
 
-/// A camera offset for cutscene panning (`PanScreen` 11060). [`camera_follow`]
-/// adds `offset` after clamping to the map, so a pan can scroll past the map
-/// edge; [`ease_camera_pan`] slides `offset` toward `target` at `speed` world
-/// units per second. The interpreter's PanScreen arm sets `target`/`speed` and
-/// zeroes `target` to return.
-#[derive(Resource, Default)]
-pub struct CameraPan {
-    pub offset: Vec2,
-    pub target: Vec2,
-    pub speed: f32,
-}
-
 /// Scripted visibility is independent of move-route transparency.
 #[derive(Resource, Default)]
 pub struct HeroHidden(pub bool);
@@ -85,19 +76,19 @@ impl Plugin for PlayerPlugin {
             .init_resource::<HeroHidden>()
             .add_systems(
                 Update,
-                (
-                    move_player,
-                    walk::<Player>,
-                    update_player_sprite,
-                    ease_camera_pan,
-                    camera_follow,
-                )
-                    .chain(),
+                (move_player, walk::<Player>, update_player_sprite).chain(),
             )
             .add_systems(
                 PostUpdate,
-                update_hero_hidden
-                    .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
+                (
+                    camera::camera_follow
+                        .in_set(CameraFollow)
+                        .after(crate::vehicles::VehicleSync)
+                        .before(crate::screenfx::ScreenShakeSet)
+                        .before(bevy::transform::TransformSystems::Propagate),
+                    update_hero_hidden
+                        .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
+                ),
             );
     }
 }
@@ -330,69 +321,6 @@ fn update_hero_hidden(
         } else {
             Visibility::Inherited
         };
-    }
-}
-
-#[allow(clippy::type_complexity)]
-fn camera_follow(
-    data: Res<MapData>,
-    pan: Res<CameraPan>,
-    players: Query<&Transform, With<Player>>,
-    mut cameras: Query<(&mut Transform, &Projection), (With<MainCamera>, Without<Player>)>,
-) {
-    let Ok(player) = players.single() else {
-        return;
-    };
-    let Ok((mut camera, projection)) = cameras.single_mut() else {
-        return;
-    };
-    // The world-space viewport is the fixed 320×240 (not the window pixels), so
-    // the clamp stops the camera at the map edge for that view, not the window.
-    let Projection::Orthographic(view) = projection else {
-        return;
-    };
-    let half_map_w = data.width as f32 * tiles::TILE / 2.0;
-    let half_map_h = data.height as f32 * tiles::TILE / 2.0;
-    // The pan offset is added after the clamp so a cutscene can deliberately
-    // scroll past the map edge; a zero offset leaves the normal follow untouched.
-    camera.translation.x = if data.loops_x() {
-        player.translation.x
-    } else {
-        clamp_to_map(player.translation.x, half_map_w, view.area.width() / 2.0)
-    } + pan.offset.x;
-    camera.translation.y = if data.loops_y() {
-        player.translation.y
-    } else {
-        clamp_to_map(player.translation.y, half_map_h, view.area.height() / 2.0)
-    } + pan.offset.y;
-}
-
-/// Follow `target` but keep the camera inside the map: never scroll past the
-/// edge (which would reveal the empty area beyond the map). When the map is
-/// smaller than the viewport on an axis, it is centered (returns 0). The map is
-/// centered on the origin, so its extent on each axis is `±half_map`.
-fn clamp_to_map(target: f32, half_map: f32, half_view: f32) -> f32 {
-    if half_view >= half_map {
-        0.0
-    } else {
-        target.clamp(-half_map + half_view, half_map - half_view)
-    }
-}
-
-/// Ease the camera pan: slide `offset` toward `target` at `speed` world units
-/// per second, snapping the last fraction of a step so it settles exactly.
-fn ease_camera_pan(time: Res<Time>, mut pan: ResMut<CameraPan>) {
-    pan.offset = ease_toward(pan.offset, pan.target, pan.speed * time.delta_secs());
-}
-
-/// Step `offset` toward `target` by at most `step`; snap to `target` once within
-/// one step (or already there), which also avoids normalising a zero vector.
-fn ease_toward(offset: Vec2, target: Vec2, step: f32) -> Vec2 {
-    let delta = target - offset;
-    if delta.length() <= step {
-        target
-    } else {
-        offset + delta.normalize() * step
     }
 }
 

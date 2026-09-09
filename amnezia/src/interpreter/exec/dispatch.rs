@@ -124,25 +124,13 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         PAN_SCREEN => {
-            // op 2 = pan by `dist` tiles in `dir`; op 3 = return; lock/unlock ignored.
-            let op = command.params.first().copied().unwrap_or(0);
-            if op == 3 {
-                x.subsystems.mapfx.camera_pan.target = Vec2::ZERO;
-            } else if op == 2 {
-                let dist =
-                    command.params.get(2).copied().unwrap_or(0).max(0) as f32 * crate::tiles::TILE;
-                let speed = command.params.get(3).copied().unwrap_or(4).max(1) as f32;
-                let delta = match command.params.get(1).copied().unwrap_or(0) {
-                    0 => Vec2::new(0.0, dist),
-                    1 => Vec2::new(dist, 0.0),
-                    2 => Vec2::new(0.0, -dist),
-                    _ => Vec2::new(-dist, 0.0),
-                };
-                x.subsystems.mapfx.camera_pan.target += delta;
-                x.subsystems.mapfx.camera_pan.speed = speed * crate::tiles::TILE * 2.0;
-            }
+            frame.wait = x.subsystems.mapfx.camera_pan.command(&command.params);
             frame.ip += 1;
-            Flow::Advance
+            if frame.wait > 0.0 {
+                Flow::Yield
+            } else {
+                Flow::Advance
+            }
         }
         WEATHER => {
             *x.subsystems.mapfx.weather =

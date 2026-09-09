@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
+mod camera;
 mod looping;
 mod scenarios;
 
@@ -19,7 +20,9 @@ impl Plugin for SmokePlugin {
         if !cfg!(debug_assertions) || !std::env::args().any(|arg| arg == "--smoke-test") {
             return;
         }
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-looping") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-camera") {
+            "camera"
+        } else if std::env::args().any(|arg| arg == "--smoke-looping") {
             "looping"
         } else if std::env::args().any(|arg| arg == "--smoke-airship") {
             "airship"
@@ -57,7 +60,10 @@ impl Plugin for SmokePlugin {
                 .after(bevy::input::InputSystems)
                 .before(crate::vehicles::VehicleInput),
         )
-        .add_systems(PostUpdate, drive);
+        .add_systems(
+            PostUpdate,
+            drive.after(bevy::transform::TransformSystems::Propagate),
+        );
     }
 }
 
@@ -118,6 +124,9 @@ fn drive(world: &mut World) {
     }
     if scenario == "looping" {
         looping::drive(world, frame);
+    }
+    if scenario == "camera" {
+        camera::drive(world, frame);
     }
     if frame == 240 && scenario == "battle-events" {
         crate::dialogue::verify_battle_layer(world);
@@ -233,7 +242,9 @@ fn start_scenario(world: &mut World, scenario: &str) {
     if scenario == "battle-menus" {
         crate::battle::smoke::prepare(world);
     }
-    let commands = if scenario == "looping" {
+    let commands = if scenario == "camera" {
+        camera::entry()
+    } else if scenario == "looping" {
         looping::entry()
     } else if scenario == "airship" {
         let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(

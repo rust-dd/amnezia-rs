@@ -26,6 +26,9 @@ pub struct VehicleInput;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct VehicleDisplay;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct VehicleSync;
+
 pub struct VehiclePlugin;
 
 impl Plugin for VehiclePlugin {
@@ -44,11 +47,14 @@ impl Plugin for VehiclePlugin {
             .add_systems(Update, advance)
             .add_systems(
                 PostUpdate,
-                (render::sync_hero, render::draw)
-                    .chain()
-                    .in_set(VehicleDisplay)
-                    .after(crate::screenfx::ScreenShakeSet)
-                    .before(bevy::transform::TransformSystems::Propagate),
+                (
+                    render::sync_hero.in_set(VehicleSync),
+                    render::draw
+                        .in_set(VehicleDisplay)
+                        .after(crate::player::CameraFollow)
+                        .after(crate::screenfx::ScreenShakeSet)
+                        .before(bevy::transform::TransformSystems::Propagate),
+                ),
             );
     }
 }

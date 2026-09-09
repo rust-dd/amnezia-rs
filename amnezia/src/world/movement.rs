@@ -141,6 +141,17 @@ impl MoveQueue {
         )
     }
 
+    pub(crate) fn ground_position<C: Character>(&self, ch: &C, data: &MapData) -> Vec2 {
+        self.active.as_ref().map_or_else(
+            || center(data, ch.tile().0, ch.tile().1),
+            |tween| {
+                tween
+                    .from
+                    .lerp(tween.to, (tween.elapsed / self.step_secs).clamp(0.0, 1.0))
+            },
+        )
+    }
+
     /// Whether [`walk`] still has something to do (busy, or a scripted route to
     /// settle). Keyboard idling stays out of the movement system.
     fn has_work(&self) -> bool {

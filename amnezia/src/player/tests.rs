@@ -1,5 +1,6 @@
+use super::camera::{camera_follow, clamp_to_map, ease_toward};
 use super::*;
-use super::{clamp_to_map, ease_toward};
+use crate::world::MainCamera;
 use amnezia_data::{Event, EventCommand, Map};
 use bevy::math::Vec2;
 
@@ -239,7 +240,8 @@ fn camera_only_clamps_non_looping_axes() {
         let mut data = MapData::for_test(140, 140);
         data.scroll_type = mode;
         let mut app = App::new();
-        app.insert_resource(data)
+        app.init_resource::<Time>()
+            .insert_resource(data)
             .init_resource::<CameraPan>()
             .add_systems(Update, camera_follow);
         app.world_mut().spawn((
@@ -266,7 +268,7 @@ fn camera_only_clamps_non_looping_axes() {
             .id();
         app.update();
         let position = app.world().get::<Transform>(camera).unwrap().translation;
-        assert_eq!(position.x, if mode & 2 != 0 { -1120.0 } else { -960.0 });
-        assert_eq!(position.y, if mode & 1 != 0 { 1120.0 } else { 1000.0 });
+        assert_eq!(position.x, if mode & 2 != 0 { -1112.0 } else { -960.0 });
+        assert_eq!(position.y, if mode & 1 != 0 { 1112.0 } else { 1000.0 });
     }
 }

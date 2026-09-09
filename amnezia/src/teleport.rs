@@ -199,11 +199,7 @@ fn swap_map(
     // Rebuilding the scene would reset every event's position and page state.
     if map_id == map_data.map_id && !reload {
         reposition_hero(players, map_data, tile_x, tile_y);
-        // A transfer re-centers the screen on the hero (RM2000), so drop any
-        // cutscene camera pan carried in — the cross-map path below does the same.
-        pan.offset = Vec2::ZERO;
-        pan.target = Vec2::ZERO;
-        pan.speed = 0.0;
+        pan.recenter(false);
         return;
     }
     for entity in scene {
@@ -221,11 +217,7 @@ fn swap_map(
     reposition_hero(players, &data, tile_x, tile_y);
     *map_data = data;
     *map_events = events;
-    // A cross-map transfer re-centers on the hero: drop any cutscene camera pan
-    // carried over from the previous map.
-    pan.offset = Vec2::ZERO;
-    pan.target = Vec2::ZERO;
-    pan.speed = 0.0;
+    pan.recenter(true);
 }
 
 /// Move the persistent hero to tile `(tile_x, tile_y)` on `data`: update its
