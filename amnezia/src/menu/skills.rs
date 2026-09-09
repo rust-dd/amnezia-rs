@@ -18,6 +18,9 @@ use amnezia_data::SkillDef;
 use super::derive;
 use super::items::viewport_start;
 
+mod cast;
+pub(super) use cast::apply_field_skill;
+
 /// How many skill rows fit before the list scrolls with the cursor.
 const VISIBLE_ROWS: usize = 8;
 
@@ -26,8 +29,11 @@ const VISIBLE_ROWS: usize = 8;
 pub(super) fn field_usable(skill: &SkillDef) -> bool {
     skill.skill_type == 0
         && (2..=4).contains(&skill.scope)
-        && (((skill.affect_hp || skill.affect_sp) && skill.power > 0)
-            || !skill.affected_states.is_empty())
+        && (skill.affect_hp
+            || skill.affect_sp
+            || crate::conditions::definitions()
+                .iter()
+                .any(|state| state.persistence == 1 && skill.affected_states.contains(&state.id)))
 }
 
 /// The `member`'s known skills in database (id) order: the skill defs whose ids
@@ -58,86 +64,6 @@ pub(super) fn skill_at<'a>(
     known_skills(member, data, party, progression)
         .into_iter()
         .nth(cursor)
-}
-
-/// Apply a field-usable skill cast by `caster` on `target`: spend the caster's SP
-/// (defaulting to full when unrecorded) and heal the target a flat `power` HP,
-/// clamped to their maximum. Returns `false` — changing nothing — when the skill
-/// isn't field-usable or the caster can't afford its SP cost.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn apply_field_skill(
-    caster: usize,
-    target: usize,
-    skill_id: u32,
-    data: &GameData,
-    party: &Party,
-    progression: &Progression,
-    vitals: &mut Vitals,
-    equipment: &Equipment,
-) -> bool {
-    let roster = party.snapshot();
-    let (Some(&caster_id), Some(&target_id)) = (roster.get(caster), roster.get(target)) else {
-        return false;
-    };
-    let Some(skill) = data.skills.iter().find(|s| s.id == skill_id) else {
-        return false;
-    };
-    if !field_usable(skill) {
-        return false;
-    }
-    let Some(caster_def) = data.actor(caster_id) else {
-        return false;
-    };
-    let caster_level = progression.level(caster_def);
-    let (caster_max_hp, caster_max_sp) = derive::max_hp_sp(caster_def, caster_level);
-    let (caster_hp, caster_sp) = vitals
-        .get_stored(caster_id)
-        .unwrap_or((caster_max_hp, caster_max_sp));
-    let cost = EquipmentEffects::from_slots(equipment.slots(caster_def), &data.items)
-        .skill_cost(skill.sp_cost) as i32;
-    if caster_sp < cost || caster_hp <= 0 {
-        return false;
-    }
-    let targets = match skill.scope {
-        2 => vec![caster_id],
-        4 => roster,
-        _ => vec![target_id],
-    };
-    let mut changed = false;
-    for id in targets {
-        let Some(def) = data.actor(id) else { continue };
-        let full = derive::max_hp_sp(def, progression.level(def));
-        let (hp, sp) = vitals.get_stored(id).unwrap_or(full);
-        if hp == 0 && !skill.affected_states.contains(&1) {
-            continue;
-        }
-        let before = vitals.states(id);
-        let mut new_hp = if skill.affect_hp {
-            (hp + skill.power as i32).min(full.0)
-        } else {
-            hp
-        };
-        if hp == 0 {
-            new_hp = new_hp.max(1);
-        }
-        let new_sp = if skill.affect_sp {
-            (sp + skill.power as i32).min(full.1)
-        } else {
-            sp
-        };
-        vitals.set(id, new_hp, new_sp);
-        for state in &skill.affected_states {
-            vitals.change_condition(id, *state, false, full);
-        }
-        changed |= (hp, sp) != (new_hp, new_sp) || before != vitals.states(id);
-    }
-    if changed {
-        let (hp, sp) = vitals
-            .get_stored(caster_id)
-            .unwrap_or((caster_hp, caster_sp));
-        vitals.set(caster_id, hp, sp - cost);
-    }
-    changed
 }
 
 /// Compose the caster's skill list and the composed-text line its windowskin
@@ -235,6 +161,7 @@ pub(super) fn compose_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::interpreter::EventRng;
     use crate::menu::testkit;
 
     #[test]
@@ -263,7 +190,8 @@ mod tests {
             &party,
             &progression,
             &mut vitals,
-            &equipment
+            &equipment,
+            &mut EventRng::seeded(1)
         ));
         vitals.set(1, 20, 5);
         assert!(apply_field_skill(
@@ -274,7 +202,8 @@ mod tests {
             &party,
             &progression,
             &mut vitals,
-            &equipment
+            &equipment,
+            &mut EventRng::seeded(1)
         ));
         assert_eq!(vitals.get_stored(1), Some((30, 0)));
     }
@@ -369,6 +298,7 @@ mod tests {
             &Progression::default(),
             &mut vitals,
             &Equipment::default(),
+            &mut EventRng::seeded(1),
         );
         assert!(ok, "an affordable field heal applies");
         // HP 20 + 40 power = 60 (below the 63 max); SP 30 - 8 cost = 22.
@@ -395,7 +325,8 @@ mod tests {
             &party,
             &prog,
             &mut broke,
-            &Equipment::default()
+            &Equipment::default(),
+            &mut EventRng::seeded(1)
         ));
         assert_eq!(
             broke.get_stored(1),
@@ -406,7 +337,17 @@ mod tests {
         let mut full = Vitals::default();
         full.set(1, 20, 30);
         assert!(
-            !apply_field_skill(0, 0, 3, &d, &party, &prog, &mut full, &Equipment::default()),
+            !apply_field_skill(
+                0,
+                0,
+                3,
+                &d,
+                &party,
+                &prog,
+                &mut full,
+                &Equipment::default(),
+                &mut EventRng::seeded(1)
+            ),
             "a battle-only skill can't be cast in the field"
         );
     }

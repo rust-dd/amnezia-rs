@@ -35,7 +35,7 @@ mod present;
 #[cfg(test)]
 mod tests;
 
-use event_rng::EventRng;
+pub(crate) use event_rng::EventRng;
 use exec::{Exec, run_frame};
 use frame::Frame;
 use params::Blockers;

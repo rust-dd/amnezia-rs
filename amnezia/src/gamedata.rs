@@ -4,8 +4,14 @@
 //! consumer sees a ready [`GameData`] resource without an `Option` guard.
 
 use crate::assets::{asset_root, load_ron};
-use amnezia_data::{ActorDef, ItemDef, SkillDef};
+use amnezia_data::{ActorDef, AttributeDef, ItemDef, SkillDef};
 use bevy::prelude::*;
+use std::sync::OnceLock;
+
+pub(crate) fn attribute_definitions() -> &'static [AttributeDef] {
+    static ATTRIBUTES: OnceLock<Vec<AttributeDef>> = OnceLock::new();
+    ATTRIBUTES.get_or_init(|| load_ron(&format!("{}/attributes.ron", asset_root())))
+}
 
 /// The static database read by the menu and shop: playable actors, the item
 /// catalogue, and the skill list, each indexed by its 1-based id.

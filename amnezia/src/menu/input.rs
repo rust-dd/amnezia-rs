@@ -125,6 +125,7 @@ pub(super) fn menu_input(
     mut save_request: ResMut<SaveRequest>,
     blockers: OpenBlockers,
     mut sfx: MenuSfx,
+    mut skill_rng: Local<crate::interpreter::EventRng>,
 ) {
     // A shop, battle, the title screen, a cutscene that locked menu access (opcode
     // 11960), or any live overlay/flow (message box, event, choice, number prompt,
@@ -255,6 +256,7 @@ pub(super) fn menu_input(
                     &progression,
                     &mut vitals,
                     &equipment,
+                    &mut skill_rng,
                 )
             {
                 state.screen = MenuScreen::SkillList { member, cursor: 0 };

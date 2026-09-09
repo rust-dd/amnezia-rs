@@ -1,9 +1,5 @@
-//! The interpreter's random source for event rolls — today the `ControlVariables`
-//! "random between" operand (opcode 10220, operand type 3). A little self-contained
-//! PCG-style LCG (the same one the battle uses), seeded once from the clock when
-//! the resource is created and advanced per draw, so dice/chance events vary
-//! between sessions yet stay deterministic within a run — no per-call `Date`/`Math`
-//! nondeterminism.
+//! Clock-seeded random streams for event operands and field skill variance.
+//! Each owner keeps its stream between draws; explicit seeds support regression tests.
 
 use bevy::prelude::*;
 
@@ -22,11 +18,11 @@ impl Default for EventRng {
 impl EventRng {
     /// A deterministic instance for tests; the low bit is forced set so the LCG
     /// never starts from a degenerate all-zero state.
-    pub(super) fn seeded(seed: u64) -> Self {
+    pub(crate) fn seeded(seed: u64) -> Self {
         Self { state: seed | 1 }
     }
 
-    fn next_u64(&mut self) -> u64 {
+    pub(crate) fn next_u64(&mut self) -> u64 {
         self.state = self
             .state
             .wrapping_mul(6364136223846793005)

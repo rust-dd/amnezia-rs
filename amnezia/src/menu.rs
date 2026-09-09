@@ -10,7 +10,8 @@
 //!
 //! The Skill list shows only the chosen caster's known skills — the actor
 //! `learnings` at or below its current level (their SP is what a cast spends).
-//! Field skill-use is limited to HP-recovery ally skills healing a flat `power`;
+//! Field skill-use shares battle magnitude, attributes and variance, with
+//! field-specific state recovery and percentage revival;
 //! the equipment screen picks a slot then an inventory item for it, swapping gear
 //! through the runtime [`crate::equipment::Equipment`] store — both noted where
 //! they live ([`skills`], [`equip`]).

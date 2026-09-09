@@ -120,12 +120,13 @@ pub(super) fn skill(id: u32, name: &str, sp_cost: u32) -> SkillDef {
     }
 }
 
-/// A single-ally HP-recovery skill (scope `3`, affects HP, `power` heal): the
-/// field-usable case for the Skill command.
+/// A flat, variance-free ally heal, matching the original Gyógyító dallam.
 pub(super) fn heal_skill(id: u32, name: &str, sp_cost: u32, power: u32) -> SkillDef {
     let mut s = skill(id, name, sp_cost);
     s.scope = 3;
     s.power = power;
+    s.magical_rate = 0;
+    s.variance = 0;
     s
 }
 

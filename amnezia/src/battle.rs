@@ -21,7 +21,7 @@ mod floaters;
 mod hud;
 mod input;
 mod log_terms;
-pub(in crate::battle) mod logic;
+pub(crate) mod logic;
 mod model;
 mod outcome_text;
 mod resolve;
