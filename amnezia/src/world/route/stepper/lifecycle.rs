@@ -69,6 +69,10 @@ impl RouteStepper {
         self.speed
     }
 
+    pub(crate) fn alpha(&self) -> f32 {
+        crate::tiles::character_alpha(self.transparency)
+    }
+
     #[cfg(test)]
     pub fn with_speed(mut self, speed: u32) -> Self {
         self.set_speed(speed);
@@ -91,6 +95,7 @@ impl RouteStepper {
         if let Some(page) = page {
             let mut route = Self::from_page(&page.move_route, page.move_speed, page.move_frequency);
             route.animation.mode = page.animation_type;
+            route.transparency = if page.translucent { 3 } else { 0 };
             route.active &= page.move_type == 6;
             route.timer = if page.move_type == 6 {
                 turn_delay_secs(route.frequency)
@@ -232,7 +237,7 @@ impl RouteStepper {
         self.animation.mode = next.animation.mode;
         self.frequency = next.frequency;
         self.timer = next.timer;
-        self.transparency = 0;
+        self.transparency = next.transparency;
         self.direction = None;
         self.facing_lock = None;
         if self.forced {

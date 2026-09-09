@@ -90,6 +90,10 @@ pub fn upper_source(id: u16) -> Option<(f32, f32)> {
 pub const CHAR_W: f32 = 24.0;
 pub const CHAR_H: f32 = 32.0;
 
+pub(crate) fn character_alpha(level: u8) -> f32 {
+    f32::from((8 - u16::from(level.min(7))) * 32 - 1) / 255.0
+}
+
 /// Source rectangle top-left (charset pixels) for a character sprite:
 /// `char_index` selects one of the 8 blocks (4×2), `dir_row` the facing row
 /// (Up=0, Right=1, Down=2, Left=3). Animation state 3 reuses the middle frame.
@@ -254,6 +258,17 @@ pub fn passable(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn character_transparency_uses_the_original_eight_bit_opacity_steps() {
+        for (level, opacity) in [255, 223, 191, 159, 127, 95, 63, 31]
+            .into_iter()
+            .enumerate()
+        {
+            assert!((character_alpha(level as u8) * 255.0 - opacity as f32).abs() < 1e-5);
+        }
+        assert_eq!(character_alpha(255), character_alpha(7));
+    }
 
     #[test]
     fn upper_empty_is_none() {

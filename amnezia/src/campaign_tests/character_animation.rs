@@ -1,6 +1,19 @@
 use super::maps;
 
 #[test]
+fn all_original_translucent_event_pages_survive_conversion() {
+    assert_eq!(
+        maps()
+            .values()
+            .flat_map(|m| &m.events)
+            .flat_map(|e| &e.pages)
+            .filter(|p| p.translucent)
+            .count(),
+        396
+    );
+}
+
+#[test]
 fn all_original_nondefault_character_animation_modes_survive_conversion() {
     let mut counts = [0; 6];
     for map in maps().values() {

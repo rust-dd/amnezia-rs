@@ -42,6 +42,28 @@ fn advance(route: &mut RouteStepper) -> Option<RouteAction> {
 }
 
 #[test]
+fn page_translucency_is_the_base_for_forced_routes_and_resets_only_on_page_change() {
+    let mut source = page(&[]);
+    source.translucent = true;
+    let mut route = RouteStepper::from_event_page(Some(&source));
+    assert_eq!(route.alpha(), 159.0 / 255.0);
+    route.force_route(RouteStepper::from_move_event(&[0, 8, 0, 0, 40, 40]));
+    advance(&mut route);
+    assert_eq!(route.alpha(), 95.0 / 255.0);
+    assert!(!route.forced());
+    route.force_route(RouteStepper::from_move_event(&[0, 8, 0, 0, 41]));
+    advance(&mut route);
+    assert_eq!(route.alpha(), 127.0 / 255.0);
+    route.force_route(RouteStepper::from_move_event(&[0, 8, 0, 0, 40]));
+    source.translucent = false;
+    route.refresh_page(Some(&source));
+    assert_eq!(route.alpha(), 1.0);
+    assert!(route.forced());
+    advance(&mut route);
+    assert_eq!(route.alpha(), 223.0 / 255.0);
+}
+
+#[test]
 fn animation_pause_is_character_state_across_forced_routes_and_page_changes() {
     let mut source = page(&[]);
     source.animation_type = 1;

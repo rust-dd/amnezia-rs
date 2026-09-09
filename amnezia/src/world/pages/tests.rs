@@ -2,6 +2,74 @@ use super::*;
 use crate::assets::{asset_root, load_ron};
 
 #[test]
+fn translucent_pages_use_the_original_third_transparency_step() {
+    let mut translucent = page("Chara1", 0);
+    translucent.translucent = true;
+    let mut app = app_with_event(Event {
+        id: 1,
+        x: 3,
+        y: 4,
+        name: String::new(),
+        pages: vec![translucent],
+    });
+    let world = app.world_mut();
+    let sprite = world.query::<&Sprite>().single(world).unwrap();
+    assert!((sprite.color.alpha() - 159.0 / 255.0).abs() < 1e-6);
+    let world = app.world_mut();
+    let (mut ch, mut route, mut queue) = world
+        .query::<(&mut EventSprite, &mut RouteStepper, &mut MoveQueue)>()
+        .single_mut(world)
+        .unwrap();
+    route.force_route(RouteStepper::from_move_event(&[
+        1, 8, 0, 0, 34, 6, 67, 104, 97, 114, 97, 50, 1,
+    ]));
+    crate::world::drive_route(
+        &mut *ch,
+        &mut queue,
+        &mut route,
+        (0, 0),
+        1.0 / 60.0,
+        |_, _, _| true,
+    );
+    app.update();
+    let world = app.world_mut();
+    let (ch, sprite) = world
+        .query::<(&EventSprite, &Sprite)>()
+        .single(world)
+        .unwrap();
+    assert_eq!((ch.charset.as_str(), ch.index), ("Chara2", 1));
+    assert!((sprite.color.alpha() - 159.0 / 255.0).abs() < 1e-6);
+}
+
+#[test]
+fn page_changes_repaint_opacity_in_both_directions() {
+    let mut translucent = page("Chara1", 0);
+    translucent.translucent = true;
+    translucent.condition.flags = 1;
+    translucent.condition.switch_a = 8;
+    let mut opaque = page("Chara1", 0);
+    opaque.translucent = false;
+    let mut app = app_with_event(Event {
+        id: 1,
+        x: 3,
+        y: 4,
+        name: String::new(),
+        pages: vec![opaque, translucent],
+    });
+    for (enabled, alpha) in [(true, 159.0 / 255.0), (false, 1.0), (true, 159.0 / 255.0)] {
+        app.world_mut().resource_mut::<Switches>().set(8, enabled);
+        app.update();
+        let world = app.world_mut();
+        let (sprite, route) = world
+            .query::<(&Sprite, &RouteStepper)>()
+            .single(world)
+            .unwrap();
+        assert!((sprite.color.alpha() - alpha).abs() < 1e-6);
+        assert_eq!(route.alpha(), alpha);
+    }
+}
+
+#[test]
 fn fixed_graphic_pages_keep_their_pose_while_moving() {
     let mut fixed = page("Chara1", 0);
     fixed.animation_type = 4;

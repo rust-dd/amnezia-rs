@@ -236,7 +236,9 @@ fn advance(
                 StepEffect::Sound { name, params } => {
                     audio.write(AudioRequest::play_sound(&name, &params));
                 }
-                StepEffect::Transparency(level) => motion.alpha = 1.0 - level as f32 / 8.0,
+                StepEffect::Transparency(level) => {
+                    motion.alpha = crate::tiles::character_alpha(level)
+                }
             }
         }
         let moving = motion.queue.busy();

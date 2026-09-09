@@ -87,7 +87,7 @@ fn apply_effects(
                 audio.write(AudioRequest::play_sound(&name, &params));
             }
             StepEffect::Transparency(level) => {
-                let alpha = 1.0 - level as f32 / 8.0;
+                let alpha = crate::tiles::character_alpha(level);
                 sprite.color = sprite.color.with_alpha(alpha);
             }
         }

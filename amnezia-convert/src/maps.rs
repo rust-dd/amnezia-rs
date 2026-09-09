@@ -51,6 +51,7 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
                         direction: p.direction,
                         pattern: p.pattern,
                         animation_type: p.animation_type,
+                        translucent: p.translucent,
                         move_type: p.move_type,
                         move_frequency: p.move_frequency,
                         move_speed: p.move_speed,

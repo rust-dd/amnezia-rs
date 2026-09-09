@@ -52,6 +52,8 @@ pub struct EventPage {
     pub pattern: u32,
     #[serde(default, skip_serializing_if = "default_animation")]
     pub animation_type: u32,
+    #[serde(default, skip_serializing_if = "opaque_page")]
+    pub translucent: bool,
     #[serde(default)]
     pub move_type: u32,
     #[serde(default = "default_move_frequency")]
@@ -77,6 +79,10 @@ fn default_pattern() -> u32 {
 
 fn default_animation(value: &u32) -> bool {
     *value == 0
+}
+
+fn opaque_page(translucent: &bool) -> bool {
+    !*translucent
 }
 
 fn default_move_frequency() -> u32 {
