@@ -235,6 +235,8 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
         actors: vec![ron.clone()],
         items: vec![],
         skills: vec![SkillDef {
+            affect_stats: [false; 4],
+            ignore_defense: false,
             id: 1,
             name: "Tűzcsapás".into(),
             description: String::new(),

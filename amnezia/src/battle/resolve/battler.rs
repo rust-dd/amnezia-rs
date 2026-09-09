@@ -1,9 +1,34 @@
 use super::*;
 
 impl Battle {
-    pub(in crate::battle::resolve) fn battler_stats(&self, target: Source) -> logic::Stats {
+    pub(in crate::battle) fn battler_stats(&self, target: Source) -> logic::Stats {
+        let stats = self.battler_base_stats(target);
+        let modifiers = match target {
+            Source::Party(i) => self.members[i].stat_modifiers,
+            Source::Enemy(i) => self.enemies[i].stat_modifiers,
+        };
+        let values = [stats.attack, stats.defense, stats.spirit, stats.agility];
+        let [attack, defense, spirit, agility] =
+            std::array::from_fn(|i| (values[i] as i32 + modifiers[i]).clamp(1, 9999) as u32);
+        logic::Stats {
+            attack,
+            defense,
+            spirit,
+            agility,
+        }
+    }
+
+    pub(in crate::battle::resolve) fn battler_base_stats(&self, target: Source) -> logic::Stats {
         match target {
-            Source::Party(i) => self.members[i].stats,
+            Source::Party(i) => {
+                let stats = self.members[i].stats;
+                logic::Stats {
+                    attack: stats.attack.clamp(1, 999),
+                    defense: stats.defense.clamp(1, 999),
+                    spirit: stats.spirit.clamp(1, 999),
+                    agility: stats.agility.clamp(1, 999),
+                }
+            }
             Source::Enemy(i) => self.enemies[i].stats,
         }
     }

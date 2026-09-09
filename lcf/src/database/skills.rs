@@ -27,6 +27,8 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// 1-based state ids it inflicts on opponents or cures from allies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Skill {
+    pub affect_stats: [bool; 4],
+    pub ignore_defense: bool,
     pub id: u32,
     pub name: String,
     pub description: String,
@@ -103,6 +105,8 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut skill = Skill {
+            affect_stats: [false; 4],
+            ignore_defense: false,
             id,
             name: String::new(),
             description: String::new(),
@@ -146,6 +150,11 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
                 SKILL_HIT => skill.hit = Reader::new(sub_data).varint()?,
                 SKILL_AFFECT_HP => skill.affect_hp = Reader::new(sub_data).varint()? != 0,
                 SKILL_AFFECT_SP => skill.affect_sp = Reader::new(sub_data).varint()? != 0,
+                0x21..=0x24 => {
+                    skill.affect_stats[(sub_id - 0x21) as usize] =
+                        Reader::new(sub_data).varint()? != 0
+                }
+                0x26 => skill.ignore_defense = Reader::new(sub_data).varint()? != 0,
                 SKILL_ABSORB_DAMAGE => skill.absorb = Reader::new(sub_data).varint()? != 0,
                 SKILL_STATE_EFFECTS => skill.affected_states = decode_flag_ids(sub_data),
                 SKILL_ATTRIBUTE_EFFECTS => skill.attributes = decode_flag_ids(sub_data),
@@ -187,6 +196,8 @@ mod tests {
         assert_eq!(
             skills[0],
             Skill {
+                affect_stats: [false; 4],
+                ignore_defense: false,
                 id: 1,
                 name: "Tűzgolyó".to_string(),
                 description: "Égeti".to_string(),
@@ -292,5 +303,16 @@ mod tests {
     fn parse_skills_errors_when_section_absent() {
         let ldb = make_ldb(&[(0x14, section(&[]))]);
         assert!(matches!(parse_skills(&ldb), Err(LcfError::MissingSkills)));
+    }
+
+    #[test]
+    fn stat_effect_flags_and_ignore_defense_preserve_defaults_and_explicit_values() {
+        let payload = [0x21, 0x22, 0x23, 0x24, 0x26].map(|id| subchunk(id, &varint(1)));
+        let ldb = make_ldb(&[(0x0C, section(&[element(1, &payload), element(2, &[])]))]);
+        let skills = parse_skills(&ldb).unwrap();
+        assert_eq!(skills[0].affect_stats, [true; 4]);
+        assert!(skills[0].ignore_defense);
+        assert_eq!(skills[1].affect_stats, [false; 4]);
+        assert!(!skills[1].ignore_defense);
     }
 }

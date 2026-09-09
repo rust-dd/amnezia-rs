@@ -71,6 +71,11 @@ fn converts_ldb_to_skills_ron() {
             subchunk(0x18, &varint(35)),
             subchunk(0x19, &varint(90)),
             subchunk(0x1F, &varint(1)),
+            subchunk(0x21, &varint(1)),
+            subchunk(0x22, &varint(0)),
+            subchunk(0x23, &varint(1)),
+            subchunk(0x24, &varint(0)),
+            subchunk(0x26, &varint(1)),
             subchunk(0x2A, &[0, 0, 1]),
             subchunk(0x2C, &[0, 0, 0, 0, 1]),
         ],
@@ -87,6 +92,8 @@ fn converts_ldb_to_skills_ron() {
     assert_eq!(
         skills[0],
         SkillDef {
+            affect_stats: [true, false, true, false],
+            ignore_defense: true,
             id: 1,
             name: "Tűzgolyó".to_string(),
             description: "Égeti".to_string(),
@@ -108,6 +115,8 @@ fn converts_ldb_to_skills_ron() {
         }
     );
     assert_eq!(skills[1].name, "Heal");
+    assert_eq!(skills[1].affect_stats, [false; 4]);
+    assert!(!skills[1].ignore_defense);
     assert_eq!(skills[1].sp_cost, 4);
     assert_eq!((skills[1].power, skills[1].hit), (0, 100));
     assert_eq!(skills[1].failure_message, 0);

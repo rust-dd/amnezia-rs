@@ -30,7 +30,7 @@ impl Battle {
         Some(Action {
             source: Source::Enemy(i),
             kind,
-            agility: self.enemies[i].stats.agility,
+            agility: self.battler_stats(Source::Enemy(i)).agility,
         })
     }
 
@@ -137,6 +137,7 @@ impl Battle {
                 } else {
                     skill.affect_hp
                         || skill.affect_sp
+                        || skill.affect_stats.into_iter().any(|flag| flag)
                         || skill
                             .affected_states
                             .iter()

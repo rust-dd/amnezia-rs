@@ -17,16 +17,16 @@ impl Battle {
         let anim = self.members[pi].attack_animation;
         self.push_anim(anim, vec![self.foe_anim_pos(ti)]);
         let base = logic::physical_damage(
-            self.members[pi].stats.attack,
-            self.enemies[ti].stats.defense,
+            self.battler_stats(Source::Party(pi)).attack,
+            self.battler_stats(Source::Enemy(ti)).defense,
         );
         // A foe that cannot act (asleep/paralyzed) is struck with certainty
         // (EasyRPG `CalcNormalAttackToHit` returns 100 vs a do-nothing target).
         let can_act = logic::worst_restriction(&self.enemies[ti].states, &self.states) != 1;
         let hit = logic::to_hit_vs(
             self.members[pi].weapon_hit,
-            self.members[pi].stats.agility,
-            self.enemies[ti].stats.agility,
+            self.battler_stats(Source::Party(pi)).agility,
+            self.battler_stats(Source::Enemy(ti)).agility,
             can_act,
         );
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
@@ -60,7 +60,7 @@ impl Battle {
     /// states' damage wear-off, and pop the damage number, whitening blink, and
     /// death-out (see [`Battle::after_foe_hit`]).
     pub(in crate::battle::resolve) fn land_strike(&mut self, ti: usize, dmg: i32) {
-        self.enemies[ti].hp -= dmg;
+        self.enemies[ti].hp = (self.enemies[ti].hp - dmg).max(0);
         self.release_states_on_enemy(ti);
         self.after_foe_hit(ti, dmg);
     }
@@ -135,8 +135,8 @@ impl Battle {
         let can_act = logic::worst_restriction(&self.members[ti].states, &self.states) != 1;
         let hit = logic::to_hit_vs(
             logic::effective_hit(None),
-            self.enemies[ei].stats.agility,
-            self.members[ti].stats.agility,
+            self.battler_stats(Source::Enemy(ei)).agility,
+            self.battler_stats(Source::Party(ti)).agility,
             can_act,
         );
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
@@ -146,8 +146,8 @@ impl Battle {
             return None;
         }
         let mut base = logic::physical_damage(
-            self.enemies[ei].stats.attack,
-            self.members[ti].stats.defense,
+            self.battler_stats(Source::Enemy(ei)).attack,
+            self.battler_stats(Source::Party(ti)).defense,
         );
         if charged {
             base *= 2;

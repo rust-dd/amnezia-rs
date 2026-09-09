@@ -25,6 +25,7 @@ pub struct Foe {
     pub sp: i32,
     pub max_sp: i32,
     pub stats: Stats,
+    pub(in crate::battle) stat_modifiers: [i32; 4],
     pub exp: u32,
     pub gold: u32,
     pub x: u32,

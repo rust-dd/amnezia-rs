@@ -42,6 +42,7 @@ impl Battle {
                 }
                 logic::inflict(self.battler_states_mut(target), id);
                 if id == 1 {
+                    self.clear_battler_bonuses(target);
                     match target {
                         Source::Party(i) => self.members[i].hp = 0,
                         Source::Enemy(i) => {

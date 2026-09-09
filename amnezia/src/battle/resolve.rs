@@ -25,6 +25,7 @@ mod skill_heal;
 mod skill_hit;
 mod skill_pools;
 mod skill_states;
+mod skill_stats;
 mod state;
 mod step;
 mod strike;

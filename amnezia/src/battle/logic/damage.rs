@@ -24,8 +24,7 @@ pub fn critical_damage(base: i32) -> i32 {
 /// attribute (element) multiplier, an optional critical, and variance are applied
 /// on top by the caller, in that order. `targets_enemies` is true for the
 /// offensive scopes (one or all enemies) and false for the ally/heal scopes, which
-/// take no defensive subtraction (the RM2000 `ignore_defense` flag is not
-/// modelled, i.e. assumed false).
+/// take no defensive subtraction. `ignore_defense` also skips that subtraction.
 pub fn skill_effect(
     skill: &SkillDef,
     source: &Stats,
@@ -35,7 +34,7 @@ pub fn skill_effect(
     let mut effect = skill.power as i32
         + skill.physical_rate as i32 * source.attack as i32 / 20
         + skill.magical_rate as i32 * source.spirit as i32 / 40;
-    if targets_enemies {
+    if targets_enemies && !skill.ignore_defense {
         effect -= skill.physical_rate as i32 * target.defense as i32 / 40;
         effect -= skill.magical_rate as i32 * target.spirit as i32 / 80;
     }

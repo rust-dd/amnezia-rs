@@ -135,6 +135,11 @@ pub struct ActorDef {
 /// `affected_states` the 1-based state ids the skill inflicts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillDef {
+    /// ATK, DEF, SPI, AGI effect flags, in database order.
+    #[serde(default)]
+    pub affect_stats: [bool; 4],
+    #[serde(default)]
+    pub ignore_defense: bool,
     pub id: u32,
     pub name: String,
     pub description: String,

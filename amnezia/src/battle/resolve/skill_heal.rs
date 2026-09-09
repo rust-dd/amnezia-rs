@@ -13,6 +13,7 @@ impl Battle {
         let hit = self.skill_hit_chance(source, target, skill);
         let hp_hit = skill.affect_hp && self.skill_roll(hit);
         let sp_hit = skill.affect_sp && self.skill_roll(hit);
+        let stats = self.skill_stat_effects(target, skill, hit, amount);
         let effects = self.skill_states(target, skill, hit);
         let (hp, sp, max_hp, max_sp) = match target {
             Source::Party(i) => {
@@ -47,7 +48,10 @@ impl Battle {
             *hp = (*hp).max(1);
         }
         let shown = (*hp - old_hp).max(*sp - old_sp);
-        let success = hp_hit && amount > 0 && !was_dead || *sp != old_sp || effects.success;
+        let success = hp_hit && amount > 0 && !was_dead
+            || *sp != old_sp
+            || effects.success
+            || !stats.is_empty();
         if let Source::Enemy(i) = target
             && effects.revived
         {
@@ -65,6 +69,7 @@ impl Battle {
         } else {
             vec![format!("{caster_name} varázsol: {target_name} hatástalan")]
         };
+        lines.extend(stats);
         lines.extend(effects.lines);
         lines
     }

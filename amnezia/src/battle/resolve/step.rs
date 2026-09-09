@@ -179,8 +179,8 @@ impl Battle {
                         return;
                     };
                     let base = logic::physical_damage(
-                        self.members[pi].stats.attack,
-                        self.members[ti].stats.defense,
+                        self.battler_stats(Source::Party(pi)).attack,
+                        self.battler_stats(Source::Party(ti)).defense,
                     );
                     let dmg = self.hit_member(ti, base, 4);
                     format!(
@@ -252,8 +252,8 @@ impl Battle {
                         return;
                     };
                     let base = logic::physical_damage(
-                        self.enemies[ei].stats.attack,
-                        self.enemies[ti].stats.defense,
+                        self.battler_stats(Source::Enemy(ei)).attack,
+                        self.battler_stats(Source::Enemy(ti)).defense,
                     );
                     let dmg = self.hit_enemy(ti, base, 4);
                     format!(
@@ -315,10 +315,11 @@ impl Battle {
                 format!("{} védekezik", self.enemies[ei].name)
             }
             (Source::Enemy(ei), Command::SelfDestruct) => {
-                let atk = self.enemies[ei].stats.attack as i32;
+                let atk = self.battler_stats(Source::Enemy(ei)).attack as i32;
                 let name = self.enemies[ei].name.clone();
                 for ti in self.living_members() {
-                    let base = (atk - self.members[ti].stats.defense as i32 / 2).max(0);
+                    let base =
+                        (atk - self.battler_stats(Source::Party(ti)).defense as i32 / 2).max(0);
                     self.hit_member(ti, base, 4);
                 }
                 self.enemies[ei].hp = 0;

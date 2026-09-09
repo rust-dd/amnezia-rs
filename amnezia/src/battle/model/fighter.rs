@@ -13,6 +13,7 @@ pub struct Fighter {
     pub sp: i32,
     pub max_sp: i32,
     pub stats: Stats,
+    pub(in crate::battle) stat_modifiers: [i32; 4],
     pub defending: bool,
     pub command: Option<Command>,
     /// The equipped weapon's hit and crit rates (percent) and its element id,

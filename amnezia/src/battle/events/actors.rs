@@ -34,6 +34,8 @@ pub(super) fn change_hp(params: &[i32], battle: &mut Battle, world: &mut EventWo
                     .clamp(i32::from(*lethal == 0), fighter.max_hp);
                 if !fighter.alive() {
                     fighter.states.clear();
+                    fighter.stat_modifiers = [0; 4];
+                    fighter.defending = false;
                 }
             }
         } else if let Some((hp, max)) = health(id, battle, world)

@@ -4,6 +4,8 @@ use super::*;
 
 fn skill(id: u32, name: &str, sp_cost: u32, power: u32) -> SkillDef {
     SkillDef {
+        affect_stats: [false; 4],
+        ignore_defense: false,
         id,
         name: name.into(),
         description: String::new(),

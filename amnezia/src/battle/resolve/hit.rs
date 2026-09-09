@@ -65,6 +65,9 @@ impl Battle {
     /// front-view sprite, so the number is their whole visual feedback (no blink,
     /// no death-out).
     pub(in crate::battle::resolve) fn after_member_hit(&mut self, ti: usize, dmg: i32) {
+        if self.members[ti].hp <= 0 {
+            self.clear_battler_bonuses(Source::Party(ti));
+        }
         let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
         self.pending_se.push(BattleSe::ActorDamaged);
         let (text, kind) = number_for(dmg);

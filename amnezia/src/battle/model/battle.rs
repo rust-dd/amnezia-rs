@@ -263,7 +263,7 @@ impl Battle {
                 actions.push(Action {
                     source: Source::Party(i),
                     kind,
-                    agility: f.stats.agility,
+                    agility: self.battler_stats(Source::Party(i)).agility,
                 });
             }
         }

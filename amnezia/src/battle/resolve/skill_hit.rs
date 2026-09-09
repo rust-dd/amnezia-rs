@@ -39,6 +39,9 @@ impl Battle {
             lines.push(format!("{caster} varázsol: {name} -{lost} SP"));
         }
         if success || !(skill.affect_hp || skill.affect_sp) {
+            let stats = self.skill_stat_effects(target, skill, hit, effect);
+            success |= !stats.is_empty();
+            lines.extend(stats);
             let states = self.skill_states(target, skill, hit);
             success |= states.success;
             lines.extend(states.lines);

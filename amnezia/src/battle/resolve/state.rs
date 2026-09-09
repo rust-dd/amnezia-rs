@@ -51,7 +51,9 @@ impl Battle {
                 format!("{name}: {state_name} +{delta}")
             });
         }
-        // A drain that emptied a foe's HP starts its death-out like any other kill.
+        if self.battler_hp(source) <= 0 {
+            self.clear_battler_bonuses(source);
+        }
         if let Source::Enemy(i) = source {
             self.start_foe_death(i, false);
         }

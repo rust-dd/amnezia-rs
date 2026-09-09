@@ -18,6 +18,8 @@ fn fire_attr() -> amnezia_data::AttributeDef {
 /// `states` (statuses it may inflict). Its `hit` is 100 for deterministic damage.
 fn damage_skill(id: u32, power: u32, attributes: Vec<u32>, states: Vec<u32>) -> SkillDef {
     SkillDef {
+        affect_stats: [false; 4],
+        ignore_defense: false,
         id,
         name: "S".into(),
         description: String::new(),
@@ -253,5 +255,6 @@ mod recovery;
 mod skill_accuracy;
 mod skill_pools;
 mod skill_states;
+mod skill_stats;
 mod skills;
 mod weapon_accuracy;
