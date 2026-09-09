@@ -3,6 +3,7 @@ use amnezia_data::{Chipset, CommonEvent, EventCommand, Map, Start, TroopDef};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+mod character_animation;
 mod enemy_actions;
 mod message_options;
 mod scrolling;

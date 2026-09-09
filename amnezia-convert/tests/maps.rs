@@ -163,6 +163,7 @@ fn move_fields_round_trip_through_ron() {
     page.extend(sub(0x1F, &varint(2)));
     page.extend(sub(0x20, &varint(5)));
     page.extend(sub(0x25, &varint(6)));
+    page.extend(sub(0x24, &varint(5)));
     page.push(0);
     let mut pages = varint(1);
     pages.extend_from_slice(&page);
@@ -186,6 +187,7 @@ fn move_fields_round_trip_through_ron() {
     let ron = std::fs::read_to_string(output.join("maps/map_0009.ron")).unwrap();
     let map: Map = ron::from_str(&ron).unwrap();
     let page = &map.events[0].pages[0];
+    assert_eq!(page.animation_type, 5);
     assert_eq!(
         (page.move_type, page.move_frequency, page.move_speed),
         (2, 5, 6)
@@ -205,6 +207,8 @@ fn map_ron_missing_move_fields_defaults_them() {
     ])"#;
     let map: Map = ron::from_str(ron).unwrap();
     let page = &map.events[0].pages[0];
+    assert_eq!(page.animation_type, 0);
+    assert!(!ron::to_string(&map).unwrap().contains("animation_type"));
     assert_eq!(
         (page.move_type, page.move_frequency, page.move_speed),
         (0, 3, 3)

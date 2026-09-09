@@ -249,6 +249,7 @@ mod tests {
             graphic_index: 0,
             direction: 2,
             pattern: 1,
+            animation_type: 0,
             move_type: 0,
             move_frequency: 3,
             move_speed: 3,

@@ -8,6 +8,9 @@
 use super::move_route::{self, MoveRoute};
 use crate::{LcfError, Reader, decode_cp1250};
 
+#[cfg(test)]
+mod tests;
+
 /// A map event: its id, tile position, name, and pages.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Event {
@@ -38,6 +41,7 @@ pub struct EventPage {
     pub graphic_index: u32,
     pub direction: u32,
     pub pattern: u32,
+    pub animation_type: u32,
     pub move_type: u32,
     pub move_frequency: u32,
     pub move_speed: u32,
@@ -142,6 +146,7 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
             graphic_index: 0,
             direction: 2,
             pattern: 1,
+            animation_type: 0,
             move_type: 1,
             move_frequency: 3,
             move_speed: 3,
@@ -167,6 +172,7 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
                 0x20 => page.move_frequency = Reader::new(sub_data).varint()?,
                 0x21 => page.trigger = Reader::new(sub_data).varint()?,
                 0x22 => page.layer = Reader::new(sub_data).varint()?,
+                0x24 => page.animation_type = Reader::new(sub_data).varint()?,
                 0x25 => page.move_speed = Reader::new(sub_data).varint()?,
                 0x29 => page.move_route = move_route::parse_move_route(sub_data)?,
                 0x34 => page.commands = parse_commands(sub_data)?,

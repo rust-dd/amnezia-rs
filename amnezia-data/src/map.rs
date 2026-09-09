@@ -50,6 +50,8 @@ pub struct EventPage {
     pub direction: u32,
     #[serde(default = "default_pattern")]
     pub pattern: u32,
+    #[serde(default, skip_serializing_if = "default_animation")]
+    pub animation_type: u32,
     #[serde(default)]
     pub move_type: u32,
     #[serde(default = "default_move_frequency")]
@@ -71,6 +73,10 @@ fn default_direction() -> u32 {
 
 fn default_pattern() -> u32 {
     1
+}
+
+fn default_animation(value: &u32) -> bool {
+    *value == 0
 }
 
 fn default_move_frequency() -> u32 {
