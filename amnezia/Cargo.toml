@@ -9,5 +9,6 @@ publish = false
 [dependencies]
 amnezia-data = { workspace = true }
 bevy = { workspace = true }
+encoding_rs = { workspace = true }
 ron = { workspace = true }
 serde = { workspace = true }

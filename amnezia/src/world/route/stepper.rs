@@ -13,6 +13,7 @@ use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use amnezia_data::{MoveCommandDef, MoveRouteDef};
 use bevy::prelude::Component;
 
+mod decode;
 mod jump;
 
 /// Logical frames per second the RM2000 stop-count delays are measured in.
@@ -125,7 +126,11 @@ impl RouteStepper {
         let repeat = params.get(2).copied().unwrap_or(0) != 0;
         let skippable = params.get(3).copied().unwrap_or(0) != 0;
         let tail = params.get(4..).unwrap_or(&[]);
-        Self::new(decode_commands(tail), repeat, skippable, 4, freq, true)
+        let commands = decode::commands(tail).unwrap_or_else(|| {
+            bevy::log::warn!("Ignoring malformed MoveEvent route");
+            Vec::new()
+        });
+        Self::new(commands, repeat, skippable, 4, freq, true)
     }
 
     /// Whether a route is loaded and still running — the flag the driving systems
@@ -388,57 +393,6 @@ enum Step {
     Next,
 }
 
-/// Decode a `MoveEvent` command tail (the ints after `[ref, freq, repeat, skip]`)
-/// into normalized [`MoveCommandDef`]s: switch (32/33) carries one arg,
-/// change-graphic (34) a length-prefixed name (one byte per int) then the frame,
-/// play-SE (35) the name then three args. Every other code has no tail.
-fn decode_commands(stream: &[i32]) -> Vec<MoveCommandDef> {
-    let mut out = Vec::new();
-    let mut i = 0;
-    while i < stream.len() {
-        let code = stream[i].max(0) as u32;
-        i += 1;
-        let (params, string) = match code {
-            32 | 33 => {
-                let a = stream.get(i).copied().unwrap_or(0);
-                i += 1;
-                (vec![a], String::new())
-            }
-            34 => {
-                let (name, frame) = read_named(stream, &mut i, 1);
-                (vec![frame[0]], name)
-            }
-            35 => {
-                let (name, args) = read_named(stream, &mut i, 3);
-                (args, name)
-            }
-            _ => (Vec::new(), String::new()),
-        };
-        out.push(MoveCommandDef {
-            code,
-            params,
-            string,
-        });
-    }
-    out
-}
-
-/// Read a `[len][name bytes]` string then `arg_count` trailing ints from an int
-/// stream, advancing the cursor. Used by change-graphic and play-SE decoding.
-fn read_named(stream: &[i32], i: &mut usize, arg_count: usize) -> (String, Vec<i32>) {
-    let len = stream.get(*i).copied().unwrap_or(0).max(0) as usize;
-    *i += 1;
-    let end = (*i + len).min(stream.len());
-    let name: String = stream[*i..end].iter().map(|&b| b as u8 as char).collect();
-    *i = end;
-    let mut args = Vec::with_capacity(arg_count);
-    for _ in 0..arg_count {
-        args.push(stream.get(*i).copied().unwrap_or(0));
-        *i += 1;
-    }
-    (name, args)
-}
-
 fn switch_id(cmd: &MoveCommandDef) -> u32 {
     cmd.params.first().copied().unwrap_or(0).max(0) as u32
 }
@@ -496,3 +450,6 @@ fn next_rand(state: &mut u32) -> u32 {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod packed_tests;
