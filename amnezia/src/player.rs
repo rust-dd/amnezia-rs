@@ -6,6 +6,8 @@ use crate::dialogue::Dialogue;
 use crate::interpreter::RunningEvent;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
+use crate::world::EventSprite;
+use crate::world::collision::{CollisionBodies, MapCollision, Mover};
 use crate::world::{
     Character, MapData, MapEvents, MoveQueue, RouteAction, RouteStepper, ScenePause, walk,
 };
@@ -152,7 +154,8 @@ fn move_player(
     party: Res<Party>,
     inventory: Res<Inventory>,
     mut running: ResMut<RunningEvent>,
-    mut players: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper)>,
+    mut players: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper), Without<EventSprite>>,
+    events: Query<(&EventSprite, Option<&RouteStepper>), Without<Player>>,
     mut arrived: Local<Option<(u32, i32, i32)>>,
 ) {
     let Ok((mut player, mut queue, mut stepper)) = players.single_mut() else {
@@ -212,17 +215,20 @@ fn move_player(
         return;
     }
     let (tx, ty) = data.normalize_tile(nx, ny);
-    let blocked = !stepper.through()
-        && (!data.can_move(player.tile_x, player.tile_y, nx, ny)
-            || event_blocks_at(
-                &map_events,
-                &switches,
-                &variables,
-                &party,
-                &inventory,
-                tx,
-                ty,
-            ));
+    let bodies = CollisionBodies::from_events(events.iter());
+    let collision = MapCollision::new(
+        &data,
+        &map_events,
+        (&switches, &variables, &party, &inventory),
+        &bodies,
+    );
+    let blocked = !collision.can_move(
+        (player.tile_x, player.tile_y),
+        (nx, ny),
+        Mover::hero(stepper.through()),
+        None,
+        false,
+    );
     if !blocked {
         queue.set_step_secs(crate::world::step_secs_for_speed(stepper.speed()));
         queue.push_step(RouteAction::Step {
@@ -245,26 +251,6 @@ fn move_player(
     {
         running.start(id, page.commands.clone());
     }
-}
-
-/// Whether a same-layer event occupies tile `(x, y)` and blocks the player.
-/// RM2000 events with `layer == 1` are solid (graphic or not); other layers
-/// don't block. The active page (per current switches/variables) decides.
-#[allow(clippy::too_many_arguments)]
-fn event_blocks_at(
-    map_events: &MapEvents,
-    switches: &Switches,
-    variables: &Variables,
-    party: &Party,
-    inventory: &Inventory,
-    x: i32,
-    y: i32,
-) -> bool {
-    map_events.events.iter().any(|e| {
-        e.x as i32 == x
-            && e.y as i32 == y
-            && active_page(e, switches, variables, party, inventory).is_some_and(|p| p.layer == 1)
-    })
 }
 
 /// The active page (with its event id) of a player-touch event (trigger 1 or 2)

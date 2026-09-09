@@ -17,7 +17,7 @@ fn drive_hero(
         &mut route,
         (0, 0),
         1.0 / 60.0,
-        |_, _, _| false,
+        |_, _, _, _, through| through,
     );
     effects.0.extend(driven.effects);
     queue.advance(&mut *player, &data, 1.0 / 60.0);

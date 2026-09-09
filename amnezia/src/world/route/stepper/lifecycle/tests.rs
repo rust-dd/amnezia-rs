@@ -37,7 +37,12 @@ fn page(codes: &[u32]) -> EventPage {
 
 fn advance(route: &mut RouteStepper) -> Option<RouteAction> {
     route
-        .advance(&mut player(), (0, 0), &|_, _, _| true, &mut Vec::new())
+        .advance(
+            &mut player(),
+            (0, 0),
+            &|_, _, _, _, _| true,
+            &mut Vec::new(),
+        )
         .map(|(action, _)| action)
 }
 
@@ -90,7 +95,7 @@ fn route_unlock_and_turn_commands_cannot_override_a_pages_fixed_or_spinning_faci
         let mut route = RouteStepper::from_event_page(Some(&source));
         let mut ch = player();
         route.force_route(RouteStepper::from_move_event(&[0, 8, 0, 0, 27, 12]));
-        route.advance(&mut ch, (0, 0), &|_, _, _| true, &mut Vec::new());
+        route.advance(&mut ch, (0, 0), &|_, _, _, _, _| true, &mut Vec::new());
         assert_eq!(ch.dir, if mode >= 2 { 2 } else { 0 });
         assert_eq!(route.direction(&ch), 0);
     }
@@ -155,7 +160,7 @@ fn a_parameter_only_page_change_keeps_the_program_counter() {
     next.move_route.commands[1].params = vec![593];
     route.refresh_page(Some(&next));
     let mut effects = Vec::new();
-    route.advance(&mut player(), (0, 0), &|_, _, _| true, &mut effects);
+    route.advance(&mut player(), (0, 0), &|_, _, _, _, _| true, &mut effects);
     assert!(matches!(
         effects.as_slice(),
         [StepEffect::Switch(593, true)]
@@ -189,7 +194,7 @@ fn final_move_finishes_on_landing_without_a_low_frequency_delay() {
             &mut route,
             (0, 0),
             1.0 / 60.0,
-            |_, _, _| true,
+            |_, _, _, _, _| true,
         );
         queue.advance(&mut player, &data, 1.0 / 60.0);
         if frame == 0 {
@@ -219,7 +224,7 @@ fn a_repeating_forced_route_stops_blocking_after_its_first_lap() {
 fn an_all_instant_repeating_route_runs_once_per_tick() {
     let mut route = RouteStepper::from_move_event(&[0, 8, 1, 0, 40]);
     let mut effects = Vec::new();
-    route.advance(&mut player(), (0, 0), &|_, _, _| true, &mut effects);
+    route.advance(&mut player(), (0, 0), &|_, _, _, _, _| true, &mut effects);
     assert!(matches!(effects.as_slice(), [StepEffect::Transparency(1)]));
     assert!(route.active());
     assert!(!route.pending());

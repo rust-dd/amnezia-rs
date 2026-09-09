@@ -72,11 +72,11 @@ fn stepper(codes: &[u32], repeat: bool, skippable: bool) -> RouteStepper {
     RouteStepper::new(commands, repeat, skippable, 4, 8, false)
 }
 
-fn open(_dx: i32, _dy: i32, _jumping: bool) -> bool {
+fn open(_ch: &TestChar, _dx: i32, _dy: i32, _jumping: bool, _through: bool) -> bool {
     true
 }
-fn blocked(_dx: i32, _dy: i32, _jumping: bool) -> bool {
-    false
+fn blocked(_ch: &TestChar, _dx: i32, _dy: i32, _jumping: bool, through: bool) -> bool {
+    through
 }
 
 #[test]

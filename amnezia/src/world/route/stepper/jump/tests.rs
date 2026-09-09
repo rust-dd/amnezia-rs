@@ -40,7 +40,7 @@ fn original_airship_jump_crosses_the_gap_and_reaches_the_graphic_change() {
             &mut stepper,
             (9, 4),
             1.0 / FPS,
-            |dx, dy, jumping| {
+            |_, dx, dy, jumping, _| {
                 if jumping {
                     landings.set(landings.get() + 1);
                     assert_eq!((position.0 + dx, position.1 + dy), (15, 15));
@@ -73,7 +73,7 @@ fn blocked_jumps_retry_as_a_whole_or_skip_to_after_the_landing() {
                 .advance(
                     &mut character,
                     (0, 0),
-                    &|_, _, jumping| {
+                    &|_, _, _, jumping, _| {
                         assert!(jumping);
                         false
                     },
@@ -84,10 +84,10 @@ fn blocked_jumps_retry_as_a_whole_or_skip_to_after_the_landing() {
         if skippable == 0 {
             assert!(effects.is_empty());
             assert!(matches!(
-                stepper.advance(&mut character, (0, 0), &|_, _, _| true, &mut effects),
+                stepper.advance(&mut character, (0, 0), &|_, _, _, _, _| true, &mut effects),
                 Some((RouteAction::Jump { dx: 2, dy: 0, .. }, _))
             ));
-            stepper.advance(&mut character, (0, 0), &|_, _, _| true, &mut effects);
+            stepper.advance(&mut character, (0, 0), &|_, _, _, _, _| true, &mut effects);
         }
         assert!(matches!(effects.as_slice(), [StepEffect::Switch(8, true)]));
     }
@@ -98,7 +98,12 @@ fn facing_lock_preserves_the_sprite_but_forward_uses_the_movement_direction() {
     let mut stepper = RouteStepper::from_move_event(&[0, 8, 0, 0, 26, 1, 11, 27, 0]);
     let mut character = character();
     for (dx, dy, face) in [(1, 0, DIR_DOWN), (1, 0, DIR_DOWN), (0, -1, DIR_UP)] {
-        let action = stepper.advance(&mut character, (0, 0), &|_, _, _| true, &mut Vec::new());
+        let action = stepper.advance(
+            &mut character,
+            (0, 0),
+            &|_, _, _, _, _| true,
+            &mut Vec::new(),
+        );
         assert!(
             matches!(action, Some((RouteAction::Step { dx: x, dy: y, face: f }, _)) if (x, y, f) == (dx, dy, face))
         );

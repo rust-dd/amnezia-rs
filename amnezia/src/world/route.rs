@@ -12,6 +12,7 @@ mod stepper;
 
 pub use stepper::RouteStepper;
 
+use super::collision::{CollisionBodies, MapCollision, Mover};
 use super::{Character, EventSprite, MapData, MapEvents, MoveQueue};
 use crate::audio::AudioRequest;
 use crate::player::Player;
@@ -49,7 +50,7 @@ pub(crate) fn drive<C: Character>(
     stepper: &mut RouteStepper,
     hero: (i32, i32),
     dt: f32,
-    can_step: impl Fn(i32, i32, bool) -> bool,
+    can_step: impl Fn(&C, i32, i32, bool, bool) -> bool,
 ) -> Driven {
     if queue.busy() {
         return Driven::idle();
@@ -94,9 +95,7 @@ fn apply_effects(
     }
 }
 
-/// Whether a tile is on the map and enterable from `(ex, ey)` — the shared move
-/// gate: in bounds, passable per `MakeWay`, and free of characters on the
-/// moving character's layer.
+#[cfg(test)]
 #[allow(clippy::too_many_arguments)]
 fn tile_open(
     ex: i32,
@@ -110,16 +109,23 @@ fn tile_open(
     map_events: &MapEvents,
     state: (&Switches, &Variables, &Party, &Inventory),
 ) -> bool {
-    let (nx, ny) = (ex + dx, ey + dy);
-    let destination = data.normalize_tile(nx, ny);
-    data.contains_tile(nx, ny)
-        && if jumping {
-            data.passable(nx, ny)
-        } else {
-            data.can_move(ex, ey, nx, ny)
-        }
-        && (mover.1 != 1 || destination != hero)
-        && !super::collision::event_blocks_at(map_events, state, mover, destination)
+    let character = EventSprite {
+        id: mover.0,
+        layer: mover.1,
+        tile_x: ex,
+        tile_y: ey,
+        dir: 2,
+        frame: 1,
+        charset: "C".into(),
+        index: 0,
+    };
+    MapCollision::new(data, map_events, state, &CollisionBodies::default()).can_move(
+        (ex, ey),
+        (ex + dx, ey + dy),
+        Mover::event(&character, false),
+        Some(hero),
+        jumping,
+    )
 }
 
 /// Step every event NPC's forced route (custom `move_type == 6` or a loaded
@@ -136,7 +142,7 @@ pub(super) fn route_events(
     guards: super::autonomy::MoveGuards,
     mut touches: Option<ResMut<super::TouchEvents>>,
     mut audio: MessageWriter<AudioRequest>,
-    players: Query<&Player>,
+    players: Query<(&Player, Option<&RouteStepper>), Without<EventSprite>>,
     mut movers: Query<
         (
             &mut EventSprite,
@@ -152,8 +158,18 @@ pub(super) fn route_events(
     }
     let hero = players
         .single()
-        .map(|p| (p.tile_x, p.tile_y))
+        .map(|(p, _)| (p.tile_x, p.tile_y))
         .unwrap_or((-1, -1));
+    let mut bodies = CollisionBodies::from_events(
+        movers
+            .iter()
+            .map(|(event, _, route, _)| (event, Some(route))),
+    );
+    bodies.hero_through = players
+        .single()
+        .ok()
+        .and_then(|(_, route)| route)
+        .is_some_and(RouteStepper::through);
     let dt = time.delta_secs();
     for (mut sprite_c, mut queue, mut stepper, mut sprite) in &mut movers {
         if !stepper.forced() && guards.autonomous_paused(sprite_c.id) {
@@ -165,26 +181,30 @@ pub(super) fn route_events(
         let delta = data.tile_delta((ex, ey), hero);
         let near_hero = (ex + delta.0, ey + delta.1);
         let touched = std::cell::Cell::new(false);
-        // Scope `can_step` (which borrows the switches and events) so it drops
-        // before either is mutated: the logical tile sync and a switch command.
         let driven = {
-            let can_step = |dx: i32, dy: i32, jumping: bool| {
-                if layer == 1 && data.normalize_tile(ex + dx, ey + dy) == hero {
-                    touched.set(true);
-                }
-                tile_open(
-                    ex,
-                    ey,
-                    dx,
-                    dy,
-                    jumping,
-                    (self_id, layer),
-                    hero,
-                    &data,
-                    &map_events,
-                    (&switches, &variables, &party, &inventory),
-                )
-            };
+            let collision = MapCollision::new(
+                &data,
+                &map_events,
+                (&switches, &variables, &party, &inventory),
+                &bodies,
+            );
+            let can_step =
+                |character: &EventSprite, dx: i32, dy: i32, jumping: bool, through: bool| {
+                    if !through
+                        && !bodies.hero_through
+                        && layer == 1
+                        && data.normalize_tile(ex + dx, ey + dy) == hero
+                    {
+                        touched.set(true);
+                    }
+                    collision.can_move(
+                        (ex, ey),
+                        (ex + dx, ey + dy),
+                        Mover::event(character, through),
+                        Some(hero),
+                        jumping,
+                    )
+                };
             drive(
                 &mut *sprite_c,
                 &mut queue,
@@ -194,6 +214,7 @@ pub(super) fn route_events(
                 can_step,
             )
         };
+        bodies.update(&sprite_c, &stepper);
         if touched.get()
             && let Some(touches) = touches.as_mut()
         {
@@ -223,7 +244,11 @@ pub(super) fn route_hero(
     inventory: Res<Inventory>,
     guards: super::autonomy::MoveGuards,
     mut audio: MessageWriter<AudioRequest>,
-    mut hero: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper, &mut Sprite)>,
+    mut hero: Query<
+        (&mut Player, &mut MoveQueue, &mut RouteStepper, &mut Sprite),
+        Without<EventSprite>,
+    >,
+    events: Query<(&EventSprite, Option<&RouteStepper>), Without<Player>>,
 ) {
     // The hero's only routes come from a `MoveEvent`, which is always forced, so they
     // must keep advancing through the very cutscene that issued them — RM2000 steps
@@ -237,20 +262,16 @@ pub(super) fn route_hero(
     let (ex, ey) = (player.tile_x, player.tile_y);
     let pos = (ex, ey);
     let dt = time.delta_secs();
+    let bodies = CollisionBodies::from_events(events.iter());
     let driven = {
-        let can_step = |dx: i32, dy: i32, jumping: bool| {
-            tile_open(
-                ex,
-                ey,
-                dx,
-                dy,
-                jumping,
-                (0, 1),
-                pos,
-                &data,
-                &map_events,
-                (&switches, &variables, &party, &inventory),
-            )
+        let collision = MapCollision::new(
+            &data,
+            &map_events,
+            (&switches, &variables, &party, &inventory),
+            &bodies,
+        );
+        let can_step = |_: &Player, dx: i32, dy: i32, jumping: bool, through: bool| {
+            collision.can_move(pos, (ex + dx, ey + dy), Mover::hero(through), None, jumping)
         };
         drive(&mut *player, &mut queue, &mut stepper, pos, dt, can_step)
     };

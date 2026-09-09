@@ -171,7 +171,7 @@ fn passages_lower_index(id: u16) -> Option<usize> {
 
 /// The `passages_up` bit (RM2000 "above hero" / star / priority) that draws an
 /// upper-layer tile above the hero instead of at or below it.
-const ABOVE_HERO_BIT: u8 = 0x10;
+pub(crate) const ABOVE_HERO_BIT: u8 = 0x10;
 
 /// Whether an upper-layer tile is flagged "above hero" (roof tops, tree tops,
 /// tall-object tops): bit [`ABOVE_HERO_BIT`] of its `passages_up` byte. Such a

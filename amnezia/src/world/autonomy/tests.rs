@@ -244,7 +244,7 @@ fn autonomous_movement_keeps_scripted_through_facing_and_speed() {
         &mut route,
         (5, 5),
         1.0 / 60.0,
-        |_, _, _| false,
+        |_, _, _, _, through| through,
     );
     assert!(!route.forced());
     app.update();

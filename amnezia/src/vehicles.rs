@@ -225,7 +225,7 @@ fn advance(
             &mut motion.route,
             (x, y),
             time.delta_secs(),
-            |dx, dy, _| data.contains_tile(x + dx, y + dy),
+            |_, dx, dy, _, _| data.contains_tile(x + dx, y + dy),
         );
         if routed {
             vehicle.speed = motion.route.speed();

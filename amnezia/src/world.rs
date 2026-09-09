@@ -15,7 +15,7 @@ use bevy::window::PrimaryWindow;
 
 mod autonomy;
 mod character_animation;
-mod collision;
+pub(crate) mod collision;
 mod movement;
 mod pages;
 mod render;
@@ -102,8 +102,8 @@ impl MapData {
     }
 
     /// Whether tile `(x, y)` is passable from any direction — a non-directional
-    /// standability test, used by the debug overlay. Movement uses [`can_move`],
-    /// which also checks the tile being left and the direction of travel.
+    /// standability test, used by the debug overlay. Movement additionally
+    /// checks both tile edges and live events through `MapCollision`.
     pub fn passable(&self, x: i32, y: i32) -> bool {
         self.passable_dir(x, y, tiles::PASS_ALL)
     }
@@ -129,6 +129,7 @@ impl MapData {
     /// per RM2000's `Game_Map::MakeWay`: the tile being left must permit exit
     /// toward the move, and the tile being entered must permit entry from the
     /// opposite side. Both checks combine each tile's lower and upper passability.
+    #[cfg(test)]
     pub fn can_move(&self, fx: i32, fy: i32, tx: i32, ty: i32) -> bool {
         let bit_from = tiles::passable_mask(fx, fy, tx, ty);
         let bit_to = tiles::passable_mask(tx, ty, fx, fy);

@@ -45,7 +45,7 @@ fn original_starting_village_dog_keeps_pacing_after_first_lap() {
         for _ in 0..3 {
             for dx in [1, -1] {
                 let (action, _) = route
-                    .advance(&mut player, (0, 0), &|_, _, _| true, &mut effects)
+                    .advance(&mut player, (0, 0), &|_, _, _, _, _| true, &mut effects)
                     .unwrap();
                 assert_eq!(action.delta(), (dx, 0));
             }

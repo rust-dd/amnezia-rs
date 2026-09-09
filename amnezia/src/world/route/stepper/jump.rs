@@ -5,7 +5,7 @@ impl RouteStepper {
         &mut self,
         ch: &mut C,
         hero: (i32, i32),
-        can_step: &impl Fn(i32, i32, bool) -> bool,
+        can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
     ) -> Step {
         let Some(end) = self.commands[self.index + 1..]
             .iter()
@@ -53,7 +53,7 @@ impl RouteStepper {
             DIR_DOWN
         };
         self.set_direction(ch, direction);
-        if (dx != 0 || dy != 0) && !self.through && !can_step(dx, dy, true) {
+        if (dx != 0 || dy != 0) && !can_step(ch, dx, dy, true, self.through) {
             self.timer = step_delay_secs(self.frequency);
             if self.skippable {
                 self.set_direction(ch, previous);

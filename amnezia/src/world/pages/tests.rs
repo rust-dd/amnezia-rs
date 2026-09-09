@@ -29,7 +29,7 @@ fn translucent_pages_use_the_original_third_transparency_step() {
         &mut route,
         (0, 0),
         1.0 / 60.0,
-        |_, _, _| true,
+        |_, _, _, _, _| true,
     );
     app.update();
     let world = app.world_mut();
@@ -357,7 +357,7 @@ fn page_refresh_during_a_forced_route_installs_the_new_autonomous_program() {
         &mut route,
         (0, 0),
         1.0 / 60.0,
-        |_, _, _| true,
+        |_, _, _, _, _| true,
     );
     assert!(matches!(
         driven.effects.as_slice(),

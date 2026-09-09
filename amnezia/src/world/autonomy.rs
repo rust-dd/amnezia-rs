@@ -10,6 +10,7 @@
 //! sync, and re-arms the countdown. Scripted routes, the `Move Event` opcode,
 //! and custom routes (`move_type` 6) are handled elsewhere or deferred.
 
+use super::collision::{CollisionBodies, MapCollision, Mover};
 use super::movement::{dir_delta, step_secs_for_speed};
 use super::route::RouteStepper;
 use super::{EventSprite, MapData, MapEvents, MoveQueue, RouteAction};
@@ -269,19 +270,25 @@ pub(crate) fn autonomous_movement(
     inventory: Res<Inventory>,
     guards: MoveGuards,
     mut touches: Option<ResMut<super::TouchEvents>>,
-    players: Query<&Player>,
-    mut movers: Query<(
-        &mut EventSprite,
-        &mut MoveQueue,
-        &mut AutoMove,
-        Option<&mut RouteStepper>,
-    )>,
+    players: Query<(&Player, Option<&RouteStepper>), Without<EventSprite>>,
+    mut movers: Query<
+        (
+            &mut EventSprite,
+            &mut MoveQueue,
+            &mut AutoMove,
+            Option<&mut RouteStepper>,
+        ),
+        Without<Player>,
+    >,
 ) {
-    let Ok(player) = players.single() else {
+    let Ok((player, hero_route)) = players.single() else {
         return;
     };
     let (px, py) = (player.tile_x, player.tile_y);
     let dt = time.delta_secs();
+    let mut bodies =
+        CollisionBodies::from_events(movers.iter().map(|(event, _, _, route)| (event, route)));
+    bodies.hero_through = hero_route.is_some_and(RouteStepper::through);
     for (mut sprite, mut queue, mut auto, mut stepper) in &mut movers {
         // Stationary (0) and custom-route (6) events never move here; a busy queue
         // means the previous step is still tweening; and a live forced route (a
@@ -314,24 +321,28 @@ pub(crate) fn autonomous_movement(
         let hero_delta = data.tile_delta((ex, ey), (px, py));
         let touched = std::cell::Cell::new(false);
         let decision = {
+            let collision = MapCollision::new(
+                &data,
+                &map_events,
+                (&switches, &variables, &party, &inventory),
+                &bodies,
+            );
             let passable = |dir: u32| {
                 let (dx, dy) = dir_delta(dir);
                 let (nx, ny) = (ex + dx, ey + dy);
                 let destination = data.normalize_tile(nx, ny);
                 let through = stepper.as_ref().is_some_and(|route| route.through());
-                if !through && sprite.layer == 1 && destination == (px, py) {
+                if !through && !bodies.hero_through && sprite.layer == 1 && destination == (px, py)
+                {
                     touched.set(true);
                 }
-                data.contains_tile(nx, ny)
-                    && (through
-                        || (data.can_move(ex, ey, nx, ny)
-                            && !(sprite.layer == 1 && destination == (px, py))
-                            && !super::collision::event_blocks_at(
-                                &map_events,
-                                (&switches, &variables, &party, &inventory),
-                                (self_id, sprite.layer),
-                                destination,
-                            )))
+                collision.can_move(
+                    (ex, ey),
+                    (nx, ny),
+                    Mover::event(&sprite, through),
+                    Some((px, py)),
+                    false,
+                )
             };
             decide(
                 auto.move_type,

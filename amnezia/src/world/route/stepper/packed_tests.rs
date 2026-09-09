@@ -26,7 +26,7 @@ fn finish(route: &mut RouteStepper) -> Vec<StepEffect> {
     };
     let mut effects = Vec::new();
     for _ in 0..=route.commands.len() {
-        route.advance(&mut player, (0, 0), &|_, _, _| true, &mut effects);
+        route.advance(&mut player, (0, 0), &|_, _, _, _, _| true, &mut effects);
     }
     assert!(!route.active());
     effects

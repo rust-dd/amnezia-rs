@@ -89,6 +89,39 @@ fn movement_app(events: Vec<Event>) -> App {
 }
 
 #[test]
+fn keyboard_movement_uses_the_other_events_live_through_state() {
+    let other = event(1, 0);
+    let mut app = movement_app(vec![other]);
+    let mut character = EventSprite {
+        id: 1,
+        tile_x: 4,
+        tile_y: 3,
+        dir: DIR_DOWN,
+        frame: 1,
+        charset: "Chara1".into(),
+        index: 0,
+        layer: 1,
+    };
+    let mut route = RouteStepper::from_move_event(&[1, 8, 0, 0, 36]);
+    crate::world::drive_route(
+        &mut character,
+        &mut MoveQueue::default(),
+        &mut route,
+        (0, 0),
+        1.0 / 60.0,
+        |_, _, _, _, _| true,
+    );
+    app.world_mut().spawn((character, route));
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ArrowRight);
+    app.update();
+    let world = app.world_mut();
+    assert_eq!(world.query::<&Player>().single(world).unwrap().tile_x, 4);
+    assert!(!world.resource::<RunningEvent>().active());
+}
+
+#[test]
 fn keyboard_movement_keeps_scripted_speed_through_and_facing_lock() {
     let mut app = movement_app(vec![event(1, 0)]);
     let world = app.world_mut();
@@ -105,7 +138,7 @@ fn keyboard_movement_keeps_scripted_speed_through_and_facing_lock() {
         &mut route,
         (0, 0),
         1.0 / 60.0,
-        |_, _, _| false,
+        |_, _, _, _, through| through,
     );
     assert!(!route.forced());
     app.world_mut()

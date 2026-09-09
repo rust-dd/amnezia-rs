@@ -87,12 +87,13 @@ impl RouteStepper {
     /// mutating `ch`'s facing/graphic and pushing switch/sound/transparency
     /// `effects`. Returns the tile step to enqueue (with its tween seconds) for a
     /// move, or `None` for a turn/wait/finish/blocked-wait.
-    /// `can_step(dx, dy, jumping)` checks a walking step or a jump's landing tile.
+    /// The movement gate receives the live graphic and through state, including
+    /// instant commands executed earlier in this same route tick.
     pub(super) fn advance<C: Character>(
         &mut self,
         ch: &mut C,
         hero: (i32, i32),
-        can_step: &impl Fn(i32, i32, bool) -> bool,
+        can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
         effects: &mut Vec<StepEffect>,
     ) -> Option<(RouteAction, f32)> {
         let len = self.commands.len();
@@ -132,7 +133,7 @@ impl RouteStepper {
         &mut self,
         ch: &mut C,
         hero: (i32, i32),
-        can_step: &impl Fn(i32, i32, bool) -> bool,
+        can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
         effects: &mut Vec<StepEffect>,
         cmd: &MoveCommandDef,
     ) -> Step {
@@ -257,14 +258,14 @@ impl RouteStepper {
         ch: &mut C,
         new_dir: Option<u32>,
         (dx, dy): (i32, i32),
-        can_step: &impl Fn(i32, i32, bool) -> bool,
+        can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
     ) -> Step {
         let prev = self.direction(ch);
         if let Some(dir) = new_dir {
             self.set_direction(ch, dir);
         }
         let face = ch.dir();
-        if self.through || can_step(dx, dy, false) {
+        if can_step(ch, dx, dy, false, self.through) {
             self.timer = step_delay_secs(self.frequency);
             Step::Gate(Some((
                 RouteAction::Step { dx, dy, face },
