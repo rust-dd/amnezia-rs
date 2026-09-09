@@ -4,6 +4,7 @@
 //! each page letter by letter, [`view`] draws it, and the confirm key here
 //! fast-forwards the reveal or advances/closes the box.
 
+mod input_prompts;
 mod options;
 #[cfg(test)]
 mod tests;
@@ -16,6 +17,7 @@ use crate::player::{Player, facing_tile};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::world::{MapData, MapEvents};
 use bevy::prelude::*;
+pub(crate) use input_prompts::InputPrompts;
 pub use options::MessageOptions;
 use typewriter::Typewriter;
 
@@ -136,6 +138,7 @@ impl Plugin for DialoguePlugin {
 #[allow(clippy::too_many_arguments)]
 fn interact(
     keys: Res<ButtonInput<KeyCode>>,
+    prompts: InputPrompts,
     scene: crate::world::ScenePause,
     data: Res<MapData>,
     map_events: Res<MapEvents>,
@@ -163,7 +166,7 @@ fn interact(
         }
         return;
     }
-    if scene.paused() {
+    if scene.paused() || prompts.active() {
         return;
     }
     if running.active() {

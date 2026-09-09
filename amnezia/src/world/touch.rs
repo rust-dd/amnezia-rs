@@ -13,6 +13,7 @@ pub(super) fn trigger(
     mut touches: ResMut<TouchEvents>,
     mut running: ResMut<RunningEvent>,
     dialogue: Res<Dialogue>,
+    prompts: crate::dialogue::InputPrompts,
     scene: ScenePause,
     events: Res<MapEvents>,
     switches: Res<Switches>,
@@ -23,7 +24,7 @@ pub(super) fn trigger(
     sprites: Query<(&EventSprite, &MoveQueue)>,
 ) {
     let attempts = std::mem::take(&mut touches.0);
-    if running.active() || dialogue.active || scene.paused() || scene.riding() {
+    if running.active() || dialogue.active || prompts.active() || scene.paused() || scene.riding() {
         return;
     }
     let Ok((hero, queue, route)) = players.single() else {

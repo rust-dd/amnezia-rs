@@ -111,6 +111,19 @@ fn action_key_reaches_an_event_on_the_opposite_loop_edge() {
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::Enter);
+    let mut choice = crate::choice::Choice::default();
+    choice.open(vec!["Igen".into()], 0, 0);
+    app.insert_resource(choice);
+    app.update();
+    assert!(!app.world().resource::<RunningEvent>().active());
+    app.world_mut().remove_resource::<crate::choice::Choice>();
+    let mut number = crate::inputnumber::InputNumber::default();
+    number.open(3, 1);
+    app.insert_resource(number);
+    app.update();
+    assert!(!app.world().resource::<RunningEvent>().active());
+    app.world_mut()
+        .remove_resource::<crate::inputnumber::InputNumber>();
     app.update();
     assert_eq!(app.world().resource::<RunningEvent>().debug_id(), Some(7));
 }

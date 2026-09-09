@@ -142,6 +142,7 @@ pub fn facing_tile(player: &Player) -> (i32, i32) {
 #[allow(clippy::too_many_arguments)]
 fn move_player(
     keys: Res<ButtonInput<KeyCode>>,
+    prompts: crate::dialogue::InputPrompts,
     data: Res<MapData>,
     dialogue: Res<Dialogue>,
     scene: ScenePause,
@@ -161,7 +162,13 @@ fn move_player(
     if data.is_changed() {
         *arrived = Some(position);
     }
-    if dialogue.active || running.active() || scene.paused() || scene.riding() || stepper.active() {
+    if dialogue.active
+        || prompts.active()
+        || running.active()
+        || scene.paused()
+        || scene.riding()
+        || stepper.active()
+    {
         *arrived = Some(position);
         return;
     }

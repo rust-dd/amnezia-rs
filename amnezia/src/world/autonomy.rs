@@ -30,12 +30,10 @@ use bevy::prelude::*;
 /// Logical frames per second the RM2000 stop-count delays are measured in.
 const FPS: f32 = 60.0;
 
-/// The resources that pause autonomous movement — the same set that stops the
-/// hero (message, teleport fade, running event, menu, shop, battle, title) plus
-/// game-over. Bundled so [`autonomous_movement`] stays within the system-param
-/// count.
+/// Shared movement gates for scenes, foreground events and input prompts.
 #[derive(SystemParam)]
 pub(crate) struct MoveGuards<'w> {
+    prompts: crate::dialogue::InputPrompts<'w>,
     message_options: Option<Res<'w, crate::dialogue::MessageOptions>>,
     dialogue: Res<'w, Dialogue>,
     fade: Res<'w, Fade>,
@@ -57,13 +55,14 @@ impl MoveGuards<'_> {
             {
                 self.running.debug_id() == Some(event_id)
             } else {
-                self.dialogue.active || self.running.active()
+                self.running.active()
             }
     }
 
     /// Whether manual movement input is paused.
     pub(crate) fn paused(&self) -> bool {
         self.dialogue.active
+            || self.prompts.active()
             || self.fade.busy()
             || self.running.active()
             || self.menu.0

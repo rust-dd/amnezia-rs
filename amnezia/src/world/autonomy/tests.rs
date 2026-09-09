@@ -84,6 +84,30 @@ fn chasing_enemy_starts_its_touch_event_when_it_reaches_the_hero() {
 }
 
 #[test]
+fn a_parallel_message_without_a_foreground_event_does_not_freeze_npcs() {
+    let mut app = chasing_app();
+    let world = app.world_mut();
+    world
+        .query::<&mut Player>()
+        .single_mut(world)
+        .unwrap()
+        .tile_y = 4;
+    world.resource_mut::<Dialogue>().active = true;
+    app.update();
+    assert_eq!(app.world().resource::<MapEvents>().events[0].y, 5);
+}
+
+#[test]
+fn npc_touch_cannot_start_a_foreground_event_during_a_parallel_choice() {
+    let mut app = chasing_app();
+    let mut choice = crate::choice::Choice::default();
+    choice.open(vec!["Igen".into()], 0, 0);
+    app.insert_resource(choice);
+    app.update();
+    assert!(!app.world().resource::<RunningEvent>().active());
+}
+
+#[test]
 fn continue_events_allows_other_npcs_to_walk_but_keeps_the_speaking_npc_paused() {
     for (continues, event_id, menu, moves) in [
         (false, 2, false, false),

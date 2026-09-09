@@ -124,6 +124,7 @@ fn run_interpreter(
 /// switch stays on.
 #[allow(clippy::too_many_arguments)]
 fn autorun(
+    prompts: crate::dialogue::InputPrompts,
     map_events: Res<MapEvents>,
     common_events: Res<CommonEvents>,
     switches: Res<Switches>,
@@ -140,6 +141,7 @@ fn autorun(
     mut running: ResMut<RunningEvent>,
 ) {
     if running.active()
+        || prompts.active()
         || dialogue.active
         || fade.busy()
         || menu.0

@@ -4,6 +4,29 @@ use crate::world::MainCamera;
 use amnezia_data::{Event, EventCommand, Map};
 use bevy::math::Vec2;
 
+#[test]
+fn parallel_choice_and_number_prompts_block_keyboard_movement() {
+    for numeric in [false, true] {
+        let mut app = movement_app(vec![]);
+        if numeric {
+            let mut input = crate::inputnumber::InputNumber::default();
+            input.open(3, 1);
+            app.insert_resource(input);
+        } else {
+            let mut choice = crate::choice::Choice::default();
+            choice.open(vec!["Igen".into()], 0, 0);
+            app.insert_resource(choice);
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::ArrowRight);
+        app.update();
+        let world = app.world_mut();
+        let hero = world.query::<&Player>().single(world).unwrap();
+        assert_eq!((hero.tile_x, hero.tile_y), (3, 3));
+    }
+}
+
 fn event(layer: u32, trigger: u32) -> Event {
     let mut page = crate::assets::load_ron::<Map>(&format!(
         "{}/maps/map_0001.ron",

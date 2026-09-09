@@ -1,6 +1,28 @@
 use super::*;
 
 #[test]
+fn autorun_waits_until_a_parallel_input_prompt_closes() {
+    let mut app = interp_app();
+    app.insert_resource(MapEvents {
+        events: vec![map_event(1, 3, vec![switch_cmd(40, 0, 0)])],
+    });
+    app.world_mut()
+        .resource_mut::<Choice>()
+        .open(vec!["Igen".into()], 0, 0);
+    app.update();
+    assert!(!app.world().resource::<RunningEvent>().active());
+    assert!(!switch_on(&app, 40));
+    app.world_mut().resource_mut::<Choice>().active = false;
+    app.world_mut().resource_mut::<InputNumber>().open(3, 1);
+    app.update();
+    assert!(!app.world().resource::<RunningEvent>().active());
+    assert!(!switch_on(&app, 40));
+    app.world_mut().resource_mut::<InputNumber>().active = false;
+    app.update();
+    assert!(switch_on(&app, 40));
+}
+
+#[test]
 fn original_prison_scene_background_opens_the_door_during_another_message() {
     let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(
         "{}/maps/map_0084.ron",
