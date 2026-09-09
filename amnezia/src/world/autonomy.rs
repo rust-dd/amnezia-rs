@@ -20,7 +20,7 @@ use crate::interpreter::RunningEvent;
 use crate::menu::MenuOpen;
 use crate::player::Player;
 use crate::shop::ShopOpen;
-use crate::state::{Inventory, Party, Switches, Variables, active_page};
+use crate::state::{Inventory, Party, Switches, Variables};
 use crate::teleport::Fade;
 use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::title::TitleActive;
@@ -241,26 +241,6 @@ fn away_candidates(dx: i32, dy: i32) -> Vec<u32> {
     toward_candidates(dx, dy).into_iter().map(reverse).collect()
 }
 
-/// Whether an event other than `self_id` occupies `(x, y)` with a solid
-/// (same-layer) active page — the hero's own collision rule, so a routed NPC
-/// can't step onto another solid event. `state` is the switch/variable/party/
-/// inventory context the active-page choice needs. Shared with the route stepper.
-pub(super) fn event_solid_at(
-    map_events: &MapEvents,
-    state: (&Switches, &Variables, &Party, &Inventory),
-    self_id: u32,
-    x: i32,
-    y: i32,
-) -> bool {
-    let (switches, variables, party, inventory) = state;
-    map_events.events.iter().any(|e| {
-        e.id != self_id
-            && e.x as i32 == x
-            && e.y as i32 == y
-            && active_page(e, switches, variables, party, inventory).is_some_and(|p| p.layer == 1)
-    })
-}
-
 /// Drive every NPC's autonomous movement: on its frequency countdown, and only
 /// while standing still and unblocked by a message/fade/menu/battle/event, pick
 /// one passable tile step for its `move_type`, keep the logical [`MapEvents`]
@@ -327,12 +307,11 @@ pub(crate) fn autonomous_movement(
                     && ny < data.height
                     && data.can_move(ex, ey, nx, ny)
                     && !(sprite.layer == 1 && nx == px && ny == py)
-                    && !event_solid_at(
+                    && !super::collision::event_blocks_at(
                         &map_events,
                         (&switches, &variables, &party, &inventory),
-                        self_id,
-                        nx,
-                        ny,
+                        (self_id, sprite.layer),
+                        (nx, ny),
                     )
             };
             decide(

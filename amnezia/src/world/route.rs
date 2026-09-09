@@ -91,15 +91,15 @@ fn apply_effects(
 }
 
 /// Whether a tile is on the map and enterable from `(ex, ey)` — the shared move
-/// gate: in bounds, passable per `MakeWay`, not the hero's tile, and not a solid
-/// (same-layer) event other than `self_id`.
+/// gate: in bounds, passable per `MakeWay`, and free of characters on the
+/// moving character's layer.
 #[allow(clippy::too_many_arguments)]
 fn tile_open(
     ex: i32,
     ey: i32,
     dx: i32,
     dy: i32,
-    self_id: u32,
+    mover: (u32, u32),
     hero: (i32, i32),
     data: &MapData,
     map_events: &MapEvents,
@@ -111,8 +111,8 @@ fn tile_open(
         && nx < data.width
         && ny < data.height
         && data.can_move(ex, ey, nx, ny)
-        && (nx, ny) != hero
-        && !super::autonomy::event_solid_at(map_events, state, self_id, nx, ny)
+        && (mover.1 != 1 || (nx, ny) != hero)
+        && !super::collision::event_blocks_at(map_events, state, mover, (nx, ny))
 }
 
 /// Step every event NPC's forced route (custom `move_type == 6` or a loaded
@@ -140,7 +140,6 @@ pub(super) fn route_events(
         Without<Player>,
     >,
 ) {
-    // A scene change or a teleport fade freezes even forced routes: nothing steps.
     if guards.forced_route_paused() {
         return;
     }
@@ -158,13 +157,13 @@ pub(super) fn route_events(
         }
         let (ex, ey) = (sprite_c.tile_x, sprite_c.tile_y);
         let self_id = sprite_c.id;
-        let same_layer = sprite_c.layer == 1;
+        let layer = sprite_c.layer;
         let touched = std::cell::Cell::new(false);
         // Scope `can_step` (which borrows the switches and events) so it drops
         // before either is mutated: the logical tile sync and a switch command.
         let driven = {
             let can_step = |dx: i32, dy: i32| {
-                if same_layer && (ex + dx, ey + dy) == hero {
+                if layer == 1 && (ex + dx, ey + dy) == hero {
                     touched.set(true);
                 }
                 tile_open(
@@ -172,7 +171,7 @@ pub(super) fn route_events(
                     ey,
                     dx,
                     dy,
-                    self_id,
+                    (self_id, layer),
                     hero,
                     &data,
                     &map_events,
@@ -186,8 +185,6 @@ pub(super) fn route_events(
         {
             touches.0.push(self_id);
         }
-        // Keep the logical event tile in step with the sprite so collision, touch,
-        // and interaction use the NPC's live position — the same sync autonomy does.
         if let Some((dx, dy)) = driven.moved
             && let Some(event) = map_events.events.iter_mut().find(|e| e.id == self_id)
         {
@@ -232,7 +229,7 @@ pub(super) fn route_hero(
                 ey,
                 dx,
                 dy,
-                0,
+                (0, 1),
                 pos,
                 &data,
                 &map_events,
@@ -312,7 +309,6 @@ mod tests {
             charset: "C".into(),
             index: 0,
         });
-        // A move_type-6 NPC armed with a repeating move-down route.
         let route = MoveRouteDef {
             commands: vec![MoveCommandDef {
                 code: 2,
@@ -337,8 +333,6 @@ mod tests {
             RouteStepper::from_page(&route, 6, 8),
             Sprite::default(),
         ));
-        // One update: the stepper advances the route, faces the NPC down, enqueues
-        // its tile step, and syncs the logical MapEvents entry to the new tile.
         app.update();
         let world = app.world_mut();
         let logical = &world.resource::<MapEvents>().events[0];
@@ -378,7 +372,6 @@ mod tests {
         app.insert_resource(running_event());
         app.add_message::<AudioRequest>();
         app.add_systems(Update, route_hero);
-        // The hero, armed with a forced MoveEvent route that steps down once.
         app.world_mut().spawn((
             Player {
                 tile_x: 5,

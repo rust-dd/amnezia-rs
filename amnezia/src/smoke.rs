@@ -128,6 +128,7 @@ fn drive(world: &mut World) {
                 .unwrap();
             assert_eq!((hero.tile_x, hero.tile_y), (9, 4));
             assert_eq!(*visibility, Visibility::Hidden);
+            scenarios::verify_airship_staging(world);
         }
         world.write_message(AppExit::Success);
     }

@@ -1,4 +1,27 @@
 use amnezia_data::{EventCommand, Map};
+use bevy::prelude::*;
+
+pub(super) fn verify_airship_staging(world: &mut World) {
+    assert!(world.resource::<crate::dialogue::Dialogue>().active);
+    let mut query = world.query::<(&crate::world::EventSprite, &Visibility)>();
+    for (id, position, charset, index, direction) in [
+        (2, (9, 9), "Chara1", 0, 2),
+        (3, (8, 9), "Chara1", 1, 2),
+        (4, (10, 10), "Chara4", 2, 0),
+        (5, (10, 9), "Chara4", 0, 2),
+        (6, (9, 10), "Chara2", 2, 0),
+    ] {
+        let (character, visibility) = query.iter(world).find(|(event, _)| event.id == id).unwrap();
+        assert_eq!((character.tile_x, character.tile_y), position, "event {id}");
+        assert_eq!(
+            (&*character.charset, character.index),
+            (charset, index),
+            "event {id}"
+        );
+        assert_eq!(character.dir, direction, "event {id}");
+        assert_ne!(*visibility, Visibility::Hidden, "event {id}");
+    }
+}
 
 pub(super) fn airship_interior_entry() -> Vec<EventCommand> {
     let map = crate::assets::load_ron::<Map>(&format!(
