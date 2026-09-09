@@ -15,6 +15,7 @@ mod move_route;
 mod panorama;
 mod system;
 mod terms;
+mod troop;
 mod vehicle;
 
 pub use item::ItemDef;
@@ -24,6 +25,7 @@ pub use move_route::{MoveCommandDef, MoveRouteDef};
 pub use panorama::PanoramaDef;
 pub use system::{MusicDef, SoundDef, SystemDef};
 pub use terms::{ShopTerms, TermsDef};
+pub use troop::{TroopDef, TroopMemberDef, TroopPageConditionDef, TroopPageDef};
 pub use vehicle::VehicleDef;
 
 /// The hero's name (actor 1's default name from the original database). The
@@ -259,25 +261,6 @@ pub struct EnemyActionDef {
     pub condition_min: u32,
     pub condition_max: u32,
     pub priority: u32,
-}
-
-/// One member of a troop: the `enemy_id` of the monster (matching a
-/// [`MonsterDef::id`]) and its `x`,`y` placement on the battle backdrop.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TroopMemberDef {
-    pub enemy_id: u32,
-    pub x: u32,
-    pub y: u32,
-}
-
-/// A troop (enemy party) definition, read by the battle system to build an
-/// encounter: its 1-based id, name, and the monsters it fields with their
-/// positions.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct TroopDef {
-    pub id: u32,
-    pub name: String,
-    pub members: Vec<TroopMemberDef>,
 }
 
 /// A battle-animation definition (see `lcf::Animation`), read by the battle

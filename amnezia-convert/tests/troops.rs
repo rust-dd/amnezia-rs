@@ -1,6 +1,9 @@
 use amnezia_data::{TroopDef, TroopMemberDef};
 use std::path::Path;
 
+#[path = "troops/pages.rs"]
+mod pages;
+
 fn varint(mut v: u32) -> Vec<u8> {
     let mut groups = vec![(v & 0x7F) as u8];
     v >>= 7;
@@ -92,6 +95,7 @@ fn converts_ldb_to_troops_ron() {
         TroopDef {
             id: 1,
             name: "Őrök".to_string(),
+            pages: Vec::new(),
             members: vec![
                 TroopMemberDef {
                     enemy_id: 3,

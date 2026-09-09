@@ -3,6 +3,8 @@ use amnezia_data::{Chipset, CommonEvent, EventCommand, Map, Start, TroopDef};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+mod troop_events;
+
 fn maps() -> BTreeMap<u32, Map> {
     std::fs::read_dir(Path::new(asset_root()).join("maps"))
         .unwrap()

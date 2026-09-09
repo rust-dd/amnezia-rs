@@ -87,6 +87,7 @@ pub fn troop(members: &[(u32, u32, u32)]) -> TroopDef {
     TroopDef {
         id: 1,
         name: "T".into(),
+        pages: Vec::new(),
         members: members
             .iter()
             .map(|&(enemy_id, x, y)| amnezia_data::TroopMemberDef { enemy_id, x, y })

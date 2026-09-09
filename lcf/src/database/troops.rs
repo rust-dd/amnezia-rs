@@ -1,10 +1,11 @@
 //! Troop (enemy party) definitions from the database (`ChunkData::troops`,
-//! `0x0F`). A troop is the fixed enemy party of a battle: a name and a list of
-//! members, each placing one monster on the backdrop. Chunk ids follow liblcf
-//! `ChunkTroop` / `ChunkTroopMember`.
+//! `0x0F`), including positioned enemies and conditional battle-event pages.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
+
+mod pages;
+pub use pages::{TroopPage, TroopPageCondition};
 
 /// One member of a troop: which enemy fights (`enemy_id`, a monster's 1-based
 /// id) and where it stands on the battle backdrop (`x`,`y` in screen pixels).
@@ -15,18 +16,19 @@ pub struct TroopMember {
     pub y: u32,
 }
 
-/// A troop (enemy party) definition: its 1-based id, name, and the enemies it
-/// fields with their battle positions.
+/// A troop's identity, positioned enemies and conditional battle-event pages.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Troop {
     pub id: u32,
     pub name: String,
     pub members: Vec<TroopMember>,
+    pub pages: Vec<TroopPage>,
 }
 
 const TROOP_SECTION: u32 = 0x0F;
 const TROOP_NAME: u32 = 0x01;
 const TROOP_MEMBERS: u32 = 0x02;
+const TROOP_PAGES: u32 = 0x0B;
 const MEMBER_ENEMY_ID: u32 = 0x01;
 const MEMBER_X: u32 = 0x02;
 const MEMBER_Y: u32 = 0x03;
@@ -66,7 +68,7 @@ fn parse_members(data: &[u8]) -> Result<Vec<TroopMember>, LcfError> {
 }
 
 /// Parse the troop table (`ChunkData::troops` = `0x0F`) out of an LDB byte
-/// slice. Chunk ids (liblcf `ChunkTroop`): name `0x01`, members `0x02`.
+/// slice, preserving the members and battle-event pages in source order.
 pub fn parse_troops(bytes: &[u8]) -> Result<Vec<Troop>, LcfError> {
     let section = find_section(bytes, TROOP_SECTION, LcfError::MissingTroops)?;
     let mut reader = Reader::new(section);
@@ -78,6 +80,7 @@ pub fn parse_troops(bytes: &[u8]) -> Result<Vec<Troop>, LcfError> {
             id,
             name: String::new(),
             members: Vec::new(),
+            pages: Vec::new(),
         };
         loop {
             let sub_id = reader.varint()?;
@@ -89,6 +92,7 @@ pub fn parse_troops(bytes: &[u8]) -> Result<Vec<Troop>, LcfError> {
             match sub_id {
                 TROOP_NAME => troop.name = decode_cp1250(sub_data),
                 TROOP_MEMBERS => troop.members = parse_members(sub_data)?,
+                TROOP_PAGES => troop.pages = pages::parse_pages(sub_data)?,
                 _ => {}
             }
         }
@@ -101,6 +105,57 @@ pub fn parse_troops(bytes: &[u8]) -> Result<Vec<Troop>, LcfError> {
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk, varint};
     use crate::{LcfError, TroopMember, parse_troops};
+
+    #[test]
+    fn preserves_battle_pages_conditions_and_commands() {
+        let mut condition = subchunk(0x01, &[0x29]);
+        condition.extend(subchunk(0x02, &varint(545)));
+        condition.extend(subchunk(0x06, &varint(2)));
+        condition.extend(subchunk(0x07, &varint(1)));
+        condition.extend(subchunk(0x0A, &varint(3)));
+        condition.extend(subchunk(0x0C, &varint(0)));
+        condition.push(0);
+        let command = [
+            varint(10210),
+            varint(1),
+            varint(0),
+            varint(4),
+            varint(0),
+            varint(617),
+            varint(617),
+            varint(0),
+        ]
+        .concat();
+        let page = element(1, &[subchunk(2, &condition), subchunk(0x0C, &command)]);
+        let troop = element(1, &[subchunk(0x0B, &section(&[page, element(2, &[])]))]);
+        let troops = parse_troops(&make_ldb(&[(0x0F, section(&[troop]))])).unwrap();
+        assert_eq!(troops[0].pages.len(), 2);
+        let page = &troops[0].pages[0];
+        assert_eq!(page.condition.flags, 0x29);
+        assert_eq!(page.condition.switch_a_id, 545);
+        assert_eq!((page.condition.turn_a, page.condition.turn_b), (2, 1));
+        assert_eq!(
+            (page.condition.enemy_index, page.condition.enemy_hp_max),
+            (3, 0)
+        );
+        assert_eq!(page.commands[0].code, 10210);
+        assert_eq!(page.commands[0].indent, 1);
+        assert_eq!(page.commands[0].params, [0, 617, 617, 0]);
+        let defaults = &troops[0].pages[1].condition;
+        assert_eq!(defaults.flags, 0);
+        assert_eq!(
+            (
+                defaults.switch_a_id,
+                defaults.switch_b_id,
+                defaults.variable_id,
+                defaults.actor_id
+            ),
+            (1, 1, 1, 1)
+        );
+        assert_eq!((defaults.enemy_hp_min, defaults.enemy_hp_max), (0, 100));
+        assert_eq!((defaults.actor_hp_min, defaults.actor_hp_max), (0, 100));
+        assert_eq!((defaults.fatigue_min, defaults.fatigue_max), (0, 100));
+    }
 
     #[test]
     fn parses_troop_with_members() {

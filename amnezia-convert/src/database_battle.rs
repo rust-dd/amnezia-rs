@@ -1,7 +1,10 @@
 //! Conversion of the battle-side `RPG_RT.ldb` tables (states, attributes,
 //! monsters, troops) into their clean RON assets.
 
-use amnezia_data::{AttributeDef, MonsterDef, StateDef, TroopDef, TroopMemberDef};
+use amnezia_data::{
+    AttributeDef, EventCommand, MonsterDef, StateDef, TroopDef, TroopMemberDef,
+    TroopPageConditionDef, TroopPageDef,
+};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -128,8 +131,7 @@ pub fn convert_monsters(input: &Path, output: &Path) -> Result<usize> {
 }
 
 /// Convert the troop table in `input/RPG_RT.ldb` into `output/troops.ron` (each
-/// troop's id, name, and members with their battle positions), returning the
-/// number of troops written. The battle system reads it to build encounters.
+/// troop's members and conditional event pages), returning the number written.
 pub fn convert_troops(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -137,11 +139,12 @@ pub fn convert_troops(input: &Path, output: &Path) -> Result<usize> {
     let ldb = input.join("RPG_RT.ldb");
     let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
     let parsed = lcf::parse_troops(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
-    let troops: Vec<TroopDef> = parsed
+    let troops = parsed
         .into_iter()
         .map(|t| TroopDef {
             id: t.id,
             name: t.name,
+            pages: t.pages.into_iter().map(convert_troop_page).collect(),
             members: t
                 .members
                 .into_iter()
@@ -152,11 +155,44 @@ pub fn convert_troops(input: &Path, output: &Path) -> Result<usize> {
                 })
                 .collect(),
         })
-        .collect();
+        .collect::<Vec<_>>();
     let count = troops.len();
     let serialised = ron::to_string(&troops).context("serialising troops to RON")?;
     std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;
     std::fs::write(output.join("troops.ron"), serialised)
         .with_context(|| format!("writing {}", output.join("troops.ron").display()))?;
     Ok(count)
+}
+
+fn convert_troop_page(page: lcf::TroopPage) -> TroopPageDef {
+    let c = page.condition;
+    TroopPageDef {
+        condition: TroopPageConditionDef {
+            flags: c.flags,
+            switch_a_id: c.switch_a_id,
+            switch_b_id: c.switch_b_id,
+            variable_id: c.variable_id,
+            variable_value: c.variable_value,
+            turn_a: c.turn_a,
+            turn_b: c.turn_b,
+            fatigue_min: c.fatigue_min,
+            fatigue_max: c.fatigue_max,
+            enemy_index: c.enemy_index,
+            enemy_hp_min: c.enemy_hp_min,
+            enemy_hp_max: c.enemy_hp_max,
+            actor_id: c.actor_id,
+            actor_hp_min: c.actor_hp_min,
+            actor_hp_max: c.actor_hp_max,
+        },
+        commands: page
+            .commands
+            .into_iter()
+            .map(|c| EventCommand {
+                code: c.code,
+                indent: c.indent,
+                string: c.string,
+                params: c.params,
+            })
+            .collect(),
+    }
 }

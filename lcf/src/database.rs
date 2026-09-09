@@ -29,7 +29,7 @@ pub use skills::{Skill, parse_skills};
 pub use states::{State, parse_states};
 pub use system::{Music, Sound, System, parse_system};
 pub use terms::{Terms, parse_terms};
-pub use troops::{Troop, TroopMember, parse_troops};
+pub use troops::{Troop, TroopMember, TroopPage, TroopPageCondition, parse_troops};
 
 /// Locate one top-level LDB section (`ChunkData`) by id, returning its raw
 /// bytes. Verifies the `LcfDataBase` signature and skips every other section.

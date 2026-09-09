@@ -19,9 +19,9 @@ mod vehicles;
 pub use database::{
     Actor, Animation, AnimationCell, AnimationFrame, AnimationTiming, Attribute, Chipset,
     CommonEvent, EnemyAction, Item, Learning, Monster, Music, Skill, Sound, StatCurves, State,
-    System, Terms, Troop, TroopMember, parse_actors, parse_animations, parse_attributes,
-    parse_chipsets, parse_common_events, parse_items, parse_monsters, parse_skills, parse_states,
-    parse_system, parse_terms, parse_troops,
+    System, Terms, Troop, TroopMember, TroopPage, TroopPageCondition, parse_actors,
+    parse_animations, parse_attributes, parse_chipsets, parse_common_events, parse_items,
+    parse_monsters, parse_skills, parse_states, parse_system, parse_terms, parse_troops,
 };
 pub use map::{
     Event, EventCommand, EventCondition, EventPage, MapUnit, MoveCommand, MoveRoute, parse_map,

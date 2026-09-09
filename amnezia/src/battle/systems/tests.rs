@@ -119,6 +119,7 @@ fn logic_app() -> App {
         troops: vec![TroopDef {
             id: DEBUG_TROOP,
             name: "Rablo".into(),
+            pages: Vec::new(),
             members: vec![TroopMemberDef {
                 enemy_id: 1,
                 x: 100,
@@ -279,6 +280,7 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     let troop = TroopDef {
         id: 1,
         name: "T".into(),
+        pages: Vec::new(),
         members: vec![TroopMemberDef {
             enemy_id: 1,
             x: 100,
