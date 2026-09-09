@@ -1,6 +1,6 @@
 # amnezia-rs
 
-Faithful **Bevy/Rust remake** of *Amnézia* — MoonDragon Entertainment's Hungarian RPG Maker 2000 game (2001/2004). Native and playable on macOS, Linux and Windows, with the same gameplay, assets and maps as the original, and containing **zero** RPG Maker 2000 runtime code.
+A **Bevy/Rust restoration in progress** of *Amnézia* — MoonDragon Entertainment's Hungarian RPG Maker 2000 game (2001/2004). It uses the original assets and maps without requiring the RPG Maker runtime. Native scenarios are tested on macOS; a complete campaign playthrough and Linux/Windows validation are still outstanding.
 
 ## How it works
 
@@ -17,40 +17,66 @@ The original game data lives in proprietary RPG Maker 2000 formats: `.ldb`/`.lmt
 ## Development flow
 
 1. `original/` holds the extracted original RM2000 project (git-ignored; the converter's input).
-2. `cargo run -p amnezia-convert` converts it into `assets/`.
-3. `cargo run -p amnezia` runs the game against `assets/`.
+2. `cargo run -p amnezia-convert --bin amnezia-convert --locked -- --input original --output assets` converts it into `assets/`. Add `--data-only` when changing the database/map parser without reconverting graphics or music.
+3. `cargo run -p amnezia --locked` runs the game against the converted `assets/`.
+
+### Checks
+
+```sh
+cargo fmt --all -- --check
+cargo test -p amnezia --locked
+cargo test --workspace --exclude amnezia --locked
+cargo clippy --workspace --all-targets --locked -- -D warnings
+```
+
+Native smoke scenarios require a graphical desktop. Each supplies its own input, captures screenshots in the OS temporary directory (`amnezia-smoke-*.png`), and exits automatically:
+
+```sh
+cargo run -p amnezia --locked -- --smoke-test
+cargo run -p amnezia --locked -- --smoke-test --smoke-battle-menus
+cargo run -p amnezia --locked -- --smoke-test --smoke-battle
+cargo run -p amnezia --locked -- --smoke-test --smoke-airship-escape
+cargo run -p amnezia --locked -- --smoke-test --smoke-timer
+```
+
+Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
 
 ### Packaging (macOS)
 
-`bash scripts/bundle-mac.sh` builds the release binary and assembles a self-contained, double-clickable `target/Amnézia.app` with the converted assets bundled inside `Contents/Resources/assets` (dev-only `.mid` intermediates excluded). Release builds resolve their asset root relative to the executable, so the packaged app runs from anywhere without the dev tree.
+`bash scripts/bundle-mac.sh` builds the release binary and replaces `target/Amnézia.app`, bundling converted assets inside `Contents/Resources/assets` (dev-only `.mid` intermediates excluded). Release assets are resolved relative to the executable. Packaging and a clean-machine release run still need validation after the current restoration changes.
 
 ## Controls
 
-The game opens on a **title screen** — pick *Új játék* (New Game) or *Folytatás* (Continue) with the arrows and confirm.
+The game opens on a **title screen** — pick *Új játék* (New Game) or *Betöltés* (Load) with the arrows and confirm.
 
 | Key | Action |
 | --- | --- |
 | **Arrow keys** | Walk (hold to keep walking); move the cursor in any menu, choice, shop or battle |
 | **Space** / **Enter** | Action: talk to people, open doors, read signs; advance a message; confirm a menu/choice/shop/battle selection |
-| **Escape** | Open/close the in-game menu; also backs out of a shop/inn |
-| **← / →** (menu open) | Switch tab: Party · Items · Skills |
-| **↑ / ↓** (menu open) | Scroll the list |
-| **S** (menu open) | Save the game |
-| **F5** / **F9** | Quick-save / quick-load (anywhere) |
+| **Escape** | Open the in-game menu or return to the previous menu/target selection |
+| **→** (main menu commands) | Select a party member to inspect their status |
+| **↑ / ↓** (menu open) | Select a command, party member, or list entry |
+| **← / →** (battle items/skills) | Move between the two list columns |
 | **F2** | Toggle the display language: Magyar / English |
 
-Menus, shops, battles and the title all **pause the world** while they are up.
+Amnézia uses save crystals. The menu's Save command and **S** shortcut work only while the original events allow saving. Development saves use `saves/slot1.ron`; macOS release saves use `~/Library/Application Support/Amnezia/saves/slot1.ron`.
 
-### Debug keys (temporary, dev-only)
+### Debug keys
+
+Run `cargo run -p amnezia --locked -- --debug-tools` to enable development shortcuts. They are disabled in release builds. **F3** toggles the diagnostic HUD in a debug build even without this flag.
 
 | Key | Action |
 | --- | --- |
-| **P** | Toggle the passability overlay (red = impassable) — the HUD shows the map id, tile and running event |
+| **F3** | Toggle the HUD showing the map id, tile, and running event |
+| **P** | Toggle the passability overlay (red = impassable) |
+| **F5** / **F9** | Development save/load, subject to active-event and transition guards |
 | **F6** | Start a test battle |
 | **F7** / **F8** | Open a test shop / inn |
 
 ## Status
 
-Playable end-to-end: title → New Game / Continue → explore, talk, shop, rest, fight, level up, save & resume. Implemented: the event interpreter (messages, switches/variables, conditions, loops, choices, move routes, numeric input, actor reskins, event relocation), tile & autotile rendering (incl. animated water, above-hero occlusion), smooth movement and collision, teleport fades, face portraits, screen effects and pictures, synthesized MIDI music and sound effects, an in-game menu, shops/inns with full healing, a turn-based battle system with experience and level-up, save/load (including party HP/SP and progression), a native 320×240 viewport, and an optional English translation (F2).
+Core systems are implemented: event interpretation, map rendering and movement, dialogue, music, menus, shops/inns, turn-based battles, progression, and save/load. Automated tests cover original-data regressions including font selection, battle-menu geometry, revival targeting, item consumption, hit chances, and scripted airship movement.
+
+The restoration is not yet verified end-to-end. Remaining work includes a complete campaign playthrough, further original-scene visual comparisons, unfinished enemy skill effects/targeting, and save fidelity for transient map/event/music state. Passing focused tests does not establish full compatibility with every original event or battle.
 
 Amnézia is freeware by MoonDragon Entertainment; this remake is non-commercial. Original game © MoonDragon Entertainment 2001/2004.
