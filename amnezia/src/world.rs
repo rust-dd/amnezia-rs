@@ -14,6 +14,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 
 mod autonomy;
+mod bush;
 mod character_animation;
 pub(crate) mod collision;
 mod movement;
@@ -226,9 +227,11 @@ impl Plugin for WorldPlugin {
             )
             .add_systems(
                 PostUpdate,
-                topology::wrap_scene
+                (topology::wrap_scene, bush::update)
+                    .chain()
                     .after(crate::vehicles::VehicleDisplay)
                     .after(crate::screenfx::ScreenShakeSet)
+                    .before(bevy::camera::visibility::VisibilitySystems::CalculateBounds)
                     .before(bevy::transform::TransformSystems::Propagate),
             );
     }

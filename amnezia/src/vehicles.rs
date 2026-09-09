@@ -6,6 +6,7 @@ mod render;
 mod tests;
 
 pub use model::{VehicleSave, Vehicles};
+pub(crate) use render::VehicleSprite;
 
 use crate::assets::{asset_root, load_ron};
 use crate::audio::{AudioRequest, CurrentBgm};

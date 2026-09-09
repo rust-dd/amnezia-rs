@@ -97,6 +97,12 @@ pub struct Vehicles {
 }
 
 impl Vehicles {
+    pub(crate) fn jumping(&self, index: usize) -> bool {
+        self.motion
+            .get(index)
+            .is_some_and(|motion| motion.queue.jumping())
+    }
+
     pub fn riding(&self) -> bool {
         self.save.riding.is_some()
     }

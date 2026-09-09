@@ -6,7 +6,7 @@ use crate::world::{Character, MainCamera, MapData, MoveQueue};
 use bevy::prelude::*;
 
 #[derive(Component)]
-pub(super) struct VehicleSprite(usize);
+pub(crate) struct VehicleSprite(pub(crate) usize);
 
 pub(super) fn sync_hero(
     data: Res<MapData>,
