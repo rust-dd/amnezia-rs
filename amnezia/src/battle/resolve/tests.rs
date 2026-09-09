@@ -238,4 +238,5 @@ mod attacks;
 mod conditions;
 mod enemies;
 mod presentation;
+mod recovery;
 mod skills;

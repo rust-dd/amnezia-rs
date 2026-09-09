@@ -255,12 +255,11 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     }
 }
 
-/// The ally target menu: move the cursor over living party members and, on
+/// The ally target menu: move the cursor over all party members and, on
 /// confirm, commit the pending ally-scope skill or item against the chosen one. A
 /// cancel returns to the Skill or Item menu the selection came from.
 fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &mut Inventory, battle: &mut Battle) {
-    let living = battle.living_members();
-    if living.is_empty() {
+    if battle.members.is_empty() {
         enter(battle, MenuLevel::Command);
         return;
     }
@@ -274,12 +273,12 @@ fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &mut Inventory, batt
         enter(battle, back);
         return;
     }
-    if move_cursor(keys, &mut battle.cursor, living.len()) {
+    if move_cursor(keys, &mut battle.cursor, battle.members.len()) {
         battle.pending_se.push(BattleSe::Cursor);
     }
     if confirm(keys) {
         battle.pending_se.push(BattleSe::Decision);
-        let target = living[battle.cursor.min(living.len() - 1)];
+        let target = battle.cursor.min(battle.members.len() - 1);
         if let Some(skill_id) = battle.pending_skill {
             battle.commit(Command::Skill { skill_id, target });
         } else if let Some(item_id) = battle.pending_item {
@@ -300,9 +299,9 @@ fn open_target(battle: &mut Battle, skill: Option<u32>) {
 }
 
 /// Enter the ally target menu for a chosen ally-scope skill or item; exactly one
-/// of `skill` / `item` is `Some`. The cursor then ranges over living members.
+/// of `skill` / `item` is `Some`. Fallen members remain selectable for revival.
 fn open_ally_target(battle: &mut Battle, skill: Option<u32>, item: Option<u32>) {
-    if battle.living_members().is_empty() {
+    if battle.members.is_empty() {
         return;
     }
     battle.pending_skill = skill;

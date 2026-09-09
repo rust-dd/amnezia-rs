@@ -35,7 +35,7 @@ pub(super) fn selection(panel: Panel, battle: &Battle) -> Option<(usize, usize)>
         Panel::Option => Some((battle.cursor, 1)),
         Panel::Command => Some((battle.cursor, list_columns(battle))),
         Panel::Status if battle.menu == MenuLevel::AllyTarget && battle.phase == Phase::Command => {
-            battle.living_members().get(battle.cursor).map(|&i| (i, 1))
+            (battle.cursor < battle.members.len()).then_some((battle.cursor, 1))
         }
         Panel::Status if battle.phase == Phase::Command => Some((battle.turn, 1)),
         _ => None,

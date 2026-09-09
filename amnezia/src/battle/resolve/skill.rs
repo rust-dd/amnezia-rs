@@ -16,11 +16,7 @@ impl Battle {
     ) -> Option<String> {
         let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
         self.members[pi].sp = (self.members[pi].sp - skill.sp_cost as i32).max(0);
-        // Queue the skill's battle animation once, over every target it resolves
-        // against, so its sound plays once for the cast while its cells and
-        // flashes land on each target. Suppressed when the cast is replayed behind
-        // its animation hold (`apply` already queued it) so it is never queued
-        // twice; the per-target effect helpers below never queue it themselves.
+        // Deferred casts already queued the animation before their hold.
         if !self.suppress_anim {
             let anchors = self.skill_anim_anchors(pi, &skill, target);
             self.push_anim(skill.animation_id, anchors);
@@ -29,10 +25,7 @@ impl Battle {
         match skill.scope {
             1 => {
                 let foes = self.living_enemies();
-                // Resolve the first target now and stagger the rest one per tick,
-                // so an all-enemy cast's damage numbers appear in sequence rather
-                // than all at once. The RNG draw order is unchanged (targets still
-                // resolve in living-enemy order).
+                // Separate ticks keep multi-target damage numbers readable.
                 let mut targets = foes.into_iter();
                 if let Some(first) = targets.next() {
                     lines.extend(self.skill_hit_enemy(pi, first, &skill));
@@ -49,14 +42,12 @@ impl Battle {
                 lines.extend(self.skill_heal_ally(pi, pi, &skill));
             }
             3 => {
-                if self.members.get(target).is_some_and(|m| m.alive()) {
+                if self.ally_skill_target(target, &skill) {
                     lines.extend(self.skill_heal_ally(pi, target, &skill));
                 }
             }
             4 => {
-                let allies = self.living_members();
-                // As for scope 1, heal the first ally now and stagger the rest one
-                // per tick so the restore numbers appear in sequence.
+                let allies = self.ally_skill_targets(&skill);
                 let mut targets = allies.into_iter();
                 if let Some(first) = targets.next() {
                     lines.extend(self.skill_heal_ally(pi, first, &skill));
@@ -86,8 +77,8 @@ impl Battle {
     /// The screen anchors party member `pi`'s cast of `skill` at `target`
     /// animates over: every living foe for an all-enemy skill (scope 1), the
     /// caster's own party slot for a self-heal (scope 2), the chosen ally's slot
-    /// for a single-ally heal (scope 3, empty if that ally is down), every living
-    /// ally for an all-ally heal (scope 4), or the single targeted foe otherwise
+    /// for a single-ally heal (scope 3), every applicable ally for a party heal
+    /// (scope 4, including fallen allies for revival), or the targeted foe otherwise
     /// (falling back to any living foe if that one has fallen). Draws no RNG, so it
     /// can be computed up front to queue the animation before the hold.
     pub(in crate::battle::resolve) fn skill_anim_anchors(
@@ -104,14 +95,14 @@ impl Battle {
                 .collect(),
             2 => vec![(self.party_anim_x(pi), PARTY_ANIM_Y)],
             3 => {
-                if self.members.get(target).is_some_and(|m| m.alive()) {
+                if self.ally_skill_target(target, skill) {
                     vec![(self.party_anim_x(target), PARTY_ANIM_Y)]
                 } else {
                     Vec::new()
                 }
             }
             4 => self
-                .living_members()
+                .ally_skill_targets(skill)
                 .iter()
                 .map(|&ti| (self.party_anim_x(ti), PARTY_ANIM_Y))
                 .collect(),
@@ -139,10 +130,6 @@ impl Battle {
     ) -> Vec<String> {
         let caster = self.members[pi].name.clone();
         let target = self.enemies[ti].name.clone();
-        // Roll the skill's to-hit (EasyRPG `CalcSkillToHit`): its own hit rate, or
-        // the bare-hands 90% default when unset (0), agility-adjusted — but a
-        // certain hit against a foe that cannot act. A miss deals nothing and
-        // inflicts no state.
         let can_act = logic::worst_restriction(&self.enemies[ti].states, &self.states) != 1;
         let hit = logic::to_hit_vs(
             logic::effective_hit(skill.hit),
@@ -169,19 +156,16 @@ impl Battle {
             &self.enemies[ti].attribute_ranks,
             &self.attributes,
         );
-        // A skill can land a critical (EasyRPG `CalcSkillEffect` triples the
-        // effect), rolled off the caster's weapon crit rate like a normal attack.
         let crit = ((rng_next(&mut self.rng) % 100) as u32) < self.members[pi].weapon_crit;
         let base = if crit {
             logic::critical_damage(base)
         } else {
             base
         };
-        // Foes carry no SP pool, so an SP-draining skill finds nothing to take.
-        let dealt = if skill.affect_sp {
-            0
-        } else {
+        let dealt = if skill.affect_hp {
             self.hit_enemy(ti, base, skill.variance as i32)
+        } else {
+            0
         };
         if skill.absorb && dealt > 0 {
             let f = &mut self.members[pi];
@@ -202,6 +186,10 @@ impl Battle {
                 .unwrap_or(2);
             if ((rng_next(&mut self.rng) % 100) as u32) < logic::state_infliction_chance(rank) {
                 logic::inflict(&mut self.enemies[ti].states, sid);
+                if sid == 1 {
+                    self.enemies[ti].hp = 0;
+                    self.start_foe_death(ti, false);
+                }
                 if let Some(state) = self.states.iter().find(|s| s.id == sid) {
                     lines.push(format!("{target} státusz: {}", state.name));
                 }
@@ -220,6 +208,9 @@ impl Battle {
         ti: usize,
         skill: &SkillDef,
     ) -> Vec<String> {
+        if !self.ally_skill_target(ti, skill) {
+            return Vec::new();
+        }
         let caster = self.members[pi].name.clone();
         let target = self.members[ti].name.clone();
         let base = logic::skill_effect(
@@ -231,16 +222,30 @@ impl Battle {
         let roll = rng_next(&mut self.rng);
         let amt = logic::variance_adjust(base, skill.variance as i32, roll).max(0);
         let f = &mut self.members[ti];
+        let was_dead = !f.alive();
+        let old_hp = f.hp.max(0);
+        let old_sp = f.sp;
         if skill.affect_sp {
             f.sp = (f.sp + amt).min(f.max_sp);
+        }
+        let hp_gain = if skill.affect_hp {
+            amt
+        } else if was_dead {
+            // RPG_RT treats revival power as a percentage when HP is unchecked.
+            f.max_hp * amt / 100
         } else {
-            f.hp = (f.hp + amt).min(f.max_hp);
+            0
+        };
+        f.hp = (old_hp + hp_gain).min(f.max_hp);
+        if was_dead {
+            f.hp = f.hp.max(1);
         }
-        if amt > 0 {
+        let shown = (f.hp - old_hp).max(f.sp - old_sp);
+        if shown > 0 {
             let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
-            self.push_number(pos, amt.to_string(), NumberKind::Heal);
+            self.push_number(pos, shown.to_string(), NumberKind::Heal);
         }
-        let mut lines = vec![format!("{caster} varázsol: {target} +{amt}")];
+        let mut lines = vec![format!("{caster} varázsol: {target} +{shown}")];
         for &sid in &skill.affected_states {
             if logic::has_state(&self.members[ti].states, sid) {
                 logic::cure(&mut self.members[ti].states, sid);
@@ -250,6 +255,22 @@ impl Battle {
             }
         }
         lines
+    }
+
+    pub(in crate::battle::resolve) fn ally_skill_target(
+        &self,
+        target: usize,
+        skill: &SkillDef,
+    ) -> bool {
+        self.members
+            .get(target)
+            .is_some_and(|m| m.alive() || skill.affected_states.contains(&1))
+    }
+
+    fn ally_skill_targets(&self, skill: &SkillDef) -> Vec<usize> {
+        (0..self.members.len())
+            .filter(|&target| self.ally_skill_target(target, skill))
+            .collect()
     }
 
     /// Resolve enemy `ei`'s cast of `skill_id` at member `target`, queuing the
@@ -267,9 +288,6 @@ impl Battle {
     ) -> Option<String> {
         let skill = self.skills.iter().find(|s| s.id == skill_id).cloned()?;
         let name = self.enemies[ei].name.clone();
-        // Queue the cast's animation once (suppressed on the deferred replay, when
-        // `apply` already queued it before the hold); it draws no RNG, so the
-        // effect rolls below keep their order whichever path runs this.
         if !self.suppress_anim {
             let anchors = self.enemy_skill_anim_anchors(ei, &skill, target);
             self.push_anim(skill.animation_id, anchors);
@@ -292,9 +310,7 @@ impl Battle {
             return Some(format!("{name} varázsol: {name} +{amt}"));
         }
         let ti = self.retarget_member(target)?;
-        // Roll the skill's to-hit (EasyRPG `CalcSkillToHit`), certain against a
-        // member that cannot act. An enemy skill carries no crit stat in our model,
-        // so it never critical's (a documented simplification).
+        // Enemies carry no critical-hit rate in the converted model.
         let can_act = logic::worst_restriction(&self.members[ti].states, &self.states) != 1;
         let hit = logic::to_hit_vs(
             logic::effective_hit(skill.hit),
@@ -317,9 +333,7 @@ impl Battle {
             &self.members[ti].stats,
             true,
         );
-        // Members carry no A–E element ranks, so an enemy skill's element bites
-        // only through the target's equipment: one guarded element halves it
-        // (min 1). Only skills that actually carry an attribute can be resisted.
+        // Actor resistance ranks are not converted; equipment supplies resistance.
         let resisted = base > 0
             && skill
                 .attributes

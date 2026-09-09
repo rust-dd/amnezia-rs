@@ -48,9 +48,6 @@ impl Battle {
                 }
             }
             Step::HealAlly { pi, ti, skill_id } => {
-                if !self.members.get(ti).is_some_and(|m| m.alive()) {
-                    return;
-                }
                 if let Some(skill) = self.skills.iter().find(|s| s.id == skill_id).cloned() {
                     let lines = self.skill_heal_ally(pi, ti, &skill);
                     self.log.extend(lines);
@@ -84,8 +81,6 @@ impl Battle {
                 skill_id,
                 target,
             } => {
-                // Re-run the cast with the animation suppressed (it was queued when
-                // the action began); its effect, numbers, and RNG resolve now.
                 self.suppress_anim = true;
                 let line = self.cast_skill(pi, skill_id, target);
                 self.suppress_anim = false;
@@ -136,11 +131,7 @@ impl Battle {
                         return;
                     };
                     let outcome = self.plan_strike(pi, ti);
-                    // RM2000 plays the swing animation and waits for it before the
-                    // damage. When the strike animates, defer its impact behind the
-                    // animation hold so the number lands as the swing finishes; a
-                    // member with no attack animation has nothing to wait for and
-                    // applies it at once.
+                    // RPG_RT applies damage after the swing animation completes.
                     if self.members[pi].attack_animation != 0 {
                         let (dmg, crit, miss) = match outcome {
                             Strike::Miss => (0, false, true),
@@ -161,10 +152,7 @@ impl Battle {
                 }
             }
             (Source::Party(pi), Command::Skill { skill_id, target }) => {
-                // A skill with a battle animation waits for it before its effect
-                // lands (RM2000). Queue the animation up front, then defer the cast
-                // behind the hold so its numbers land as the cast finishes; an
-                // animation-less skill resolves at once.
+                // The animation must complete before the skill changes its targets.
                 let Some(skill) = self.skills.iter().find(|s| s.id == skill_id).cloned() else {
                     return;
                 };
@@ -221,8 +209,6 @@ impl Battle {
                 }
             }
             (Source::Enemy(ei), Command::Skill { skill_id, target }) => {
-                // As for a party cast: an animated enemy skill waits for its
-                // animation before the effect lands; queue it, then defer.
                 let Some(skill) = self.skills.iter().find(|s| s.id == skill_id).cloned() else {
                     return;
                 };
@@ -262,8 +248,6 @@ impl Battle {
                 let atk = self.enemies[ei].stats.attack as i32;
                 let name = self.enemies[ei].name.clone();
                 for ti in self.living_members() {
-                    // EasyRPG `CalcSelfDestructEffect`: max(0, atk - def/2) against
-                    // each member's own defence, then the var=4 spread.
                     let base = (atk - self.members[ti].stats.defense as i32 / 2).max(0);
                     self.hit_member(ti, base, 4);
                 }

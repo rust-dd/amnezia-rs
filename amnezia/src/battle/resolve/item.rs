@@ -1,15 +1,10 @@
-//! Item use in battle: a member consumes a medicine to restore HP/SP and cure
-//! statuses on an ally (or itself).
+//! Restorative battle items, including revival and party-wide medicine.
 
 use super::*;
 
 impl Battle {
-    /// Apply item `item_id`, used by member `pi`, to ally `target` (falling back to
-    /// the user when that member is gone): restore HP and SP by the item's flat
-    /// amount plus its percent-of-maximum (each clamped to the maximum) and cure
-    /// each of its `cure_states` from the recipient. The item was already consumed
-    /// from the inventory when the order was committed, so an unknown id or an item
-    /// with no restorative effect still logs a use line.
+    /// The item is reserved when the order is chosen; effects stay on the selected
+    /// recipient even if that actor is knocked out before the user's turn.
     pub(in crate::battle::resolve) fn apply_item(
         &mut self,
         pi: usize,
@@ -20,31 +15,44 @@ impl Battle {
         let Some(item) = self.items.iter().find(|i| i.id == item_id).cloned() else {
             return format!("{user} használ");
         };
-        let ti = if self.members.get(target).is_some_and(|m| m.alive()) {
-            target
+        let targets = if item.scope == 1 {
+            (0..self.members.len()).collect::<Vec<_>>()
+        } else if target < self.members.len() {
+            vec![target]
         } else {
-            pi
+            Vec::new()
         };
-        let (max_hp, max_sp) = (self.members[ti].max_hp, self.members[ti].max_sp);
-        let hp_gain = item.recover_hp as i32 + max_hp * item.recover_hp_rate as i32 / 100;
-        let sp_gain = item.recover_sp as i32 + max_sp * item.recover_sp_rate as i32 / 100;
-        if hp_gain > 0 {
-            self.members[ti].hp = (self.members[ti].hp + hp_gain).min(max_hp);
+        let mut lines = vec![format!("{user} használ: {}", item.name)];
+        for ti in targets {
+            lines.extend(self.restore_with_item(ti, &item));
         }
-        if sp_gain > 0 {
-            self.members[ti].sp = (self.members[ti].sp + sp_gain).min(max_sp);
+        lines.join("\n")
+    }
+
+    fn restore_with_item(&mut self, ti: usize, item: &amnezia_data::ItemDef) -> Vec<String> {
+        let member = &mut self.members[ti];
+        let was_dead = !member.alive();
+        let revives = item.cure_states.contains(&1);
+        let old_hp = member.hp.max(0);
+        let old_sp = member.sp;
+        if !was_dead || revives {
+            let gain = item.recover_hp as i32 + member.max_hp * item.recover_hp_rate as i32 / 100;
+            member.hp = (old_hp + gain).min(member.max_hp);
+            if was_dead {
+                member.hp = member.hp.max(1);
+            }
         }
-        let shown = hp_gain.max(sp_gain);
-        if shown > 0 {
-            let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
-            self.push_number(pos, shown.to_string(), NumberKind::Heal);
-        }
-        let mut cured: Vec<String> = Vec::new();
+        let sp_gain = item.recover_sp as i32 + member.max_sp * item.recover_sp_rate as i32 / 100;
+        member.sp = (old_sp + sp_gain).min(member.max_sp);
+        let hp_gain = (member.hp - old_hp).max(0);
+        let sp_gain = member.sp - old_sp;
+        let recipient = member.name.clone();
+        let mut lines = Vec::new();
         for &sid in &item.cure_states {
-            if logic::has_state(&self.members[ti].states, sid) {
-                logic::cure(&mut self.members[ti].states, sid);
+            if logic::has_state(&member.states, sid) || (sid == 1 && was_dead) {
+                logic::cure(&mut member.states, sid);
                 if let Some(state) = self.states.iter().find(|s| s.id == sid) {
-                    cured.push(state.name.clone());
+                    lines.push(format!("{recipient} gyógyul: {}", state.name));
                 }
             }
         }
@@ -54,11 +62,14 @@ impl Battle {
             (false, true) => format!(" (+{sp_gain} SP)"),
             (false, false) => String::new(),
         };
-        let recipient = self.members[ti].name.clone();
-        let mut lines = vec![format!("{user} használ: {}{gain}", item.name)];
-        for state_name in cured {
-            lines.push(format!("{recipient} gyógyul: {state_name}"));
+        if !gain.is_empty() {
+            lines.insert(0, format!("{recipient}{gain}"));
         }
-        lines.join("\n")
+        let shown = hp_gain.max(sp_gain);
+        if shown > 0 {
+            let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
+            self.push_number(pos, shown.to_string(), NumberKind::Heal);
+        }
+        lines
     }
 }
