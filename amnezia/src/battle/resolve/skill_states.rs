@@ -33,23 +33,15 @@ impl Battle {
                 if !present {
                     continue;
                 }
-                logic::cure(self.battler_states_mut(target), id);
+                self.cure_battler_state(target, id);
                 effects.revived |= id == 1;
             } else {
                 let chance = self.battler_state_probability(target, id);
                 if !self.skill_roll(chance as i32) {
                     continue;
                 }
-                logic::inflict(self.battler_states_mut(target), id);
-                if id == 1 {
-                    self.clear_battler_bonuses(target);
-                    match target {
-                        Source::Party(i) => self.members[i].hp = 0,
-                        Source::Enemy(i) => {
-                            self.enemies[i].hp = 0;
-                            self.start_foe_death(i, false);
-                        }
-                    }
+                if !self.inflict_battler_state(target, id) {
+                    continue;
                 }
             }
             effects.success = true;

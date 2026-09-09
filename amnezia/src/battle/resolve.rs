@@ -13,6 +13,7 @@
 //! rewards, and flee).
 
 mod battler;
+mod confused_attack;
 mod death;
 mod end;
 mod enemy;
@@ -27,6 +28,7 @@ mod skill_pools;
 mod skill_states;
 mod skill_stats;
 mod state;
+mod state_change;
 mod step;
 mod strike;
 

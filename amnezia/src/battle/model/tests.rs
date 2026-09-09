@@ -63,23 +63,29 @@ fn undo_choice_on_the_first_chooser_reopens_the_party_option_window() {
 }
 
 #[test]
-fn new_round_clears_orders_and_defence() {
+fn defence_lasts_until_the_next_command_is_selected() {
     let mut battle = build_1v2();
     battle.members[0].command = Some(Command::Defend);
     battle.members[0].defending = true;
     battle.new_round();
     assert!(battle.members[0].command.is_none());
-    assert!(!battle.members[0].defending);
+    assert!(battle.members[0].defending);
     assert!(battle.phase == Phase::PartyCommand);
+    battle.begin_actor_commands();
+    battle.commit(Command::Defend);
+    assert!(!battle.members[0].defending);
 }
 
 #[test]
-fn new_round_clears_every_foe_defence() {
+fn enemy_defence_lasts_until_the_next_ai_selection() {
     let mut battle = build_1v2();
     for e in &mut battle.enemies {
         e.defending = true;
     }
     battle.new_round();
+    assert!(battle.enemies.iter().all(|e| e.defending));
+    battle.begin_actor_commands();
+    battle.commit(Command::Nothing);
     assert!(battle.enemies.iter().all(|e| !e.defending));
 }
 
@@ -251,14 +257,12 @@ fn a_cant_act_member_is_auto_skipped_in_the_command_flow() {
 }
 
 #[test]
-fn new_round_wears_off_a_timed_state_but_never_the_death_state() {
+fn new_round_does_not_advance_state_recovery() {
     let mut battle = build_1v2();
-    // Death (id 1) is exempt; state 2 lifts at once (hold 0, 100% release).
     battle.states = vec![state_def(1, 0, 100), state_def(2, 0, 100)];
     battle.members[0].states = vec![(1, 0), (2, 0)];
     battle.new_round();
-    assert!(logic::has_state(&battle.members[0].states, 1)); // KO status endures
-    assert!(!logic::has_state(&battle.members[0].states, 2)); // timed state worn off
+    assert_eq!(battle.members[0].states, [(1, 0), (2, 0)]);
 }
 
 /// The turn order for `seed`: the source of each queued action, in order, for a

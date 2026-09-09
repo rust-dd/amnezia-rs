@@ -34,7 +34,7 @@ pub enum Command {
 }
 
 /// Which side (and index) an action originates from.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Source {
     Party(usize),
     Enemy(usize),
@@ -55,6 +55,11 @@ pub struct Action {
 /// own `SetWait`, without the full substate machine.
 #[derive(Clone, Copy)]
 pub(in crate::battle) enum Step {
+    AllyStrikeImpact {
+        source: Source,
+        target: Source,
+        damage: Option<i32>,
+    },
     /// Land caster `pi`'s multi-target skill on one more enemy `ti`.
     HitEnemy { pi: usize, ti: usize, skill_id: u32 },
     /// Apply caster `pi`'s multi-target heal to one more ally `ti`.

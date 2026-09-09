@@ -16,6 +16,7 @@ mod enemy;
 mod escape;
 mod hit;
 mod state;
+mod state_effects;
 mod stats;
 
 #[cfg(test)]
@@ -35,7 +36,10 @@ pub(crate) use escape::{
 pub(crate) use hit::{effective_hit, skill_to_hit, to_hit_vs};
 pub(crate) use state::{
     cure, has_state, inflict, release_on_damage, state_hp_delta, state_infliction_chance,
-    tick_recovery, worst_restriction,
+    state_sp_delta, tick_recovery, worst_restriction,
+};
+pub(crate) use state_effects::{
+    inflict_with_priority, state_hit_ratio, state_stats, states_allow_skill,
 };
 #[cfg(test)]
 pub(crate) use stats::equipment_bonus;

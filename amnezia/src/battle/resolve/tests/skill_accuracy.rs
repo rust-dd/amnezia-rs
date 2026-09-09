@@ -29,14 +29,14 @@ fn physical_skill_accuracy_depends_on_the_failure_mode_not_damage_weights() {
     let mut skill = damage_skill(1, 30, vec![], vec![]);
     skill.hit = 80;
     skill.physical_rate = 10;
-    assert_eq!(logic::skill_to_hit(&skill, 10, 40, true), 80);
-    assert_eq!(logic::skill_to_hit(&skill, 10, 40, false), 80);
+    assert_eq!(logic::skill_to_hit(&skill, 10, 40, true, 100), 80);
+    assert_eq!(logic::skill_to_hit(&skill, 10, 40, false, 100), 80);
     skill.failure_message = 3;
     skill.physical_rate = 0;
-    assert_eq!(logic::skill_to_hit(&skill, 10, 40, true), 50);
-    assert_eq!(logic::skill_to_hit(&skill, 10, 40, false), 100);
+    assert_eq!(logic::skill_to_hit(&skill, 10, 40, true, 100), 50);
+    assert_eq!(logic::skill_to_hit(&skill, 10, 40, false, 100), 100);
     skill.scope = 3;
-    assert_eq!(logic::skill_to_hit(&skill, 10, 40, true), 80);
+    assert_eq!(logic::skill_to_hit(&skill, 10, 40, true, 100), 80);
 }
 
 #[test]

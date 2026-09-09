@@ -133,7 +133,7 @@ fn death_clears_stat_modifiers_and_a_weapon_kill_never_leaves_negative_hp() {
     assert_eq!(battle.enemies[0].hp, 0);
     assert_eq!(battle.enemies[0].stat_modifiers, [0; 4]);
     battle.members[0].stat_modifiers = [5; 4];
-    battle.hit_member(0, 9999, 0);
+    battle.hit_member(0, 9999, 0, 100);
     assert_eq!(battle.members[0].stat_modifiers, [0; 4]);
     battle.members[0].hp = 1;
     assert_eq!(

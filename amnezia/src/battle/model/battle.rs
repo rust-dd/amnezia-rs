@@ -192,6 +192,7 @@ impl Battle {
     pub fn commit(&mut self, command: Command) {
         if let Some(f) = self.members.get_mut(self.turn) {
             f.command = Some(command);
+            f.defending = false;
         }
         self.menu = MenuLevel::Command;
         self.cursor = 0;
@@ -348,22 +349,13 @@ impl Battle {
         true
     }
 
-    /// Open a fresh command round: bump the round, clear each order and defence,
-    /// wear off timed states, then hand the round to the first member who may
-    /// freely choose (auto-ordering and skipping any restricted members).
+    /// Reopen party commands; state recovery waits for each battler's action.
     pub fn new_round(&mut self) {
         self.action_source = None;
         self.round += 1;
         for f in &mut self.members {
             f.command = None;
-            f.defending = false;
         }
-        // A foe's Defend lasts until its next turn; clearing it here (one round
-        // later) is the RM2000 approximation, mirroring the members above.
-        for e in &mut self.enemies {
-            e.defending = false;
-        }
-        self.run_recovery();
         self.queue.clear();
         self.queue_at = 0;
         self.steps.clear();

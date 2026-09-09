@@ -68,7 +68,7 @@ fn defend_halves_the_hit_a_member_takes() {
     battle.members[0].defending = true;
     let full = battle.members[0].hp;
     // base 8 with var=4 spreads to [7,10], halved by defence to [3,5].
-    battle.hit_member(0, 8, 4);
+    battle.hit_member(0, 8, 4, 100);
     let taken = full - battle.members[0].hp;
     assert!((3..=5).contains(&taken));
 }

@@ -107,10 +107,6 @@ pub fn skill_choices(data: &GameData, known: &[u32], _sp: i32) -> Vec<(u32, u32,
         .collect()
 }
 
-pub(super) fn skill_enabled(skill: &amnezia_data::SkillDef, sp: i32) -> bool {
-    skill.skill_type == 0 && skill.sp_cost as i32 <= sp
-}
-
 pub(super) fn item_enabled(item: &amnezia_data::ItemDef) -> bool {
     item.item_type == MEDICINE && !item.only_field
 }
@@ -167,11 +163,10 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
             battle.pending_se.push(BattleSe::Buzzer);
             return;
         };
-        if !data
-            .skills
-            .iter()
-            .any(|skill| skill.id == skill_id && skill_enabled(skill, sp))
-        {
+        if !data.skills.iter().any(|skill| {
+            skill.id == skill_id
+                && battle.skill_usable_by(super::model::Source::Party(battle.turn), skill)
+        }) {
             battle.pending_se.push(BattleSe::Buzzer);
             return;
         }

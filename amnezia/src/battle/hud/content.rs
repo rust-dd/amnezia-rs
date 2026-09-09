@@ -93,7 +93,8 @@ fn commands(battle: &Battle, data: &GameData, inventory: &Inventory, terms: &Ter
                 let skill = data.skills.iter().find(|s| s.id == id).unwrap();
                 Row {
                     text: format!("{:<20}-{:>3}", clip(&i18n::tr(&skill.name), 20), cost),
-                    enabled: crate::battle::input::skill_enabled(skill, actor.sp),
+                    enabled: battle
+                        .skill_usable_by(crate::battle::model::Source::Party(battle.turn), skill),
                 }
             })
             .collect(),

@@ -26,13 +26,19 @@ impl Battle {
         let Some(&action) = self.queue.get(self.queue_at) else {
             return false;
         };
-        self.queue_at += 1;
         if self.source_alive(action.source) {
-            // RM2000 applies an HP-changing state (poison drain, regen) at the
-            // start of the battler's turn, before it acts; a drain that fells the
-            // battler cancels its action through the HP-based death path.
+            self.recover_before_action(action.source);
             self.tick_state_hp(action.source);
+            let action = self.queue[self.queue_at];
+            self.queue_at += 1;
             if self.source_alive(action.source) {
+                let restriction = self.state_restriction(action.source);
+                if restriction == 1
+                    || (restriction != 0
+                        && !matches!(action.kind, Command::Attack { .. } | Command::Nothing))
+                {
+                    return true;
+                }
                 if let Command::Item { item_id, .. } = action.kind
                     && !consume(item_id)
                 {
@@ -51,6 +57,8 @@ impl Battle {
                 self.apply(action);
                 self.finish_action();
             }
+        } else {
+            self.queue_at += 1;
         }
         true
     }
@@ -84,6 +92,11 @@ impl Battle {
     /// target and a felled target starts its own death-hold before the next beat.
     fn run_step(&mut self, step: Step) {
         match step {
+            Step::AllyStrikeImpact {
+                source,
+                target,
+                damage,
+            } => self.land_ally_strike(source, target, damage),
             Step::EnemySkillTarget {
                 ei,
                 target,
@@ -178,15 +191,8 @@ impl Battle {
                     let Some(ti) = self.retarget_ally(pi, target) else {
                         return;
                     };
-                    let base = logic::physical_damage(
-                        self.battler_stats(Source::Party(pi)).attack,
-                        self.battler_stats(Source::Party(ti)).defense,
-                    );
-                    let dmg = self.hit_member(ti, base, 4);
-                    format!(
-                        "{} zavartan lesújt: {} -{}",
-                        self.members[pi].name, self.members[ti].name, dmg
-                    )
+                    self.confused_attack(Source::Party(pi), Source::Party(ti));
+                    return;
                 } else {
                     let Some(ti) = self.retarget_enemy(target) else {
                         return;
@@ -251,15 +257,8 @@ impl Battle {
                     let Some(ti) = self.retarget_other_enemy(ei, target) else {
                         return;
                     };
-                    let base = logic::physical_damage(
-                        self.battler_stats(Source::Enemy(ei)).attack,
-                        self.battler_stats(Source::Enemy(ti)).defense,
-                    );
-                    let dmg = self.hit_enemy(ti, base, 4);
-                    format!(
-                        "{} zavartan lesújt: {} -{}",
-                        self.enemies[ei].name, self.enemies[ti].name, dmg
-                    )
+                    self.confused_attack(Source::Enemy(ei), Source::Enemy(ti));
+                    return;
                 } else {
                     let Some(ti) = self.retarget_member(target) else {
                         return;
@@ -320,7 +319,7 @@ impl Battle {
                 for ti in self.living_members() {
                     let base =
                         (atk - self.battler_stats(Source::Party(ti)).defense as i32 / 2).max(0);
-                    self.hit_member(ti, base, 4);
+                    self.hit_member(ti, base, 4, 100);
                 }
                 self.enemies[ei].hp = 0;
                 self.start_foe_death(ei, true);

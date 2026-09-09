@@ -342,14 +342,15 @@ fn inflict_is_idempotent_and_cure_removes() {
 }
 
 #[test]
-fn worst_restriction_takes_the_max_across_active_states() {
+fn worst_restriction_prioritizes_cannot_act_then_enemy_then_ally() {
     let defs = vec![
         state(1, 1, 0, 0, 0),
         state(2, 3, 0, 0, 0),
         state(3, 2, 0, 0, 0),
     ];
-    assert_eq!(worst_restriction(&[(1, 0), (3, 0)], &defs), 2);
-    assert_eq!(worst_restriction(&[(1, 0), (2, 0), (3, 0)], &defs), 3);
+    assert_eq!(worst_restriction(&[(1, 0), (3, 0)], &defs), 1);
+    assert_eq!(worst_restriction(&[(1, 0), (2, 0), (3, 0)], &defs), 1);
+    assert_eq!(worst_restriction(&[(2, 0), (3, 0)], &defs), 2);
     assert_eq!(worst_restriction(&[], &defs), 0);
     assert_eq!(worst_restriction(&[(99, 0)], &defs), 0);
 }
@@ -365,6 +366,8 @@ fn tick_recovery_wears_off_after_hold_and_spares_the_death_state() {
     let mut s = vec![(5, 0)];
     assert!(tick_recovery(&mut s, &held, || 0).is_empty());
     assert_eq!(s, vec![(5, 1)]);
+    assert!(tick_recovery(&mut s, &held, || 0).is_empty());
+    assert_eq!(s, vec![(5, 2)]);
     assert_eq!(tick_recovery(&mut s, &held, || 0), vec![5]);
     assert!(s.is_empty());
 }
@@ -377,10 +380,10 @@ fn release_on_damage_lifts_by_chance_and_spares_the_death_state() {
         state(5, 0, 0, 0, 0),
     ];
     let mut states = vec![(1, 0), (4, 0), (5, 0)];
-    assert_eq!(release_on_damage(&mut states, &defs, || 0), vec![4]);
+    assert_eq!(release_on_damage(&mut states, &defs, 100, || 0), vec![4]);
     assert_eq!(states, vec![(1, 0), (5, 0)]);
     let mut s = vec![(4, 0)];
-    assert!(release_on_damage(&mut s, &defs, || 100).is_empty());
+    assert!(release_on_damage(&mut s, &defs, 100, || 100).is_empty());
     assert_eq!(s, vec![(4, 0)]);
 }
 
@@ -414,12 +417,12 @@ fn state_hp(id: u32, hp_change_type: u32, hp_change_max: u32, hp_change_val: u32
 }
 
 #[test]
-fn state_hp_delta_signs_by_type_and_floors_a_configured_change_at_one() {
+fn state_hp_delta_signs_by_type_and_truncates_small_percentages() {
     assert_eq!(state_hp_delta(&state_hp(2, 0, 5, 1), 100), -6);
     assert_eq!(state_hp_delta(&state_hp(2, 1, 5, 1), 100), 6);
     assert_eq!(state_hp_delta(&state_hp(2, 2, 5, 1), 100), 0);
     assert_eq!(state_hp_delta(&state_hp(2, 0, 0, 0), 100), 0);
-    assert_eq!(state_hp_delta(&state_hp(2, 0, 1, 0), 50), -1);
+    assert_eq!(state_hp_delta(&state_hp(2, 0, 1, 0), 50), 0);
 }
 
 fn action(

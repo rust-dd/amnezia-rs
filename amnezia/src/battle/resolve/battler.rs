@@ -40,12 +40,16 @@ impl Battle {
         let values = [stats.attack, stats.defense, stats.spirit, stats.agility];
         let [attack, defense, spirit, agility] =
             std::array::from_fn(|i| (values[i] as i32 + modifiers[i]).clamp(1, 9999) as u32);
-        logic::Stats {
-            attack,
-            defense,
-            spirit,
-            agility,
-        }
+        logic::state_stats(
+            logic::Stats {
+                attack,
+                defense,
+                spirit,
+                agility,
+            },
+            self.battler_states(target),
+            &self.states,
+        )
     }
 
     pub(in crate::battle::resolve) fn battler_base_stats(&self, target: Source) -> logic::Stats {
@@ -84,7 +88,7 @@ impl Battle {
         }
     }
 
-    pub(in crate::battle::resolve) fn battler_states(&self, target: Source) -> &[(u32, u32)] {
+    pub(in crate::battle) fn battler_states(&self, target: Source) -> &[(u32, u32)] {
         match target {
             Source::Party(i) => &self.members[i].states,
             Source::Enemy(i) => &self.enemies[i].states,
@@ -153,6 +157,7 @@ impl Battle {
             self.battler_stats(source).agility,
             self.battler_stats(target).agility,
             can_act,
+            logic::state_hit_ratio(self.battler_states(source), &self.states),
         )
     }
 }

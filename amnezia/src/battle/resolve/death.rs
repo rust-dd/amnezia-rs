@@ -10,7 +10,7 @@ impl Battle {
     /// are left alone. `resolve_tick` then holds until it elapses.
     pub(in crate::battle) fn start_foe_death(&mut self, ti: usize, explode: bool) {
         if self.enemies[ti].hp <= 0 {
-            self.clear_battler_bonuses(Source::Enemy(ti));
+            self.mark_knocked_out(Source::Enemy(ti));
         }
         let foe = &mut self.enemies[ti];
         if foe.hp <= 0 && !foe.fled && foe.dying.is_none() {

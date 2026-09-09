@@ -51,6 +51,7 @@ fn a_skill_can_miss_its_to_hit_roll_and_deal_nothing() {
         battle.members[0].stats.agility,
         battle.enemies[0].stats.agility,
         true,
+        100,
     );
     loop {
         let mut probe = battle.rng;

@@ -18,8 +18,9 @@ impl Battle {
                 self.turn = i;
                 return;
             }
-            let forced = self.forced_party_command(i, restriction);
+            let forced = self.forced_party_command(restriction);
             self.members[i].command = Some(forced);
+            self.members[i].defending = false;
         }
         self.begin_resolve();
     }
@@ -41,26 +42,19 @@ impl Battle {
                     None => Command::Nothing,
                 }
             } else {
-                self.forced_party_command(i, restriction)
+                self.forced_party_command(restriction)
             };
             self.members[i].command = Some(command);
+            self.members[i].defending = false;
         }
         self.begin_resolve();
     }
 
-    /// The attack a restricted member `i` is forced into: a random living enemy
-    /// while berserk (2), a random living ally while confused (3), or nothing at all
-    /// (restriction 1, or no legal target). The chosen side is re-checked and the
-    /// blow re-aimed at resolution by [`Battle::apply`].
-    fn forced_party_command(&mut self, i: usize, restriction: u32) -> Command {
-        let alive: Vec<bool> = match restriction {
-            2 => self.enemies.iter().map(|e| e.alive()).collect(),
-            3 => self
-                .members
-                .iter()
-                .enumerate()
-                .map(|(j, m)| j != i && m.alive())
-                .collect(),
+    /// Berserk targets enemies; confusion can hit any ally, including oneself.
+    fn forced_party_command(&mut self, restriction: u32) -> Command {
+        let alive = match restriction {
+            2 => self.enemies.iter().map(|e| e.alive()).collect::<Vec<_>>(),
+            3 => self.members.iter().map(|m| m.alive()).collect::<Vec<_>>(),
             _ => return Command::Nothing,
         };
         match logic::select_target(&alive, rng_next(&mut self.rng) as usize) {
@@ -83,46 +77,34 @@ impl Battle {
         if self.members.get(target).is_some_and(|m| m.alive()) {
             return Some(target);
         }
-        let alive: Vec<bool> = self.members.iter().map(|m| m.alive()).collect();
+        let alive = self.members.iter().map(|m| m.alive()).collect::<Vec<_>>();
         let roll = rng_next(&mut self.rng) as usize;
         logic::select_target(&alive, roll)
     }
 
-    /// Keep confused member `pi`'s stored ally `target` if it still lives, else pick
-    /// another living ally. `None` when `pi` has no living ally to turn on.
+    /// Confusion may target any living ally, including the attacker.
     pub(in crate::battle::resolve) fn retarget_ally(
         &mut self,
-        pi: usize,
+        _pi: usize,
         target: usize,
     ) -> Option<usize> {
-        if target != pi && self.members.get(target).is_some_and(|m| m.alive()) {
+        if self.members.get(target).is_some_and(|m| m.alive()) {
             return Some(target);
         }
-        let alive: Vec<bool> = self
-            .members
-            .iter()
-            .enumerate()
-            .map(|(j, m)| j != pi && m.alive())
-            .collect();
+        let alive = self.members.iter().map(|m| m.alive()).collect::<Vec<_>>();
         logic::select_target(&alive, rng_next(&mut self.rng) as usize)
     }
 
-    /// Keep confused foe `ei`'s stored fellow `target` if it still lives, else pick
-    /// another living foe. `None` when `ei` has no living fellow to turn on.
+    /// Enemy confusion follows the same self-inclusive target rule.
     pub(in crate::battle::resolve) fn retarget_other_enemy(
         &mut self,
-        ei: usize,
+        _ei: usize,
         target: usize,
     ) -> Option<usize> {
-        if target != ei && self.enemies.get(target).is_some_and(|e| e.alive()) {
+        if self.enemies.get(target).is_some_and(|e| e.alive()) {
             return Some(target);
         }
-        let alive: Vec<bool> = self
-            .enemies
-            .iter()
-            .enumerate()
-            .map(|(j, e)| j != ei && e.alive())
-            .collect();
+        let alive = self.enemies.iter().map(|e| e.alive()).collect::<Vec<_>>();
         logic::select_target(&alive, rng_next(&mut self.rng) as usize)
     }
 }

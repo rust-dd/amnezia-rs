@@ -7,7 +7,10 @@ impl Battle {
             Source::Enemy(i) => self.enemies.get(i).map(|f| (f.alive(), f.sp)),
         }
         .unwrap_or_default();
-        alive && skill.skill_type == 0 && i64::from(sp) >= i64::from(skill.sp_cost)
+        alive
+            && skill.skill_type == 0
+            && i64::from(sp) >= i64::from(skill.sp_cost)
+            && logic::states_allow_skill(self.battler_states(source), &self.states, skill)
     }
 
     pub(in crate::battle::resolve) fn pay_skill(

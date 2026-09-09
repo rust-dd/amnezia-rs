@@ -26,16 +26,15 @@ pub(super) fn change_hp(params: &[i32], battle: &mut Battle, world: &mut EventWo
     };
     let delta = operate_value(*operation, *operand_type, *operand, &world.variables);
     for id in actor_targets(*mode, *actor, &world.variables, &world.party) {
-        if let Some(fighter) = battle.members.iter_mut().find(|f| f.actor_id == id) {
+        if let Some(index) = battle.members.iter().position(|f| f.actor_id == id) {
+            let fighter = &mut battle.members[index];
             if fighter.alive() {
                 fighter.hp = fighter
                     .hp
                     .saturating_add(delta)
                     .clamp(i32::from(*lethal == 0), fighter.max_hp);
                 if !fighter.alive() {
-                    fighter.states.clear();
-                    fighter.stat_modifiers = [0; 4];
-                    fighter.defending = false;
+                    battle.mark_knocked_out(crate::battle::model::Source::Party(index));
                 }
             }
         } else if let Some((hp, max)) = health(id, battle, world)

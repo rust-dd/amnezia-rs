@@ -28,14 +28,13 @@ fn a_type_2_hp_change_state_drains_nothing() {
 }
 
 #[test]
-fn poison_can_reduce_a_battler_to_zero_and_kill_it() {
+fn poison_leaves_at_least_one_hp() {
     let mut battle = build_1v2();
-    // A 100%-of-max drain empties the fighter's HP outright.
     battle.states = vec![hp_change_state(2, 0, 100, 0)];
     battle.members[0].states = vec![(2, 0)];
     battle.tick_state_hp(Source::Party(0));
-    assert_eq!(battle.members[0].hp, 0);
-    assert!(!battle.members[0].alive());
+    assert_eq!(battle.members[0].hp, 1);
+    assert!(battle.members[0].alive());
 }
 
 #[test]
@@ -66,7 +65,7 @@ fn being_hit_wears_off_a_damage_release_state_but_never_death() {
     // id 1 is the death state (exempt); id 2 shakes off on any hit.
     battle.states = vec![poison_state(1), damage_release_state(2)];
     battle.members[0].states = vec![(1, 0), (2, 0)];
-    battle.hit_member(0, 8, 4);
+    battle.hit_member(0, 8, 4, 100);
     assert!(logic::has_state(&battle.members[0].states, 1)); // KO exempt
     assert!(!logic::has_state(&battle.members[0].states, 2)); // lifted by the blow
 }
@@ -97,16 +96,21 @@ fn a_confused_member_turns_on_a_living_ally() {
     );
     battle.states = vec![confusion_state(9)];
     battle.members[0].states = vec![(9, 0)]; // member 0 is confused
-    let ally_hp = battle.members[1].hp;
+    battle.members[0].weapon_hit = 100;
+    battle.enemies[0].actions.clear();
     // The command flow auto-orders the confused member to strike an ally.
     battle.skip_restricted_choosers();
     assert!(matches!(
         battle.members[0].command,
         Some(Command::Attack { .. })
     ));
+    let Some(Command::Attack { target }) = battle.members[0].command else {
+        unreachable!()
+    };
+    let ally_hp = battle.members[target].hp;
     battle.commit(Command::Defend); // member 1 (free) finishes the round
     while battle.resolve_next() {}
-    assert!(battle.members[1].hp < ally_hp);
+    assert!(battle.members[target].hp < ally_hp);
 }
 
 #[test]

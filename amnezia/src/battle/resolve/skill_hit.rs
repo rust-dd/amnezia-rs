@@ -15,9 +15,14 @@ impl Battle {
         let mut success = false;
         if skill.affect_hp && self.skill_roll(hit) {
             let old_hp = self.battler_hp(target).max(0);
+            let release_rate = if skill.absorb {
+                0
+            } else {
+                skill.physical_rate * 10
+            };
             let dealt = match target {
-                Source::Party(i) => self.hit_member(i, effect, 0),
-                Source::Enemy(i) => self.hit_enemy(i, effect, 0),
+                Source::Party(i) => self.hit_member(i, effect, 0, release_rate),
+                Source::Enemy(i) => self.hit_enemy(i, effect, 0, release_rate),
             };
             if skill.absorb && dealt > 0 {
                 let absorbed = self.restore_skill_hp(source, dealt.min(old_hp));

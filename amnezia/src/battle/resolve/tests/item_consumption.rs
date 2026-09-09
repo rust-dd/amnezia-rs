@@ -52,7 +52,7 @@ fn a_fallen_user_does_not_consume_the_queued_item() {
 }
 
 #[test]
-fn poison_that_fells_the_user_cancels_item_consumption() {
+fn poison_leaves_the_user_alive_to_consume_the_queued_item() {
     let mut battle = build_party2();
     battle.items = vec![medicine(50, 20, 0, vec![])];
     battle.states = vec![hp_change_state(2, 0, 100, 0)];
@@ -62,9 +62,9 @@ fn poison_that_fells_the_user_cancels_item_consumption() {
     let mut inventory = Inventory::default();
     inventory.add_item(50, 1);
     use_item(&mut battle, &mut inventory);
-    assert_eq!(battle.members[0].hp, 0);
-    assert_eq!(inventory.count(50), 1);
-    assert_eq!(battle.members[1].hp, 1);
+    assert_eq!(battle.members[0].hp, 1);
+    assert_eq!(inventory.count(50), 0);
+    assert_eq!(battle.members[1].hp, 21);
 }
 
 #[test]

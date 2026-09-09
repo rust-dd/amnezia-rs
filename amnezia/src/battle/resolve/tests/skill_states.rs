@@ -120,7 +120,7 @@ fn a_lethal_hp_effect_does_not_also_drain_sp_or_apply_states() {
     battle.skill_hit_enemy(0, 0, &skill);
     assert_eq!(battle.enemies[0].hp, 0);
     assert_eq!(battle.enemies[0].sp, sp);
-    assert!(battle.enemies[0].states.is_empty());
+    assert_eq!(battle.enemies[0].states, [(1, 0)]);
 }
 
 #[test]

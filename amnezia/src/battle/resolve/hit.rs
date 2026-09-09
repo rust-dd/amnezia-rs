@@ -66,7 +66,7 @@ impl Battle {
     /// no death-out).
     pub(in crate::battle::resolve) fn after_member_hit(&mut self, ti: usize, dmg: i32) {
         if self.members[ti].hp <= 0 {
-            self.clear_battler_bonuses(Source::Party(ti));
+            self.mark_knocked_out(Source::Party(ti));
         }
         let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
         self.pending_se.push(BattleSe::ActorDamaged);
@@ -78,14 +78,20 @@ impl Battle {
     /// blow, the skill's variance for a cast), one draw per hit, then the plain
     /// defending-foe halving (no floor, like a member Defend). Returns the damage
     /// dealt.
-    pub(in crate::battle::resolve) fn hit_enemy(&mut self, ti: usize, base: i32, var: i32) -> i32 {
+    pub(in crate::battle::resolve) fn hit_enemy(
+        &mut self,
+        ti: usize,
+        base: i32,
+        var: i32,
+        physical_rate: u32,
+    ) -> i32 {
         let roll = rng_next(&mut self.rng);
         let mut dmg = logic::variance_adjust(base, var, roll).max(0);
         if self.enemies[ti].defending {
             dmg = logic::defended(dmg);
         }
         self.enemies[ti].hp = (self.enemies[ti].hp - dmg).max(0);
-        self.release_states_on_enemy(ti);
+        self.release_states_from_damage(Source::Enemy(ti), physical_rate);
         self.after_foe_hit(ti, dmg);
         dmg
     }
@@ -93,14 +99,20 @@ impl Battle {
     /// Apply `base` damage to member `ti` with `var` variance (4 for a physical
     /// blow, the skill's variance for a cast), one draw per hit, then the member's
     /// own defend halving. Returns the damage dealt.
-    pub(in crate::battle::resolve) fn hit_member(&mut self, ti: usize, base: i32, var: i32) -> i32 {
+    pub(in crate::battle::resolve) fn hit_member(
+        &mut self,
+        ti: usize,
+        base: i32,
+        var: i32,
+        physical_rate: u32,
+    ) -> i32 {
         let roll = rng_next(&mut self.rng);
         let mut dmg = logic::variance_adjust(base, var, roll).max(0);
         if self.members[ti].defending {
             dmg = logic::defended(dmg);
         }
         self.members[ti].hp = (self.members[ti].hp - dmg).max(0);
-        self.release_states_on_member(ti);
+        self.release_states_from_damage(Source::Party(ti), physical_rate);
         self.after_member_hit(ti, dmg);
         dmg
     }

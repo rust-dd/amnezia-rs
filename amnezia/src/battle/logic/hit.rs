@@ -16,9 +16,15 @@ pub fn skill_to_hit(
     source_agi: u32,
     target_agi: u32,
     target_can_act: bool,
+    state_hit_ratio: u32,
 ) -> i32 {
     if skill.failure_message == 3 && skill.scope < 2 {
-        to_hit_vs(skill.hit, source_agi, target_agi, target_can_act)
+        to_hit_vs(
+            skill.hit * state_hit_ratio / 100,
+            source_agi,
+            target_agi,
+            target_can_act,
+        )
     } else {
         skill.hit as i32
     }

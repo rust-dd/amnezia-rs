@@ -24,7 +24,9 @@ impl Battle {
         // (EasyRPG `CalcNormalAttackToHit` returns 100 vs a do-nothing target).
         let can_act = logic::worst_restriction(&self.enemies[ti].states, &self.states) != 1;
         let hit = logic::to_hit_vs(
-            self.members[pi].weapon_hit,
+            self.members[pi].weapon_hit
+                * logic::state_hit_ratio(&self.members[pi].states, &self.states)
+                / 100,
             self.battler_stats(Source::Party(pi)).agility,
             self.battler_stats(Source::Enemy(ti)).agility,
             can_act,
@@ -63,7 +65,7 @@ impl Battle {
     /// death-out (see [`Battle::after_foe_hit`]).
     pub(in crate::battle::resolve) fn land_strike(&mut self, ti: usize, dmg: i32) {
         self.enemies[ti].hp = (self.enemies[ti].hp - dmg).max(0);
-        self.release_states_on_enemy(ti);
+        self.release_states_from_damage(Source::Enemy(ti), 100);
         self.after_foe_hit(ti, dmg);
     }
 
@@ -136,7 +138,9 @@ impl Battle {
         // `CalcNormalAttackToHit` returns 100 vs a do-nothing target).
         let can_act = logic::worst_restriction(&self.members[ti].states, &self.states) != 1;
         let hit = logic::to_hit_vs(
-            logic::effective_hit(None),
+            logic::effective_hit(None)
+                * logic::state_hit_ratio(&self.enemies[ei].states, &self.states)
+                / 100,
             self.battler_stats(Source::Enemy(ei)).agility,
             self.battler_stats(Source::Party(ti)).agility,
             can_act,
@@ -154,6 +158,6 @@ impl Battle {
         if charged {
             base *= 2;
         }
-        Some(self.hit_member(ti, base, 4))
+        Some(self.hit_member(ti, base, 4, 100))
     }
 }

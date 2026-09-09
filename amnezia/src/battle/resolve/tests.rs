@@ -3,6 +3,7 @@ use crate::battle::model::testkit::{build_1v2, build_party2};
 
 mod attributes;
 mod criticals;
+mod state_behavior;
 
 fn fire_attr() -> amnezia_data::AttributeDef {
     amnezia_data::AttributeDef {

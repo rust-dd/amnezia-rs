@@ -1,6 +1,27 @@
 use super::*;
 
 #[test]
+fn a_silenced_skill_stays_listed_but_cannot_be_confirmed() {
+    let mut battle = build_party2();
+    battle.states = crate::assets::load_ron(&format!("{}/states.ron", crate::assets::asset_root()));
+    battle.members[0].states = vec![(4, 0)];
+    battle.members[0].known_skills = vec![1];
+    let skill = skill_def(1, 20, 0);
+    let data = GameData {
+        actors: vec![],
+        items: vec![],
+        skills: vec![skill.clone()],
+    };
+    battle.skills = vec![skill];
+    battle.menu = MenuLevel::Skill;
+    assert_eq!(skill_choices(&data, &[1], battle.members[0].sp).len(), 1);
+    skill_menu(&press_enter(), &data, &mut battle);
+    assert!(battle.menu == MenuLevel::Skill);
+    assert!(matches!(battle.pending_se.last(), Some(BattleSe::Buzzer)));
+    assert!(battle.pending_skill.is_none());
+}
+
+#[test]
 fn cancelling_a_committed_item_order_leaves_inventory_unchanged() {
     let mut battle = build_party2();
     battle.begin_actor_commands();

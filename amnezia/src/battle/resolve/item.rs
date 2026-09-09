@@ -30,6 +30,7 @@ impl Battle {
     }
 
     fn restore_with_item(&mut self, ti: usize, item: &amnezia_data::ItemDef) -> Vec<String> {
+        let old_restriction = self.state_restriction(Source::Party(ti));
         let member = &mut self.members[ti];
         let was_dead = !member.alive();
         if item.ko_only && !was_dead {
@@ -69,6 +70,7 @@ impl Battle {
             lines.insert(0, format!("{recipient}{gain}"));
         }
         let shown = hp_gain.max(sp_gain);
+        self.states_changed(Source::Party(ti), old_restriction, false);
         if shown > 0 {
             let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
             self.push_number(pos, shown.to_string(), NumberKind::Heal);

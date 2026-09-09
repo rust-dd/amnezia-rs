@@ -7,6 +7,7 @@ impl Battle {
             return None;
         }
         self.enemies[i].switch_on_after_action = None;
+        self.enemies[i].defending = false;
         self.enemies[i].switch_off_after_action = None;
         let restriction = logic::worst_restriction(&self.enemies[i].states, &self.states);
         let kind = match restriction {
@@ -15,8 +16,7 @@ impl Battle {
                 let others = self
                     .enemies
                     .iter()
-                    .enumerate()
-                    .map(|(j, enemy)| j != i && enemy.alive())
+                    .map(|enemy| enemy.alive())
                     .collect::<Vec<_>>();
                 logic::select_target(&others, rng_next(&mut self.rng) as usize)
                     .map_or(Command::Nothing, |target| Command::Attack { target })
