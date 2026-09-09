@@ -51,30 +51,37 @@ use bevy::prelude::*;
 
 fn main() -> AppExit {
     let hero: amnezia_data::Hero = load_ron(&format!("{}/hero.ron", asset_root()));
+    let offscreen = smoke::offscreen::enabled();
+    let mut plugins = DefaultPlugins
+        .set(ImagePlugin::default_nearest())
+        .set(AssetPlugin {
+            file_path: asset_root().to_string(),
+            ..default()
+        })
+        .set(WindowPlugin {
+            primary_window: Some(Window {
+                // WindowResolution uses physical pixels, including on Retina.
+                resolution: if offscreen {
+                    bevy::window::WindowResolution::new(960, 720)
+                } else {
+                    bevy::window::WindowResolution::new(1440, 1080)
+                },
+                resizable: true,
+                title: "Amnézia".to_string(),
+                ..default()
+            }),
+            exit_condition: if offscreen {
+                bevy::window::ExitCondition::DontExit
+            } else {
+                bevy::window::ExitCondition::OnAllClosed
+            },
+            ..default()
+        });
+    if offscreen {
+        plugins = plugins.disable::<bevy::winit::WinitPlugin>();
+    }
     App::new()
-        .add_plugins(
-            DefaultPlugins
-                .set(ImagePlugin::default_nearest())
-                .set(AssetPlugin {
-                    file_path: asset_root().to_string(),
-                    ..default()
-                })
-                .set(WindowPlugin {
-                    primary_window: Some(Window {
-                        // A moderate 4:3 window (`new` is physical pixels, so on a 2×
-                        // Retina display this is a ~720×540-point window). The camera's
-                        // Fixed 320×240 scaling fills the window with the world at any
-                        // size, and `world::fit_ui_scale` scales the 960×720 UI to
-                        // match — so the game stays consistent across window sizes and
-                        // display densities. Resizable, so the player can fine-tune it.
-                        resolution: bevy::window::WindowResolution::new(1440, 1080),
-                        resizable: true,
-                        title: "Amnézia".to_string(),
-                        ..default()
-                    }),
-                    ..default()
-                }),
-        )
+        .add_plugins(plugins)
         .insert_resource(text::HeroName(hero.name))
         .init_resource::<state::Switches>()
         .init_resource::<state::Variables>()

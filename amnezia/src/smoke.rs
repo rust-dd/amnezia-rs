@@ -5,6 +5,7 @@ mod camera;
 mod capture;
 mod looping;
 mod message_options;
+pub(crate) mod offscreen;
 mod scenarios;
 
 pub struct SmokePlugin;
@@ -22,6 +23,7 @@ impl Plugin for SmokePlugin {
         if !cfg!(debug_assertions) || !std::env::args().any(|arg| arg == "--smoke-test") {
             return;
         }
+        offscreen::configure(app);
         let scenario = if std::env::args().any(|arg| arg == "--smoke-message-options") {
             "message-options"
         } else if std::env::args().any(|arg| arg == "--smoke-camera") {
@@ -72,18 +74,24 @@ impl Plugin for SmokePlugin {
 }
 
 fn capture(world: &mut World, label: &str) {
-    let path = std::env::temp_dir().join(format!("amnezia-smoke-{label}.png"));
+    let target = world.get_resource::<offscreen::Target>();
+    let prefix = if target.is_some() {
+        "amnezia-smoke-offscreen"
+    } else {
+        "amnezia-smoke"
+    };
+    let screenshot = target.map_or_else(Screenshot::primary_window, |target| {
+        Screenshot::image(target.0.clone())
+    });
+    let path = std::env::temp_dir().join(format!("{prefix}-{label}.png"));
     info!("smoke screenshot: {}", path.display());
     let label = label.to_owned();
-    world
-        .spawn(Screenshot::primary_window())
-        .observe(save_to_disk(path))
-        .observe(
-            move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
-                capture::verify_content(&capture.image, &label);
-                crate::battle::smoke::verify_skin(&capture.image, &label);
-            },
-        );
+    world.spawn(screenshot).observe(save_to_disk(path)).observe(
+        move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
+            capture::verify_content(&capture.image, &label);
+            crate::battle::smoke::verify_skin(&capture.image, &label);
+        },
+    );
 }
 
 fn input(world: &mut World) {

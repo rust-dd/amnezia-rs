@@ -41,6 +41,8 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-timer
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
 
+Add `--smoke-offscreen` to render all camera layers into a GPU texture without a native window, including on a locked desktop. This still requires a working graphics adapter. Captures use the separate `amnezia-smoke-offscreen-*.png` prefix; empty images fail the check. Offscreen runs test rendering and scripted input, not native window/input integration.
+
 ### Packaging (macOS)
 
 `bash scripts/bundle-mac.sh` builds the release binary and replaces `target/Amnézia.app`, bundling converted assets inside `Contents/Resources/assets` (dev-only `.mid` intermediates excluded). Release assets are resolved relative to the executable. Packaging and a clean-machine release run still need validation after the current restoration changes.
