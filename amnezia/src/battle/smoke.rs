@@ -41,8 +41,6 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         let mut battle = world.resource_mut::<Battle>();
         assert_eq!(battle.members.len(), 4);
         battle.members[0].known_skills = skills;
-        battle.members[0].hp = 1234;
-        battle.members[0].max_hp = 2345;
     }
     let state = match frame {
         400 => Some((MenuLevel::Command, 0)),
