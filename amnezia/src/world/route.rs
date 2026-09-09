@@ -143,6 +143,7 @@ pub(super) fn route_events(
     mut touches: Option<ResMut<super::TouchEvents>>,
     mut audio: MessageWriter<AudioRequest>,
     players: Query<(&Player, Option<&RouteStepper>), Without<EventSprite>>,
+    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut movers: Query<
         (
             &mut EventSprite,
@@ -170,6 +171,7 @@ pub(super) fn route_events(
         .ok()
         .and_then(|(_, route)| route)
         .is_some_and(RouteStepper::through);
+    bodies.include_vehicles(vehicles.as_deref(), data.map_id);
     let dt = time.delta_secs();
     for (mut sprite_c, mut queue, mut stepper, mut sprite) in &mut movers {
         if !stepper.forced() && guards.autonomous_paused(sprite_c.id) {
@@ -254,7 +256,8 @@ pub(super) fn route_hero(
     // The hero's only routes come from a `MoveEvent`, which is always forced, so they
     // must keep advancing through the very cutscene that issued them — RM2000 steps
     // an overwritten route even while the event interpreter runs and a message shows.
-    if guards.forced_route_paused() || vehicles.is_some_and(|v| v.airship_transitioning()) {
+    if guards.forced_route_paused() || vehicles.as_ref().is_some_and(|v| v.airship_transitioning())
+    {
         return;
     }
     let Ok((mut player, mut queue, mut stepper, mut sprite)) = hero.single_mut() else {
@@ -263,7 +266,8 @@ pub(super) fn route_hero(
     let (ex, ey) = (player.tile_x, player.tile_y);
     let pos = (ex, ey);
     let dt = time.delta_secs();
-    let bodies = CollisionBodies::from_events(events.iter());
+    let mut bodies = CollisionBodies::from_events(events.iter());
+    bodies.include_vehicles(vehicles.as_deref(), data.map_id);
     let driven = {
         let collision = MapCollision::new(
             &data,

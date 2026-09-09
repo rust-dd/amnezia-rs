@@ -271,6 +271,7 @@ pub(crate) fn autonomous_movement(
     guards: MoveGuards,
     mut touches: Option<ResMut<super::TouchEvents>>,
     players: Query<(&Player, Option<&RouteStepper>), Without<EventSprite>>,
+    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut movers: Query<
         (
             &mut EventSprite,
@@ -289,6 +290,7 @@ pub(crate) fn autonomous_movement(
     let mut bodies =
         CollisionBodies::from_events(movers.iter().map(|(event, _, _, route)| (event, route)));
     bodies.hero_through = hero_route.is_some_and(RouteStepper::through);
+    bodies.include_vehicles(vehicles.as_deref(), data.map_id);
     for (mut sprite, mut queue, mut auto, mut stepper) in &mut movers {
         // Stationary (0) and custom-route (6) events never move here; a busy queue
         // means the previous step is still tweening; and a live forced route (a

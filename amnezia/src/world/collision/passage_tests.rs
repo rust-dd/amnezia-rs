@@ -329,3 +329,35 @@ fn through_ignores_obstacles_but_preserves_map_bounds_and_looping() {
             .can_move((0, 2), (-1, 2), Mover::hero(false), None, false)
     );
 }
+
+#[test]
+fn parked_airships_block_npcs_but_leave_the_heros_boarding_tile_open() {
+    let mut f = Fixture::new();
+    let mut vehicles = crate::vehicles::Vehicles::default();
+    vehicles.set_location(2, 0, 2, 2);
+    f.bodies.include_vehicles(Some(&vehicles), 0);
+    assert!(f.enter(Mover::hero(false)));
+    assert!(!f.enter(npc(1, 1, None)));
+    assert!(f.enter(npc(1, 0, None)));
+    vehicles.save.riding = Some(2);
+    f.bodies.include_vehicles(Some(&vehicles), 0);
+    assert!(
+        f.collision()
+            .can_move((1, 2), (2, 2), npc(1, 1, None), Some((2, 2)), false)
+    );
+}
+
+#[test]
+fn ships_block_ground_characters_but_not_other_layers_or_maps() {
+    let mut f = Fixture::new();
+    let mut vehicles = crate::vehicles::Vehicles::default();
+    vehicles.set_location(0, 0, 2, 2);
+    f.bodies.include_vehicles(Some(&vehicles), 0);
+    assert!(!f.enter(Mover::hero(false)));
+    assert!(!f.enter(npc(1, 1, None)));
+    assert!(f.enter(npc(1, 0, None)));
+    assert!(f.enter(Mover::hero(true)));
+    vehicles.set_location(0, 13, 2, 2);
+    f.bodies.include_vehicles(Some(&vehicles), 0);
+    assert!(f.enter(Mover::hero(false)));
+}

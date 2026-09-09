@@ -156,6 +156,7 @@ fn move_player(
     mut running: ResMut<RunningEvent>,
     mut players: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper), Without<EventSprite>>,
     events: Query<(&EventSprite, Option<&RouteStepper>), Without<Player>>,
+    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut arrived: Local<Option<(u32, i32, i32)>>,
 ) {
     let Ok((mut player, mut queue, mut stepper)) = players.single_mut() else {
@@ -215,7 +216,8 @@ fn move_player(
         return;
     }
     let (tx, ty) = data.normalize_tile(nx, ny);
-    let bodies = CollisionBodies::from_events(events.iter());
+    let mut bodies = CollisionBodies::from_events(events.iter());
+    bodies.include_vehicles(vehicles.as_deref(), data.map_id);
     let collision = MapCollision::new(
         &data,
         &map_events,

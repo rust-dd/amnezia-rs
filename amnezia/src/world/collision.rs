@@ -35,6 +35,7 @@ impl Mover {
 #[derive(Default)]
 pub(crate) struct CollisionBodies {
     events: HashMap<u32, Mover>,
+    vehicles: Vec<((i32, i32), bool)>,
     pub(crate) hero_through: bool,
 }
 
@@ -52,12 +53,24 @@ impl CollisionBodies {
                 })
                 .collect(),
             hero_through: false,
+            vehicles: Vec::new(),
         }
     }
 
     pub(crate) fn update(&mut self, event: &EventSprite, route: &RouteStepper) {
         self.events
             .insert(event.id, Mover::event(event, route.through()));
+    }
+
+    pub(crate) fn include_vehicles(
+        &mut self,
+        vehicles: Option<&crate::vehicles::Vehicles>,
+        map_id: u32,
+    ) {
+        if let Some(vehicles) = vehicles {
+            self.hero_through |= vehicles.riding();
+            self.vehicles = vehicles.collision_tiles(map_id).collect();
+        }
     }
 
     fn event(&self, event: &Event, page: &EventPage) -> Mover {
@@ -201,6 +214,11 @@ impl<'a> MapCollision<'a> {
                 .is_some_and(|tile| tile > 0 && self.passage(tile) & bit_from == 0);
         let destination = self.data.normalize_tile(to.0, to.1);
         if self.event_blocks_at(mover, destination, self_conflict)
+            || self.bodies.vehicles.iter().any(|&(tile, airship)| {
+                tile == destination
+                    && (mover.layer == 1 || self_conflict)
+                    && (mover.id != 0 || !airship)
+            })
             || (mover.id != 0
                 && !self.bodies.hero_through
                 && hero == Some(destination)

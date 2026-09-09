@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn vehicle_collision_reads_live_route_through_state() {
+    let mut vehicles = Vehicles::default();
+    vehicles.set_location(0, 13, 4, 4);
+    assert_eq!(
+        vehicles.collision_tiles(13).collect::<Vec<_>>(),
+        [((4, 4), false)]
+    );
+    vehicles.set_route(
+        10002,
+        crate::world::RouteStepper::from_move_event(&[10002, 8, 0, 0, 36]),
+    );
+    let motion = &mut vehicles.motion[0];
+    drive_route(
+        &mut vehicles.save.vehicles[0],
+        &mut motion.queue,
+        &mut motion.route,
+        (0, 0),
+        1.0 / 60.0,
+        |_, _, _, _, _| true,
+    );
+    assert_eq!(vehicles.collision_tiles(13).count(), 0);
+}
+
+#[test]
 fn boarding_and_disembarking_wrap_the_facing_tile() {
     let mut data = MapData::for_test(140, 140);
     data.scroll_type = 3;
