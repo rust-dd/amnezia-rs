@@ -35,6 +35,30 @@ fn make_xyz(width: u16, height: u16, palette: &[u8; 768], indices: &[u8]) -> Vec
 }
 
 #[test]
+fn picture_png_preserves_key_color_rgb_for_opaque_show_commands() {
+    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR")).join("picture_palette_color");
+    let input = tmp.join("in");
+    let output = tmp.join("out");
+    std::fs::create_dir_all(input.join("Picture")).unwrap();
+    let mut palette = [0; 768];
+    palette[..6].copy_from_slice(&[10, 20, 30, 40, 50, 60]);
+    std::fs::write(
+        input.join("Picture/Test.xyz"),
+        make_xyz(2, 1, &palette, &[0, 1]),
+    )
+    .unwrap();
+    assert_eq!(
+        amnezia_convert::convert_graphics(&input, &output).unwrap(),
+        1
+    );
+    let image = image::open(output.join("graphics/Picture/Test.png"))
+        .unwrap()
+        .to_rgba8();
+    assert_eq!(image.get_pixel(0, 0).0, [10, 20, 30, 0]);
+    assert_eq!(image.get_pixel(1, 0).0, [40, 50, 60, 255]);
+}
+
+#[test]
 fn converts_chipset_with_transparency() {
     let tmp = Path::new(env!("CARGO_TARGET_TMPDIR")).join("converts_chipset");
     let input = tmp.join("in");

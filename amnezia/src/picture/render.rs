@@ -34,7 +34,7 @@ pub(super) struct PictureMaterial {
     /// `xyz` RGB multipliers (1 = neutral), `w` saturation (1 = neutral, 0 = gray).
     #[uniform(0)]
     pub rgb_sat: Vec4,
-    /// `x` opacity (0..1); `yzw` padding.
+    /// `x` opacity (0..1), `y` enables palette-index-zero transparency.
     #[uniform(1)]
     pub extra: Vec4,
     #[texture(2)]
@@ -67,19 +67,25 @@ pub(super) fn setup_picture_mesh(mut commands: Commands, mut meshes: ResMut<Asse
 /// pinned to the map; a `Move` on a legacy map-fixed picture keeps its position
 /// (RM2000 ignores the target coordinates for those).
 pub(super) fn apply_commands(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    mut materials: ResMut<Assets<PictureMaterial>>,
-    mesh: Option<Res<PictureMesh>>,
-    cameras: Query<&Transform, With<MainCamera>>,
-    mut requests: MessageReader<PictureCommand>,
-    mut pictures: Query<(Entity, &mut Picture)>,
+    world: &mut World,
+    mut cursor: Local<bevy::ecs::message::MessageCursor<PictureCommand>>,
 ) {
-    let Some(mesh) = mesh else {
+    let Some(mesh) = world
+        .get_resource::<PictureMesh>()
+        .map(|mesh| mesh.0.clone())
+    else {
         return;
     };
-    let camera_base = cameras.single().map(|t| t.translation.truncate()).ok();
-    for request in requests.read() {
+    let camera_base = world
+        .query_filtered::<&Transform, With<MainCamera>>()
+        .single(world)
+        .map(|t| t.translation.truncate())
+        .ok();
+    let requests = cursor
+        .read(world.resource::<Messages<PictureCommand>>())
+        .cloned()
+        .collect::<Vec<_>>();
+    for request in requests {
         match request {
             PictureCommand::Show {
                 id,
@@ -87,35 +93,44 @@ pub(super) fn apply_commands(
                 x,
                 y,
                 fixed_to_map,
+                use_transparent_color,
                 transparency,
                 zoom,
                 tone,
             } => {
-                despawn_picture(&mut commands, &pictures, *id);
+                for entity in picture_entities(world, id) {
+                    world.despawn(entity);
+                }
                 let anchor =
-                    fixed_to_map.then(|| camera_base.unwrap_or_default() + screen_offset(*x, *y));
-                let image = asset_server.load(resolve_png("Picture", name));
-                let material = materials.add(PictureMaterial {
-                    rgb_sat: tone_rgb_sat(*tone),
-                    extra: opacity_extra(*transparency),
-                    image: image.clone(),
-                });
-                commands.spawn((
+                    fixed_to_map.then(|| camera_base.unwrap_or_default() + screen_offset(x, y));
+                let image = world
+                    .resource::<AssetServer>()
+                    .load(resolve_png("Picture", &name));
+                let material =
+                    world
+                        .resource_mut::<Assets<PictureMaterial>>()
+                        .add(PictureMaterial {
+                            rgb_sat: tone_rgb_sat(tone),
+                            extra: opacity_extra(transparency, use_transparent_color),
+                            image,
+                        });
+                world.spawn((
                     Picture {
-                        id: *id,
-                        x: *x,
-                        y: *y,
-                        transparency: *transparency,
-                        zoom: *zoom,
-                        tone: *tone,
-                        fixed_to_map: *fixed_to_map,
+                        id,
+                        x,
+                        y,
+                        transparency,
+                        zoom,
+                        tone,
+                        use_transparent_color,
+                        fixed_to_map,
                         world_anchor: anchor,
                         base_size: None,
                         tween: None,
                     },
-                    Mesh2d(mesh.0.clone()),
+                    Mesh2d(mesh.clone()),
                     MeshMaterial2d(material),
-                    Transform::from_translation(screen_offset(*x, *y).extend(picture_z(*id)))
+                    Transform::from_translation(screen_offset(x, y).extend(picture_z(id)))
                         .with_scale(Vec3::ZERO),
                     RenderLayers::layer(PICTURE_LAYER),
                 ));
@@ -129,29 +144,32 @@ pub(super) fn apply_commands(
                 tone,
                 secs,
             } => {
-                if let Some((_, mut pic)) = pictures.iter_mut().find(|(_, p)| p.id == *id) {
-                    // RPG Maker 2000 ignores the target position when moving a
-                    // map-fixed picture; only the tone/zoom/opacity animate.
+                for entity in picture_entities(world, id) {
+                    let mut pic = world.get_mut::<Picture>(entity).unwrap();
+                    // Legacy map-fixed pictures ignore MovePicture coordinates.
                     let (tx, ty) = if pic.fixed_to_map {
                         (pic.x, pic.y)
                     } else {
-                        (*x, *y)
+                        (x, y)
                     };
-                    pic.retarget(tx, ty, *transparency, *zoom, *tone, *secs);
+                    pic.retarget(tx, ty, transparency, zoom, tone, secs);
                 }
             }
-            PictureCommand::Erase { id } => despawn_picture(&mut commands, &pictures, *id),
+            PictureCommand::Erase { id } => {
+                for entity in picture_entities(world, id) {
+                    world.despawn(entity);
+                }
+            }
         }
     }
 }
 
-/// Despawn every picture entity with the given id.
-fn despawn_picture(commands: &mut Commands, pictures: &Query<(Entity, &mut Picture)>, id: u32) {
-    for (entity, pic) in pictures.iter() {
-        if pic.id == id {
-            commands.entity(entity).despawn();
-        }
-    }
+fn picture_entities(world: &mut World, id: u32) -> Vec<Entity> {
+    world
+        .query::<(Entity, &Picture)>()
+        .iter(world)
+        .filter_map(|(entity, picture)| (picture.id == id).then_some(entity))
+        .collect()
 }
 
 /// Record each picture's native texture size once its image has loaded, so
@@ -195,7 +213,7 @@ pub(super) fn place_pictures(
         }
         if let Some(mut material) = materials.get_mut(&handle.0) {
             material.rgb_sat = tone_rgb_sat(pic.tone);
-            material.extra = opacity_extra(pic.transparency);
+            material.extra = opacity_extra(pic.transparency, pic.use_transparent_color);
         }
     }
 }
@@ -232,14 +250,18 @@ fn channel(value: f32) -> f32 {
     (value / 100.0).clamp(0.0, 2.0)
 }
 
-/// The opacity uniform (`x` = 1 − transparency, rest padding).
-fn opacity_extra(transparency: f32) -> Vec4 {
-    Vec4::new(opacity(transparency), 0.0, 0.0, 0.0)
+fn opacity_extra(transparency: f32, use_transparent_color: bool) -> Vec4 {
+    Vec4::new(
+        opacity(transparency),
+        f32::from(use_transparent_color),
+        0.0,
+        0.0,
+    )
 }
 
 /// Opacity (0..1) from RM2000 transparency percent (0 opaque, 100 invisible).
 fn opacity(transparency: f32) -> f32 {
-    1.0 - transparency.clamp(0.0, 100.0) / 100.0
+    (255.0 * (100.0 - transparency.clamp(0.0, 100.0)) / 100.0).floor() / 255.0
 }
 
 /// The world z of picture `id`.
@@ -262,7 +284,8 @@ mod tests {
     fn opacity_is_the_complement_of_transparency() {
         assert_eq!(opacity(0.0), 1.0);
         assert_eq!(opacity(100.0), 0.0);
-        assert_eq!(opacity(50.0), 0.5);
+        assert_eq!(opacity(50.0), 127.0 / 255.0);
+        assert_eq!(opacity(25.0), 191.0 / 255.0);
         assert_eq!(opacity(150.0), 0.0);
     }
 

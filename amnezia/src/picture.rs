@@ -18,6 +18,9 @@ use bevy::sprite_render::Material2dPlugin;
 use bevy::transform::TransformSystems;
 
 mod render;
+pub(crate) mod smoke;
+#[cfg(test)]
+mod tests;
 
 /// An RM2000 picture colour tone: per-channel RGB and a saturation, each a
 /// percent with 100 neutral (`saturation = 0` is full grayscale). Interpolated
@@ -53,6 +56,7 @@ pub enum PictureCommand {
         x: f32,
         y: f32,
         fixed_to_map: bool,
+        use_transparent_color: bool,
         transparency: f32,
         zoom: f32,
         tone: Tone,
@@ -74,7 +78,8 @@ pub enum PictureCommand {
 impl PictureCommand {
     /// Map a `ShowPicture` (11110) with `name` from the command string and
     /// already-resolved `(x, y)`. `params[4]` is the fixed-to-map flag,
-    /// `params[5]` zoom %, `params[6]` transparency, `params[8..12]` the tone.
+    /// `params[5]` zoom %, `params[6]` transparency, `params[7]` colour key,
+    /// and `params[8..12]` the tone.
     pub fn show(id: u32, name: &str, x: f32, y: f32, params: &[i32]) -> Self {
         Self::Show {
             id,
@@ -82,6 +87,7 @@ impl PictureCommand {
             x,
             y,
             fixed_to_map: fixed_param(params),
+            use_transparent_color: params.get(7).copied().unwrap_or(0) > 0,
             transparency: transparency_param(params),
             zoom: zoom_param(params),
             tone: tone_param(params),
@@ -89,7 +95,7 @@ impl PictureCommand {
     }
 
     /// Map a `MovePicture` (11120): same fields as `Show` (minus the graphic and
-    /// the fixed flag, which stay from the original show) plus `params[14]`
+    /// the fixed/colour-key flags, which stay from the original show) plus `params[14]`
     /// duration in tenths of a second.
     pub fn move_to(id: u32, x: f32, y: f32, params: &[i32]) -> Self {
         Self::Move {
@@ -144,6 +150,7 @@ struct Picture {
     transparency: f32,
     zoom: f32,
     tone: Tone,
+    use_transparent_color: bool,
     /// Anchored to the map (scrolls with it) rather than pinned to the screen.
     fixed_to_map: bool,
     /// The fixed world position of a map-anchored picture, sampled at show time.
@@ -165,8 +172,7 @@ impl Picture {
         }
     }
 
-    /// Apply the visual state `state`, immediately when `secs <= 0`, otherwise as
-    /// a tween from the current state.
+    /// Apply one interpolation sample.
     fn apply(&mut self, state: Anim) {
         self.x = state.x;
         self.y = state.y;
@@ -293,154 +299,4 @@ fn clear_on_map_change(
 
 fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn show_maps_position_flag_tone_transparency_and_zoom() {
-        // Cross at (93, 94): [id, method, x, y, fixed, zoom, transp, usetransp,
-        // R, G, B, sat, effmode, effpower].
-        let params = [2, 1, 93, 94, 0, 100, 0, 1, 100, 100, 100, 100, 0, 60];
-        assert_eq!(
-            PictureCommand::show(2, "Cross", 93.0, 94.0, &params),
-            PictureCommand::Show {
-                id: 2,
-                name: "Cross".into(),
-                x: 93.0,
-                y: 94.0,
-                fixed_to_map: false,
-                transparency: 0.0,
-                zoom: 100.0,
-                tone: Tone::NEUTRAL,
-            }
-        );
-    }
-
-    #[test]
-    fn show_reads_the_fixed_to_map_flag_and_a_grayscale_tone() {
-        // A map-fixed shadow, and the intro plate's grayscale (saturation 0).
-        let fixed = [1, 1, 12, 13, 1, 150, 60, 1, 100, 100, 100, 100, 0, 60];
-        let gray = [1, 0, 74, 120, 0, 100, 100, 0, 100, 100, 100, 0, 0, 60];
-        match PictureCommand::show(1, "AirshipShadow", 12.0, 13.0, &fixed) {
-            PictureCommand::Show { fixed_to_map, .. } => assert!(fixed_to_map),
-            _ => panic!("expected a Show"),
-        }
-        match PictureCommand::show(1, "Intro1", 74.0, 120.0, &gray) {
-            PictureCommand::Show {
-                tone, fixed_to_map, ..
-            } => {
-                assert!(!fixed_to_map);
-                assert_eq!(tone.sat, 0.0);
-                assert_eq!((tone.r, tone.g, tone.b), (100.0, 100.0, 100.0));
-            }
-            _ => panic!("expected a Show"),
-        }
-    }
-
-    #[test]
-    fn move_reads_duration_and_tone_from_the_command() {
-        // Intro fade to grayscale: saturation 0, duration 30 tenths = 3.0s.
-        let params = [1, 0, 246, 120, 0, 100, 0, 0, 100, 100, 100, 0, 0, 0, 30, 1];
-        assert_eq!(
-            PictureCommand::move_to(1, 246.0, 120.0, &params),
-            PictureCommand::Move {
-                id: 1,
-                x: 246.0,
-                y: 120.0,
-                transparency: 0.0,
-                zoom: 100.0,
-                tone: Tone {
-                    r: 100.0,
-                    g: 100.0,
-                    b: 100.0,
-                    sat: 0.0,
-                },
-                secs: 3.0,
-            }
-        );
-    }
-
-    #[test]
-    fn lerp_interpolates_endpoints_and_midpoint() {
-        assert_eq!(lerp(0.0, 10.0, 0.0), 0.0);
-        assert_eq!(lerp(0.0, 10.0, 1.0), 10.0);
-        assert_eq!(lerp(0.0, 10.0, 0.5), 5.0);
-    }
-
-    #[test]
-    fn tween_interpolates_the_tone_toward_grayscale() {
-        // Start in colour (sat 100), retarget to grayscale (sat 0) over 2s.
-        let mut pic = Picture {
-            id: 1,
-            x: 0.0,
-            y: 0.0,
-            transparency: 0.0,
-            zoom: 100.0,
-            tone: Tone::NEUTRAL,
-            fixed_to_map: false,
-            world_anchor: None,
-            base_size: None,
-            tween: None,
-        };
-        pic.retarget(
-            0.0,
-            0.0,
-            0.0,
-            100.0,
-            Tone {
-                r: 100.0,
-                g: 100.0,
-                b: 100.0,
-                sat: 0.0,
-            },
-            2.0,
-        );
-        let tween = pic.tween.expect("a tween");
-        let mid = Anim::lerp(tween.from, tween.to, 0.5);
-        assert_eq!(mid.tone.sat, 50.0);
-    }
-
-    #[test]
-    fn a_map_change_despawns_every_picture() {
-        let mut app = App::new();
-        app.add_plugins(MinimalPlugins);
-        app.add_message::<MapChanged>();
-        app.add_systems(Update, clear_on_map_change);
-        app.world_mut().spawn(test_picture(1));
-        app.world_mut().spawn(test_picture(2));
-
-        // No map change yet: the pictures survive a frame.
-        app.update();
-        assert_eq!(count_pictures(&mut app), 2);
-
-        // On a map change every picture despawns.
-        app.world_mut().write_message(MapChanged);
-        app.update();
-        assert_eq!(count_pictures(&mut app), 0);
-    }
-
-    fn test_picture(id: u32) -> Picture {
-        Picture {
-            id,
-            x: 0.0,
-            y: 0.0,
-            transparency: 0.0,
-            zoom: 100.0,
-            tone: Tone::NEUTRAL,
-            fixed_to_map: false,
-            world_anchor: None,
-            base_size: None,
-            tween: None,
-        }
-    }
-
-    fn count_pictures(app: &mut App) -> usize {
-        app.world_mut()
-            .query::<&Picture>()
-            .iter(app.world())
-            .count()
-    }
 }

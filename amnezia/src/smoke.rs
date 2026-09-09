@@ -24,7 +24,9 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-message-options") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-pictures") {
+            "pictures"
+        } else if std::env::args().any(|arg| arg == "--smoke-message-options") {
             "message-options"
         } else if std::env::args().any(|arg| arg == "--smoke-camera") {
             "camera"
@@ -90,6 +92,7 @@ fn capture(world: &mut World, label: &str) {
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
             capture::verify_content(&capture.image, &label);
             crate::battle::smoke::verify_skin(&capture.image, &label);
+            crate::picture::smoke::verify_image(&capture.image, &label);
         },
     );
 }
@@ -143,6 +146,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "message-options" {
         message_options::drive(world, frame);
+    }
+    if scenario == "pictures"
+        && let Some(label) = crate::picture::smoke::drive(world, frame)
+    {
+        capture(world, label);
     }
     if frame == 240 && scenario == "battle-events" {
         crate::dialogue::verify_battle_layer(world);
@@ -258,7 +266,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
     if scenario == "battle-menus" {
         crate::battle::smoke::prepare(world);
     }
-    let commands = if scenario == "message-options" {
+    let commands = if matches!(scenario, "message-options" | "pictures") {
         message_options::entry()
     } else if scenario == "camera" {
         camera::entry()
