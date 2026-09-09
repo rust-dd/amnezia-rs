@@ -87,12 +87,13 @@ fn capture(world: &mut World, label: &str) {
     });
     let path = std::env::temp_dir().join(format!("{prefix}-{label}.png"));
     info!("smoke screenshot: {}", path.display());
+    let picture_pixels = crate::picture::smoke::expected_pixels(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
             capture::verify_content(&capture.image, &label);
             crate::battle::smoke::verify_skin(&capture.image, &label);
-            crate::picture::smoke::verify_image(&capture.image, &label);
+            crate::picture::smoke::verify_image(&capture.image, &label, &picture_pixels);
         },
     );
 }

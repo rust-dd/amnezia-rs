@@ -15,6 +15,7 @@ fn show_maps_position_flag_tone_transparency_and_zoom() {
             transparency: 0.0,
             zoom: 100.0,
             tone: Tone::NEUTRAL,
+            effect: Effect::default(),
         }
     );
 }
@@ -57,6 +58,7 @@ fn move_reads_duration_and_tone_from_the_command() {
                 sat: 0.0,
             },
             secs: 3.0,
+            effect: Effect::default(),
         }
     );
 }
@@ -82,18 +84,23 @@ fn tween_interpolates_the_tone_toward_grayscale() {
         world_anchor: None,
         base_size: None,
         tween: None,
+        effect: effects::EffectState::default(),
+        frame_fraction: 0.0,
     };
     pic.retarget(
-        0.0,
-        0.0,
-        0.0,
-        100.0,
-        Tone {
-            r: 100.0,
-            g: 100.0,
-            b: 100.0,
-            sat: 0.0,
+        Anim {
+            x: 0.0,
+            y: 0.0,
+            transparency: 0.0,
+            zoom: 100.0,
+            tone: Tone {
+                r: 100.0,
+                g: 100.0,
+                b: 100.0,
+                sat: 0.0,
+            },
         },
+        Effect::default(),
         2.0,
     );
     let tween = pic.tween.expect("a tween");
@@ -131,6 +138,8 @@ fn test_picture(id: u32) -> Picture {
         world_anchor: None,
         base_size: None,
         tween: None,
+        effect: effects::EffectState::default(),
+        frame_fraction: 0.0,
     }
 }
 

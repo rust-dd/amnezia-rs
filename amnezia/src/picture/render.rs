@@ -4,7 +4,7 @@
 //! place those quads. Kept apart from the command/state logic in the parent
 //! module so the tone maths and the screen/map placement unit-test in isolation.
 
-use super::{Picture, Tone};
+use super::{Anim, Picture, Tone};
 use crate::assets::resolve_png;
 use crate::picture::PictureCommand;
 use crate::screenfx::PICTURE_LAYER;
@@ -40,6 +40,9 @@ pub(super) struct PictureMaterial {
     #[texture(2)]
     #[sampler(3)]
     pub image: Handle<Image>,
+    /// Phase, horizontal amplitude, zoom, and clipped native rows.
+    #[uniform(4)]
+    pub wave: Vec4,
 }
 
 impl Material2d for PictureMaterial {
@@ -97,6 +100,7 @@ pub(super) fn apply_commands(
                 transparency,
                 zoom,
                 tone,
+                effect,
             } => {
                 for entity in picture_entities(world, id) {
                     world.despawn(entity);
@@ -113,6 +117,7 @@ pub(super) fn apply_commands(
                             rgb_sat: tone_rgb_sat(tone),
                             extra: opacity_extra(transparency, use_transparent_color),
                             image,
+                            wave: Vec4::ZERO,
                         });
                 world.spawn((
                     Picture {
@@ -127,6 +132,8 @@ pub(super) fn apply_commands(
                         world_anchor: anchor,
                         base_size: None,
                         tween: None,
+                        effect: super::effects::EffectState::show(effect),
+                        frame_fraction: 0.0,
                     },
                     Mesh2d(mesh.clone()),
                     MeshMaterial2d(material),
@@ -142,6 +149,7 @@ pub(super) fn apply_commands(
                 transparency,
                 zoom,
                 tone,
+                effect,
                 secs,
             } => {
                 for entity in picture_entities(world, id) {
@@ -152,7 +160,17 @@ pub(super) fn apply_commands(
                     } else {
                         (x, y)
                     };
-                    pic.retarget(tx, ty, transparency, zoom, tone, secs);
+                    pic.retarget(
+                        Anim {
+                            x: tx,
+                            y: ty,
+                            transparency,
+                            zoom,
+                            tone,
+                        },
+                        effect,
+                        secs,
+                    );
                 }
             }
             PictureCommand::Erase { id } => {
@@ -208,12 +226,24 @@ pub(super) fn place_pictures(
     for (pic, mut transform, handle) in &mut pictures {
         let pos = picture_translation(base, pic.x, pic.y, pic.world_anchor);
         transform.translation = pos.extend(picture_z(pic.id));
+        transform.rotation = Quat::from_rotation_z(pic.effect.angle());
+        let mut wave_uniform = Vec4::ZERO;
         if let Some(size) = pic.base_size {
-            transform.scale = (size * (pic.zoom / 100.0).max(0.0)).extend(1.0);
+            let zoom = (pic.zoom / 100.0).max(0.0);
+            let center = Vec2::new(pos.x - base.x + CENTER_X, CENTER_Y - (pos.y - base.y));
+            if let Some(wave) = pic.effect.wave(size, zoom, center) {
+                transform.scale = wave.size.extend(1.0);
+                transform.translation =
+                    (base + screen_offset(wave.center.x, wave.center.y)).extend(picture_z(pic.id));
+                wave_uniform = wave.uniform;
+            } else {
+                transform.scale = (size * zoom).extend(1.0);
+            }
         }
         if let Some(mut material) = materials.get_mut(&handle.0) {
             material.rgb_sat = tone_rgb_sat(pic.tone);
             material.extra = opacity_extra(pic.transparency, pic.use_transparent_color);
+            material.wave = wave_uniform;
         }
     }
 }

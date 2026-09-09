@@ -17,8 +17,10 @@ use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
 use bevy::transform::TransformSystems;
 
+mod effects;
 mod render;
 pub(crate) mod smoke;
+pub use effects::Effect;
 #[cfg(test)]
 mod tests;
 
@@ -60,6 +62,7 @@ pub enum PictureCommand {
         transparency: f32,
         zoom: f32,
         tone: Tone,
+        effect: Effect,
     },
     /// Tween picture `id` to `(x, y)`/opacity/zoom/tone over `secs`.
     Move {
@@ -69,6 +72,7 @@ pub enum PictureCommand {
         transparency: f32,
         zoom: f32,
         tone: Tone,
+        effect: Effect,
         secs: f32,
     },
     /// Remove picture `id`.
@@ -79,7 +83,7 @@ impl PictureCommand {
     /// Map a `ShowPicture` (11110) with `name` from the command string and
     /// already-resolved `(x, y)`. `params[4]` is the fixed-to-map flag,
     /// `params[5]` zoom %, `params[6]` transparency, `params[7]` colour key,
-    /// and `params[8..12]` the tone.
+    /// `params[8..12]` the tone, and `params[12..14]` the effect.
     pub fn show(id: u32, name: &str, x: f32, y: f32, params: &[i32]) -> Self {
         Self::Show {
             id,
@@ -91,6 +95,7 @@ impl PictureCommand {
             transparency: transparency_param(params),
             zoom: zoom_param(params),
             tone: tone_param(params),
+            effect: Effect::from_params(params),
         }
     }
 
@@ -105,6 +110,7 @@ impl PictureCommand {
             transparency: transparency_param(params),
             zoom: zoom_param(params),
             tone: tone_param(params),
+            effect: Effect::from_params(params),
             secs: params.get(14).copied().unwrap_or(0) as f32 / 10.0,
         }
     }
@@ -158,6 +164,8 @@ struct Picture {
     /// The native texture size, filled once the image loads.
     base_size: Option<Vec2>,
     tween: Option<Tween>,
+    effect: effects::EffectState,
+    frame_fraction: f64,
 }
 
 impl Picture {
@@ -182,14 +190,8 @@ impl Picture {
     }
 
     /// Retarget this picture to a new visual state over `secs`.
-    fn retarget(&mut self, x: f32, y: f32, transparency: f32, zoom: f32, tone: Tone, secs: f32) {
-        let to = Anim {
-            x,
-            y,
-            transparency,
-            zoom,
-            tone,
-        };
+    fn retarget(&mut self, to: Anim, effect: Effect, secs: f32) {
+        self.effect.retarget(effect);
         if secs <= 0.0 {
             self.apply(to);
             self.tween = None;
@@ -197,9 +199,30 @@ impl Picture {
             self.tween = Some(Tween {
                 from: self.anim(),
                 to,
-                elapsed: 0.0,
-                secs,
+                elapsed: 0,
+                frames: (secs * 60.0).round().max(1.0) as u32,
             });
+        }
+    }
+
+    fn advance(&mut self, dt: f32) {
+        self.frame_fraction += f64::from(dt.max(0.0)) * 60.0;
+        let frames = (self.frame_fraction + 1e-6).floor() as u32;
+        self.frame_fraction = (self.frame_fraction - f64::from(frames)).max(0.0);
+        for _ in 0..frames {
+            let remaining = if let Some(mut tween) = self.tween {
+                tween.elapsed += 1;
+                self.apply(Anim::lerp(
+                    tween.from,
+                    tween.to,
+                    tween.elapsed as f32 / tween.frames as f32,
+                ));
+                self.tween = (tween.elapsed < tween.frames).then_some(tween);
+                tween.frames - tween.elapsed
+            } else {
+                0
+            };
+            self.effect.tick(remaining);
         }
     }
 }
@@ -237,8 +260,8 @@ impl Anim {
 struct Tween {
     from: Anim,
     to: Anim,
-    elapsed: f32,
-    secs: f32,
+    elapsed: u32,
+    frames: u32,
 }
 
 pub struct PicturePlugin;
@@ -267,17 +290,18 @@ impl Plugin for PicturePlugin {
     }
 }
 
-/// Advance running move tweens, updating each picture's current visual state.
-fn drive_tweens(time: Res<Time>, mut pictures: Query<&mut Picture>) {
+/// Advance picture moves and effects on their shared 60 Hz clock.
+fn drive_tweens(
+    time: Res<Time>,
+    scenes: crate::world::ScenePause,
+    mut pictures: Query<&mut Picture>,
+) {
+    if scenes.paused() {
+        return;
+    }
     let dt = time.delta_secs();
     for mut pic in &mut pictures {
-        let Some(mut tween) = pic.tween else {
-            continue;
-        };
-        tween.elapsed += dt;
-        let t = (tween.elapsed / tween.secs).clamp(0.0, 1.0);
-        pic.apply(Anim::lerp(tween.from, tween.to, t));
-        pic.tween = (tween.elapsed < tween.secs).then_some(tween);
+        pic.advance(dt);
     }
 }
 
