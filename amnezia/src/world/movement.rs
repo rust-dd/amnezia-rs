@@ -7,7 +7,7 @@
 //! so every kind of movement animates smoothly across a tile instead of
 //! teleport-snapping. The stepper applies a route's facing/graphic changes
 //! directly to the character and paces it via its own timer, so the queue itself
-//! only ever carries tile [`RouteAction::Step`]s.
+//! carries walking steps and complete jumps.
 
 use super::MapData;
 use crate::assets::resolve_png;
@@ -27,12 +27,19 @@ pub(crate) fn step_secs_for_speed(speed: u32) -> f32 {
     STEP_DURATION * 2f32.powi(4 - speed.clamp(1, 6) as i32)
 }
 
-/// One queued tile step: its `(dx, dy)` delta and the facing it leaves the
-/// character in. This is the only action the queue tweens — a route's turns,
-/// graphic swaps, and waits are handled by the stepper, not queued here.
+/// A queued move and its final facing; a jump crosses its full delta in one tween.
 #[derive(Clone, PartialEq, Debug)]
 pub enum RouteAction {
     Step { dx: i32, dy: i32, face: u32 },
+    Jump { dx: i32, dy: i32, face: u32 },
+}
+
+impl RouteAction {
+    pub(crate) fn delta(&self) -> (i32, i32) {
+        match *self {
+            Self::Step { dx, dy, .. } | Self::Jump { dx, dy, .. } => (dx, dy),
+        }
+    }
 }
 
 /// A movable map character (the hero or an event NPC). Lets the shared movement
@@ -59,11 +66,12 @@ pub trait Character {
     }
 }
 
-/// An in-progress single-tile tween between two tile centers (equal for `Wait`).
+/// An in-progress walk or jump between tile centers.
 struct Tween {
     from: Vec2,
     to: Vec2,
     elapsed: f32,
+    jumping: bool,
 }
 
 /// A character's pending route steps plus the tween of the step in flight. The
@@ -135,7 +143,12 @@ impl MoveQueue {
             if let Some(tween) = self.active.as_mut() {
                 tween.elapsed += dt;
                 if tween.elapsed < step {
-                    return Some(tween.from.lerp(tween.to, tween.elapsed / step));
+                    let progress = tween.elapsed / step;
+                    let mut pos = tween.from.lerp(tween.to, progress);
+                    if tween.jumping {
+                        pos.y += jump_height(progress);
+                    }
+                    return Some(pos);
                 }
                 let end = tween.to;
                 self.active = None;
@@ -151,33 +164,43 @@ impl MoveQueue {
                     }
                     return None;
                 }
-                Some(RouteAction::Step { dx, dy, face }) => self.begin_step(ch, data, dx, dy, face),
+                Some(action) => self.begin_step(ch, data, action),
             }
         }
     }
 
-    /// Commit a move to the adjacent tile: update the logical tile immediately
+    /// Commit a move to its destination: update the logical tile immediately
     /// (so y-sorting and lookups use the destination), face and advance the walk
     /// frame, and start the pixel tween from the old center to the new one.
-    fn begin_step<C: Character>(
-        &mut self,
-        ch: &mut C,
-        data: &MapData,
-        dx: i32,
-        dy: i32,
-        face: u32,
-    ) {
+    fn begin_step<C: Character>(&mut self, ch: &mut C, data: &MapData, action: RouteAction) {
+        let (dx, dy) = action.delta();
+        let jumping = matches!(action, RouteAction::Jump { .. });
+        let (RouteAction::Step { face, .. } | RouteAction::Jump { face, .. }) = action;
         let (x, y) = ch.tile();
         let from = center(data, x, y);
         let (nx, ny) = (x + dx, y + dy);
         ch.set_tile(nx, ny);
         ch.set_dir(face);
-        ch.set_frame((ch.frame() + 1) % 3);
+        if !jumping {
+            ch.set_frame((ch.frame() + 1) % 3);
+        }
         self.active = Some(Tween {
             from,
             to: center(data, nx, ny),
             elapsed: 0.0,
+            jumping,
         });
+    }
+}
+
+fn jump_height(progress: f32) -> f32 {
+    let height = (progress.min(1.0 - progress) * 32.0).floor().max(0.0);
+    if height < 5.0 {
+        height * 2.0
+    } else if height < 13.0 {
+        height + 4.0
+    } else {
+        16.0
     }
 }
 

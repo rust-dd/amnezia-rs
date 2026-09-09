@@ -13,6 +13,8 @@ use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use amnezia_data::{MoveCommandDef, MoveRouteDef};
 use bevy::prelude::Component;
 
+mod jump;
+
 /// Logical frames per second the RM2000 stop-count delays are measured in.
 const FPS: f32 = 60.0;
 
@@ -54,6 +56,8 @@ pub struct RouteStepper {
     /// interpreter runs and while a message is up — RM2000's `IsMoveRouteOverwritten`
     /// short-circuits both pauses; a page route pauses like autonomous movement.
     forced: bool,
+    facing_lock: Option<u32>,
+    direction: Option<u32>,
 }
 
 impl Default for RouteStepper {
@@ -93,6 +97,8 @@ impl RouteStepper {
             timer: 0.0,
             rng: 0x9E37_79B9,
             forced,
+            facing_lock: None,
+            direction: None,
         }
     }
 
@@ -146,13 +152,13 @@ impl RouteStepper {
     /// Advance the route: apply instant commands until the first gating command,
     /// mutating `ch`'s facing/graphic and pushing switch/sound/transparency
     /// `effects`. Returns the tile step to enqueue (with its tween seconds) for a
-    /// move, or `None` for a turn/wait/finish/blocked-wait. `can_step(dx, dy)`
-    /// reports whether the character may enter the tile at that delta.
+    /// move, or `None` for a turn/wait/finish/blocked-wait.
+    /// `can_step(dx, dy, jumping)` checks a walking step or a jump's landing tile.
     pub(super) fn advance<C: Character>(
         &mut self,
         ch: &mut C,
         hero: (i32, i32),
-        can_step: &impl Fn(i32, i32) -> bool,
+        can_step: &impl Fn(i32, i32, bool) -> bool,
         effects: &mut Vec<StepEffect>,
     ) -> Option<(RouteAction, f32)> {
         let len = self.commands.len();
@@ -187,7 +193,7 @@ impl RouteStepper {
         &mut self,
         ch: &mut C,
         hero: (i32, i32),
-        can_step: &impl Fn(i32, i32) -> bool,
+        can_step: &impl Fn(i32, i32, bool) -> bool,
         effects: &mut Vec<StepEffect>,
         cmd: &MoveCommandDef,
     ) -> Step {
@@ -210,9 +216,9 @@ impl RouteStepper {
                 let dir = away_dir(hero, ch.tile());
                 self.try_move(ch, Some(dir), dir_delta(dir), can_step)
             }
-            11 => self.try_move(ch, None, dir_delta(ch.dir()), can_step),
+            11 => self.try_move(ch, None, dir_delta(self.direction(ch)), can_step),
             12..=15 => {
-                ch.set_dir(cmd.code - 12);
+                self.set_direction(ch, cmd.code - 12);
                 self.gate_turn()
             }
             16 => self.turn(ch, 1),
@@ -224,20 +230,30 @@ impl RouteStepper {
             }
             20 => {
                 let dir = self.random_dir();
-                ch.set_dir(dir);
+                self.set_direction(ch, dir);
                 self.gate_turn()
             }
             21 => {
-                ch.set_dir(toward_dir(hero, ch.tile()));
+                self.set_direction(ch, toward_dir(hero, ch.tile()));
                 self.gate_turn()
             }
             22 => {
-                ch.set_dir(away_dir(hero, ch.tile()));
+                self.set_direction(ch, away_dir(hero, ch.tile()));
                 self.gate_turn()
             }
             23 => {
                 self.timer = wait_delay_secs(self.frequency);
                 Step::Gate(None)
+            }
+            24 => self.begin_jump(ch, hero, can_step),
+            26 => {
+                self.direction = Some(self.direction(ch));
+                self.facing_lock = Some(ch.dir());
+                Step::Next
+            }
+            27 => {
+                self.facing_lock = None;
+                Step::Next
             }
             28 => self.retune(&mut Self::adjust_speed, 1),
             29 => self.retune(&mut Self::adjust_speed, -1),
@@ -285,8 +301,6 @@ impl RouteStepper {
                 effects.push(StepEffect::Transparency(self.transparency));
                 Step::Next
             }
-            // Jump markers (24/25), facing lock (26/27), animation pause (38/39),
-            // and any unknown code: no observable effect in this remake.
             _ => Step::Next,
         }
     }
@@ -300,21 +314,21 @@ impl RouteStepper {
         ch: &mut C,
         new_dir: Option<u32>,
         (dx, dy): (i32, i32),
-        can_step: &impl Fn(i32, i32) -> bool,
+        can_step: &impl Fn(i32, i32, bool) -> bool,
     ) -> Step {
-        let prev = ch.dir();
+        let prev = self.direction(ch);
         if let Some(dir) = new_dir {
-            ch.set_dir(dir);
+            self.set_direction(ch, dir);
         }
         let face = ch.dir();
-        if self.through || can_step(dx, dy) {
+        if self.through || can_step(dx, dy, false) {
             self.timer = step_delay_secs(self.frequency);
             Step::Gate(Some((
                 RouteAction::Step { dx, dy, face },
                 step_secs_for_speed(self.speed),
             )))
         } else if self.skippable {
-            ch.set_dir(prev);
+            self.set_direction(ch, prev);
             Step::Next
         } else {
             self.timer = step_delay_secs(self.frequency);
@@ -323,8 +337,19 @@ impl RouteStepper {
     }
 
     fn turn<C: Character>(&mut self, ch: &mut C, quarters: u32) -> Step {
-        ch.set_dir((ch.dir() + quarters) % 4);
+        self.set_direction(ch, (self.direction(ch) + quarters) % 4);
         self.gate_turn()
+    }
+
+    fn direction<C: Character>(&self, ch: &C) -> u32 {
+        self.direction.unwrap_or_else(|| ch.dir())
+    }
+
+    fn set_direction<C: Character>(&mut self, ch: &mut C, dir: u32) {
+        self.direction = Some(dir);
+        if self.facing_lock.is_none() {
+            ch.set_dir(dir);
+        }
     }
 
     fn gate_turn(&mut self) -> Step {

@@ -1,6 +1,27 @@
 use amnezia_data::{EventCommand, Map};
 use bevy::prelude::*;
 
+pub(super) fn escaped_airship_cast(world: &mut World) -> u8 {
+    if world.resource::<crate::world::MapData>().map_id != 94 {
+        return 0;
+    }
+    let mut mask = 0;
+    for event in world.query::<&crate::world::EventSprite>().iter(world) {
+        if !(2..=6).contains(&event.id) || (event.charset.as_str(), event.index) != ("Torch", 1) {
+            continue;
+        }
+        let destination = [(13, 15), (12, 15), (14, 15), (15, 15), (13, 15)][event.id as usize - 2];
+        assert_eq!(
+            (event.tile_x, event.tile_y),
+            destination,
+            "escaped event {}",
+            event.id
+        );
+        mask |= 1 << (event.id - 2);
+    }
+    mask
+}
+
 pub(super) fn verify_airship_staging(world: &mut World) {
     assert!(world.resource::<crate::dialogue::Dialogue>().active);
     let mut query = world.query::<(&crate::world::EventSprite, &Visibility)>();

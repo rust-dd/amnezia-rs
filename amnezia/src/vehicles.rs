@@ -207,7 +207,7 @@ fn advance(
             &mut motion.route,
             (x, y),
             time.delta_secs(),
-            |dx, dy| x + dx >= 0 && y + dy >= 0 && x + dx < data.width && y + dy < data.height,
+            |dx, dy, _| x + dx >= 0 && y + dy >= 0 && x + dx < data.width && y + dy < data.height,
         );
         if routed {
             vehicle.speed = motion.route.speed();

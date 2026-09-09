@@ -1,0 +1,81 @@
+use super::*;
+
+impl RouteStepper {
+    pub(super) fn begin_jump<C: Character>(
+        &mut self,
+        ch: &mut C,
+        hero: (i32, i32),
+        can_step: &impl Fn(i32, i32, bool) -> bool,
+    ) -> Step {
+        let Some(end) = self.commands[self.index + 1..]
+            .iter()
+            .position(|cmd| cmd.code == 25)
+            .map(|offset| self.index + 1 + offset)
+        else {
+            self.index = self.commands.len();
+            return Step::Next;
+        };
+        let (mut dx, mut dy) = (0, 0);
+        let previous = self.direction(ch);
+        let mut direction = previous;
+        for index in self.index + 1..end {
+            let code = self.commands[index].code;
+            match code {
+                0..=3 => direction = code,
+                4..=7 => {
+                    let delta = DIAGONALS[(code - 4) as usize];
+                    dx += delta.0;
+                    dy += delta.1;
+                    direction = if delta.1 < 0 { DIR_UP } else { DIR_DOWN };
+                    continue;
+                }
+                8 | 20 => direction = self.random_dir(),
+                9 | 21 => direction = toward_dir(hero, ch.tile()),
+                10 | 22 => direction = away_dir(hero, ch.tile()),
+                12..=15 => direction = code - 12,
+                16 => direction = (direction + 1) % 4,
+                17 => direction = (direction + 3) % 4,
+                18 => direction = (direction + 2) % 4,
+                19 => direction = (direction + if self.random_bit() { 1 } else { 3 }) % 4,
+                _ => {}
+            }
+            if code <= 11 {
+                let delta = dir_delta(direction);
+                dx += delta.0;
+                dy += delta.1;
+            }
+        }
+        let direction = if dx.abs() > dy.abs() {
+            if dx < 0 { DIR_LEFT } else { DIR_RIGHT }
+        } else if dy < 0 {
+            DIR_UP
+        } else {
+            DIR_DOWN
+        };
+        self.set_direction(ch, direction);
+        if (dx != 0 || dy != 0) && !self.through && !can_step(dx, dy, true) {
+            self.timer = step_delay_secs(self.frequency);
+            if self.skippable {
+                self.set_direction(ch, previous);
+                self.index = end;
+                return Step::Next;
+            }
+            return Step::Retry;
+        }
+        self.index = end;
+        self.timer = step_delay_secs(self.frequency);
+        let per_frame = [8_u32, 12, 16, 24, 32, 64][(self.speed - 1) as usize];
+        let seconds = 256_u32.div_ceil(per_frame) as f32 / FPS;
+        Step::Gate(Some((
+            RouteAction::Jump {
+                dx,
+                dy,
+                face: ch.dir(),
+            },
+            seconds,
+        )))
+    }
+}
+
+#[cfg(test)]
+mod tests;

@@ -9,6 +9,8 @@ pub struct SmokePlugin;
 struct SmokeRun {
     frame: u32,
     scenario: &'static str,
+    escaped_cast: u8,
+    finish_at: Option<u32>,
 }
 
 impl Plugin for SmokePlugin {
@@ -24,6 +26,8 @@ impl Plugin for SmokePlugin {
             "timer"
         } else if std::env::args().any(|arg| arg == "--smoke-panorama") {
             "panorama"
+        } else if std::env::args().any(|arg| arg == "--smoke-airship-escape") {
+            "escape"
         } else if std::env::args().any(|arg| arg == "--smoke-font") {
             "font"
         } else if std::env::args().any(|arg| arg == "--smoke-menu") {
@@ -31,17 +35,22 @@ impl Plugin for SmokePlugin {
         } else {
             "intro"
         };
-        app.insert_resource(SmokeRun { frame: 0, scenario })
-            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
-                std::time::Duration::from_secs_f64(1.0 / 60.0),
-            ))
-            .add_systems(
-                PreUpdate,
-                input
-                    .after(bevy::input::InputSystems)
-                    .before(crate::vehicles::VehicleInput),
-            )
-            .add_systems(PostUpdate, drive);
+        app.insert_resource(SmokeRun {
+            frame: 0,
+            scenario,
+            escaped_cast: 0,
+            finish_at: None,
+        })
+        .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+            std::time::Duration::from_secs_f64(1.0 / 60.0),
+        ))
+        .add_systems(
+            PreUpdate,
+            input
+                .after(bevy::input::InputSystems)
+                .before(crate::vehicles::VehicleInput),
+        )
+        .add_systems(PostUpdate, drive);
     }
 }
 
@@ -56,6 +65,7 @@ fn capture(world: &mut World, label: &str) {
 fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let advance = frame > 90
+        && world.resource::<SmokeRun>().finish_at.is_none()
         && !matches!(
             world.resource::<SmokeRun>().scenario,
             "font" | "panorama" | "timer"
@@ -97,6 +107,18 @@ fn drive(world: &mut World) {
         assert!(world.resource::<crate::battle::BattleActive>().0);
         world.resource_mut::<crate::timer::GameClock>().remaining = 1.0;
     }
+    if scenario == "escape" {
+        let escaped = scenarios::escaped_airship_cast(world);
+        world.resource_mut::<SmokeRun>().escaped_cast |= escaped;
+        if world.resource::<crate::world::MapData>().map_id == 86
+            && world.resource::<SmokeRun>().finish_at.is_none()
+        {
+            assert_eq!(world.resource::<SmokeRun>().escaped_cast, 0b11111);
+            assert!(!world.resource::<crate::player::HeroHidden>().0);
+            capture(world, "escape");
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 60);
+        }
+    }
     if frame.is_multiple_of(300) {
         let map = world.resource::<crate::world::MapData>().map_id;
         let running = world
@@ -108,13 +130,23 @@ fn drive(world: &mut World) {
             .map(|p| (p.tile_x, p.tile_y));
         info!("smoke frame={frame} map={map} hero={hero:?} event={running:?}");
     }
-    if frame == 1200 {
+    if frame == 1200 && scenario != "escape" {
         capture(world, scenario);
     }
     if frame == 360 && scenario != "intro" {
         capture(world, &format!("{scenario}-early"));
     }
-    if frame >= 1260 {
+    let finish = world
+        .resource::<SmokeRun>()
+        .finish_at
+        .unwrap_or(if scenario == "escape" { 2400 } else { 1260 });
+    if frame >= finish {
+        if scenario == "escape" {
+            assert!(
+                world.resource::<SmokeRun>().finish_at.is_some(),
+                "airship escape never reached the forest scene"
+            );
+        }
         if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(
@@ -247,7 +279,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
             string: String::new(),
             params: vec![3, 15, 6],
         }]
-    } else if scenario == "panorama" {
+    } else if matches!(scenario, "panorama" | "escape") {
         scenarios::airship_interior_entry()
     } else {
         unreachable!("unknown smoke scenario: {scenario}")

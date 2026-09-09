@@ -12,7 +12,7 @@ mod stepper;
 
 pub use stepper::RouteStepper;
 
-use super::{Character, EventSprite, MapData, MapEvents, MoveQueue, RouteAction};
+use super::{Character, EventSprite, MapData, MapEvents, MoveQueue};
 use crate::audio::AudioRequest;
 use crate::player::Player;
 use crate::state::{Inventory, Party, Switches, Variables};
@@ -49,7 +49,7 @@ pub(crate) fn drive<C: Character>(
     stepper: &mut RouteStepper,
     hero: (i32, i32),
     dt: f32,
-    can_step: impl Fn(i32, i32) -> bool,
+    can_step: impl Fn(i32, i32, bool) -> bool,
 ) -> Driven {
     if !stepper.active() || queue.busy() {
         return Driven::idle();
@@ -58,13 +58,14 @@ pub(crate) fn drive<C: Character>(
         return Driven::idle();
     }
     let mut effects = Vec::new();
-    let moved = stepper.advance(ch, hero, &can_step, &mut effects).map(
-        |(RouteAction::Step { dx, dy, face }, secs)| {
+    let moved = stepper
+        .advance(ch, hero, &can_step, &mut effects)
+        .map(|(action, secs)| {
+            let delta = action.delta();
             queue.set_step_secs(secs);
-            queue.enqueue_route([RouteAction::Step { dx, dy, face }]);
-            (dx, dy)
-        },
-    );
+            queue.enqueue_route([action]);
+            delta
+        });
     Driven { moved, effects }
 }
 
@@ -99,6 +100,7 @@ fn tile_open(
     ey: i32,
     dx: i32,
     dy: i32,
+    jumping: bool,
     mover: (u32, u32),
     hero: (i32, i32),
     data: &MapData,
@@ -110,7 +112,11 @@ fn tile_open(
         && ny >= 0
         && nx < data.width
         && ny < data.height
-        && data.can_move(ex, ey, nx, ny)
+        && if jumping {
+            data.passable(nx, ny)
+        } else {
+            data.can_move(ex, ey, nx, ny)
+        }
         && (mover.1 != 1 || (nx, ny) != hero)
         && !super::collision::event_blocks_at(map_events, state, mover, (nx, ny))
 }
@@ -162,7 +168,7 @@ pub(super) fn route_events(
         // Scope `can_step` (which borrows the switches and events) so it drops
         // before either is mutated: the logical tile sync and a switch command.
         let driven = {
-            let can_step = |dx: i32, dy: i32| {
+            let can_step = |dx: i32, dy: i32, jumping: bool| {
                 if layer == 1 && (ex + dx, ey + dy) == hero {
                     touched.set(true);
                 }
@@ -171,6 +177,7 @@ pub(super) fn route_events(
                     ey,
                     dx,
                     dy,
+                    jumping,
                     (self_id, layer),
                     hero,
                     &data,
@@ -223,12 +230,13 @@ pub(super) fn route_hero(
     let pos = (ex, ey);
     let dt = time.delta_secs();
     let driven = {
-        let can_step = |dx: i32, dy: i32| {
+        let can_step = |dx: i32, dy: i32, jumping: bool| {
             tile_open(
                 ex,
                 ey,
                 dx,
                 dy,
+                jumping,
                 (0, 1),
                 pos,
                 &data,

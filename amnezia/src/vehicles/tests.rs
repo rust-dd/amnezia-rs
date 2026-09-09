@@ -44,7 +44,7 @@ fn original_airship_move_route_advances_character_and_survives_save() {
             &mut motion.route,
             (55, 100),
             1.0 / 60.0,
-            |_, _| true,
+            |_, _, _| true,
         );
         motion.queue.advance(vehicle, &data, 1.0 / 60.0);
     }
@@ -75,7 +75,7 @@ fn original_fortress_flight_finishes_before_its_four_second_wait() {
             &mut motion.route,
             (55, 100),
             1.0 / 60.0,
-            |_, _| true,
+            |_, _, _| true,
         );
         motion.queue.advance(vehicle, &data, 1.0 / 60.0);
     }
