@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 mod character_animation;
+mod collision;
 mod enemy_actions;
 mod message_options;
 mod scrolling;

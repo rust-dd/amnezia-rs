@@ -54,6 +54,8 @@ pub struct EventPage {
     pub animation_type: u32,
     #[serde(default, skip_serializing_if = "opaque_page")]
     pub translucent: bool,
+    #[serde(default, skip_serializing_if = "allows_overlap")]
+    pub overlap_forbidden: bool,
     #[serde(default)]
     pub move_type: u32,
     #[serde(default = "default_move_frequency")]
@@ -83,6 +85,10 @@ fn default_animation(value: &u32) -> bool {
 
 fn opaque_page(translucent: &bool) -> bool {
     !*translucent
+}
+
+fn allows_overlap(forbidden: &bool) -> bool {
+    !*forbidden
 }
 
 fn default_move_frequency() -> u32 {

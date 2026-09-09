@@ -1,6 +1,13 @@
 use super::*;
 
 #[test]
+fn overlap_forbidden_defaults_to_false_and_preserves_explicit_values() {
+    assert!(!parse_pages(&[1, 1, 0]).unwrap()[0].overlap_forbidden);
+    assert!(!parse_pages(&[1, 1, 0x23, 1, 0, 0]).unwrap()[0].overlap_forbidden);
+    assert!(parse_pages(&[1, 1, 0x23, 1, 1, 0]).unwrap()[0].overlap_forbidden);
+}
+
+#[test]
 fn page_translucency_defaults_to_opaque_and_preserves_both_explicit_values() {
     assert!(!parse_pages(&[1, 1, 0]).unwrap()[0].translucent);
     assert!(!parse_pages(&[1, 1, 0x19, 1, 0, 0]).unwrap()[0].translucent);
