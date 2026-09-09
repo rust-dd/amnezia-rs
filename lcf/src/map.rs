@@ -19,6 +19,7 @@ const DEFAULT_HEIGHT: u32 = 15;
 
 /// A parsed RPG Maker 2000 map unit (only the fields the renderer needs).
 pub struct MapUnit {
+    pub scroll_type: u32,
     pub panorama: Option<Panorama>,
     pub chipset_id: u32,
     pub width: u32,
@@ -60,6 +61,7 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     }
 
     let mut chipset_id = 1;
+    let mut scroll_type = 0;
     let mut width = DEFAULT_WIDTH;
     let mut height = DEFAULT_HEIGHT;
     let mut lower: Option<&[u8]> = None;
@@ -79,6 +81,7 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
             0x01 => chipset_id = Reader::new(data).varint()?,
             0x02 => width = Reader::new(data).varint()?,
             0x03 => height = Reader::new(data).varint()?,
+            0x0B => scroll_type = Reader::new(data).varint()?,
             0x1F => panorama_enabled = Reader::new(data).varint()? != 0,
             0x20 => panorama.name = crate::decode_cp1250(data),
             0x21 => panorama.loop_x = Reader::new(data).varint()? != 0,
@@ -101,6 +104,7 @@ pub fn parse_map(bytes: &[u8]) -> Result<MapUnit, LcfError> {
     let upper_layer = decode_layer(upper, "upper", expected)?;
 
     Ok(MapUnit {
+        scroll_type,
         panorama: panorama_enabled.then_some(panorama),
         chipset_id,
         width,
@@ -152,6 +156,23 @@ mod tests {
     }
 
     #[test]
+    fn preserves_each_map_loop_mode_and_defaults_to_no_loop() {
+        for mode in 0..=3 {
+            let file = make_lmu(
+                b"LcfMapUnit",
+                &[
+                    (0x02, varint(1)),
+                    (0x03, varint(1)),
+                    (0x0B, varint(mode)),
+                    (0x47, layer_bytes(&[0])),
+                    (0x48, layer_bytes(&[0])),
+                ],
+            );
+            assert_eq!(parse_map(&file).unwrap().scroll_type, mode);
+        }
+    }
+
+    #[test]
     fn applies_defaults_for_omitted_width_height() {
         let file = make_lmu(
             b"LcfMapUnit",
@@ -163,6 +184,7 @@ mod tests {
         );
         let map = parse_map(&file).unwrap();
         assert_eq!((map.width, map.height), (20, 15));
+        assert_eq!(map.scroll_type, 0);
         assert_eq!(map.lower_layer.len(), 300);
         assert_eq!(map.upper_layer.len(), 300);
     }

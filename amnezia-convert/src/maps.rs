@@ -92,6 +92,7 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
             })
             .collect();
         let map = Map {
+            scroll_type: unit.scroll_type,
             panorama: unit.panorama.map(|p| amnezia_data::PanoramaDef {
                 name: p.name,
                 loop_x: p.loop_x,

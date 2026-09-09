@@ -42,6 +42,14 @@ fn sub(id: u32, data: &[u8]) -> Vec<u8> {
 }
 
 #[test]
+fn old_maps_without_loop_flags_stay_bounded_and_omit_the_default_when_serialized() {
+    let legacy = "(chipset_id:1,width:1,height:1,lower:[0],upper:[10000],events:[])";
+    let map = ron::from_str::<Map>(legacy).unwrap();
+    assert_eq!(map.scroll_type, 0);
+    assert!(!ron::to_string(&map).unwrap().contains("scroll_type"));
+}
+
+#[test]
 fn converts_lmu_to_map_ron() {
     let tmp = Path::new(env!("CARGO_TARGET_TMPDIR")).join("converts_lmu");
     let input = tmp.join("in");
@@ -53,6 +61,7 @@ fn converts_lmu_to_map_ron() {
         (0x01, varint(7)),
         (0x02, varint(2)),
         (0x03, varint(1)),
+        (0x0B, varint(3)),
         (0x47, layer_bytes(&[1, 2])),
         (0x48, layer_bytes(&[10, 11])),
     ]);
@@ -66,6 +75,7 @@ fn converts_lmu_to_map_ron() {
     assert_eq!(
         map,
         Map {
+            scroll_type: 3,
             panorama: None,
             chipset_id: 7,
             width: 2,

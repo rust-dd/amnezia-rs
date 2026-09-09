@@ -6,6 +6,8 @@ use serde::{Deserialize, Serialize};
 /// ground layer, `upper` the overlay layer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Map {
+    #[serde(default, skip_serializing_if = "scrolls_neither_axis")]
+    pub scroll_type: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panorama: Option<crate::PanoramaDef>,
     pub chipset_id: u32,
@@ -14,6 +16,10 @@ pub struct Map {
     pub lower: Vec<u16>,
     pub upper: Vec<u16>,
     pub events: Vec<Event>,
+}
+
+fn scrolls_neither_axis(value: &u32) -> bool {
+    *value == 0
 }
 
 /// A map event: its id, tile position, name, and pages.
