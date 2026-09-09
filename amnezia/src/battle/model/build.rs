@@ -49,17 +49,10 @@ impl Battle {
                 })
             })
             .collect();
-        let members: Vec<Fighter> = actors
+        let members = actors
             .iter()
             .enumerate()
             .map(|(idx, a)| {
-                let level = progression.level(a);
-                let (max_hp, max_sp) = logic::actor_hp_sp_at(&a.curves, level, a.hp, a.sp);
-                let (max_hp, max_sp) = (max_hp as i32, max_sp as i32);
-                let (hp, sp) = match vitals.get_stored(a.id) {
-                    Some((h, s)) => (h.min(max_hp), s.min(max_sp)),
-                    None => (max_hp, max_sp),
-                };
                 let slots = equipped.get(idx).copied().unwrap_or([
                     a.weapon,
                     a.shield,
@@ -67,36 +60,9 @@ impl Battle {
                     a.helmet,
                     a.accessory,
                 ]);
-                let mut stats = logic::actor_stats_at(&a.curves, level);
-                let bonus = logic::equipment_bonus_slots(slots, items);
-                stats.attack += bonus.attack;
-                stats.defense += bonus.defense;
-                stats.spirit += bonus.spirit;
-                stats.agility += bonus.agility;
-                let weapon = items.iter().find(|i| i.id == slots[0]);
-                Fighter {
-                    actor_id: a.id,
-                    name: a.name.clone(),
-                    hp,
-                    max_hp,
-                    sp,
-                    max_sp,
-                    stats,
-                    defending: false,
-                    command: None,
-                    weapon_hit: logic::effective_hit(weapon.map(|w| w.hit)),
-                    weapon_crit: weapon.map_or(0, |w| w.crit),
-                    weapon_element: weapon.and_then(|w| w.attribute_defense.first().copied()),
-                    attack_animation: match weapon {
-                        Some(w) => w.weapon_animation,
-                        None => a.unarmed_animation,
-                    },
-                    states: vitals.states(a.id).into_iter().map(|id| (id, 0)).collect(),
-                    resist_attributes: logic::equipment_resist_slots(slots, items),
-                    known_skills: progression.known_skill_ids(a),
-                }
+                Fighter::build(a, slots, items, vitals, progression)
             })
-            .collect();
+            .collect::<Vec<_>>();
         // The RM2000 escape chance is fixed at battle start from the two sides'
         // AVERAGE agilities (EasyRPG `InitEscapeChance`), then only nudged by +10
         // per failed attempt — never recomputed as combatants fall.
@@ -105,6 +71,7 @@ impl Battle {
         let enemy_avg =
             logic::average_agility(&enemies.iter().map(|e| e.stats.agility).collect::<Vec<_>>());
         Battle {
+            events: crate::battle::events::BattleEvents::new(&troop.pages),
             phase: Phase::PartyCommand,
             background,
             allow_escape: true,
@@ -121,6 +88,50 @@ impl Battle {
             round: 1,
             escape_chance: logic::init_escape_chance(party_avg, enemy_avg),
             ..default()
+        }
+    }
+}
+
+impl Fighter {
+    pub(in crate::battle) fn build(
+        actor: &ActorDef,
+        slots: [u32; 5],
+        items: &[ItemDef],
+        vitals: &Vitals,
+        progression: &Progression,
+    ) -> Self {
+        let level = progression.level(actor);
+        let (max_hp, max_sp) = logic::actor_hp_sp_at(&actor.curves, level, actor.hp, actor.sp);
+        let (max_hp, max_sp) = (max_hp as i32, max_sp as i32);
+        let (hp, sp) = vitals.get_stored(actor.id).unwrap_or((max_hp, max_sp));
+        let mut stats = logic::actor_stats_at(&actor.curves, level);
+        let bonus = logic::equipment_bonus_slots(slots, items);
+        stats.attack += bonus.attack;
+        stats.defense += bonus.defense;
+        stats.spirit += bonus.spirit;
+        stats.agility += bonus.agility;
+        let weapon = items.iter().find(|i| i.id == slots[0]);
+        Self {
+            actor_id: actor.id,
+            name: actor.name.clone(),
+            hp: hp.clamp(0, max_hp),
+            max_hp,
+            sp: sp.clamp(0, max_sp),
+            max_sp,
+            stats,
+            defending: false,
+            command: None,
+            weapon_hit: logic::effective_hit(weapon.map(|w| w.hit)),
+            weapon_crit: weapon.map_or(0, |w| w.crit),
+            weapon_element: weapon.and_then(|w| w.attribute_defense.first().copied()),
+            attack_animation: weapon.map_or(actor.unarmed_animation, |w| w.weapon_animation),
+            states: vitals
+                .states(actor.id)
+                .into_iter()
+                .map(|id| (id, 0))
+                .collect(),
+            resist_attributes: logic::equipment_resist_slots(slots, items),
+            known_skills: progression.known_skill_ids(actor),
         }
     }
 }

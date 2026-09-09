@@ -23,10 +23,18 @@ pub struct Dialogue {
     pub boxes: Vec<MessageBox>,
     pub index: usize,
     pub active: bool,
+    generation: u64,
     reveal: Option<Typewriter>,
 }
 
 impl Dialogue {
+    pub(crate) fn close(&mut self) {
+        self.active = false;
+        self.boxes.clear();
+        self.index = 0;
+        self.reveal = None;
+    }
+
     /// Show `boxes` from the first one. Called by the event interpreter, which
     /// then pauses until the player dismisses the last box (`active` clears).
     pub fn open(&mut self, boxes: Vec<MessageBox>) {
@@ -34,6 +42,7 @@ impl Dialogue {
         self.index = 0;
         self.active = true;
         self.reveal = None;
+        self.generation = self.generation.wrapping_add(1);
     }
 
     /// Advance past the current box to the next one, closing the dialogue when
@@ -42,9 +51,7 @@ impl Dialogue {
         self.index += 1;
         self.reveal = None;
         if self.index >= self.boxes.len() {
-            self.active = false;
-            self.boxes.clear();
-            self.index = 0;
+            self.close();
         }
     }
 }
@@ -69,6 +76,23 @@ pub struct MessageTransparent(pub bool);
 
 pub struct DialoguePlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct DialogueInput;
+
+pub(crate) fn verify_battle_layer(world: &mut World) {
+    assert!(world.resource::<Dialogue>().active);
+    let camera = world
+        .query_filtered::<Entity, With<crate::battle::HudCamera>>()
+        .single(world)
+        .unwrap();
+    let (target, visibility) = world
+        .query_filtered::<(&UiTargetCamera, &Visibility), With<view::DialoguePanel>>()
+        .single(world)
+        .unwrap();
+    assert_eq!(target.0, camera);
+    assert_eq!(*visibility, Visibility::Visible);
+}
+
 impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Dialogue>()
@@ -78,9 +102,10 @@ impl Plugin for DialoguePlugin {
             .add_systems(
                 Update,
                 (
-                    interact,
+                    interact.in_set(DialogueInput),
                     typewriter::drive_reveal,
                     view::render_box,
+                    view::target_camera,
                     view::render_reveal,
                     view::update_position,
                 )
@@ -109,9 +134,6 @@ fn interact(
     mut running: ResMut<RunningEvent>,
     players: Query<(&Player, Option<&crate::world::MoveQueue>)>,
 ) {
-    if scene.paused() {
-        return;
-    }
     if !keys.just_pressed(KeyCode::Space) && !keys.just_pressed(KeyCode::Enter) {
         return;
     }
@@ -126,6 +148,9 @@ fn interact(
             // The reveal has not been built yet this frame; ignore the press.
             None => {}
         }
+        return;
+    }
+    if scene.paused() {
         return;
     }
     if running.active() {

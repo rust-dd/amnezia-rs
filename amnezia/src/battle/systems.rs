@@ -76,6 +76,7 @@ pub(super) fn start_on_request(
     mut battle: ResMut<Battle>,
     mut active: ResMut<BattleActive>,
     mut result: ResMut<BattleResult>,
+    mut dialogue: Option<ResMut<crate::dialogue::Dialogue>>,
 ) {
     let Some(request) = requests.read().last() else {
         return;
@@ -125,6 +126,9 @@ pub(super) fn start_on_request(
     battle.text.apply(&terms.0);
     active.0 = true;
     result.0 = None;
+    if let Some(dialogue) = dialogue.as_deref_mut() {
+        dialogue.face = default();
+    }
     let system = &battle_data.system;
     map_bgm.memorize(current_bgm.track());
     if let Some(se) = AudioRequest::se(
@@ -178,7 +182,7 @@ pub(super) fn resolve_tick(
     mut battle: ResMut<Battle>,
     mut inventory: ResMut<Inventory>,
 ) {
-    if battle.phase != Phase::Resolve {
+    if battle.phase != Phase::Resolve || battle.events.blocks_action() {
         return;
     }
     // Hold the step while a slain foe plays out its death or explosion, so the
@@ -206,7 +210,13 @@ pub(super) fn resolve_tick(
         inventory.remove_item(item_id, 1);
         true
     });
-    if let Some(outcome) = battle.end_state() {
+    if battle.steps.is_empty() && !battle.anim_hold_active() {
+        battle.events.check_pages();
+    }
+    if let Some(outcome) = battle.end_state()
+        && battle.steps.is_empty()
+        && !battle.anim_hold_active()
+    {
         battle.finish(outcome);
         play_outcome_music(
             &mut audio,
@@ -223,7 +233,7 @@ pub(super) fn resolve_tick(
 /// music on a defeat. Both are sent as the looping BGM so they interrupt the
 /// battle track under the outcome screen; the map BGM restores on teardown. A
 /// successful escape has no fanfare (only its SE, played at the flee attempt).
-fn play_outcome_music(
+pub(super) fn play_outcome_music(
     audio: &mut MessageWriter<AudioRequest>,
     system: &SystemDef,
     overrides: Option<&crate::system_bgm::SystemBgm>,
@@ -370,6 +380,7 @@ pub(super) fn abort_expired_battle(
 /// [`BattleResult`], and tear the battle down. The victory reward (gold and
 /// experience) was already paid by [`apply_victory_rewards`] on entering the
 /// outcome, so it is not applied again here.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn outcome_input(
     keys: Res<ButtonInput<KeyCode>>,
     map_bgm: Res<MapBgm>,
@@ -378,6 +389,7 @@ pub(super) fn outcome_input(
     mut active: ResMut<BattleActive>,
     mut result: ResMut<BattleResult>,
     mut vitals: ResMut<Vitals>,
+    mut dialogue: Option<ResMut<crate::dialogue::Dialogue>>,
 ) {
     if battle.phase != Phase::Outcome {
         return;
@@ -388,6 +400,11 @@ pub(super) fn outcome_input(
         return;
     }
     let outcome = battle.outcome.unwrap_or(BattleOutcome::Escape);
+    if let Some(dialogue) = dialogue.as_deref_mut()
+        && dialogue.active
+    {
+        dialogue.close();
+    }
     for fighter in &battle.members {
         vitals.set(fighter.actor_id, fighter.hp.max(0), fighter.sp);
         let states = fighter

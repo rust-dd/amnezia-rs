@@ -24,7 +24,7 @@ const ANIM_HOLD_GRACE_TICKS: u32 = 12;
 pub const LOG_TAIL: usize = 5;
 
 /// The battle's coarse phase, which gates the input/resolve/outcome systems.
-#[derive(Default, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub enum Phase {
     #[default]
     Inactive,
@@ -52,6 +52,7 @@ pub enum MenuLevel {
 /// `Inactive` phase) between fights.
 #[derive(Resource, Default)]
 pub struct Battle {
+    pub(in crate::battle) events: crate::battle::events::BattleEvents,
     pub phase: Phase,
     pub background: String,
     pub allow_escape: bool,
@@ -250,6 +251,7 @@ impl Battle {
     /// plus each living enemy's AI-chosen action (`resolve::enemy_action`), and
     /// start resolving.
     pub(in crate::battle) fn begin_resolve(&mut self) {
+        self.events.next_turn();
         let alive: Vec<bool> = self.members.iter().map(|f| f.alive()).collect();
         let mut actions: Vec<Action> = Vec::new();
         for (i, f) in self.members.iter().enumerate() {

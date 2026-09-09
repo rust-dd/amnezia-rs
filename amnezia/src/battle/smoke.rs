@@ -1,6 +1,26 @@
 use super::model::{Battle, MenuLevel, Phase};
 use bevy::prelude::*;
 
+pub(crate) fn verify_events(world: &World) {
+    assert!(!world.resource::<super::BattleActive>().0);
+    assert!(
+        !world
+            .resource::<crate::interpreter::RunningEvent>()
+            .active()
+    );
+    assert!(world.resource::<crate::state::Switches>().get(9999));
+    let actor = world
+        .resource::<crate::gamedata::GameData>()
+        .actor(1)
+        .unwrap();
+    assert!(
+        world
+            .resource::<crate::progression::Progression>()
+            .known_skill_ids(actor)
+            .contains(&2)
+    );
+}
+
 pub(crate) fn prepare(world: &mut World) {
     world
         .resource_mut::<crate::state::Party>()

@@ -54,7 +54,7 @@ pub fn command_input(
     inventory: Res<Inventory>,
     mut battle: ResMut<Battle>,
 ) {
-    if !any_key(&keys) {
+    if !any_key(&keys) || battle.events.blocks_action() {
         return;
     }
     match battle.phase {

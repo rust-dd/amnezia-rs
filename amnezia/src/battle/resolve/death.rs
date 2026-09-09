@@ -8,7 +8,7 @@ impl Battle {
     /// leaving: a zoom-fade explosion for a self-destruct (`explode`), else the
     /// RM2000 blink-and-fade. A fled foe (it kept its HP) and an already-dying foe
     /// are left alone. `resolve_tick` then holds until it elapses.
-    pub(in crate::battle::resolve) fn start_foe_death(&mut self, ti: usize, explode: bool) {
+    pub(in crate::battle) fn start_foe_death(&mut self, ti: usize, explode: bool) {
         let foe = &mut self.enemies[ti];
         if foe.hp <= 0 && !foe.fled && foe.dying.is_none() {
             foe.dying = Some(Dying {

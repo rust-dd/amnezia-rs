@@ -78,6 +78,7 @@ pub(super) fn spawn_ui(
                 ..default()
             },
             Visibility::Hidden,
+            GlobalZIndex(100),
             DialoguePanel,
         ))
         .with_children(|panel| {
@@ -177,6 +178,26 @@ pub(super) fn spawn_ui(
         });
 }
 
+pub(super) fn target_camera(
+    mut commands: Commands,
+    battle: Res<crate::battle::BattleActive>,
+    cameras: Query<Entity, With<crate::battle::HudCamera>>,
+    panels: Query<Entity, With<DialoguePanel>>,
+) {
+    if !battle.is_changed() {
+        return;
+    }
+    for panel in &panels {
+        if battle.0 {
+            if let Ok(camera) = cameras.single() {
+                commands.entity(panel).insert(UiTargetCamera(camera));
+            }
+        } else {
+            commands.entity(panel).remove::<UiTargetCamera>();
+        }
+    }
+}
+
 /// An absolutely-positioned node filling its parent (the windowskin frame).
 fn fill_node() -> Node {
     inset_node(0.0)
@@ -204,7 +225,7 @@ pub(super) fn render_box(
     dialogue: Res<Dialogue>,
     transparent: Res<MessageTransparent>,
     asset_server: Res<AssetServer>,
-    mut last: Local<Option<(bool, usize, bool)>>,
+    mut last: Local<Option<(bool, u64, usize, bool)>>,
     mut panels: Query<
         &mut Visibility,
         (
@@ -232,7 +253,7 @@ pub(super) fn render_box(
     mut texts: Query<&mut Node, With<DialogueText>>,
 ) {
     let showing = dialogue.active && dialogue.index < dialogue.boxes.len();
-    let snapshot = (showing, dialogue.index, transparent.0);
+    let snapshot = (showing, dialogue.generation, dialogue.index, transparent.0);
     if *last == Some(snapshot) {
         return;
     }

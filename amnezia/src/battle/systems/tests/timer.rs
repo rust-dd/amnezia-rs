@@ -5,6 +5,7 @@ fn expired_mission_timer_returns_to_the_map_without_input_or_rewards() {
     let mut app = logic_app();
     app.add_systems(Update, abort_expired_battle.before(outcome_input));
     app.init_resource::<crate::timer::GameClock>();
+    app.init_resource::<crate::dialogue::Dialogue>();
     app.insert_resource(CurrentBgm::with_track("Mission", 0.8, 1.0));
     app.world_mut().write_message(BattleRequest {
         troop_id: DEBUG_TROOP,
@@ -14,10 +15,18 @@ fn expired_mission_timer_returns_to_the_map_without_input_or_rewards() {
     assert!(app.world().resource::<BattleActive>().0);
     app.world_mut().resource_mut::<Battle>().members[0].hp = 17;
     app.world_mut()
+        .resource_mut::<crate::dialogue::Dialogue>()
+        .open(vec![crate::events::MessageBox {
+            face: None,
+            face_index: 0,
+            lines: vec!["Interrupted battle dialogue".into()],
+        }]);
+    app.world_mut()
         .resource_mut::<crate::timer::GameClock>()
         .expired = true;
     app.update();
     assert!(!app.world().resource::<BattleActive>().0);
+    assert!(!app.world().resource::<crate::dialogue::Dialogue>().active);
     assert_eq!(
         app.world().resource::<BattleResult>().0,
         Some(BattleOutcome::Abort)

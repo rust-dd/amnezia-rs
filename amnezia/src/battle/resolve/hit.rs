@@ -10,7 +10,7 @@ impl Battle {
     /// flashes reach every target. A `0` id (no animation) or an empty target list
     /// is skipped, so an attacker with neither a weapon nor an unarmed animation
     /// plays nothing rather than a stray effect.
-    pub(in crate::battle::resolve) fn push_anim(&mut self, anim_id: u32, targets: Vec<(f32, f32)>) {
+    pub(in crate::battle) fn push_anim(&mut self, anim_id: u32, targets: Vec<(f32, f32)>) {
         if anim_id != 0 && !targets.is_empty() {
             self.pending_anims.push(PendingAnim { anim_id, targets });
         }
@@ -27,7 +27,7 @@ impl Battle {
     /// The screen offset for foe `ti`'s battle animation: its backdrop placement
     /// re-centred on the RM2000 320×240 screen (minus the 160×120 half-extent, y
     /// downward), matching the animation player's coordinates.
-    pub(in crate::battle::resolve) fn foe_anim_pos(&self, ti: usize) -> (f32, f32) {
+    pub(in crate::battle) fn foe_anim_pos(&self, ti: usize) -> (f32, f32) {
         (
             self.enemies[ti].x as f32 - 160.0,
             self.enemies[ti].y as f32 - 120.0,

@@ -24,6 +24,8 @@ impl Plugin for SmokePlugin {
             "battle"
         } else if std::env::args().any(|arg| arg == "--smoke-battle-menus") {
             "battle-menus"
+        } else if std::env::args().any(|arg| arg == "--smoke-battle-events") {
+            "battle-events"
         } else if std::env::args().any(|arg| arg == "--smoke-timer") {
             "timer"
         } else if std::env::args().any(|arg| arg == "--smoke-panorama") {
@@ -73,6 +75,7 @@ fn capture(world: &mut World, label: &str) {
 fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let advance = frame > 90
+        && (world.resource::<SmokeRun>().scenario != "battle-events" || frame > 240)
         && world.resource::<SmokeRun>().finish_at.is_none()
         && !matches!(
             world.resource::<SmokeRun>().scenario,
@@ -109,6 +112,10 @@ fn drive(world: &mut World) {
     }
     if frame == 150 && scenario != "intro" {
         start_scenario(world, scenario);
+    }
+    if frame == 240 && scenario == "battle-events" {
+        crate::dialogue::verify_battle_layer(world);
+        capture(world, "battle-events-message");
     }
     if frame == 300 && scenario == "menu" {
         world.resource_mut::<crate::menu::MenuOpen>().0 = true;
@@ -204,6 +211,8 @@ fn drive(world: &mut World) {
                 Some("House".to_string()),
                 "the battle must restore music requested immediately before the encounter"
             );
+        } else if scenario == "battle-events" {
+            crate::battle::smoke::verify_events(world);
         }
         world.write_message(AppExit::Success);
     }
@@ -244,7 +253,10 @@ fn start_scenario(world: &mut World, scenario: &str) {
             .position(|c| c.code == 10810)
             .map_or(commands.len(), |i| vehicle + i);
         commands[start..end].to_vec()
-    } else if matches!(scenario, "battle" | "timer" | "battle-menus") {
+    } else if matches!(
+        scenario,
+        "battle" | "timer" | "battle-menus" | "battle-events"
+    ) {
         let mut commands = if scenario == "timer" {
             let mut commands = vec![EventCommand {
                 code: 10810,
@@ -261,8 +273,23 @@ fn start_scenario(world: &mut World, scenario: &str) {
             code: 10710,
             indent: 0,
             string: "Cave1".into(),
-            params: vec![0, 2, 1, 0, 0, 0],
+            params: vec![
+                0,
+                if scenario == "battle-events" { 15 } else { 2 },
+                1,
+                0,
+                0,
+                0,
+            ],
         });
+        if scenario == "battle-events" {
+            commands.push(EventCommand {
+                code: 10210,
+                indent: 0,
+                string: String::new(),
+                params: vec![0, 9999, 9999, 0],
+            });
+        }
         commands
     } else if scenario == "font" {
         vec![

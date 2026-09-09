@@ -40,6 +40,7 @@ use exec::{Exec, run_frame};
 use frame::Frame;
 use params::Blockers;
 
+pub(crate) use commands::{actor_targets, apply_control_switches, operate_value};
 pub use parallel::{CommonEvents, ParallelPool};
 
 /// The foreground interpreter: one event page executing at a time. Wraps the

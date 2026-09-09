@@ -1,6 +1,9 @@
 use super::*;
 
 pub(super) fn rectangle(panel: Panel, battle: &Battle) -> Option<(f32, f32, f32, f32)> {
+    if battle.events.presenting() {
+        return None;
+    }
     match panel {
         Panel::Option if battle.phase == Phase::PartyCommand => Some((0.0, 160.0, 76.0, 80.0)),
         Panel::Status if battle.phase == Phase::PartyCommand => Some((76.0, 160.0, 244.0, 80.0)),

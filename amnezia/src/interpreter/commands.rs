@@ -11,7 +11,7 @@ use crate::state::{Inventory, Party, Switches, Variables};
 /// Apply a `ControlSwitches` command `[mode, start_id, end_id, op]` to the id
 /// range `start..=end`: op 0 turns switches ON, 1 OFF, 2 toggles. `mode` (direct
 /// range vs. variable-referenced id) is treated as a direct range for now.
-pub(super) fn apply_control_switches(switches: &mut Switches, params: &[i32]) {
+pub(crate) fn apply_control_switches(switches: &mut Switches, params: &[i32]) {
     let [_, start, end, op, ..] = params else {
         return;
     };
@@ -106,7 +106,7 @@ pub(super) fn battle_anim_wait(params: &[i32], frames: usize) -> Option<f32> {
 /// `OperateValue`: `operand_type` 0 reads the constant `operand`, 1 reads the
 /// value of variable `operand`; `operation` 1 (subtract) negates the result, any
 /// other (0 = add) leaves it. Shared by the actor `Change*` commands.
-pub(super) fn operate_value(
+pub(crate) fn operate_value(
     operation: i32,
     operand_type: i32,
     operand: i32,
@@ -123,7 +123,7 @@ pub(super) fn operate_value(
 /// The actor ids an actor-target `Change*` command addresses, mirroring EasyRPG's
 /// `GetActors`: mode 0 = the whole party, 1 = the fixed actor `id_operand`, 2 =
 /// the actor whose id is in variable `id_operand`. An unknown mode targets none.
-pub(super) fn actor_targets(
+pub(crate) fn actor_targets(
     mode: i32,
     id_operand: i32,
     variables: &Variables,

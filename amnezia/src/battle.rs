@@ -16,6 +16,7 @@
 //! live in [`systems`]; this module owns the plugin, the message/resource
 //! contract, and the battle-only database.
 
+mod events;
 mod floaters;
 mod hud;
 mod input;
@@ -135,9 +136,17 @@ impl Plugin for BattlePlugin {
                     systems::start_on_request.after(crate::audio::AudioRequests),
                     systems::debug_trigger,
                     input::command_input,
+                    events::drive
+                        .after(systems::start_on_request)
+                        .after(crate::dialogue::DialogueInput)
+                        .before(input::command_input)
+                        .before(systems::resolve_tick)
+                        .before(systems::apply_victory_rewards)
+                        .before(systems::outcome_input),
                     systems::abort_expired_battle
                         .after(crate::timer::ClockTick)
                         .after(systems::start_on_request)
+                        .before(events::drive)
                         .before(input::command_input)
                         .before(systems::resolve_tick)
                         .before(systems::apply_victory_rewards)
