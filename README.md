@@ -77,6 +77,6 @@ Run `cargo run -p amnezia --locked -- --debug-tools` to enable development short
 
 Core systems are implemented: event interpretation, map rendering and movement, dialogue, music, menus, shops/inns, turn-based battles, progression, and save/load. Automated tests cover original-data regressions including font selection, battle-menu geometry, revival targeting, item consumption, hit chances, and scripted airship movement.
 
-The restoration is not yet verified end-to-end. Remaining work includes a complete campaign playthrough, further original-scene visual comparisons, unfinished enemy skill effects/targeting, and save fidelity for transient map/event/music state. Passing focused tests does not establish full compatibility with every original event or battle.
+The restoration is not yet verified end-to-end. The [complete restoration checklist](docs/RESTORATION_CHECKLIST.md) tracks all known original-game differences, acceptance criteria, implementation progress, and remaining playthrough/release checks. Passing focused tests does not establish full compatibility with every original event or battle.
 
 Amnézia is freeware by MoonDragon Entertainment; this remake is non-commercial. Original game © MoonDragon Entertainment 2001/2004.
