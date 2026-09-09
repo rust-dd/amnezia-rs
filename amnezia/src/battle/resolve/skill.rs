@@ -209,63 +209,17 @@ impl Battle {
         lines
     }
 
-    /// Heal ally `ti` for caster `pi`'s `skill`: restore SP or HP (clamped to the
-    /// maximum), then cure each of the skill's affected states from that ally. The
-    /// skill's battle animation is queued once for the whole cast by
-    /// [`Battle::cast_skill`], not here.
     pub(in crate::battle::resolve) fn skill_heal_ally(
         &mut self,
         pi: usize,
         ti: usize,
         skill: &SkillDef,
     ) -> Vec<String> {
-        if !self.ally_skill_target(ti, skill) {
-            return Vec::new();
-        }
-        let caster = self.members[pi].name.clone();
-        let target = self.members[ti].name.clone();
-        let base = logic::skill_effect(
-            skill,
-            &self.members[pi].stats,
-            &self.members[ti].stats,
-            false,
-        );
-        let roll = rng_next(&mut self.rng);
-        let amt = logic::variance_adjust(base, skill.variance as i32, roll).max(0);
-        let f = &mut self.members[ti];
-        let was_dead = !f.alive();
-        let old_hp = f.hp.max(0);
-        let old_sp = f.sp;
-        if skill.affect_sp {
-            f.sp = (f.sp + amt).min(f.max_sp);
-        }
-        let hp_gain = if skill.affect_hp {
-            amt
-        } else if was_dead {
-            // RPG_RT treats revival power as a percentage when HP is unchecked.
-            f.max_hp * amt / 100
+        if self.ally_skill_target(ti, skill) {
+            self.skill_heal_battler(Source::Party(pi), Source::Party(ti), skill)
         } else {
-            0
-        };
-        f.hp = (old_hp + hp_gain).min(f.max_hp);
-        if was_dead {
-            f.hp = f.hp.max(1);
+            Vec::new()
         }
-        let shown = (f.hp - old_hp).max(f.sp - old_sp);
-        if shown > 0 {
-            let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
-            self.push_number(pos, shown.to_string(), NumberKind::Heal);
-        }
-        let mut lines = vec![format!("{caster} varázsol: {target} +{shown}")];
-        for &sid in &skill.affected_states {
-            if logic::has_state(&self.members[ti].states, sid) {
-                logic::cure(&mut self.members[ti].states, sid);
-                if let Some(state) = self.states.iter().find(|s| s.id == sid) {
-                    lines.push(format!("{target} gyógyul: {}", state.name));
-                }
-            }
-        }
-        lines
     }
 
     pub(in crate::battle::resolve) fn ally_skill_target(

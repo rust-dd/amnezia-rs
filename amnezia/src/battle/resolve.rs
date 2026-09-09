@@ -20,6 +20,7 @@ mod enemy_skill;
 mod hit;
 mod item;
 mod skill;
+mod skill_heal;
 mod skill_pools;
 mod state;
 mod step;

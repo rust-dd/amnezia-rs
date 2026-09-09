@@ -84,6 +84,21 @@ impl Battle {
     /// target and a felled target starts its own death-hold before the next beat.
     fn run_step(&mut self, step: Step) {
         match step {
+            Step::EnemySkillTarget {
+                ei,
+                target,
+                skill_id,
+            } => {
+                if let Some(skill) = self
+                    .skills
+                    .iter()
+                    .find(|skill| skill.id == skill_id)
+                    .cloned()
+                {
+                    let lines = self.enemy_skill_target(ei, target, &skill);
+                    self.log.extend(lines);
+                }
+            }
             Step::HitEnemy { pi, ti, skill_id } => {
                 if !self.enemies.get(ti).is_some_and(|e| e.alive()) {
                     return;
@@ -259,6 +274,9 @@ impl Battle {
             }
             (Source::Enemy(ei), Command::Skill { skill_id, target }) => {
                 let Some(skill) = self.skills.iter().find(|s| s.id == skill_id).cloned() else {
+                    return;
+                };
+                let Some(target) = self.enemy_skill_target_index(&skill, target) else {
                     return;
                 };
                 let anchors = self.enemy_skill_anim_anchors(ei, &skill, target);

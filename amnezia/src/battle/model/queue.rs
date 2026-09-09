@@ -59,6 +59,11 @@ pub(in crate::battle) enum Step {
     HitEnemy { pi: usize, ti: usize, skill_id: u32 },
     /// Apply caster `pi`'s multi-target heal to one more ally `ti`.
     HealAlly { pi: usize, ti: usize, skill_id: u32 },
+    EnemySkillTarget {
+        ei: usize,
+        target: usize,
+        skill_id: u32,
+    },
     /// The damage beat after a "Kritikus!" announcement: land the precomputed
     /// `dmg` of member `pi`'s critical strike on enemy `ti`.
     CritDamage { ti: usize, dmg: i32 },

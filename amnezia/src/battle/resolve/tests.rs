@@ -240,6 +240,7 @@ mod attacks;
 mod conditions;
 mod enemies;
 mod enemy_ai;
+mod enemy_targets;
 mod item_consumption;
 mod presentation;
 mod recovery;
