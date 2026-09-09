@@ -358,6 +358,7 @@ mod tests {
 
     fn level_def() -> amnezia_data::ActorDef {
         amnezia_data::ActorDef {
+            state_ranks: Vec::new(),
             id: 1,
             name: "Ron".into(),
             title: String::new(),

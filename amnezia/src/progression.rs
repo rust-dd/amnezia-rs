@@ -189,6 +189,7 @@ mod tests {
 
     fn def() -> ActorDef {
         ActorDef {
+            state_ranks: Vec::new(),
             id: 1,
             name: "Ron".into(),
             title: String::new(),

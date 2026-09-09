@@ -1,6 +1,17 @@
 use amnezia_data::StateDef;
 use std::path::Path;
 
+#[test]
+fn legacy_state_ron_uses_editor_rates_without_overwriting_explicit_zero() {
+    let legacy = r#"(id:1,name:"",restriction:0,priority:50,hold_turn:0,auto_release_prob:0,release_by_damage:0)"#;
+    assert_eq!(
+        ron::from_str::<StateDef>(legacy).unwrap().rates,
+        [100, 80, 60, 30, 0]
+    );
+    let explicit = legacy.replacen('(', "(rates:(0,0,0,0,0),", 1);
+    assert_eq!(ron::from_str::<StateDef>(&explicit).unwrap().rates, [0; 5]);
+}
+
 fn varint(mut v: u32) -> Vec<u8> {
     let mut groups = vec![(v & 0x7F) as u8];
     v >>= 7;
@@ -67,6 +78,8 @@ fn converts_ldb_to_states_ron() {
             subchunk(0x15, &varint(1)),
             subchunk(0x16, &varint(25)),
             subchunk(0x17, &varint(50)),
+            subchunk(0x0B, &varint(0)),
+            subchunk(0x0E, &varint(40)),
         ],
     );
     // Poison: acts normally (restriction omitted -> 0), priority omitted -> 50,
@@ -92,6 +105,7 @@ fn converts_ldb_to_states_ron() {
     assert_eq!(
         states[0],
         StateDef {
+            rates: [0, 80, 60, 40, 0],
             persistence: 0,
             id: 1,
             name: "Alvas".to_string(),
@@ -108,6 +122,7 @@ fn converts_ldb_to_states_ron() {
         }
     );
     assert_eq!(states[1].name, "Mereg");
+    assert_eq!(states[1].rates, [100, 80, 60, 30, 0]);
     assert_eq!(states[1].restriction, 0);
     assert_eq!(states[1].priority, 50, "omitted priority defaults to 50");
     assert_eq!(

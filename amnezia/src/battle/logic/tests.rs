@@ -27,6 +27,7 @@ fn skill(id: u32, name: &str, sp_cost: u32, power: u32) -> SkillDef {
 
 fn gear(id: u32, atk: u32, def: u32, spi: u32, agi: u32) -> ItemDef {
     ItemDef {
+        state_chance: 0,
         id,
         name: String::new(),
         description: String::new(),
@@ -292,6 +293,7 @@ fn state_infliction_chance_maps_ranks_a_through_e() {
 
 fn state(id: u32, restriction: u32, hold_turn: u32, auto: u32, by_damage: u32) -> StateDef {
     StateDef {
+        rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,
         name: format!("S{id}"),
@@ -367,6 +369,7 @@ fn release_on_damage_lifts_by_chance_and_spares_the_death_state() {
 
 fn state_hp(id: u32, hp_change_type: u32, hp_change_max: u32, hp_change_val: u32) -> StateDef {
     StateDef {
+        rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,
         name: format!("S{id}"),

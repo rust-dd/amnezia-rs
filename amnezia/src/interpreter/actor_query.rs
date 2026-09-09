@@ -90,6 +90,7 @@ pub(super) mod fixtures {
 
     pub(in crate::interpreter) fn actor_def() -> ActorDef {
         ActorDef {
+            state_ranks: Vec::new(),
             id: 1,
             name: "Ron".into(),
             title: String::new(),
@@ -127,6 +128,7 @@ pub(super) mod fixtures {
 
     pub(in crate::interpreter) fn weapon(id: u32, atk: u32) -> ItemDef {
         ItemDef {
+            state_chance: 0,
             id,
             name: String::new(),
             description: String::new(),

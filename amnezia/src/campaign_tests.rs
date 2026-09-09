@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 mod enemy_actions;
+mod state_resistance;
 mod troop_events;
 
 fn maps() -> BTreeMap<u32, Map> {

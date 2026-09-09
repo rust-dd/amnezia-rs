@@ -12,6 +12,7 @@ pub(super) const ITEM_HERB: u32 = 5;
 /// starting HP/SP and battle's linear stat formula, no equipment.
 pub(super) fn actor() -> ActorDef {
     ActorDef {
+        state_ranks: Vec::new(),
         id: 1,
         name: "Ron".into(),
         title: "Zsoldos".into(),
@@ -57,6 +58,7 @@ pub(super) fn weapon(id: u32, name: &str, atk: u32) -> ItemDef {
 /// An item with every effect field zeroed, ready to specialise.
 pub(super) fn blank_item(id: u32, item_type: u32) -> ItemDef {
     ItemDef {
+        state_chance: 0,
         id,
         name: "Tárgy".into(),
         description: String::new(),

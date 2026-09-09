@@ -29,6 +29,7 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// default to `0` (a zero-amount no-op); Poison sets them to bleed HP each turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
+    pub rates: [u32; 5],
     pub persistence: u32,
     pub id: u32,
     pub name: String,
@@ -77,6 +78,7 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut state = State {
+            rates: [100, 80, 60, 30, 0],
             persistence: 0,
             id,
             name: String::new(),
@@ -99,6 +101,9 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
             let sub_size = reader.varint()? as usize;
             let sub_data = reader.take(sub_size)?;
             match sub_id {
+                0x0B..=0x0F => {
+                    state.rates[(sub_id - 0x0B) as usize] = Reader::new(sub_data).varint()?
+                }
                 STATE_NAME => state.name = decode_cp1250(sub_data),
                 0x02 => state.persistence = Reader::new(sub_data).varint()?,
                 STATE_PRIORITY => state.priority = Reader::new(sub_data).varint()?,
@@ -152,6 +157,7 @@ mod tests {
         assert_eq!(
             states[0],
             State {
+                rates: [100, 80, 60, 30, 0],
                 persistence: 0,
                 id: 1,
                 name: "Alvas".to_string(),
@@ -246,5 +252,18 @@ mod tests {
     fn parse_states_errors_when_section_absent() {
         let ldb = make_ldb(&[(0x14, section(&[]))]);
         assert!(matches!(parse_states(&ldb), Err(LcfError::MissingStates)));
+    }
+
+    #[test]
+    fn state_rates_preserve_defaults_and_explicit_zero() {
+        let chunks = [0, 85, 70, 40, 0]
+            .into_iter()
+            .enumerate()
+            .map(|(i, value)| subchunk(0x0B + i as u32, &varint(value)))
+            .collect::<Vec<_>>();
+        let ldb = make_ldb(&[(0x12, section(&[element(1, &[]), element(2, &chunks)]))]);
+        let states = parse_states(&ldb).unwrap();
+        assert_eq!(states[0].rates, [100, 80, 60, 30, 0]);
+        assert_eq!(states[1].rates, [0, 85, 70, 40, 0]);
     }
 }

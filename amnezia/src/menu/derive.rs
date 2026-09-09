@@ -88,6 +88,7 @@ mod tests {
 
     fn def() -> ActorDef {
         ActorDef {
+            state_ranks: Vec::new(),
             id: 1,
             name: "Ron".into(),
             title: "Zsoldos".into(),
@@ -115,6 +116,7 @@ mod tests {
 
     fn weapon(id: u32, atk: u32) -> ItemDef {
         ItemDef {
+            state_chance: 0,
             id,
             name: "Kard".into(),
             description: String::new(),

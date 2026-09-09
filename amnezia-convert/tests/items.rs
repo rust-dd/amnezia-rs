@@ -97,6 +97,7 @@ fn converts_ldb_to_items_ron() {
     assert_eq!(
         items[0],
         ItemDef {
+            state_chance: 0,
             id: 1,
             name: "Ton-Kard".to_string(),
             description: "Éles".to_string(),
@@ -157,4 +158,35 @@ fn explicit_zero_item_fields_survive_ron_loading() {
     )
     .unwrap();
     assert_eq!((item.uses, item.hit, item.weapon_animation), (0, 0, 0));
+}
+
+#[test]
+fn equipment_state_probability_survives_ldb_and_ron_conversion() {
+    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR")).join("converts_equipment_state_chance");
+    let input = tmp.join("in");
+    let output = tmp.join("out");
+    std::fs::create_dir_all(&input).unwrap();
+    let ldb = make_ldb(
+        0x0D,
+        &[
+            element(
+                1,
+                &[subchunk(0x03, &varint(2)), subchunk(0x43, &varint(75))],
+            ),
+            element(2, &[]),
+            element(3, &[subchunk(0x43, &varint(0))]),
+        ],
+    );
+    std::fs::write(input.join("RPG_RT.ldb"), ldb).unwrap();
+    amnezia_convert::convert_items(&input, &output).unwrap();
+    let items =
+        ron::from_str::<Vec<ItemDef>>(&std::fs::read_to_string(output.join("items.ron")).unwrap())
+            .unwrap();
+    assert_eq!(
+        items
+            .iter()
+            .map(|item| item.state_chance)
+            .collect::<Vec<_>>(),
+        [75, 0, 0]
+    );
 }

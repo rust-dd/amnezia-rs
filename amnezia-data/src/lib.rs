@@ -76,6 +76,8 @@ pub struct ActorCurves {
 /// usable in battle) are exactly those learnings at or below its current level.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorDef {
+    #[serde(default)]
+    pub state_ranks: Vec<u8>,
     pub id: u32,
     pub name: String,
     pub title: String,
@@ -185,6 +187,8 @@ pub struct SkillDef {
 /// 0 (a zero-amount no-op); Poison sets them to bleed HP each battle turn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateDef {
+    #[serde(default = "default_state_rates")]
+    pub rates: [u32; 5],
     #[serde(default)]
     pub persistence: u32,
     pub id: u32,
@@ -204,6 +208,10 @@ pub struct StateDef {
     pub hp_change_map_steps: u32,
     #[serde(default)]
     pub hp_change_map_val: u32,
+}
+
+fn default_state_rates() -> [u32; 5] {
+    [100, 80, 60, 30, 0]
 }
 
 /// An attribute (element) definition, read by the battle system: its 1-based

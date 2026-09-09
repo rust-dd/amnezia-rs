@@ -22,6 +22,8 @@ use serde::{Deserialize, Serialize};
 /// `weapon_animation` its attack animation id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemDef {
+    #[serde(default)]
+    pub state_chance: u32,
     pub id: u32,
     pub name: String,
     pub description: String,

@@ -73,6 +73,7 @@ fn logic_app() -> App {
     app.add_message::<AudioRequest>();
     app.insert_resource(GameData {
         actors: vec![ActorDef {
+            state_ranks: Vec::new(),
             id: 1,
             name: "Ron".into(),
             title: "Zsoldos".into(),
@@ -203,6 +204,7 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     let ron = ActorDef {
+        state_ranks: Vec::new(),
         id: 1,
         name: "Ron".into(),
         title: String::new(),

@@ -18,6 +18,7 @@ use amnezia_data::{ItemDef, SkillDef};
 
 fn medicine(id: u32) -> ItemDef {
     ItemDef {
+        state_chance: 0,
         id,
         name: "Gyógyfű".into(),
         description: String::new(),

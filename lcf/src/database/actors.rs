@@ -49,6 +49,7 @@ pub struct StatCurves {
 /// `Learning` list: the `(level, skill_id)` pairs it learns as it levels up.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Actor {
+    pub state_ranks: Vec<u8>,
     pub id: u32,
     pub name: String,
     pub title: String,
@@ -216,6 +217,7 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
         let mut two_weapons = false;
         let mut fix_equipment = false;
         let mut unarmed_animation = 0;
+        let mut state_ranks = Vec::new();
         loop {
             let sub_id = reader.varint()?;
             if sub_id == 0 {
@@ -239,6 +241,7 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
                 ACTOR_EXP_CORRECTION => exp_correction = Reader::new(sub_data).varint()?,
                 ACTOR_INITIAL_EQUIPMENT => equipment = read_equipment(sub_data),
                 ACTOR_UNARMED_ANIMATION => unarmed_animation = Reader::new(sub_data).varint()?,
+                0x48 => state_ranks = sub_data.to_vec(),
                 _ => {}
             }
         }
@@ -253,6 +256,7 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
         let initial_hp = stat_curves.max_hp.get(level_index).copied().unwrap_or(0) as u32;
         let initial_sp = stat_curves.max_sp.get(level_index).copied().unwrap_or(0) as u32;
         actors.push(Actor {
+            state_ranks,
             id,
             name,
             title,
@@ -521,5 +525,16 @@ mod tests {
     fn parse_actors_errors_when_section_absent() {
         let ldb = make_ldb(&[(0x14, section(&[]))]);
         assert!(matches!(parse_actors(&ldb), Err(LcfError::MissingActors)));
+    }
+
+    #[test]
+    fn actor_state_ranks_keep_each_byte_and_a_missing_tail() {
+        let ldb = make_ldb(&[(
+            0x0B,
+            section(&[element(1, &[subchunk(0x48, &[0, 4, 2])]), element(2, &[])]),
+        )]);
+        let actors = parse_actors(&ldb).unwrap();
+        assert_eq!(actors[0].state_ranks, [0, 4, 2]);
+        assert!(actors[1].state_ranks.is_empty());
     }
 }

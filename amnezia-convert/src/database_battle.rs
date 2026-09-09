@@ -23,6 +23,7 @@ pub fn convert_states(input: &Path, output: &Path) -> Result<usize> {
     let states: Vec<StateDef> = parsed
         .into_iter()
         .map(|s| StateDef {
+            rates: s.rates,
             persistence: s.persistence,
             id: s.id,
             name: s.name,

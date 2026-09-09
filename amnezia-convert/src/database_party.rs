@@ -44,6 +44,7 @@ pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
     let actors: Vec<ActorDef> = parsed
         .into_iter()
         .map(|a| ActorDef {
+            state_ranks: a.state_ranks,
             id: a.id,
             name: a.name,
             title: a.title,
@@ -151,6 +152,7 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
                 Vec::new()
             };
             ItemDef {
+                state_chance: i.state_chance,
                 id: i.id,
                 name: i.name,
                 description: i.description,

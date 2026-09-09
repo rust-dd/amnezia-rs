@@ -198,6 +198,7 @@ mod tests {
 
     fn actor(id: u32) -> ActorDef {
         ActorDef {
+            state_ranks: Vec::new(),
             id,
             name: format!("A{id}"),
             title: String::new(),
@@ -225,6 +226,7 @@ mod tests {
 
     fn item(id: u32, item_type: u32) -> ItemDef {
         ItemDef {
+            state_chance: 0,
             id,
             name: format!("I{id}"),
             description: String::new(),
