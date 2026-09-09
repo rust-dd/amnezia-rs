@@ -51,7 +51,7 @@ pub fn party_labels(terms: &Terms) -> [String; PARTY_COUNT] {
 pub fn command_input(
     keys: Res<ButtonInput<KeyCode>>,
     data: Res<GameData>,
-    mut inventory: ResMut<Inventory>,
+    inventory: Res<Inventory>,
     mut battle: ResMut<Battle>,
 ) {
     if !any_key(&keys) {
@@ -64,7 +64,7 @@ pub fn command_input(
             MenuLevel::Skill => skill_menu(&keys, &data, &mut battle),
             MenuLevel::Item => item_menu(&keys, &data, &inventory, &mut battle),
             MenuLevel::Target => target_menu(&keys, &mut battle),
-            MenuLevel::AllyTarget => ally_target_menu(&keys, &mut inventory, &mut battle),
+            MenuLevel::AllyTarget => ally_target_menu(&keys, &inventory, &mut battle),
         },
         _ => {}
     }
@@ -258,7 +258,7 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
 /// The ally target menu: move the cursor over all party members and, on
 /// confirm, commit the pending ally-scope skill or item against the chosen one. A
 /// cancel returns to the Skill or Item menu the selection came from.
-fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &mut Inventory, battle: &mut Battle) {
+fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &Inventory, battle: &mut Battle) {
     if battle.members.is_empty() {
         enter(battle, MenuLevel::Command);
         return;
@@ -277,12 +277,15 @@ fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &mut Inventory, batt
         battle.pending_se.push(BattleSe::Cursor);
     }
     if confirm(keys) {
+        if battle.pending_item.is_some_and(|id| !inventory.has(id)) {
+            battle.pending_se.push(BattleSe::Buzzer);
+            return;
+        }
         battle.pending_se.push(BattleSe::Decision);
         let target = battle.cursor.min(battle.members.len() - 1);
         if let Some(skill_id) = battle.pending_skill {
             battle.commit(Command::Skill { skill_id, target });
         } else if let Some(item_id) = battle.pending_item {
-            inventory.remove_item(item_id, 1);
             battle.commit(Command::Item { item_id, target });
         }
     }

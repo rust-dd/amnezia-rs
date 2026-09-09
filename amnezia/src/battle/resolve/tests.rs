@@ -237,6 +237,7 @@ fn sleep_state(id: u32) -> amnezia_data::StateDef {
 mod attacks;
 mod conditions;
 mod enemies;
+mod item_consumption;
 mod presentation;
 mod recovery;
 mod skills;

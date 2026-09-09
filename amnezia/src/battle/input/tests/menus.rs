@@ -1,6 +1,23 @@
 use super::*;
 
 #[test]
+fn cancelling_a_committed_item_order_leaves_inventory_unchanged() {
+    let mut battle = build_party2();
+    battle.begin_actor_commands();
+    let mut inventory = Inventory::default();
+    inventory.add_item(50, 1);
+    open_ally_target(&mut battle, None, Some(50));
+    ally_target_menu(&press_enter(), &inventory, &mut battle);
+    assert_eq!(battle.turn, 1);
+    let mut cancel = ButtonInput::default();
+    cancel.press(KeyCode::Escape);
+    command_menu(&cancel, &mut battle);
+    assert_eq!(battle.turn, 0);
+    assert!(battle.members[0].command.is_none());
+    assert_eq!(inventory.count(50), 1);
+}
+
+#[test]
 fn revival_items_can_target_a_fallen_party_member() {
     let mut battle = build_party2();
     battle.begin_actor_commands();
@@ -10,9 +27,9 @@ fn revival_items_can_target_a_fallen_party_member() {
     open_ally_target(&mut battle, None, Some(112));
     let mut down = ButtonInput::<KeyCode>::default();
     down.press(KeyCode::ArrowDown);
-    ally_target_menu(&down, &mut inventory, &mut battle);
+    ally_target_menu(&down, &inventory, &mut battle);
     assert_eq!(battle.cursor, 1);
-    ally_target_menu(&press_enter(), &mut inventory, &mut battle);
+    ally_target_menu(&press_enter(), &inventory, &mut battle);
     assert!(matches!(
         battle.members[0].command,
         Some(Command::Item {

@@ -10,7 +10,14 @@ impl Battle {
     /// ticks; otherwise the next queued action is applied (skipping a fainted
     /// actor, retargeting a dead target) and its log line appended. Returns
     /// `false` only once both the step buffer and the queue are spent.
+    #[cfg(test)]
     pub fn resolve_next(&mut self) -> bool {
+        self.resolve_next_with_items(|_| true)
+    }
+
+    /// Consume a held item only when its living user actually begins the action.
+    /// The callback returns false if an earlier action used the last copy.
+    pub fn resolve_next_with_items(&mut self, mut consume: impl FnMut(u32) -> bool) -> bool {
         if let Some(step) = self.steps.pop_front() {
             self.run_step(step);
             return true;
@@ -25,6 +32,11 @@ impl Battle {
             // battler cancels its action through the HP-based death path.
             self.tick_state_hp(action.source);
             if self.source_alive(action.source) {
+                if let Command::Item { item_id, .. } = action.kind
+                    && !consume(item_id)
+                {
+                    return true;
+                }
                 self.apply(action);
             }
         }

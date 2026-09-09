@@ -88,8 +88,8 @@ fn a_single_ally_skill_opens_the_ally_menu_then_commits_on_the_chosen_member() {
     battle.cursor = 1;
     let mut confirm_keys = ButtonInput::<KeyCode>::default();
     confirm_keys.press(KeyCode::Enter);
-    let mut inventory = Inventory::default();
-    ally_target_menu(&confirm_keys, &mut inventory, &mut battle);
+    let inventory = Inventory::default();
+    ally_target_menu(&confirm_keys, &inventory, &mut battle);
     assert!(matches!(
         battle.members[0].command,
         Some(Command::Skill {
@@ -127,7 +127,7 @@ fn a_self_scope_skill_commits_immediately_on_the_caster() {
 }
 
 #[test]
-fn committing_an_item_targets_the_chosen_ally_and_consumes_one() {
+fn committing_an_item_selects_the_ally_without_consuming_it() {
     let data = GameData {
         actors: vec![],
         items: vec![medicine(50)],
@@ -147,8 +147,8 @@ fn committing_an_item_targets_the_chosen_ally_and_consumes_one() {
     battle.cursor = 1;
     let mut confirm_keys = ButtonInput::<KeyCode>::default();
     confirm_keys.press(KeyCode::Enter);
-    ally_target_menu(&confirm_keys, &mut inventory, &mut battle);
-    assert_eq!(inventory.count(50), 1);
+    ally_target_menu(&confirm_keys, &inventory, &mut battle);
+    assert_eq!(inventory.count(50), 2);
     assert!(matches!(
         battle.members[0].command,
         Some(Command::Item {

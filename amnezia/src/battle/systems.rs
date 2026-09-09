@@ -122,13 +122,9 @@ pub(super) fn start_on_request(
     );
     battle.allow_escape = request.allow_escape;
     battle.first_strike = request.first_strike;
-    // Capture the real RM2000 battle-end message terms for the outcome/reward
-    // log lines the resolution code (which has no resources) composes.
     battle.text.apply(&terms.0);
     active.0 = true;
     result.0 = None;
-    // Remember the map BGM (read before the battle track replaces it this frame),
-    // sound the battle-start SE, then start the looping battle BGM.
     let system = &battle_data.system;
     map_bgm.memorize(current_bgm.track());
     if let Some(se) = AudioRequest::se(
@@ -180,6 +176,7 @@ pub(super) fn resolve_tick(
     system_bgm: Option<Res<crate::system_bgm::SystemBgm>>,
     mut audio: MessageWriter<AudioRequest>,
     mut battle: ResMut<Battle>,
+    mut inventory: ResMut<Inventory>,
 ) {
     if battle.phase != Phase::Resolve {
         return;
@@ -189,11 +186,7 @@ pub(super) fn resolve_tick(
     if battle.death_in_progress() {
         return;
     }
-    // Hold while a queued attack animation plays out, so a strike/cast's damage
-    // number lands only once the swing/cast finishes (RM2000 sequences the
-    // animation, its wait, then the damage). Once it clears, apply the deferred
-    // impact at once and re-pace the timer for the next beat; otherwise keep the
-    // normal per-action cadence.
+    // RPG_RT applies the impact only after its animation completes.
     let advance = if battle.anim_hold_active() {
         if battle.tick_anim_hold(active_anims.0 > 0) {
             return;
@@ -206,7 +199,13 @@ pub(super) fn resolve_tick(
     if !advance {
         return;
     }
-    let more = battle.resolve_next();
+    let more = battle.resolve_next_with_items(|item_id| {
+        if !inventory.has(item_id) {
+            return false;
+        }
+        inventory.remove_item(item_id, 1);
+        true
+    });
     if let Some(outcome) = battle.end_state() {
         battle.finish(outcome);
         play_outcome_music(
@@ -344,8 +343,6 @@ pub(super) fn apply_victory_rewards(
             let after = progression.level(def);
             if after > before {
                 level_ups.push(format!("{} elérte a(z) {after}. szintet!", fighter.name));
-                // Each learning crossed by the level gain is learned now; RM2000
-                // logs a line per newly learned skill.
                 for learn in &def.learnings {
                     if learn.level > before
                         && learn.level <= after

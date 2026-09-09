@@ -3,8 +3,8 @@
 use super::*;
 
 impl Battle {
-    /// The item is reserved when the order is chosen; effects stay on the selected
-    /// recipient even if that actor is knocked out before the user's turn.
+    /// Effects stay on the selected recipient even if that actor is knocked out
+    /// before the user's turn. The resolution driver has consumed the item.
     pub(in crate::battle::resolve) fn apply_item(
         &mut self,
         pi: usize,
