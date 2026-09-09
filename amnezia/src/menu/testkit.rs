@@ -61,6 +61,7 @@ pub(super) fn weapon(id: u32, name: &str, atk: u32) -> ItemDef {
 /// An item with every effect field zeroed, ready to specialise.
 pub(super) fn blank_item(id: u32, item_type: u32) -> ItemDef {
     ItemDef {
+        actor_set: Vec::new(),
         state_chance: 0,
         id,
         name: "Tárgy".into(),

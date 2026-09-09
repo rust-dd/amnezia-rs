@@ -210,6 +210,7 @@ fn medicine(
     cure_states: Vec<u32>,
 ) -> amnezia_data::ItemDef {
     amnezia_data::ItemDef {
+        actor_set: Vec::new(),
         state_chance: 0,
         id,
         name: "Gyógyfű".into(),

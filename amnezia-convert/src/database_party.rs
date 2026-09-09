@@ -155,6 +155,7 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
                 Vec::new()
             };
             ItemDef {
+                actor_set: i.actor_set,
                 state_chance: i.state_chance,
                 id: i.id,
                 name: i.name,

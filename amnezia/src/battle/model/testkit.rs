@@ -57,6 +57,7 @@ pub fn monster(id: u32, hp: u32, exp: u32, gold: u32) -> MonsterDef {
 
 pub fn item(id: u32, atk: u32, def: u32, hit: u32, crit: u32, element: u32) -> ItemDef {
     ItemDef {
+        actor_set: Vec::new(),
         state_chance: 0,
         id,
         name: String::new(),

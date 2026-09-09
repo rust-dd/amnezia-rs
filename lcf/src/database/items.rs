@@ -33,6 +33,7 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// 1-based ids.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Item {
+    pub actor_set: Vec<bool>,
     pub state_chance: u32,
     pub id: u32,
     pub name: String,
@@ -112,6 +113,7 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut item = Item {
+            actor_set: Vec::new(),
             state_chance: 0,
             id,
             name: String::new(),
@@ -166,6 +168,7 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
                 ITEM_OCCASION_FIELD => item.only_field = Reader::new(sub_data).varint()? != 0,
                 ITEM_KO_ONLY => item.ko_only = Reader::new(sub_data).varint()? != 0,
                 ITEM_STATE_SET => item.state_set = decode_flag_ids(sub_data),
+                0x3E => item.actor_set = sub_data.iter().map(|byte| *byte != 0).collect(),
                 0x43 => item.state_chance = Reader::new(sub_data).varint()?,
                 ITEM_ATTRIBUTE_SET => item.attribute_set = decode_flag_ids(sub_data),
                 _ => {}
@@ -180,6 +183,20 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk, varint};
     use crate::{Item, LcfError, parse_items};
+
+    #[test]
+    fn actor_flags_keep_false_entries_and_the_omitted_tail() {
+        let ldb = make_ldb(&[(
+            0x0D,
+            section(&[
+                element(1, &[subchunk(0x3E, &[1, 0, 1, 0])]),
+                element(2, &[]),
+            ]),
+        )]);
+        let items = parse_items(&ldb).unwrap();
+        assert_eq!(items[0].actor_set, [true, false, true, false]);
+        assert!(items[1].actor_set.is_empty());
+    }
 
     #[test]
     fn parses_weapon_equipment_fields() {
@@ -207,6 +224,7 @@ mod tests {
         assert_eq!(
             items[0],
             Item {
+                actor_set: Vec::new(),
                 state_chance: 0,
                 id: 1,
                 name: "Ton-Kard".to_string(),

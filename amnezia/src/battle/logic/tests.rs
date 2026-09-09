@@ -29,6 +29,7 @@ fn skill(id: u32, name: &str, sp_cost: u32, power: u32) -> SkillDef {
 
 fn gear(id: u32, atk: u32, def: u32, spi: u32, agi: u32) -> ItemDef {
     ItemDef {
+        actor_set: Vec::new(),
         state_chance: 0,
         id,
         name: String::new(),

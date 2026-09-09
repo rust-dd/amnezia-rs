@@ -53,10 +53,9 @@ pub(super) fn candidates(
     let Some(def) = party.snapshot().get(member).and_then(|&id| data.actor(id)) else {
         return Vec::new();
     };
-    let want = equipment::slot_item_type(slot, def.two_weapons);
     let mut ids = vec![0u32];
     for item in &data.items {
-        if item.item_type == want && inventory.count(item.id) > 0 {
+        if equipment::can_equip(def, slot, item) && inventory.count(item.id) > 0 {
             ids.push(item.id);
         }
     }
@@ -270,6 +269,12 @@ mod tests {
         // The shield slot lists only the held shield.
         let shield_slot = candidates(0, 1, &d, &Party::default(), &inv);
         assert_eq!(shield_slot, vec![0, 20]);
+        d.items
+            .iter_mut()
+            .find(|item| item.id == 10)
+            .unwrap()
+            .actor_set = vec![false];
+        assert_eq!(candidates(0, 0, &d, &Party::default(), &inv), [0]);
     }
 
     #[test]

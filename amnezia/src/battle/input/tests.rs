@@ -18,6 +18,7 @@ use amnezia_data::{ItemDef, SkillDef};
 
 fn medicine(id: u32) -> ItemDef {
     ItemDef {
+        actor_set: Vec::new(),
         state_chance: 0,
         id,
         name: "Gyógyfű".into(),

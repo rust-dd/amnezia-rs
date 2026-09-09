@@ -23,6 +23,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemDef {
     #[serde(default)]
+    pub actor_set: Vec<bool>,
+    #[serde(default)]
     pub state_chance: u32,
     pub id: u32,
     pub name: String,
@@ -71,6 +73,15 @@ pub struct ItemDef {
 
 fn default_one() -> u32 {
     1
+}
+
+impl ItemDef {
+    /// Omitted trailing actor flags mean allowed, unlike attribute/state sets.
+    pub fn usable_by_actor(&self, actor_id: u32) -> bool {
+        actor_id
+            .checked_sub(1)
+            .is_some_and(|index| self.actor_set.get(index as usize).copied().unwrap_or(true))
+    }
 }
 
 fn default_hit() -> u32 {

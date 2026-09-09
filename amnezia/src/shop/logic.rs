@@ -128,6 +128,7 @@ mod tests {
 
     fn item(id: u32, price: u32) -> ItemDef {
         ItemDef {
+            actor_set: Vec::new(),
             state_chance: 0,
             id,
             name: format!("item{id}"),

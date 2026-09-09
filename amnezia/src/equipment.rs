@@ -37,6 +37,12 @@ pub fn slot_item_type(slot: usize, two_weapons: bool) -> u32 {
     }
 }
 
+pub fn can_equip(actor: &ActorDef, slot: usize, item: &ItemDef) -> bool {
+    slot < SLOTS
+        && item.item_type == slot_item_type(slot, actor.two_weapons)
+        && item.usable_by_actor(actor.id)
+}
+
 /// The per-actor equipped item ids, keyed by actor id. An actor absent from the
 /// map wears its `ActorDef` starting gear (see [`Equipment::slots`]).
 #[derive(Resource, Default)]
@@ -94,6 +100,9 @@ impl Equipment {
         if def.fix_equipment || slot >= SLOTS {
             return false;
         }
+        if new_id != 0 && inventory.count(new_id) == 0 {
+            return false;
+        }
         self.equip_from_event(def, slot, new_id, items, inventory)
     }
 
@@ -107,6 +116,14 @@ impl Equipment {
         inventory: &mut Inventory,
     ) -> bool {
         if slot >= SLOTS {
+            return false;
+        }
+        if new_id != 0
+            && !items
+                .iter()
+                .find(|item| item.id == new_id)
+                .is_some_and(|item| can_equip(def, slot, item))
+        {
             return false;
         }
         let before = self.slots(def);
@@ -194,6 +211,7 @@ impl Plugin for EquipmentPlugin {
 
 #[cfg(test)]
 mod tests {
+    mod restrictions;
     use super::*;
 
     fn actor(id: u32) -> ActorDef {
@@ -229,6 +247,7 @@ mod tests {
 
     fn item(id: u32, item_type: u32) -> ItemDef {
         ItemDef {
+            actor_set: Vec::new(),
             state_chance: 0,
             id,
             name: format!("I{id}"),
