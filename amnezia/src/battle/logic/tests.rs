@@ -11,6 +11,7 @@ fn skill(id: u32, name: &str, sp_cost: u32, power: u32) -> SkillDef {
         power,
         hit: 0,
         skill_type: 0,
+        failure_message: 0,
         scope: 0,
         animation_id: 0,
         physical_rate: 0,
@@ -74,9 +75,10 @@ fn physical_damage_is_half_attack_less_quarter_defense_floored_at_zero() {
 }
 
 #[test]
-fn effective_hit_defaults_bare_hands_to_ninety() {
-    assert_eq!(effective_hit(0), 90);
-    assert_eq!(effective_hit(85), 85);
+fn effective_hit_defaults_only_an_empty_weapon_slot_to_ninety() {
+    assert_eq!(effective_hit(None), 90);
+    assert_eq!(effective_hit(Some(0)), 0);
+    assert_eq!(effective_hit(Some(85)), 85);
 }
 
 #[test]

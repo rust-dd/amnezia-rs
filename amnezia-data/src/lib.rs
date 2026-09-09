@@ -137,6 +137,9 @@ pub struct SkillDef {
     pub sp_cost: u32,
     pub power: u32,
     pub hit: u32,
+    /// RM2000 miss-message selector; `3` enables physical accuracy modifiers.
+    #[serde(default)]
+    pub failure_message: u32,
     #[serde(default)]
     pub skill_type: u32,
     #[serde(default)]

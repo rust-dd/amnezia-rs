@@ -131,8 +131,8 @@ impl Battle {
         let caster = self.members[pi].name.clone();
         let target = self.enemies[ti].name.clone();
         let can_act = logic::worst_restriction(&self.enemies[ti].states, &self.states) != 1;
-        let hit = logic::to_hit_vs(
-            logic::effective_hit(skill.hit),
+        let hit = logic::skill_to_hit(
+            skill,
             self.members[pi].stats.agility,
             self.enemies[ti].stats.agility,
             can_act,
@@ -312,8 +312,8 @@ impl Battle {
         let ti = self.retarget_member(target)?;
         // Enemies carry no critical-hit rate in the converted model.
         let can_act = logic::worst_restriction(&self.members[ti].states, &self.states) != 1;
-        let hit = logic::to_hit_vs(
-            logic::effective_hit(skill.hit),
+        let hit = logic::skill_to_hit(
+            &skill,
             self.enemies[ei].stats.agility,
             self.members[ti].stats.agility,
             can_act,

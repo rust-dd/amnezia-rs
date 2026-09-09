@@ -24,8 +24,7 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// effect changes and
 /// `absorb` whether the caster drains what it deals. `attributes` lists the
 /// 1-based element ids the damage is checked against and `affected_states` the
-/// 1-based state ids it inflicts (RM2000's `state_effects`; this game never sets
-/// `reverse_state_effect`, so these are always inflicted, never cured).
+/// 1-based state ids it inflicts on opponents or cures from allies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Skill {
     pub id: u32,
@@ -34,6 +33,8 @@ pub struct Skill {
     pub sp_cost: u32,
     pub power: u32,
     pub hit: u32,
+    /// The miss-message selector; `3` enables physical accuracy modifiers.
+    pub failure_message: u32,
     pub skill_type: u32,
     pub scope: u32,
     /// The battle-animation id this skill plays on each target it resolves
@@ -52,6 +53,7 @@ pub struct Skill {
 const SKILL_SECTION: u32 = 0x0C;
 const SKILL_NAME: u32 = 0x01;
 const SKILL_DESCRIPTION: u32 = 0x02;
+const SKILL_FAILURE_MESSAGE: u32 = 0x07;
 const SKILL_TYPE: u32 = 0x08;
 const SKILL_SP_COST: u32 = 0x0B;
 const SKILL_SCOPE: u32 = 0x0C;
@@ -91,7 +93,7 @@ fn decode_flag_ids(data: &[u8]) -> Vec<u32> {
 /// affect_sp `0x20`, absorb_damage `0x25`, state_effects `0x2A`,
 /// attribute_effects `0x2C`. Scalar fields are integer chunks; the two effect
 /// lists are `vector<bool>` chunks (one byte per element). Omitted fields
-/// default to 0/false, except `magical_rate` (RM2000 editor value 3) and
+/// default to 0/false, except `hit` (100), `magical_rate` (3), and
 /// `variance` (RM2000 editor value 4).
 pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
     let section = find_section(bytes, SKILL_SECTION, LcfError::MissingSkills)?;
@@ -106,7 +108,8 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
             description: String::new(),
             sp_cost: 0,
             power: 0,
-            hit: 0,
+            hit: 100,
+            failure_message: 0,
             skill_type: 0,
             scope: 0,
             animation_id: 0,
@@ -129,6 +132,9 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
             match sub_id {
                 SKILL_NAME => skill.name = decode_cp1250(sub_data),
                 SKILL_DESCRIPTION => skill.description = decode_cp1250(sub_data),
+                SKILL_FAILURE_MESSAGE => {
+                    skill.failure_message = Reader::new(sub_data).varint()?;
+                }
                 SKILL_TYPE => skill.skill_type = Reader::new(sub_data).varint()?,
                 SKILL_SP_COST => skill.sp_cost = Reader::new(sub_data).varint()?,
                 SKILL_SCOPE => skill.scope = Reader::new(sub_data).varint()?,
@@ -158,10 +164,6 @@ mod tests {
 
     #[test]
     fn parses_skill_battle_fields() {
-        // Name bytes are CP1250 "Tűzgolyó" (fireball): 0xFB = 'ű', 0xF3 = 'ó'.
-        // Description bytes decode "Égeti" (0xC9 = 'É'). It hits one enemy (scope
-        // 0), is a magical fire attack (attribute id 5), and inflicts Poison
-        // (state id 3).
         let fireball = element(
             1,
             &[
@@ -191,6 +193,7 @@ mod tests {
                 sp_cost: 8,
                 power: 35,
                 hit: 90,
+                failure_message: 0,
                 skill_type: 0,
                 scope: 0,
                 animation_id: 0,
@@ -215,7 +218,7 @@ mod tests {
         assert_eq!(s.id, 2);
         assert_eq!(s.name, "Heal");
         assert_eq!(s.sp_cost, 4);
-        assert_eq!((s.power, s.hit), (0, 0));
+        assert_eq!((s.power, s.hit, s.failure_message), (0, 100, 0));
         assert_eq!((s.skill_type, s.scope, s.physical_rate), (0, 0, 0));
         assert_eq!(s.animation_id, 0, "omitted animation_id defaults to 0");
         assert_eq!(s.magical_rate, 3, "omitted magical_rate defaults to 3");
@@ -227,7 +230,6 @@ mod tests {
 
     #[test]
     fn parses_scope_type_and_absorb() {
-        // A self-cast (scope 2) switch-type skill (type 3) that drains SP.
         let drain = element(
             3,
             &[
@@ -248,8 +250,6 @@ mod tests {
 
     #[test]
     fn effect_lists_flag_multiple_ids() {
-        // state_effects [0,1,0,0,0,0,0,0,1] -> ids 2 and 9;
-        // attribute_effects [1,0,1] -> ids 1 and 3.
         let multi = element(
             4,
             &[
@@ -265,8 +265,6 @@ mod tests {
 
     #[test]
     fn parses_skill_variance() {
-        // A skill whose damage spread is set to 6 (chunk 0x17, between
-        // magical_rate 0x16 and power 0x18).
         let spread = element(5, &[subchunk(0x17, &varint(6))]);
         let ldb = make_ldb(&[(0x0C, section(&[spread]))]);
         let s = &parse_skills(&ldb).unwrap()[0];
@@ -275,12 +273,19 @@ mod tests {
 
     #[test]
     fn parses_skill_animation_id() {
-        // The battle animation a skill plays (chunk 0x0E, between scope 0x0C and
-        // physical_rate 0x15).
         let flashy = element(6, &[subchunk(0x0E, &varint(12))]);
         let ldb = make_ldb(&[(0x0C, section(&[flashy]))]);
         let s = &parse_skills(&ldb).unwrap()[0];
         assert_eq!(s.animation_id, 12, "explicit animation_id is parsed");
+    }
+
+    #[test]
+    fn explicit_zero_hit_and_physical_failure_mode_are_preserved() {
+        let skill = element(1, &[subchunk(0x07, &varint(3)), subchunk(0x19, &varint(0))]);
+        let ldb = make_ldb(&[(0x0C, section(&[skill]))]);
+        let skill = &parse_skills(&ldb).unwrap()[0];
+        assert_eq!(skill.hit, 0);
+        assert_eq!(skill.failure_message, 3);
     }
 
     #[test]

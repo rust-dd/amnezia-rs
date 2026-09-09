@@ -208,6 +208,7 @@ pub fn convert_skills(input: &Path, output: &Path) -> Result<usize> {
             sp_cost: s.sp_cost,
             power: s.power,
             hit: s.hit,
+            failure_message: s.failure_message,
             skill_type: s.skill_type,
             scope: s.scope,
             animation_id: s.animation_id,

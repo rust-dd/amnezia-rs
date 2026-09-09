@@ -24,7 +24,7 @@ impl Battle {
         // (EasyRPG `CalcNormalAttackToHit` returns 100 vs a do-nothing target).
         let can_act = logic::worst_restriction(&self.enemies[ti].states, &self.states) != 1;
         let hit = logic::to_hit_vs(
-            logic::effective_hit(self.members[pi].weapon_hit),
+            self.members[pi].weapon_hit,
             self.members[pi].stats.agility,
             self.enemies[ti].stats.agility,
             can_act,
@@ -134,7 +134,7 @@ impl Battle {
         // `CalcNormalAttackToHit` returns 100 vs a do-nothing target).
         let can_act = logic::worst_restriction(&self.members[ti].states, &self.states) != 1;
         let hit = logic::to_hit_vs(
-            logic::effective_hit(0),
+            logic::effective_hit(None),
             self.enemies[ei].stats.agility,
             self.members[ti].stats.agility,
             can_act,

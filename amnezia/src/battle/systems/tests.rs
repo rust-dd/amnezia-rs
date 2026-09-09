@@ -156,7 +156,6 @@ fn logic_app() -> App {
 #[test]
 fn f6_starts_a_battle_and_confirming_a_win_publishes_the_contract_out() {
     let mut app = logic_app();
-    // F6 -> debug_trigger emits BattleRequest -> start_on_request builds it.
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::F6);
@@ -175,7 +174,6 @@ fn f6_starts_a_battle_and_confirming_a_win_publishes_the_contract_out() {
         assert_eq!(battle.enemies.len(), 1);
         assert_eq!(battle.members.len(), 1);
     }
-    // Force a victory, then confirm at the outcome screen.
     app.world_mut()
         .resource_mut::<Battle>()
         .finish(BattleOutcome::Victory);
@@ -203,7 +201,6 @@ fn f6_starts_a_battle_and_confirming_a_win_publishes_the_contract_out() {
 fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
-    // Ron at level 1: reaching level 2 needs exp_for_level(2) = exp_base = 30.
     let ron = ActorDef {
         id: 1,
         name: "Ron".into(),
@@ -213,7 +210,6 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
         hp: 40,
         sp: 10,
         curves: Default::default(),
-        // Ron learns skill 1 at level 2, so crossing into level 2 learns it.
         learnings: vec![amnezia_data::Learning {
             level: 2,
             skill_id: 1,
@@ -243,6 +239,7 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
             power: 10,
             hit: 100,
             skill_type: 0,
+            failure_message: 0,
             scope: 0,
             animation_id: 0,
             physical_rate: 0,
@@ -263,8 +260,6 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     app.init_resource::<MapBgm>();
     app.add_message::<AudioRequest>();
     app.init_resource::<ButtonInput<KeyCode>>();
-    // A foe worth exactly 30 exp — enough to lift Ron from level 1 to 2 — and
-    // 30 gold.
     let monsters = vec![MonsterDef {
         id: 1,
         name: "Rabló".into(),
@@ -363,7 +358,6 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
 #[test]
 fn memorize_and_restore_round_trips_the_map_bgm() {
     let mut memory = MapBgm::default();
-    // A silent map restores to a stop, not a phantom track.
     assert_eq!(memory.restore(), AudioRequest::StopBgm);
     memory.memorize(Some(BgmTrack {
         name: "Field".into(),
@@ -379,7 +373,6 @@ fn memorize_and_restore_round_trips_the_map_bgm() {
             fade_in: 0.0,
         }
     );
-    // Memorizing "nothing playing" restores to a stop.
     memory.memorize(None);
     assert_eq!(memory.restore(), AudioRequest::StopBgm);
 }
@@ -387,7 +380,6 @@ fn memorize_and_restore_round_trips_the_map_bgm() {
 #[test]
 fn battle_start_plays_battle_music_and_stores_the_prior_bgm() {
     let mut app = logic_app();
-    // A map track is playing when the fight starts.
     app.insert_resource(CurrentBgm::with_track("Field", 0.7, 1.0));
     // Request the fight directly (avoids the debug-key intra-frame ordering).
     app.world_mut().write_message(BattleRequest {
@@ -401,7 +393,6 @@ fn battle_start_plays_battle_music_and_stores_the_prior_bgm() {
     assert_eq!(battle.background, "Town");
     assert!(!battle.allow_escape);
     assert!(battle.first_strike);
-    // The pre-battle map BGM is remembered for the teardown restore.
     assert_eq!(
         app.world().resource::<MapBgm>().0,
         Some(BgmTrack {
@@ -410,7 +401,6 @@ fn battle_start_plays_battle_music_and_stores_the_prior_bgm() {
             speed: 1.0
         })
     );
-    // The battle BGM and the battle-start SE were requested on build.
     let messages = app.world().resource::<Messages<AudioRequest>>();
     let mut cursor = messages.get_cursor();
     let played: Vec<AudioRequest> = cursor.read(messages).cloned().collect();

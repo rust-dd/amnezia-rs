@@ -6,17 +6,16 @@ fn fire_attr() -> amnezia_data::AttributeDef {
         id: 5,
         name: "Tűz".into(),
         attribute_type: 0,
-        a_rate: 200, // rank A: weak, double damage
+        a_rate: 200,
         b_rate: 150,
         c_rate: 100,
         d_rate: 50,
-        e_rate: 0, // rank E: immune, no damage
+        e_rate: 0,
     }
 }
 
 /// A single-enemy (scope 0) damage skill carrying `attributes` (elements) and
-/// `states` (statuses it may inflict). Its `hit` is 100 so the added skill to-hit
-/// roll lands deterministically; a missing-skill test sets it lower explicitly.
+/// `states` (statuses it may inflict). Its `hit` is 100 for deterministic damage.
 fn damage_skill(id: u32, power: u32, attributes: Vec<u32>, states: Vec<u32>) -> SkillDef {
     SkillDef {
         id,
@@ -26,6 +25,7 @@ fn damage_skill(id: u32, power: u32, attributes: Vec<u32>, states: Vec<u32>) -> 
         power,
         hit: 100,
         skill_type: 0,
+        failure_message: 0,
         scope: 0,
         animation_id: 0,
         physical_rate: 0,
@@ -194,7 +194,7 @@ fn enemy_action_def(basic: u32) -> amnezia_data::EnemyActionDef {
         basic,
         skill_id: 0,
         enemy_id: 0,
-        condition_type: 0, // always eligible
+        condition_type: 0,
         condition_min: 0,
         condition_max: 0,
         priority: 1,
@@ -241,4 +241,6 @@ mod enemies;
 mod item_consumption;
 mod presentation;
 mod recovery;
+mod skill_accuracy;
 mod skills;
+mod weapon_accuracy;

@@ -3,8 +3,6 @@ use super::*;
 #[test]
 fn a_party_attack_wounds_its_target_and_logs() {
     let mut battle = build_1v2();
-    // Force a guaranteed hit so the wound assertion doesn't ride on the new
-    // 90% bare-hands to-hit roll (which would miss 10% of seeds).
     battle.members[0].weapon_hit = 100;
     battle.commit(Command::Attack { target: 0 });
     let before = battle.enemies[0].hp;
@@ -16,8 +14,8 @@ fn a_party_attack_wounds_its_target_and_logs() {
 #[test]
 fn a_forced_critical_triples_the_blow() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // never miss
-    battle.members[0].weapon_crit = 100; // always crit
+    battle.members[0].weapon_hit = 100;
+    battle.members[0].weapon_crit = 100;
     let base = logic::physical_damage(
         battle.members[0].stats.attack,
         battle.enemies[0].stats.defense,
@@ -36,11 +34,11 @@ fn a_forced_critical_triples_the_blow() {
 #[test]
 fn a_missed_strike_deals_no_damage() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 90; // bare-hands default
+    battle.members[0].weapon_hit = 90;
     // The effective chance is the base hit adjusted by the agility gap; wind
     // the rng to a state whose next to-hit roll falls in that miss band.
     let hit = logic::to_hit(
-        logic::effective_hit(battle.members[0].weapon_hit),
+        battle.members[0].weapon_hit,
         battle.members[0].stats.agility,
         battle.enemies[0].stats.agility,
     );
@@ -54,7 +52,7 @@ fn a_missed_strike_deals_no_damage() {
     let before = battle.enemies[0].hp;
     let strike = battle.strike_enemy(0, 0);
     assert!(matches!(strike, Strike::Miss));
-    assert_eq!(battle.enemies[0].hp, before); // a miss deals 0
+    assert_eq!(battle.enemies[0].hp, before);
 }
 
 #[test]
@@ -87,10 +85,9 @@ fn finish_victory_records_reward_and_log() {
 #[test]
 fn a_failed_escape_raises_the_next_chance_by_ten_and_a_first_strike_is_certain() {
     let mut battle = build_1v2();
-    battle.escape_chance = 0; // a 0% chance always fails
+    battle.escape_chance = 0;
     assert!(!battle.attempt_escape());
-    assert_eq!(battle.escape_chance, 10); // bumped for the next attempt
-    // A first strike escapes outright, with no roll and no further bump.
+    assert_eq!(battle.escape_chance, 10);
     battle.first_strike = true;
     assert!(battle.attempt_escape());
     assert_eq!(battle.escape_chance, 10);

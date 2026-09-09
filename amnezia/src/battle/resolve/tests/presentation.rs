@@ -5,8 +5,6 @@ fn a_party_strike_queues_the_weapon_animation_on_the_struck_foe() {
     let mut battle = build_weapon_anim(7);
     battle.commit(Command::Attack { target: 0 });
     while battle.resolve_next() {}
-    // The member's swing queued its weapon animation (7) at the foe's screen
-    // slot: x = foe.x - 160, y = foe.y - 120 (foe at 100, 100).
     let anim = battle
         .pending_anims
         .iter()
@@ -24,7 +22,7 @@ fn an_unarmed_party_strike_falls_back_to_the_actor_unarmed_animation() {
     use crate::progression::Progression;
     use crate::vitals::Vitals;
     let mut ron = testkit::actor(1, 2, 63, 37);
-    ron.weapon = 0; // bare-handed
+    ron.weapon = 0;
     ron.unarmed_animation = 3;
     let actors = vec![&ron];
     let monsters = vec![testkit::monster(1, 30, 10, 30)];
@@ -87,11 +85,11 @@ fn new_round_clears_the_pending_animation_queue() {
 
 #[test]
 fn a_single_target_skill_queues_one_animation_at_the_targeted_foe() {
-    let mut battle = build_1v2(); // foes at (100, 100) and (200, 100)
+    let mut battle = build_1v2();
     let mut s = damage_skill(1, 20, vec![], vec![]);
     s.animation_id = 9;
     battle.skills = vec![s];
-    battle.cast_skill(0, 1, 0); // scope 0 -> the targeted foe (index 0)
+    battle.cast_skill(0, 1, 0);
     let hits: Vec<_> = battle
         .pending_anims
         .iter()
@@ -99,7 +97,6 @@ fn a_single_target_skill_queues_one_animation_at_the_targeted_foe() {
         .collect();
     assert_eq!(hits.len(), 1, "one animation for the one struck foe");
     assert_eq!(hits[0].targets.len(), 1, "one target");
-    // foe 0 at (100, 100): x = 100 - 160 = -60, y = 100 - 120 = -20.
     let (x, y) = hits[0].targets[0];
     assert!((x + 60.0).abs() < 1e-6, "x = {x}");
     assert!((y + 20.0).abs() < 1e-6, "y = {y}");
@@ -107,9 +104,9 @@ fn a_single_target_skill_queues_one_animation_at_the_targeted_foe() {
 
 #[test]
 fn an_all_enemy_skill_queues_one_animation_over_every_living_foe() {
-    let mut battle = build_1v2(); // two living foes, at x = 100 and x = 200
+    let mut battle = build_1v2();
     let mut s = damage_skill(1, 20, vec![], vec![]);
-    s.scope = 1; // all enemies
+    s.scope = 1;
     s.animation_id = 8;
     battle.skills = vec![s];
     battle.cast_skill(0, 1, 0);
@@ -129,13 +126,12 @@ fn an_all_enemy_skill_queues_one_animation_over_every_living_foe() {
 
 #[test]
 fn an_all_ally_heal_queues_one_animation_per_living_member_at_the_party_area() {
-    let mut battle = build_party2(); // two living members
+    let mut battle = build_party2();
     let mut s = heal_skill(2, 30);
-    s.scope = 4; // all allies
+    s.scope = 4;
     s.animation_id = 5;
     battle.skills = vec![s];
     battle.cast_skill(0, 2, 0);
-    // One queued animation for the whole cast, carrying every living ally.
     let heals: Vec<_> = battle
         .pending_anims
         .iter()
@@ -157,7 +153,6 @@ fn an_all_ally_heal_queues_one_animation_per_living_member_at_the_party_area() {
 #[test]
 fn a_zero_animation_skill_queues_nothing() {
     let mut battle = build_1v2();
-    // damage_skill leaves animation_id at its 0 default.
     battle.skills = vec![damage_skill(1, 20, vec![], vec![])];
     battle.cast_skill(0, 1, 0);
     assert!(
@@ -168,8 +163,8 @@ fn a_zero_animation_skill_queues_nothing() {
 
 #[test]
 fn an_enemy_damage_cast_queues_the_animation_at_the_targeted_member_slot() {
-    let mut battle = build_1v2(); // one member
-    let mut s = damage_skill(1, 30, vec![], vec![]); // scope 0 -> hits a member
+    let mut battle = build_1v2();
+    let mut s = damage_skill(1, 30, vec![], vec![]);
     s.animation_id = 6;
     battle.skills = vec![s];
     battle.enemy_cast(0, 1, 0);
@@ -180,7 +175,6 @@ fn an_enemy_damage_cast_queues_the_animation_at_the_targeted_member_slot() {
         .collect();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].targets.len(), 1);
-    // The lone member's party slot: centred x, party-area y.
     let (x, y) = hits[0].targets[0];
     assert!(x.abs() < 1e-6, "x = {x}");
     assert!((y - 80.0).abs() < 1e-6, "y = {y}");
@@ -188,8 +182,8 @@ fn an_enemy_damage_cast_queues_the_animation_at_the_targeted_member_slot() {
 
 #[test]
 fn an_enemy_ally_scope_cast_queues_the_animation_on_the_casting_foe() {
-    let mut battle = build_1v2(); // caster foe 0 at (100, 100)
-    let mut s = heal_skill(2, 40); // scope 3 -> the foe heals itself
+    let mut battle = build_1v2();
+    let mut s = heal_skill(2, 40);
     s.animation_id = 4;
     battle.skills = vec![s];
     battle.enemy_cast(0, 2, 0);
@@ -207,8 +201,8 @@ fn an_enemy_ally_scope_cast_queues_the_animation_on_the_casting_foe() {
 
 #[test]
 fn a_landed_strike_pops_a_damage_number_at_the_foe() {
-    let mut battle = build_1v2(); // foe 0 at (100, 100)
-    battle.members[0].weapon_hit = 100; // never miss
+    let mut battle = build_1v2();
+    battle.members[0].weapon_hit = 100;
     let Strike::Hit { dmg, .. } = battle.strike_enemy(0, 0) else {
         panic!("a forced-hit strike missed");
     };
@@ -226,7 +220,7 @@ fn a_landed_strike_pops_a_damage_number_at_the_foe() {
 #[test]
 fn a_heal_pops_a_heal_coloured_number() {
     let mut battle = build_1v2();
-    battle.skills = vec![heal_skill(2, 40)]; // scope 3 HP heal
+    battle.skills = vec![heal_skill(2, 40)];
     battle.members[0].hp = 10;
     battle.cast_skill(0, 2, 0);
     assert!(
@@ -243,7 +237,7 @@ fn a_missed_strike_pops_a_miss_number() {
     let mut battle = build_1v2();
     battle.members[0].weapon_hit = 90;
     let hit = logic::to_hit(
-        logic::effective_hit(battle.members[0].weapon_hit),
+        battle.members[0].weapon_hit,
         battle.members[0].stats.agility,
         battle.enemies[0].stats.agility,
     );
@@ -265,7 +259,7 @@ fn a_foe_hit_enqueues_a_guaranteed_blink_without_any_animation_flash() {
     // build_1v2's hero is bare-handed (unarmed_animation 0), so its swing plays
     // no animation and carries no flash timing — yet the struck foe blinks.
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // never miss
+    battle.members[0].weapon_hit = 100;
     assert!(battle.pending_blinks.is_empty());
     battle.strike_enemy(0, 0);
     let pos = battle.foe_anim_pos(0);
@@ -275,20 +269,20 @@ fn a_foe_hit_enqueues_a_guaranteed_blink_without_any_animation_flash() {
 #[test]
 fn felling_a_foe_starts_a_death_that_holds_resolve_then_clears() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // never miss
-    battle.enemies[0].hp = 1; // one blow from death
+    battle.members[0].weapon_hit = 100;
+    battle.enemies[0].hp = 1;
     battle.strike_enemy(0, 0);
     assert!(!battle.enemies[0].alive());
     assert!(battle.enemies[0].dying.is_some());
-    assert!(battle.death_in_progress()); // resolve_tick holds while this is true
-    battle.advance_deaths(DEATH_SECS + 0.1); // let the beat play out
-    assert!(!battle.death_in_progress()); // hold released
-    assert!(!battle.enemies[0].alive()); // and the foe is gone for good
+    assert!(battle.death_in_progress());
+    battle.advance_deaths(DEATH_SECS + 0.1);
+    assert!(!battle.death_in_progress());
+    assert!(!battle.enemies[0].alive());
 }
 
 #[test]
 fn self_destruct_starts_an_explosion_death_out() {
-    let mut battle = build_party2(); // one foe
+    let mut battle = build_party2();
     battle.apply(Action {
         source: Source::Enemy(0),
         kind: Command::SelfDestruct,
@@ -304,22 +298,20 @@ fn self_destruct_starts_an_explosion_death_out() {
 
 #[test]
 fn a_multi_target_cast_staggers_its_damage_numbers_across_ticks() {
-    let mut battle = build_1v2(); // two foes
+    let mut battle = build_1v2();
     let mut s = damage_skill(1, 20, vec![], vec![]);
-    s.scope = 1; // all enemies
+    s.scope = 1;
     battle.skills = vec![s];
     // The foes survive the cast (so no death-hold) and only defend, so the sole
     // damage numbers each tick come from the staggered cast, not enemy attacks.
     for e in &mut battle.enemies {
         e.hp = 500;
-        e.actions = vec![enemy_action_def(2)]; // basic 2 = defend
+        e.actions = vec![enemy_action_def(2)];
     }
     battle.commit(Command::Skill {
         skill_id: 1,
         target: 0,
     });
-    // Drive resolution tick by tick, counting how many floating numbers land
-    // each tick. The all-enemy cast must spread its two numbers over two ticks.
     let mut per_tick: Vec<usize> = Vec::new();
     let mut prev = battle.pending_numbers.len();
     while battle.resolve_next() {
@@ -342,8 +334,8 @@ fn a_multi_target_cast_staggers_its_damage_numbers_across_ticks() {
 #[test]
 fn a_critical_announces_on_its_own_line_before_the_damage_line() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // never miss
-    battle.members[0].weapon_crit = 100; // always crit
+    battle.members[0].weapon_hit = 100;
+    battle.members[0].weapon_crit = 100;
     // Foes survive and only defend, so no enemy lines crowd the log.
     for e in &mut battle.enemies {
         e.hp = 500;
@@ -351,13 +343,11 @@ fn a_critical_announces_on_its_own_line_before_the_damage_line() {
     }
     battle.commit(Command::Attack { target: 0 });
     while battle.resolve_next() {}
-    // The critical term is emitted as its own distinct log line.
     assert!(
         battle.log.iter().any(|l| l == "Kritikus ütés!"),
         "a critical announces on its own line, log: {:?}",
         battle.log
     );
-    // The damage line follows separately and no longer folds in the crit word.
     let damage_line = battle
         .log
         .iter()
@@ -372,7 +362,7 @@ fn a_critical_announces_on_its_own_line_before_the_damage_line() {
 #[test]
 fn a_landed_foe_hit_enqueues_the_enemy_damaged_se() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // never miss
+    battle.members[0].weapon_hit = 100;
     assert!(matches!(battle.strike_enemy(0, 0), Strike::Hit { .. }));
     assert!(
         battle.pending_se.contains(&BattleSe::EnemyDamaged),
@@ -386,8 +376,8 @@ fn a_landed_foe_hit_enqueues_the_enemy_damaged_se() {
 #[test]
 fn felling_a_foe_enqueues_the_enemy_defeated_se() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // never miss
-    battle.enemies[0].hp = 1; // one blow from death
+    battle.members[0].weapon_hit = 100;
+    battle.enemies[0].hp = 1;
     battle.strike_enemy(0, 0);
     assert!(!battle.enemies[0].alive());
     assert!(
@@ -395,16 +385,15 @@ fn felling_a_foe_enqueues_the_enemy_defeated_se() {
         "felling a foe queues the kill SE: {:?}",
         battle.pending_se
     );
-    // The damage SE still fires for the killing blow itself.
     assert!(battle.pending_se.contains(&BattleSe::EnemyDamaged));
 }
 
 #[test]
 fn a_missed_strike_enqueues_the_dodge_se() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 90; // bare-hands default
+    battle.members[0].weapon_hit = 90;
     let hit = logic::to_hit(
-        logic::effective_hit(battle.members[0].weapon_hit),
+        battle.members[0].weapon_hit,
         battle.members[0].stats.agility,
         battle.enemies[0].stats.agility,
     );
@@ -436,13 +425,10 @@ fn an_animated_strike_defers_its_damage_number_until_after_the_animation() {
         kind: Command::Attack { target: 0 },
         agility: 0,
     });
-    // The swing animation is queued now, up front...
     assert!(
         battle.pending_anims.iter().any(|a| a.anim_id == 7),
         "the attack animation is queued when the action begins"
     );
-    // ...but no damage number lands on the same tick as the animation — it is
-    // held behind the animation as a deferred impact step, and resolution holds.
     assert!(
         battle.pending_numbers.is_empty(),
         "no number pops on the same tick as the animation"
@@ -456,8 +442,6 @@ fn an_animated_strike_defers_its_damage_number_until_after_the_animation() {
         "the impact is queued as a deferred step: {:?}",
         battle.steps.front().is_some()
     );
-    // Draining the deferred step (what `resolve_tick` does once the animation has
-    // played out) is what finally pops the number.
     battle.resolve_next();
     assert!(
         !battle.pending_numbers.is_empty(),
@@ -470,7 +454,7 @@ fn a_zero_animation_strike_applies_immediately_without_holding() {
     // build_1v2's hero is bare-handed (unarmed_animation 0), so there is no swing
     // to wait for: the impact must land at once with no hold (never wedging).
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // land the blow deterministically
+    battle.members[0].weapon_hit = 100;
     let before = battle.enemies[0].hp;
     battle.apply(Action {
         source: Source::Party(0),
@@ -493,7 +477,7 @@ fn an_enemy_normal_attack_applies_and_pops_a_number_without_holding() {
     // An rpg2k enemy normal attack plays no animation, so it applies immediately
     // (paced only by the step timer), queues no animation, and never holds.
     let mut battle = build_1v2();
-    wind_enemy_hits(&mut battle, &[0]); // land the enemy to-hit roll
+    wind_enemy_hits(&mut battle, &[0]);
     let before = battle.members[0].hp;
     battle.apply(Action {
         source: Source::Enemy(0),
@@ -530,10 +514,8 @@ fn the_animation_hold_waits_for_the_animation_to_appear_then_finish() {
         battle.tick_anim_hold(false),
         "holds through the one-tick spawn lag"
     );
-    // Once it appears it plays for its duration.
     assert!(battle.tick_anim_hold(true), "holds while it plays");
     assert!(battle.tick_anim_hold(true));
-    // When the seen animation is gone, the hold releases.
     assert!(
         !battle.tick_anim_hold(false),
         "releases once the seen animation has finished"

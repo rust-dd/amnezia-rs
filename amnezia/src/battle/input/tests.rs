@@ -54,6 +54,7 @@ fn skill_def(id: u32, power: u32, scope: u32) -> SkillDef {
         power,
         hit: 0,
         skill_type: 0,
+        failure_message: 0,
         scope,
         animation_id: 0,
         physical_rate: 0,

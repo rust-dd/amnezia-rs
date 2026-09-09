@@ -56,15 +56,10 @@ impl Battle {
                 let level = progression.level(a);
                 let (max_hp, max_sp) = logic::actor_hp_sp_at(&a.curves, level, a.hp, a.sp);
                 let (max_hp, max_sp) = (max_hp as i32, max_sp as i32);
-                // Resume stored HP/SP (clamped to the level's maxima), or start
-                // full at the current level when this actor has no stored vitals.
                 let (hp, sp) = match vitals.get_stored(a.id) {
                     Some((h, s)) => (h.min(max_hp), s.min(max_sp)),
                     None => (max_hp, max_sp),
                 };
-                // The runtime loadout (`Equipment` resource), resolved per member
-                // at the call site; an out-of-range member falls back to the
-                // actor's starting gear so a bare test caller stays correct.
                 let slots = equipped.get(idx).copied().unwrap_or([
                     a.weapon,
                     a.shield,
@@ -78,9 +73,6 @@ impl Battle {
                 stats.defense += bonus.defense;
                 stats.spirit += bonus.spirit;
                 stats.agility += bonus.agility;
-                // The equipped weapon (slot 0) lends its hit, crit, and first
-                // element for later resolution; id `0` matches no real item, so an
-                // empty weapon slot resolves to `None`.
                 let weapon = items.iter().find(|i| i.id == slots[0]);
                 Fighter {
                     actor_id: a.id,
@@ -92,11 +84,9 @@ impl Battle {
                     stats,
                     defending: false,
                     command: None,
-                    weapon_hit: weapon.map_or(0, |w| w.hit),
+                    weapon_hit: logic::effective_hit(weapon.map(|w| w.hit)),
                     weapon_crit: weapon.map_or(0, |w| w.crit),
                     weapon_element: weapon.and_then(|w| w.attribute_defense.first().copied()),
-                    // A weapon animates with its own `weapon_animation`; an empty
-                    // slot falls back to the actor's bare-handed animation.
                     attack_animation: match weapon {
                         Some(w) => w.weapon_animation,
                         None => a.unarmed_animation,

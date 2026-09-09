@@ -16,8 +16,8 @@ pub struct Fighter {
     pub command: Option<Command>,
     /// The equipped weapon's hit and crit rates (percent) and its element id,
     /// captured at build time and consumed by the to-hit / critical / elemental
-    /// resolution in [`crate::battle::resolve`]. Empty-handed leaves them `0` / `0`
-    /// / `None`; a `0` hit reads as the RM2000 bare-hands 90% default.
+    /// resolution in [`crate::battle::resolve`]. Empty-handed uses `90` / `0`
+    /// / `None`; an equipped weapon's explicit `0` hit rate remains zero.
     pub weapon_hit: u32,
     pub weapon_crit: u32,
     pub weapon_element: Option<u32>,

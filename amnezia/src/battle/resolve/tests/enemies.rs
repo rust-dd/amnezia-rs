@@ -3,11 +3,11 @@ use super::*;
 #[test]
 fn an_elemental_strike_amplifies_against_a_weak_foe() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // never miss
-    battle.members[0].weapon_crit = 0; // never crit — isolate the element
-    battle.members[0].weapon_element = Some(5); // fire
+    battle.members[0].weapon_hit = 100;
+    battle.members[0].weapon_crit = 0;
+    battle.members[0].weapon_element = Some(5);
     battle.attributes = vec![fire_attr()];
-    battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 0]; // attr 5 -> rank A (weak)
+    battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 0];
     let base = logic::physical_damage(
         battle.members[0].stats.attack,
         battle.enemies[0].stats.defense,
@@ -15,21 +15,21 @@ fn an_elemental_strike_amplifies_against_a_weak_foe() {
     let Strike::Hit { dmg, .. } = battle.strike_enemy(0, 0) else {
         panic!("a forced-hit strike missed");
     };
-    assert!(dmg > base); // a weak (A) rank amplifies past the plain hit
+    assert!(dmg > base);
 }
 
 #[test]
 fn an_elemental_strike_is_nullified_by_an_immune_foe() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // never miss
-    battle.members[0].weapon_element = Some(5); // fire
+    battle.members[0].weapon_hit = 100;
+    battle.members[0].weapon_element = Some(5);
     battle.attributes = vec![fire_attr()];
-    battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 4]; // attr 5 -> rank E (0%)
+    battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 4];
     let before = battle.enemies[0].hp;
     let Strike::Hit { dmg, .. } = battle.strike_enemy(0, 0) else {
         panic!("a forced-hit strike missed");
     };
-    assert_eq!(dmg, 0); // immune (E, 0%) nullifies the blow
+    assert_eq!(dmg, 0);
     assert_eq!(battle.enemies[0].hp, before);
 }
 
@@ -40,21 +40,21 @@ fn killing_every_enemy_yields_victory_and_summed_reward() {
         e.hp = 0;
     }
     assert!(matches!(battle.end_state(), Some(BattleOutcome::Victory)));
-    assert_eq!(battle.victory_rewards(), (20, 60)); // 10+10 exp, 30+30 gold
+    assert_eq!(battle.victory_rewards(), (20, 60));
 }
 
 #[test]
 fn retargeting_skips_a_dead_enemy() {
     let mut battle = build_1v2();
-    battle.enemies[0].hp = 0; // first target dead
-    assert_eq!(battle.retarget_enemy(0), Some(1)); // falls through to the living one
+    battle.enemies[0].hp = 0;
+    assert_eq!(battle.retarget_enemy(0), Some(1));
 }
 
 #[test]
 fn a_fire_skill_amplifies_against_a_weak_foe() {
     let mut battle = build_1v2();
-    battle.attributes = vec![fire_attr()]; // element id 5
-    battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 0]; // attr 5 -> rank A (weak)
+    battle.attributes = vec![fire_attr()];
+    battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 0];
     battle.skills = vec![damage_skill(1, 50, vec![5], vec![])];
     let plain = logic::skill_effect(
         &battle.skills[0],
@@ -78,7 +78,7 @@ fn a_fire_skill_amplifies_against_a_weak_foe() {
 #[test]
 fn an_enemy_skill_cast_wounds_the_targeted_member() {
     let mut battle = build_1v2();
-    battle.skills = vec![damage_skill(1, 30, vec![], vec![])]; // scope 0 -> hits a member
+    battle.skills = vec![damage_skill(1, 30, vec![], vec![])];
     let before = battle.members[0].hp;
     let line = battle.enemy_cast(0, 1, 0).unwrap();
     assert!(battle.members[0].hp < before);
@@ -88,8 +88,8 @@ fn an_enemy_skill_cast_wounds_the_targeted_member() {
 #[test]
 fn an_enemy_ally_scope_skill_heals_the_caster_clamped_to_max() {
     let mut battle = build_1v2();
-    battle.skills = vec![heal_skill(2, 40)]; // scope 3 -> caster heals itself
-    battle.enemies[0].hp = battle.enemies[0].max_hp - 5; // wounded, within one heal of full
+    battle.skills = vec![heal_skill(2, 40)];
+    battle.enemies[0].hp = battle.enemies[0].max_hp - 5;
     battle.enemy_cast(0, 2, 0);
     assert_eq!(battle.enemies[0].hp, battle.enemies[0].max_hp);
 }
@@ -97,8 +97,8 @@ fn an_enemy_ally_scope_skill_heals_the_caster_clamped_to_max() {
 #[test]
 fn a_defending_foe_takes_half_of_an_identical_strike() {
     let mut battle = build_1v2();
-    battle.members[0].weapon_hit = 100; // never miss
-    battle.members[0].weapon_crit = 0; // never crit — isolate the halving
+    battle.members[0].weapon_hit = 100;
+    battle.members[0].weapon_crit = 0;
     // Foe 0 (open) and foe 1 (defending) are identical bandits; strike each
     // from the same RNG state so only the Defend stance differs.
     let rng_save = battle.rng;
@@ -119,13 +119,13 @@ fn a_defending_foe_takes_half_of_an_identical_strike() {
 fn a_defending_enemy_guards_and_deals_no_damage_that_turn() {
     let mut battle = build_1v2();
     for e in &mut battle.enemies {
-        e.actions = vec![enemy_action_def(2)]; // basic 2 = defend
+        e.actions = vec![enemy_action_def(2)];
     }
     let hp_before = battle.members[0].hp;
-    battle.commit(Command::Defend); // the lone member defends -> resolution
+    battle.commit(Command::Defend);
     while battle.resolve_next() {}
     assert!(battle.enemies.iter().all(|e| e.defending));
-    assert_eq!(battle.members[0].hp, hp_before); // no foe attacked
+    assert_eq!(battle.members[0].hp, hp_before);
     assert!(battle.log.iter().any(|l| l.contains("védekezik")));
 }
 
@@ -137,7 +137,6 @@ fn a_double_attack_strikes_the_target_twice() {
     // the double) so the comparison reflects strike count, not a chance miss.
     wind_enemy_hits(&mut battle, &[0, 2]);
     let rng_save = battle.rng;
-    // Baseline: a single enemy strike from this RNG state.
     battle.apply(Action {
         source: Source::Enemy(0),
         kind: Command::Attack { target: 0 },
@@ -163,7 +162,7 @@ fn a_double_attack_strikes_the_target_twice() {
 
 #[test]
 fn self_destruct_hits_every_member_then_kills_the_foe() {
-    let mut battle = build_party2(); // 2 members, 1 foe (attack 20)
+    let mut battle = build_party2();
     let hp = [battle.members[0].hp, battle.members[1].hp];
     battle.apply(Action {
         source: Source::Enemy(0),
@@ -179,7 +178,7 @@ fn self_destruct_hits_every_member_then_kills_the_foe() {
 
 #[test]
 fn an_escaping_foe_leaves_battle_and_grants_no_reward() {
-    let mut battle = build_1v2(); // 2 foes, each 10 exp / 30 gold
+    let mut battle = build_1v2();
     battle.apply(Action {
         source: Source::Enemy(0),
         kind: Command::Escape,
@@ -199,7 +198,7 @@ fn an_escaping_foe_leaves_battle_and_grants_no_reward() {
 fn a_charged_foe_doubles_its_next_strike_then_clears() {
     let mut battle = build_1v2();
     let hp0 = battle.members[0].hp;
-    wind_enemy_hits(&mut battle, &[0]); // land the single to-hit roll
+    wind_enemy_hits(&mut battle, &[0]);
     let rng_save = battle.rng;
     battle.apply(Action {
         source: Source::Enemy(0),
@@ -222,7 +221,7 @@ fn a_charged_foe_doubles_its_next_strike_then_clears() {
         charged > normal,
         "charged strike ({charged}) should exceed a normal one ({normal})"
     );
-    assert!(!battle.enemies[0].charging); // consumed by the strike
+    assert!(!battle.enemies[0].charging);
 }
 
 #[test]
@@ -231,7 +230,7 @@ fn equipped_element_defence_halves_a_matching_enemy_skill_only() {
     use crate::progression::Progression;
     use crate::vitals::Vitals;
     let mut ron = testkit::actor(1, 3, 200, 50);
-    ron.armor = 2; // equip armor guarding attribute 5
+    ron.armor = 2;
     let actors = vec![&ron];
     let items = vec![testkit::item(2, 0, 0, 0, 0, 5)];
     let monsters = vec![testkit::monster(1, 30, 10, 30)];
@@ -255,13 +254,11 @@ fn equipped_element_defence_halves_a_matching_enemy_skill_only() {
     // cast deals base/2 and the unguarded cast deals the full base, so the two
     // compare cleanly without depending on the variance draw.
     let before = battle.members[0].hp;
-    // A guarded (attribute 5) enemy skill is halved (before variance).
     let mut guarded = damage_skill(1, 40, vec![5], vec![]);
     guarded.variance = 0;
     battle.skills = vec![guarded];
     battle.enemy_cast(0, 1, 0);
     let resisted = before - battle.members[0].hp;
-    // The same skill on an unguarded element (6) lands full.
     battle.members[0].hp = before;
     let mut unguarded = damage_skill(1, 40, vec![6], vec![]);
     unguarded.variance = 0;
@@ -273,14 +270,14 @@ fn equipped_element_defence_halves_a_matching_enemy_skill_only() {
 }
 
 #[test]
-fn a_skill_auto_hits_a_foe_that_cannot_act() {
+fn a_physical_skill_auto_hits_a_foe_that_cannot_act() {
     let mut battle = build_1v2();
-    // A can't-act foe is struck for certain, whatever the skill's hit rate.
     battle.states = vec![sleep_state(7)];
     battle.enemies[0].states = vec![(7, 0)];
-    battle.enemies[0].hp = 500; // survive so the wound is observable
+    battle.enemies[0].hp = 500;
     let mut s = damage_skill(1, 30, vec![], vec![]);
-    s.hit = 1; // 1% would almost always miss a foe that could act
+    s.hit = 1;
+    s.failure_message = 3;
     battle.skills = vec![s];
     let before = battle.enemies[0].hp;
     battle.cast_skill(0, 1, 0);
@@ -292,9 +289,9 @@ fn a_skill_auto_hits_a_foe_that_cannot_act() {
 
 #[test]
 fn self_destruct_deals_attack_minus_half_defence_per_member() {
-    let mut battle = build_party2(); // two members, one foe
+    let mut battle = build_party2();
     battle.enemies[0].stats.attack = 40;
-    battle.members[0].stats.defense = 40; // base = max(0, 40 - 20) = 20
+    battle.members[0].stats.defense = 40;
     let hp0 = battle.members[0].hp;
     battle.apply(Action {
         source: Source::Enemy(0),

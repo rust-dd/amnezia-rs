@@ -95,6 +95,7 @@ pub(super) fn skill(id: u32, name: &str, sp_cost: u32) -> SkillDef {
         power: 50,
         hit: 0,
         skill_type: 0,
+        failure_message: 0,
         scope: 0,
         animation_id: 0,
         physical_rate: 0,

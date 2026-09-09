@@ -56,15 +56,12 @@ fn converts_ldb_to_skills_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    // Name bytes are CP1250 "Tűzgolyó" (fireball): 0xFB = 'ű', 0xF3 = 'ó'.
-    // A single-enemy (scope 0) magical fire attack (attribute id 5) that plays
-    // battle animation 12, with damage variance 6, damages HP, and inflicts
-    // Poison (state id 3).
     let fireball = element(
         1,
         &[
             subchunk(0x01, &[0x54, 0xFB, 0x7A, 0x67, 0x6F, 0x6C, 0x79, 0xF3]),
             subchunk(0x02, &[0xC9, 0x67, 0x65, 0x74, 0x69]),
+            subchunk(0x07, &varint(3)),
             subchunk(0x08, &varint(0)),
             subchunk(0x0B, &varint(8)),
             subchunk(0x0C, &varint(0)),
@@ -86,7 +83,7 @@ fn converts_ldb_to_skills_ron() {
     assert_eq!(count, 2);
 
     let text = std::fs::read_to_string(output.join("skills.ron")).unwrap();
-    let skills: Vec<SkillDef> = ron::from_str(&text).unwrap();
+    let skills = ron::from_str::<Vec<SkillDef>>(&text).unwrap();
     assert_eq!(
         skills[0],
         SkillDef {
@@ -96,6 +93,7 @@ fn converts_ldb_to_skills_ron() {
             sp_cost: 8,
             power: 35,
             hit: 90,
+            failure_message: 3,
             skill_type: 0,
             scope: 0,
             animation_id: 12,
@@ -111,7 +109,8 @@ fn converts_ldb_to_skills_ron() {
     );
     assert_eq!(skills[1].name, "Heal");
     assert_eq!(skills[1].sp_cost, 4);
-    assert_eq!((skills[1].power, skills[1].hit), (0, 0));
+    assert_eq!((skills[1].power, skills[1].hit), (0, 100));
+    assert_eq!(skills[1].failure_message, 0);
     assert_eq!(
         skills[1].magical_rate, 3,
         "omitted magical_rate keeps the RM2000 default"
