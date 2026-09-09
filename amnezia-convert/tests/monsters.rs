@@ -139,6 +139,8 @@ fn converts_ldb_to_monsters_ron() {
             subchunk(0x06, &varint(180)),
             subchunk(0x0B, &varint(1500)),
             subchunk(0x0C, &varint(800)),
+            subchunk(0x0D, &varint(33)),
+            subchunk(0x0E, &varint(0)),
             subchunk(0x15, &varint(1)),
             subchunk(0x16, &varint(0)),
         ],
@@ -155,6 +157,8 @@ fn converts_ldb_to_monsters_ron() {
     assert_eq!(
         monsters[0],
         MonsterDef {
+            drop_id: 33,
+            drop_prob: 0,
             critical_hit: true,
             critical_hit_chance: 0,
             id: 1,
@@ -178,4 +182,5 @@ fn converts_ldb_to_monsters_ron() {
     assert_eq!(monsters[1].attack, 0);
     assert!(!monsters[1].critical_hit);
     assert_eq!(monsters[1].critical_hit_chance, 30);
+    assert_eq!((monsters[1].drop_id, monsters[1].drop_prob), (0, 100));
 }

@@ -339,6 +339,17 @@ pub(super) fn apply_victory_rewards(
     }
     battle.rewarded = true;
     inventory.add_gold(battle.reward_gold as i32);
+    for id in battle.reward_items.clone() {
+        inventory.add_item(id, 1);
+        if let Some(item) = data.items.iter().find(|item| item.id == id) {
+            let line = format!(
+                "{}{}",
+                crate::i18n::tr(&item.name),
+                crate::i18n::tr(&battle.text.item_received)
+            );
+            battle.log.push(line);
+        }
+    }
     let exp = battle.reward_exp;
     let mut level_ups: Vec<String> = Vec::new();
     for fighter in &battle.members {
@@ -400,6 +411,9 @@ pub(super) fn outcome_input(
         return;
     }
     let outcome = battle.outcome.unwrap_or(BattleOutcome::Escape);
+    if outcome != BattleOutcome::Abort && super::outcome_text::advance(&mut battle) {
+        return;
+    }
     if let Some(dialogue) = dialogue.as_deref_mut()
         && dialogue.active
     {

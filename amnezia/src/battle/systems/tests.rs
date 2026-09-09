@@ -5,6 +5,7 @@ use crate::audio::BgmTrack;
 use amnezia_data::{MonsterDef, MusicDef, SkillDef, SoundDef, TroopDef, TroopMemberDef};
 use bevy::input::ButtonInput;
 
+mod drops;
 mod timer;
 
 /// A System audio def with a battle track, start SE, and the per-hit effects
@@ -105,6 +106,8 @@ fn logic_app() -> App {
     });
     app.insert_resource(BattleData {
         monsters: vec![MonsterDef {
+            drop_id: 0,
+            drop_prob: 100,
             critical_hit: false,
             critical_hit_chance: 30,
             id: 1,
@@ -274,6 +277,8 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     app.add_message::<AudioRequest>();
     app.init_resource::<ButtonInput<KeyCode>>();
     let monsters = vec![MonsterDef {
+        drop_id: 0,
+        drop_prob: 100,
         critical_hit: false,
         critical_hit_chance: 30,
         id: 1,

@@ -23,6 +23,7 @@ mod input;
 mod log_terms;
 pub(in crate::battle) mod logic;
 mod model;
+mod outcome_text;
 mod resolve;
 mod scene;
 pub(crate) mod smoke;

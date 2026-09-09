@@ -29,6 +29,8 @@ pub struct Foe {
     pub(in crate::battle) stat_modifiers: [i32; 4],
     pub exp: u32,
     pub gold: u32,
+    pub(in crate::battle) drop_id: u32,
+    pub(in crate::battle) drop_prob: u32,
     pub x: u32,
     pub y: u32,
     /// This foe's per-attribute damage ranks (0=A … 4=E), copied from its

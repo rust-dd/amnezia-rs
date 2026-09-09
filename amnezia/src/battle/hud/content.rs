@@ -1,5 +1,7 @@
 use super::*;
 use crate::battle::input::{command_labels, item_choices, party_labels, skill_choices};
+use crate::battle::outcome_text;
+use crate::battle::outcome_text::wrap;
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::state::Inventory;
@@ -61,20 +63,21 @@ pub(super) fn rows(
             })
             .collect(),
         Panel::Message => {
+            if battle.phase == Phase::Outcome {
+                let mut lines = outcome_text::page(battle);
+                lines.push("[Enter] Tovább".into());
+                return lines.into_iter().map(Row::plain).collect();
+            }
             let log = battle.log_tail();
             let mut lines = wrap(&log, 50);
-            let keep = if battle.phase == Phase::Outcome { 3 } else { 4 };
             lines = lines
                 .into_iter()
                 .rev()
-                .take(keep)
+                .take(4)
                 .collect::<Vec<_>>()
                 .into_iter()
                 .rev()
                 .collect();
-            if battle.phase == Phase::Outcome {
-                lines.push("[Enter] Tovább".into());
-            }
             lines.into_iter().map(Row::plain).collect()
         }
         Panel::Help => vec![Row::plain(description(battle, data, inventory))],
@@ -141,24 +144,6 @@ fn description(battle: &Battle, data: &GameData, inventory: &Inventory) -> Strin
 
 fn clip(text: &str, cells: usize) -> String {
     text.chars().take(cells).collect()
-}
-
-fn wrap(text: &str, cells: usize) -> Vec<String> {
-    let mut lines = Vec::new();
-    for line in text.lines() {
-        let mut current = String::new();
-        for word in line.split_whitespace() {
-            if !current.is_empty() && current.chars().count() + 1 + word.chars().count() > cells {
-                lines.push(std::mem::take(&mut current));
-            }
-            if !current.is_empty() {
-                current.push(' ');
-            }
-            current.push_str(word);
-        }
-        lines.push(current);
-    }
-    lines
 }
 
 #[cfg(test)]

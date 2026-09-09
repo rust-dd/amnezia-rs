@@ -96,6 +96,9 @@ pub struct Battle {
     pub outcome: Option<BattleOutcome>,
     pub reward_exp: u32,
     pub reward_gold: u32,
+    pub(in crate::battle) reward_items: Vec<u32>,
+    pub(in crate::battle) outcome_log_start: usize,
+    pub(in crate::battle) outcome_page: usize,
     /// A unique-per-fight stamp (the build seed) the UI watches to rebuild the
     /// enemy battler nodes exactly once when a new encounter begins.
     pub generation: u64,

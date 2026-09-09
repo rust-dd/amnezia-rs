@@ -272,6 +272,10 @@ pub struct AttributeDef {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MonsterDef {
     #[serde(default)]
+    pub drop_id: u32,
+    #[serde(default = "default_hundred")]
+    pub drop_prob: u32,
+    #[serde(default)]
     pub critical_hit: bool,
     #[serde(default = "default_critical_denominator")]
     pub critical_hit_chance: u32,

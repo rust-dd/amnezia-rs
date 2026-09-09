@@ -40,6 +40,8 @@ impl Battle {
                     stat_modifiers: [0; 4],
                     exp: d.exp,
                     gold: d.gold,
+                    drop_id: d.drop_id,
+                    drop_prob: d.drop_prob,
                     x: m.x,
                     y: m.y,
                     attribute_ranks: d.attribute_ranks.clone(),

@@ -56,6 +56,12 @@ impl Battle {
     /// once the outcome is entered, since that needs the party's progression and
     /// inventory resources.
     pub fn finish(&mut self, outcome: BattleOutcome) {
+        if self.outcome == Some(outcome) {
+            return;
+        }
+        self.outcome_log_start = self.log.len();
+        self.outcome_page = 0;
+        self.reward_items.clear();
         self.outcome = Some(outcome);
         self.phase = Phase::Outcome;
         match outcome {
@@ -63,6 +69,16 @@ impl Battle {
                 let (exp, gold) = self.victory_rewards();
                 self.reward_exp = exp;
                 self.reward_gold = gold;
+                for enemy in &self.enemies {
+                    if enemy.hp <= 0
+                        && !enemy.fled
+                        && enemy.drop_id != 0
+                        && self.items.iter().any(|item| item.id == enemy.drop_id)
+                        && rng_next(&mut self.rng) % 100 < u64::from(enemy.drop_prob)
+                    {
+                        self.reward_items.push(enemy.drop_id);
+                    }
+                }
                 self.log.push(i18n::tr(&self.text.victory));
                 if exp > 0 {
                     // RM2000 (2000) message order: "<value><exp_received>".

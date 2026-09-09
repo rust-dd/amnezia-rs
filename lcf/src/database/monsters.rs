@@ -60,6 +60,8 @@ impl Default for EnemyAction {
 /// bytes are kept here unpadded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Monster {
+    pub drop_id: u32,
+    pub drop_prob: u32,
     pub critical_hit: bool,
     pub critical_hit_chance: u32,
     pub id: u32,
@@ -162,6 +164,8 @@ pub fn parse_monsters(bytes: &[u8]) -> Result<Vec<Monster>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut monster = Monster {
+            drop_id: 0,
+            drop_prob: 100,
             critical_hit: false,
             critical_hit_chance: 30,
             id,
@@ -199,6 +203,8 @@ pub fn parse_monsters(bytes: &[u8]) -> Result<Vec<Monster>, LcfError> {
                 MONSTER_AGILITY => monster.agility = Reader::new(sub_data).varint()?,
                 MONSTER_EXP => monster.exp = Reader::new(sub_data).varint()?,
                 MONSTER_GOLD => monster.gold = Reader::new(sub_data).varint()?,
+                0x0D => monster.drop_id = Reader::new(sub_data).varint()?,
+                0x0E => monster.drop_prob = Reader::new(sub_data).varint()?,
                 MONSTER_STATE_RANKS => monster.state_ranks = sub_data.to_vec(),
                 MONSTER_ATTRIBUTE_RANKS => monster.attribute_ranks = sub_data.to_vec(),
                 MONSTER_ACTIONS => monster.actions = parse_actions(sub_data)?,
@@ -240,6 +246,8 @@ mod tests {
         assert_eq!(
             monsters[0],
             Monster {
+                drop_id: 0,
+                drop_prob: 100,
                 critical_hit: false,
                 critical_hit_chance: 30,
                 id: 1,
