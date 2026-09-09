@@ -144,6 +144,9 @@ pub fn play_system_se(audio: &mut MessageWriter<AudioRequest>, sound: &SoundDef)
 
 pub struct AudioPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct AudioRequests;
+
 impl Plugin for AudioPlugin {
     fn build(&self, app: &mut App) {
         let system: SystemDef = load_ron(&format!("{}/system.ron", asset_root()));
@@ -161,7 +164,13 @@ impl Plugin for AudioPlugin {
                 inn: system.inn_music,
                 gameover: system.gameover_music,
             })
-            .add_systems(Update, (play_requests, drive_bgm_fade).chain());
+            .add_systems(
+                Update,
+                (play_requests, drive_bgm_fade)
+                    .chain()
+                    .in_set(AudioRequests)
+                    .after(crate::interpreter::InterpreterStep),
+            );
     }
 }
 

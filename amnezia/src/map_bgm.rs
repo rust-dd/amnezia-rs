@@ -33,7 +33,10 @@ impl Plugin for MapBgmPlugin {
             "{}/map_info.ron",
             asset_root()
         ))))
-        .add_systems(Update, play_map_bgm);
+        .add_systems(
+            Update,
+            play_map_bgm.before(crate::interpreter::InterpreterStep),
+        );
     }
 }
 

@@ -132,7 +132,7 @@ impl Plugin for BattlePlugin {
             .add_systems(
                 Update,
                 (
-                    systems::start_on_request,
+                    systems::start_on_request.after(crate::audio::AudioRequests),
                     systems::debug_trigger,
                     input::command_input,
                     systems::abort_expired_battle

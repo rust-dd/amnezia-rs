@@ -196,6 +196,14 @@ fn drive(world: &mut World) {
             assert!(!clock.running && !clock.visible);
             assert!(!world.resource::<crate::battle::BattleActive>().0);
             assert!(!world.resource::<crate::gameover::GameOverActive>().0);
+            assert_eq!(
+                world
+                    .resource::<crate::audio::CurrentBgm>()
+                    .track()
+                    .map(|t| t.name),
+                Some("House".to_string()),
+                "the battle must restore music requested immediately before the encounter"
+            );
         }
         world.write_message(AppExit::Success);
     }
