@@ -84,6 +84,33 @@ fn chasing_enemy_starts_its_touch_event_when_it_reaches_the_hero() {
 }
 
 #[test]
+fn chasing_npc_uses_the_short_path_and_touch_collision_across_a_seam() {
+    for hero_y in [8, 9] {
+        let mut app = chasing_app();
+        let world = app.world_mut();
+        world.resource_mut::<MapData>().scroll_type = 1;
+        world
+            .query::<&mut Player>()
+            .single_mut(world)
+            .unwrap()
+            .tile_y = hero_y;
+        world
+            .query::<&mut EventSprite>()
+            .single_mut(world)
+            .unwrap()
+            .tile_y = 0;
+        world.resource_mut::<MapEvents>().events[0].y = 0;
+        app.update();
+        let world = app.world();
+        assert_eq!(world.resource::<RunningEvent>().active(), hero_y == 9);
+        assert_eq!(
+            world.resource::<MapEvents>().events[0].y,
+            if hero_y == 9 { 0 } else { 9 }
+        );
+    }
+}
+
+#[test]
 fn autonomous_movement_keeps_scripted_through_facing_and_speed() {
     let mut app = chasing_app();
     let world = app.world_mut();

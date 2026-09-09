@@ -8,6 +8,9 @@ use super::water::WaterQuarter;
 use crate::tiles;
 use bevy::prelude::*;
 
+#[derive(Component)]
+pub(super) struct MapTile(pub Vec2);
+
 pub(super) fn spawn_tile(
     commands: &mut Commands,
     chipset: &Handle<Image>,
@@ -33,6 +36,7 @@ pub(super) fn spawn_tile(
                 ..default()
             },
             Transform::from_xyz(world_x, world_y, z),
+            MapTile(Vec2::new(world_x, world_y)),
             MapScene,
         ))
         .id()
@@ -72,6 +76,7 @@ pub(super) fn spawn_lower_quarters(
                 ..default()
             },
             Transform::from_xyz(world_x, world_y, z),
+            MapTile(Vec2::new(world_x, world_y)),
             MapScene,
         ));
         if tiles::is_ab_water(id) {

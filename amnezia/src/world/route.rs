@@ -111,17 +111,15 @@ fn tile_open(
     state: (&Switches, &Variables, &Party, &Inventory),
 ) -> bool {
     let (nx, ny) = (ex + dx, ey + dy);
-    nx >= 0
-        && ny >= 0
-        && nx < data.width
-        && ny < data.height
+    let destination = data.normalize_tile(nx, ny);
+    data.contains_tile(nx, ny)
         && if jumping {
             data.passable(nx, ny)
         } else {
             data.can_move(ex, ey, nx, ny)
         }
-        && (mover.1 != 1 || (nx, ny) != hero)
-        && !super::collision::event_blocks_at(map_events, state, mover, (nx, ny))
+        && (mover.1 != 1 || destination != hero)
+        && !super::collision::event_blocks_at(map_events, state, mover, destination)
 }
 
 /// Step every event NPC's forced route (custom `move_type == 6` or a loaded
@@ -167,12 +165,14 @@ pub(super) fn route_events(
         let (ex, ey) = (sprite_c.tile_x, sprite_c.tile_y);
         let self_id = sprite_c.id;
         let layer = sprite_c.layer;
+        let delta = data.tile_delta((ex, ey), hero);
+        let near_hero = (ex + delta.0, ey + delta.1);
         let touched = std::cell::Cell::new(false);
         // Scope `can_step` (which borrows the switches and events) so it drops
         // before either is mutated: the logical tile sync and a switch command.
         let driven = {
             let can_step = |dx: i32, dy: i32, jumping: bool| {
-                if layer == 1 && (ex + dx, ey + dy) == hero {
+                if layer == 1 && data.normalize_tile(ex + dx, ey + dy) == hero {
                     touched.set(true);
                 }
                 tile_open(
@@ -188,7 +188,14 @@ pub(super) fn route_events(
                     (&switches, &variables, &party, &inventory),
                 )
             };
-            drive(&mut *sprite_c, &mut queue, &mut stepper, hero, dt, can_step)
+            drive(
+                &mut *sprite_c,
+                &mut queue,
+                &mut stepper,
+                near_hero,
+                dt,
+                can_step,
+            )
         };
         if touched.get()
             && let Some(touches) = touches.as_mut()
@@ -198,8 +205,9 @@ pub(super) fn route_events(
         if let Some((dx, dy)) = driven.moved
             && let Some(event) = map_events.events.iter_mut().find(|e| e.id == self_id)
         {
-            event.x = (event.x as i32 + dx).max(0) as u32;
-            event.y = (event.y as i32 + dy).max(0) as u32;
+            let (x, y) = data.normalize_tile(ex + dx, ey + dy);
+            event.x = x.max(0) as u32;
+            event.y = y.max(0) as u32;
         }
         apply_effects(driven.effects, &mut switches, &mut audio, &mut sprite);
     }
@@ -267,6 +275,56 @@ mod tests {
     use crate::tiles::DIR_DOWN;
     use crate::title::TitleActive;
     use amnezia_data::{Event, EventCommand, MoveCommandDef, MoveRouteDef};
+
+    #[test]
+    fn forced_routes_check_the_wrapped_destination_for_hero_collision() {
+        let mut data = MapData::for_test(140, 140);
+        data.scroll_type = 3;
+        let state = (
+            &Switches::default(),
+            &Variables::default(),
+            &Party::default(),
+            &Inventory::default(),
+        );
+        for jumping in [false, true] {
+            assert!(!tile_open(
+                0,
+                2,
+                -1,
+                0,
+                jumping,
+                (1, 1),
+                (139, 2),
+                &data,
+                &MapEvents::default(),
+                state
+            ));
+            assert!(tile_open(
+                0,
+                2,
+                -1,
+                0,
+                jumping,
+                (1, 0),
+                (139, 2),
+                &data,
+                &MapEvents::default(),
+                state
+            ));
+            assert!(tile_open(
+                0,
+                2,
+                -1,
+                0,
+                jumping,
+                (1, 1),
+                (138, 2),
+                &data,
+                &MapEvents::default(),
+                state
+            ));
+        }
+    }
 
     /// A `RunningEvent` mid-execution — a one-command frame is enough to make
     /// `active()` hold, standing in for a cutscene that is still running.

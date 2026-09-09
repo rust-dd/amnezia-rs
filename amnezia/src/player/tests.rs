@@ -202,3 +202,71 @@ fn camera_clamps_to_map_edges() {
     // map narrower than the viewport: centered, no gray edge
     assert_eq!(clamp_to_map(1000.0, 100.0, 160.0), 0.0);
 }
+
+#[test]
+fn keyboard_wraps_and_triggers_events_across_the_seam() {
+    for (looping, layer) in [(false, 0), (true, 0), (true, 1)] {
+        let mut destination = event(layer, 1);
+        destination.x = 9;
+        let mut app = movement_app(vec![destination]);
+        app.world_mut().resource_mut::<MapData>().scroll_type = if looping { 2 } else { 0 };
+        let world = app.world_mut();
+        world
+            .query::<&mut Player>()
+            .single_mut(world)
+            .unwrap()
+            .tile_x = 0;
+        world
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::ArrowLeft);
+        app.update();
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .release(KeyCode::ArrowLeft);
+        for _ in 0..15 {
+            app.update();
+        }
+        let world = app.world_mut();
+        let player = world.query::<&Player>().single(world).unwrap();
+        assert_eq!(player.tile_x, if looping && layer == 0 { 9 } else { 0 });
+        assert_eq!(world.resource::<RunningEvent>().active(), looping);
+    }
+}
+
+#[test]
+fn camera_only_clamps_non_looping_axes() {
+    for mode in 0..=3 {
+        let mut data = MapData::for_test(140, 140);
+        data.scroll_type = mode;
+        let mut app = App::new();
+        app.insert_resource(data)
+            .init_resource::<CameraPan>()
+            .add_systems(Update, camera_follow);
+        app.world_mut().spawn((
+            Player {
+                tile_x: 0,
+                tile_y: 0,
+                dir: 0,
+                frame: 1,
+                charset: String::new(),
+                index: 0,
+            },
+            Transform::from_xyz(-1120.0, 1120.0, 4.0),
+        ));
+        let camera = app
+            .world_mut()
+            .spawn((
+                MainCamera,
+                Transform::default(),
+                Projection::Orthographic(OrthographicProjection {
+                    area: Rect::new(-160.0, -120.0, 160.0, 120.0),
+                    ..OrthographicProjection::default_2d()
+                }),
+            ))
+            .id();
+        app.update();
+        let position = app.world().get::<Transform>(camera).unwrap().translation;
+        assert_eq!(position.x, if mode & 2 != 0 { -1120.0 } else { -960.0 });
+        assert_eq!(position.y, if mode & 1 != 0 { 1120.0 } else { 1000.0 });
+    }
+}

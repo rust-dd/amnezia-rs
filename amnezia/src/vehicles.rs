@@ -23,6 +23,9 @@ struct VehicleMusic([MusicDef; 3]);
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct VehicleInput;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct VehicleDisplay;
+
 pub struct VehiclePlugin;
 
 impl Plugin for VehiclePlugin {
@@ -43,6 +46,8 @@ impl Plugin for VehiclePlugin {
                 PostUpdate,
                 (render::sync_hero, render::draw)
                     .chain()
+                    .in_set(VehicleDisplay)
+                    .after(crate::screenfx::ScreenShakeSet)
                     .before(bevy::transform::TransformSystems::Propagate),
             );
     }
@@ -66,6 +71,7 @@ impl Vehicles {
                 x += dx;
                 y += dy;
             }
+            let (x, y) = data.normalize_tile(x, y);
             if !data.passable(x, y) || blocked(x, y) {
                 return false;
             }
@@ -79,7 +85,7 @@ impl Vehicles {
             let tile = if index == 2 {
                 (hero.0, hero.1)
             } else {
-                (hero.0 + dx, hero.1 + dy)
+                data.normalize_tile(hero.0 + dx, hero.1 + dy)
             };
             if vehicle.definition.map_id == data.map_id
                 && vehicle.tile() == tile
@@ -171,7 +177,7 @@ fn keyboard(
         let (dx, dy) = dir_delta(dir);
         let (x, y) = vehicles.save.vehicles[index].tile();
         vehicles.save.vehicles[index].dir = dir;
-        if x + dx >= 0 && y + dy >= 0 && x + dx < data.width && y + dy < data.height {
+        if data.contains_tile(x + dx, y + dy) {
             let speed = vehicles.save.vehicles[index].speed;
             vehicles.motion[index]
                 .queue
@@ -207,7 +213,7 @@ fn advance(
             &mut motion.route,
             (x, y),
             time.delta_secs(),
-            |dx, dy, _| x + dx >= 0 && y + dy >= 0 && x + dx < data.width && y + dy < data.height,
+            |dx, dy, _| data.contains_tile(x + dx, y + dy),
         );
         if routed {
             vehicle.speed = motion.route.speed();

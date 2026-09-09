@@ -194,8 +194,6 @@ fn move_player(
         running.start(id, page.commands.clone());
         return;
     }
-    // Held (not tapped) so the hero keeps walking; the queue paces it one tile at
-    // a time via a smooth tween rather than an instant snap.
     let step = if keys.pressed(KeyCode::ArrowUp) {
         Some((0, -1, DIR_UP))
     } else if keys.pressed(KeyCode::ArrowDown) {
@@ -208,7 +206,6 @@ fn move_player(
         None
     };
     let Some((dx, dy, dir)) = step else {
-        // Settle to the standing frame once the hero comes to rest.
         if !queue.busy() && player.frame != 1 {
             player.frame = 1;
         }
@@ -216,11 +213,10 @@ fn move_player(
     };
     stepper.set_direction(&mut *player, dir);
     let (nx, ny) = (player.tile_x + dx, player.tile_y + dy);
-    if nx < 0 || ny < 0 || nx >= data.width || ny >= data.height {
+    if !data.contains_tile(nx, ny) {
         return;
     }
-    // RM2000 MakeWay: the tile being left must permit exit toward the move and
-    // the destination must permit entry from the opposite side.
+    let (tx, ty) = data.normalize_tile(nx, ny);
     let blocked = !stepper.through()
         && (!data.can_move(player.tile_x, player.tile_y, nx, ny)
             || event_blocks_at(
@@ -229,8 +225,8 @@ fn move_player(
                 &variables,
                 &party,
                 &inventory,
-                nx,
-                ny,
+                tx,
+                ty,
             ));
     if !blocked {
         queue.set_step_secs(crate::world::step_secs_for_speed(stepper.speed()));
@@ -247,8 +243,8 @@ fn move_player(
             &variables,
             &party,
             &inventory,
-            nx,
-            ny,
+            tx,
+            ty,
             true,
         )
     {
@@ -359,10 +355,16 @@ fn camera_follow(
     let half_map_h = data.height as f32 * tiles::TILE / 2.0;
     // The pan offset is added after the clamp so a cutscene can deliberately
     // scroll past the map edge; a zero offset leaves the normal follow untouched.
-    camera.translation.x =
-        clamp_to_map(player.translation.x, half_map_w, view.area.width() / 2.0) + pan.offset.x;
-    camera.translation.y =
-        clamp_to_map(player.translation.y, half_map_h, view.area.height() / 2.0) + pan.offset.y;
+    camera.translation.x = if data.loops_x() {
+        player.translation.x
+    } else {
+        clamp_to_map(player.translation.x, half_map_w, view.area.width() / 2.0)
+    } + pan.offset.x;
+    camera.translation.y = if data.loops_y() {
+        player.translation.y
+    } else {
+        clamp_to_map(player.translation.y, half_map_h, view.area.height() / 2.0)
+    } + pan.offset.y;
 }
 
 /// Follow `target` but keep the camera inside the map: never scroll past the

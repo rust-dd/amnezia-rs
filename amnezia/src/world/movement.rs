@@ -74,6 +74,17 @@ struct Tween {
     jumping: bool,
 }
 
+impl Tween {
+    fn position(&self, duration: f32) -> Vec2 {
+        let progress = (self.elapsed / duration).clamp(0.0, 1.0);
+        let mut pos = self.from.lerp(self.to, progress);
+        if self.jumping {
+            pos.y += jump_height(progress);
+        }
+        pos
+    }
+}
+
 /// A character's pending route steps plus the tween of the step in flight. The
 /// interpreter enqueues scripted routes; the player system pushes keyboard
 /// steps. `route` marks a scripted run so the character settles to its standing
@@ -123,6 +134,13 @@ impl MoveQueue {
         self.active.is_some() || !self.steps.is_empty()
     }
 
+    pub(crate) fn render_position<C: Character>(&self, ch: &C, data: &MapData) -> Vec2 {
+        self.active.as_ref().map_or_else(
+            || center(data, ch.tile().0, ch.tile().1),
+            |tween| tween.position(self.step_secs),
+        )
+    }
+
     /// Whether [`walk`] still has something to do (busy, or a scripted route to
     /// settle). Keyboard idling stays out of the movement system.
     fn has_work(&self) -> bool {
@@ -143,12 +161,7 @@ impl MoveQueue {
             if let Some(tween) = self.active.as_mut() {
                 tween.elapsed += dt;
                 if tween.elapsed < step {
-                    let progress = tween.elapsed / step;
-                    let mut pos = tween.from.lerp(tween.to, progress);
-                    if tween.jumping {
-                        pos.y += jump_height(progress);
-                    }
-                    return Some(pos);
+                    return Some(tween.position(step));
                 }
                 let end = tween.to;
                 self.active = None;
@@ -179,7 +192,8 @@ impl MoveQueue {
         let (x, y) = ch.tile();
         let from = center(data, x, y);
         let (nx, ny) = (x + dx, y + dy);
-        ch.set_tile(nx, ny);
+        let (tile_x, tile_y) = data.normalize_tile(nx, ny);
+        ch.set_tile(tile_x, tile_y);
         ch.set_dir(face);
         if !jumping {
             ch.set_frame((ch.frame() + 1) % 3);
@@ -350,6 +364,7 @@ mod tests {
 
     fn test_map() -> MapData {
         MapData {
+            scroll_type: 0,
             panorama: None,
             map_id: 0,
             width: 5,
@@ -393,5 +408,39 @@ mod tests {
         assert!(q.advance(&mut ch, &data, 0.0).is_none());
         assert!(!q.busy());
         assert_eq!(ch.frame(), 1);
+    }
+
+    #[test]
+    fn seam_crossings_tween_one_tile_with_a_canonical_logical_destination() {
+        let mut data = MapData::for_test(140, 140);
+        data.scroll_type = 3;
+        for (start, delta, destination) in [
+            ((0, 0), (-1, 0), (139, 0)),
+            ((139, 0), (1, 0), (0, 0)),
+            ((0, 0), (0, -1), (0, 139)),
+            ((0, 139), (0, 1), (0, 0)),
+        ] {
+            let mut ch = FakeChar {
+                x: start.0,
+                y: start.1,
+                dir: 0,
+                frame: 1,
+                charset: String::new(),
+            };
+            let mut q = MoveQueue::default();
+            q.push_step(RouteAction::Step {
+                dx: delta.0,
+                dy: delta.1,
+                face: 0,
+            });
+            let from = q.advance(&mut ch, &data, 0.0).unwrap();
+            assert_eq!(ch.tile(), destination);
+            let mid = q.advance(&mut ch, &data, STEP_DURATION / 2.0).unwrap();
+            assert_eq!(q.render_position(&ch, &data), mid);
+            assert_eq!(mid.distance(from), 8.0);
+            let end = q.advance(&mut ch, &data, STEP_DURATION / 2.0).unwrap();
+            assert_eq!(end.distance(from), 16.0);
+            assert_eq!(data.world_near(q.render_position(&ch, &data), end), end);
+        }
     }
 }

@@ -2,7 +2,7 @@ use super::Vehicles;
 use crate::assets::resolve_png;
 use crate::player::Player;
 use crate::tiles::{self, CHAR_Y_OFFSET};
-use crate::world::{Character, MapData, MoveQueue};
+use crate::world::{Character, MainCamera, MapData, MoveQueue};
 use bevy::prelude::*;
 
 #[derive(Component)]
@@ -58,7 +58,11 @@ pub(super) fn draw(
     data: Res<MapData>,
     vehicles: Res<Vehicles>,
     assets: Res<AssetServer>,
-    mut sprites: Query<(&VehicleSprite, &mut Sprite, &mut Transform, &mut Visibility)>,
+    cameras: Query<&Transform, With<MainCamera>>,
+    mut sprites: Query<
+        (&VehicleSprite, &mut Sprite, &mut Transform, &mut Visibility),
+        Without<MainCamera>,
+    >,
 ) {
     if sprites.is_empty() {
         for index in 0..3 {
@@ -85,12 +89,22 @@ pub(super) fn draw(
         sprite.color = sprite.color.with_alpha(vehicles.motion[id.0].alpha);
         let (x, y) = vehicle.tile();
         let (wx, wy) = data.tile_center(x, y);
-        let pixel = vehicles.motion[id.0].pixel.unwrap_or(Vec2::new(wx, wy));
+        let camera = cameras
+            .single()
+            .map_or(Vec2::ZERO, |t| t.translation.truncate());
+        let pixel = data.world_near(
+            vehicles.motion[id.0].pixel.unwrap_or(Vec2::new(wx, wy)),
+            camera,
+        );
         let flying = id.0 == 2 && vehicles.save.riding == Some(2);
         transform.translation = Vec3::new(
             pixel.x,
             pixel.y + CHAR_Y_OFFSET + if flying { 12.0 } else { 0.0 },
-            if flying { 250.0 } else { tiles::character_z(y) },
+            if flying {
+                250.0
+            } else {
+                tiles::character_z(data.draw_row((x, y), camera))
+            },
         );
     }
 }

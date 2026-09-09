@@ -1,6 +1,19 @@
 use super::*;
 
 #[test]
+fn boarding_and_disembarking_wrap_the_facing_tile() {
+    let mut data = MapData::for_test(140, 140);
+    data.scroll_type = 3;
+    let mut vehicles = Vehicles::default();
+    vehicles.set_location(0, 0, 139, 2);
+    assert!(vehicles.toggle(&data, (0, 2, DIR_LEFT), |_, _| false));
+    vehicles.save.vehicles[0].dir = DIR_RIGHT;
+    assert!(!vehicles.toggle(&data, (139, 2, DIR_RIGHT), |x, y| (x, y) == (0, 2)));
+    assert!(vehicles.toggle(&data, (139, 2, DIR_RIGHT), |_, _| false));
+    assert_eq!(vehicles.disembark, Some((0, 2, DIR_RIGHT)));
+}
+
+#[test]
 fn airship_boards_on_its_tile_and_lands_at_its_live_position() {
     let mut vehicles = Vehicles::default();
     let mut data = MapData::for_test(100, 110);

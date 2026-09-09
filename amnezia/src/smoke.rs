@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
+mod looping;
 mod scenarios;
 
 pub struct SmokePlugin;
@@ -18,7 +19,9 @@ impl Plugin for SmokePlugin {
         if !cfg!(debug_assertions) || !std::env::args().any(|arg| arg == "--smoke-test") {
             return;
         }
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-airship") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-looping") {
+            "looping"
+        } else if std::env::args().any(|arg| arg == "--smoke-airship") {
             "airship"
         } else if std::env::args().any(|arg| arg == "--smoke-battle") {
             "battle"
@@ -112,6 +115,9 @@ fn drive(world: &mut World) {
     }
     if frame == 150 && scenario != "intro" {
         start_scenario(world, scenario);
+    }
+    if scenario == "looping" {
+        looping::drive(world, frame);
     }
     if frame == 240 && scenario == "battle-events" {
         crate::dialogue::verify_battle_layer(world);
@@ -227,7 +233,9 @@ fn start_scenario(world: &mut World, scenario: &str) {
     if scenario == "battle-menus" {
         crate::battle::smoke::prepare(world);
     }
-    let commands = if scenario == "airship" {
+    let commands = if scenario == "looping" {
+        looping::entry()
+    } else if scenario == "airship" {
         let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(
             "{}/maps/map_0125.ron",
             crate::assets::asset_root()

@@ -300,27 +300,26 @@ pub(crate) fn autonomous_movement(
         let (ex, ey) = (sprite.tile_x, sprite.tile_y);
         let self_id = sprite.id;
         let rand_dir = next_rand(&mut auto.rng) % 4;
+        let hero_delta = data.tile_delta((ex, ey), (px, py));
         let touched = std::cell::Cell::new(false);
         let decision = {
             let passable = |dir: u32| {
                 let (dx, dy) = dir_delta(dir);
                 let (nx, ny) = (ex + dx, ey + dy);
+                let destination = data.normalize_tile(nx, ny);
                 let through = stepper.as_ref().is_some_and(|route| route.through());
-                if !through && sprite.layer == 1 && (nx, ny) == (px, py) {
+                if !through && sprite.layer == 1 && destination == (px, py) {
                     touched.set(true);
                 }
-                nx >= 0
-                    && ny >= 0
-                    && nx < data.width
-                    && ny < data.height
+                data.contains_tile(nx, ny)
                     && (through
                         || (data.can_move(ex, ey, nx, ny)
-                            && !(sprite.layer == 1 && nx == px && ny == py)
+                            && !(sprite.layer == 1 && destination == (px, py))
                             && !super::collision::event_blocks_at(
                                 &map_events,
                                 (&switches, &variables, &party, &inventory),
                                 (self_id, sprite.layer),
-                                (nx, ny),
+                                destination,
                             )))
             };
             decide(
@@ -330,8 +329,8 @@ pub(crate) fn autonomous_movement(
                     .map_or(sprite.dir, |route| route.direction(&*sprite)),
                 ex,
                 ey,
-                px,
-                py,
+                ex + hero_delta.0,
+                ey + hero_delta.1,
                 rand_dir,
                 passable,
             )
@@ -346,7 +345,7 @@ pub(crate) fn autonomous_movement(
         match decision {
             Decision::Step(dir) => {
                 let (dx, dy) = dir_delta(dir);
-                let (nx, ny) = (ex + dx, ey + dy);
+                let (nx, ny) = data.normalize_tile(ex + dx, ey + dy);
                 if let Some(event) = map_events.events.iter_mut().find(|e| e.id == self_id) {
                     event.x = nx as u32;
                     event.y = ny as u32;

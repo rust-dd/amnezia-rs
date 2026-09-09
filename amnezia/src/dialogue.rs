@@ -4,6 +4,8 @@
 //! each page letter by letter, [`view`] draws it, and the confirm key here
 //! fast-forwards the reveal or advances/closes the box.
 
+#[cfg(test)]
+mod tests;
 mod typewriter;
 mod view;
 
@@ -172,7 +174,7 @@ fn interact(
     // tile is a counter, the scan reaches across it to the next tile — up to
     // RPG_RT's maximum of three counter tiles — so the hero can talk to an event
     // standing behind a shop counter.
-    let (mut tx, mut ty) = (fx, fy);
+    let (mut tx, mut ty) = data.normalize_tile(fx, fy);
     for hop in 0..=3 {
         for event in &map_events.events {
             if event.x as i32 != tx || event.y as i32 != ty {
@@ -189,8 +191,7 @@ fn interact(
         if hop == 3 || !data.is_counter(tx, ty) {
             break;
         }
-        tx += dx;
-        ty += dy;
+        (tx, ty) = data.normalize_tile(tx + dx, ty + dy);
     }
     // RM2000 `CheckEventTriggerHere`: a trigger-0 event on the hero's own tile
     // fires when its active page is below or above the hero (layer != 1). The save

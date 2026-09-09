@@ -20,6 +20,7 @@ mod pages;
 mod render;
 mod route;
 mod scene_pause;
+mod topology;
 mod touch;
 mod water;
 
@@ -76,6 +77,7 @@ pub struct EventSprite {
 /// The active map's geometry, tile layers, and passability, for movement.
 #[derive(Resource)]
 pub struct MapData {
+    pub scroll_type: u32,
     pub panorama: Option<amnezia_data::PanoramaDef>,
     pub map_id: u32,
     pub width: i32,
@@ -104,8 +106,9 @@ impl MapData {
     }
 
     /// Whether the cell at `(x, y)` permits passage in the direction(s) `bit`,
-    /// combining its lower and upper layers. Out-of-bounds cells are impassable.
+    /// combining both layers. Looping axes wrap; other map boundaries block.
     fn passable_dir(&self, x: i32, y: i32, bit: u8) -> bool {
+        let (x, y) = self.normalize_tile(x, y);
         if x < 0 || y < 0 || x >= self.width || y >= self.height {
             return false;
         }
@@ -132,6 +135,7 @@ impl MapData {
     /// Whether the tile `(x, y)` is a counter (its upper tile carries the counter
     /// bit): an action event one tile beyond can be talked to across it.
     pub fn is_counter(&self, x: i32, y: i32) -> bool {
+        let (x, y) = self.normalize_tile(x, y);
         if x < 0 || y < 0 || x >= self.width || y >= self.height {
             return false;
         }
@@ -146,6 +150,7 @@ impl MapData {
     /// headless tests: offsets centered as on a real load, all tiles empty.
     pub(crate) fn for_test(width: i32, height: i32) -> MapData {
         MapData {
+            scroll_type: 0,
             panorama: None,
             map_id: 0,
             width,
@@ -209,6 +214,13 @@ impl Plugin for WorldPlugin {
                     apply_relocate,
                     fit_ui_scale,
                 ),
+            )
+            .add_systems(
+                PostUpdate,
+                topology::wrap_scene
+                    .after(crate::vehicles::VehicleDisplay)
+                    .after(crate::screenfx::ScreenShakeSet)
+                    .before(bevy::transform::TransformSystems::Propagate),
             );
     }
 }
@@ -389,6 +401,7 @@ pub fn load_map(
     }
 
     let data = MapData {
+        scroll_type: map.scroll_type,
         panorama: map.panorama,
         map_id,
         width,
