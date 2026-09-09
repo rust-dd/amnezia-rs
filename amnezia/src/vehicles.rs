@@ -1,3 +1,5 @@
+#[cfg(test)]
+mod landing_tests;
 mod model;
 mod render;
 #[cfg(test)]
@@ -78,7 +80,16 @@ impl Vehicles {
                 y += dy;
             }
             let (x, y) = data.normalize_tile(x, y);
-            if !data.passable(x, y) || blocked(x, y) {
+            let terrain_allows = if index == 2 {
+                data.airship_landing_tile(x, y)
+            } else {
+                data.passable(x, y)
+            };
+            let occupied_by_ship = index == 2
+                && self.save.vehicles[..2]
+                    .iter()
+                    .any(|other| other.definition.map_id == data.map_id && other.tile() == (x, y));
+            if !terrain_allows || occupied_by_ship || blocked(x, y) {
                 return false;
             }
             self.disembark = Some((x, y, vehicle.dir));
@@ -137,12 +148,13 @@ fn keyboard(
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
         let was_riding = vehicles.riding();
+        let landing_airship = vehicles.save.riding == Some(2);
         if vehicles.toggle(&data, (hero.tile_x, hero.tile_y, hero.dir), |x, y| {
             map_events.events.iter().any(|event| {
                 event.x as i32 == x
                     && event.y as i32 == y
                     && active_page(event, &switches, &variables, &party, &inventory)
-                        .is_some_and(|p| p.layer == 1)
+                        .is_some_and(|p| landing_airship || p.layer == 1)
             })
         }) {
             vehicles.consumed_action = true;
@@ -183,7 +195,9 @@ fn keyboard(
         let (dx, dy) = dir_delta(dir);
         let (x, y) = vehicles.save.vehicles[index].tile();
         vehicles.save.vehicles[index].dir = dir;
-        if data.contains_tile(x + dx, y + dy) {
+        if data.contains_tile(x + dx, y + dy)
+            && (index != 2 || data.airship_passable(x + dx, y + dy))
+        {
             let speed = vehicles.save.vehicles[index].speed;
             vehicles.motion[index]
                 .queue
@@ -225,7 +239,10 @@ fn advance(
             &mut motion.route,
             (x, y),
             time.delta_secs(),
-            |_, dx, dy, _, _| data.contains_tile(x + dx, y + dy),
+            |_, dx, dy, _, through| {
+                data.contains_tile(x + dx, y + dy)
+                    && (through || index != 2 || data.airship_passable(x + dx, y + dy))
+            },
         );
         if routed {
             vehicle.speed = motion.route.speed();

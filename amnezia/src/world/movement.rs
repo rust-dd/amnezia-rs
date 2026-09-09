@@ -392,6 +392,8 @@ mod tests {
             upper: vec![10000; 25],
             passages_down: vec![0x0F; 162],
             passages_up: vec![0x0F; 144],
+            terrain_data: Vec::new(),
+            terrains: vec![amnezia_data::TerrainDef { id: 1, ..default() }],
         }
     }
 

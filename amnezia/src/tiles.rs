@@ -155,7 +155,7 @@ pub fn is_counter(upper_id: u16, passages_up: &[u8]) -> bool {
         .is_some_and(|byte| byte & COUNTER_BIT != 0)
 }
 
-fn passages_lower_index(id: u16) -> Option<usize> {
+pub(crate) fn passages_lower_index(id: u16) -> Option<usize> {
     if id < 3000 {
         Some((id / 1000) as usize)
     } else if (3000..3150).contains(&id) {
@@ -211,7 +211,7 @@ const WALL_BIT: u8 = 0x20;
 /// the edge/threshold set) in any direction; every other tile is passable when
 /// its byte has the requested direction bit set. Pass [`PASS_ALL`] for a
 /// non-directional "standable at all" test.
-fn lower_passable(lower_id: u16, passages_down: &[u8], bit: u8) -> bool {
+pub(crate) fn lower_passable(lower_id: u16, passages_down: &[u8], bit: u8) -> bool {
     let byte = passages_lower_index(lower_id)
         .and_then(|i| passages_down.get(i))
         .copied()

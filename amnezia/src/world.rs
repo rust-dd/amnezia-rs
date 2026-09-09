@@ -22,6 +22,7 @@ mod render;
 mod route;
 mod scene_pause;
 mod screen;
+mod terrain;
 mod topology;
 mod touch;
 mod water;
@@ -91,6 +92,8 @@ pub struct MapData {
     upper: Vec<u16>,
     passages_down: Vec<u8>,
     passages_up: Vec<u8>,
+    terrain_data: Vec<u16>,
+    terrains: Vec<amnezia_data::TerrainDef>,
 }
 
 impl MapData {
@@ -165,6 +168,8 @@ impl MapData {
             upper: vec![10000; (width * height) as usize],
             passages_down: vec![0x0F; 162],
             passages_up: vec![0x0F; 144],
+            terrain_data: Vec::new(),
+            terrains: vec![amnezia_data::TerrainDef { id: 1, ..default() }],
         }
     }
 }
@@ -335,9 +340,9 @@ pub fn load_map(
     let map: Map = load_ron(&format!("{}/maps/map_{map_id:04}.ron", asset_root()));
     let chipsets: Vec<Chipset> = load_ron(&format!("{}/chipsets.ron", asset_root()));
     let entry = chipsets.into_iter().find(|c| c.id == map.chipset_id);
-    let (graphic, passages_down, passages_up) = match entry {
-        Some(c) => (c.graphic, c.passages_down, c.passages_up),
-        None => (String::new(), vec![0x0F; 162], vec![0x0F; 144]),
+    let (graphic, passages_down, passages_up, terrain_data) = match entry {
+        Some(c) => (c.graphic, c.passages_down, c.passages_up, c.terrain_data),
+        None => (String::new(), vec![0x0F; 162], vec![0x0F; 144], Vec::new()),
     };
     let chipset = asset_server.load(resolve_png("ChipSet", &graphic));
     commands.insert_resource(pages::EventTileset(chipset.clone()));
@@ -416,6 +421,8 @@ pub fn load_map(
         upper: map.upper,
         passages_down,
         passages_up,
+        terrain_data,
+        terrains: load_ron(&format!("{}/terrains.ron", asset_root())),
     };
     (data, MapEvents { events: map.events })
 }
