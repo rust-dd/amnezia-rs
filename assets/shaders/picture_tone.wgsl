@@ -5,6 +5,7 @@
 // cannot). Bound as a `Material2d` on the picture quad.
 
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
+#import bevy_render::color_operations::{linear_to_srgb, srgb_to_linear}
 
 // xyz: per-channel RGB multiplier (1.0 = neutral). w: saturation (1.0 = neutral,
 // 0.0 = full grayscale, >1.0 oversaturates).
@@ -37,9 +38,12 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     } else {
         texel = textureSampleLevel(picture_texture, picture_sampler, mesh.uv, 0.0);
     }
-    var rgb = texel.rgb * rgb_sat.xyz;
+    var rgb = linear_to_srgb(texel.rgb) * rgb_sat.xyz;
     let luma = dot(rgb, vec3<f32>(0.299, 0.587, 0.114));
     rgb = mix(vec3<f32>(luma, luma, luma), rgb, rgb_sat.w);
+#ifndef SRGB_OUTPUT
+    rgb = srgb_to_linear(rgb);
+#endif
     let alpha = select(1.0, texel.a, extra.y != 0.0);
     return vec4<f32>(rgb, alpha * extra.x);
 }

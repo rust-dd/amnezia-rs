@@ -23,6 +23,7 @@ mod gameover;
 mod i18n;
 mod inputnumber;
 mod interpreter;
+mod legacy_colors;
 mod map_bgm;
 mod menu;
 mod panorama;
@@ -82,6 +83,7 @@ fn main() -> AppExit {
     }
     App::new()
         .add_plugins(plugins)
+        .add_plugins(legacy_colors::LegacyColorsPlugin)
         .insert_resource(text::HeroName(hero.name))
         .init_resource::<state::Switches>()
         .init_resource::<state::Variables>()

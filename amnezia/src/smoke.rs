@@ -24,7 +24,9 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-pictures") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-colors") {
+            "colors"
+        } else if std::env::args().any(|arg| arg == "--smoke-pictures") {
             "pictures"
         } else if std::env::args().any(|arg| arg == "--smoke-message-options") {
             "message-options"
@@ -94,6 +96,7 @@ fn capture(world: &mut World, label: &str) {
             capture::verify_content(&capture.image, &label);
             crate::battle::smoke::verify_skin(&capture.image, &label);
             crate::picture::smoke::verify_image(&capture.image, &label, &picture_pixels);
+            crate::legacy_colors::smoke::verify(&capture.image, &label);
         },
     );
 }
@@ -150,6 +153,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "pictures"
         && let Some(label) = crate::picture::smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "colors"
+        && let Some(label) = crate::legacy_colors::smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -267,7 +275,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
     if scenario == "battle-menus" {
         crate::battle::smoke::prepare(world);
     }
-    let commands = if matches!(scenario, "message-options" | "pictures") {
+    let commands = if matches!(scenario, "message-options" | "pictures" | "colors") {
         message_options::entry()
     } else if scenario == "camera" {
         camera::entry()
