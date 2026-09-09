@@ -127,8 +127,8 @@ impl Battle {
                     self.log.extend(lines);
                 }
             }
-            Step::CritDamage { ti, dmg } => {
-                self.land_strike(ti, dmg);
+            Step::CritDamage { pi, ti, dmg } => {
+                self.land_strike(pi, ti, dmg);
                 let line = format!(
                     "{} {dmg}{}",
                     self.enemies[ti].name,

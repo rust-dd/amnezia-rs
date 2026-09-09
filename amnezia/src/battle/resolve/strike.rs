@@ -43,6 +43,9 @@ impl Battle {
             self.members[pi].base_critical_denominator,
             self.members[pi].weapon_crit,
         );
+        let chance = self
+            .battler_equipment_effects(Source::Enemy(ti))
+            .critical_chance(chance);
         let crit = ((rng_next(&mut self.rng) % 100) as u32) < chance;
         let base = if crit {
             logic::critical_damage(base)
@@ -63,9 +66,10 @@ impl Battle {
     /// Land a planned strike of `dmg` on enemy `ti`: subtract the HP, roll its
     /// states' damage wear-off, and pop the damage number, whitening blink, and
     /// death-out (see [`Battle::after_foe_hit`]).
-    pub(in crate::battle::resolve) fn land_strike(&mut self, ti: usize, dmg: i32) {
+    pub(in crate::battle::resolve) fn land_strike(&mut self, pi: usize, ti: usize, dmg: i32) {
         self.enemies[ti].hp = (self.enemies[ti].hp - dmg).max(0);
         self.release_states_from_damage(Source::Enemy(ti), 100);
+        self.weapon_states(Source::Party(pi), Source::Enemy(ti));
         self.after_foe_hit(ti, dmg);
     }
 
@@ -73,11 +77,11 @@ impl Battle {
     /// animation has played (RM2000 `ProcessBattleActionApply`/`Damage`): a miss
     /// pops the dodge SE and "Miss" number, a critical announces on its own beat
     /// and lands its precomputed `dmg` on the next tick ([`Step::CritDamage`]),
-    /// and a plain hit lands at once — each logging its line. Draws no RNG, so the
-    /// order is unchanged whether this runs inline or deferred behind the hold.
+    /// and a plain hit lands at once. State recovery and weapon afflictions are
+    /// rolled at impact, after the precomputed HP damage.
     pub(in crate::battle::resolve) fn resolve_strike_impact(
         &mut self,
-        _pi: usize,
+        pi: usize,
         ti: usize,
         outcome: Strike,
     ) {
@@ -94,7 +98,7 @@ impl Battle {
                     .push(format!("{enemy}{}", crate::i18n::tr(&self.text.dodge)));
             }
             Strike::Hit { dmg, crit: false } => {
-                self.land_strike(ti, dmg);
+                self.land_strike(pi, ti, dmg);
                 self.log.push(format!(
                     "{enemy} {dmg}{}",
                     crate::i18n::tr(&self.text.enemy_damaged)
@@ -103,7 +107,7 @@ impl Battle {
             Strike::Hit { dmg, crit: true } => {
                 // RM2000 `ProcessBattleActionCritical`: announce the critical on
                 // its own beat, then land the (already rolled) blow next tick.
-                self.steps.push_back(Step::CritDamage { ti, dmg });
+                self.steps.push_back(Step::CritDamage { pi, ti, dmg });
                 self.log.push(crate::i18n::tr(&self.text.enemy_critical));
             }
         }
@@ -145,6 +149,9 @@ impl Battle {
             self.battler_stats(Source::Party(ti)).agility,
             can_act,
         );
+        let hit = self.members[ti]
+            .equipment_effects
+            .physical_hit(hit, can_act);
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
             let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
             self.pending_se.push(BattleSe::Dodge);
@@ -155,7 +162,12 @@ impl Battle {
             self.battler_stats(Source::Enemy(ei)).attack,
             self.battler_stats(Source::Party(ti)).defense,
         );
-        if charged {
+        let chance = logic::critical_chance(self.enemies[ei].base_critical_denominator, 0);
+        let chance = self.members[ti].equipment_effects.critical_chance(chance);
+        if chance > 0 && self.skill_roll(chance as i32) {
+            base = logic::critical_damage(base);
+            self.log.push(crate::i18n::tr(&self.text.actor_critical));
+        } else if charged {
             base *= 2;
         }
         Some(self.hit_member(ti, base, 4, 100))

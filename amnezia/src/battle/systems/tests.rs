@@ -105,6 +105,8 @@ fn logic_app() -> App {
     });
     app.insert_resource(BattleData {
         monsters: vec![MonsterDef {
+            critical_hit: false,
+            critical_hit_chance: 30,
             id: 1,
             name: "Rabló".into(),
             battler: "Cannibal".into(),
@@ -272,6 +274,8 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     app.add_message::<AudioRequest>();
     app.init_resource::<ButtonInput<KeyCode>>();
     let monsters = vec![MonsterDef {
+        critical_hit: false,
+        critical_hit_chance: 30,
         id: 1,
         name: "Rabló".into(),
         battler: String::new(),

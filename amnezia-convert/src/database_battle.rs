@@ -104,6 +104,8 @@ pub fn convert_monsters(input: &Path, output: &Path) -> Result<usize> {
     let monsters: Vec<MonsterDef> = parsed
         .into_iter()
         .map(|m| MonsterDef {
+            critical_hit: m.critical_hit,
+            critical_hit_chance: m.critical_hit_chance,
             id: m.id,
             name: m.name,
             battler: m.battler,

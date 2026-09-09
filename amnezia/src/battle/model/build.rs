@@ -35,6 +35,7 @@ impl Battle {
                     max_hp: d.max_hp as i32,
                     sp: d.max_sp as i32,
                     max_sp: d.max_sp as i32,
+                    base_critical_denominator: d.critical_hit.then_some(d.critical_hit_chance),
                     stats: Stats::from_monster(d),
                     stat_modifiers: [0; 4],
                     exp: d.exp,
@@ -132,6 +133,13 @@ impl Fighter {
             weapon_crit: weapon.map_or(0, |w| w.crit),
             base_critical_denominator: actor.critical_hit.then_some(actor.critical_hit_chance),
             weapon_attributes: weapon.map_or_else(Vec::new, |w| w.attribute_defense.clone()),
+            weapon_states: weapon.map_or_else(Vec::new, |w| {
+                w.state_defense
+                    .iter()
+                    .map(|&id| (id, w.state_chance))
+                    .collect()
+            }),
+            equipment_effects: crate::equipment::EquipmentEffects::from_slots(slots, items),
             attack_animation: weapon.map_or(actor.unarmed_animation, |w| w.weapon_animation),
             states: vitals
                 .states(actor.id)

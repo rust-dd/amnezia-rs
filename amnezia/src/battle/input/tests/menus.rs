@@ -14,7 +14,10 @@ fn a_silenced_skill_stays_listed_but_cannot_be_confirmed() {
     };
     battle.skills = vec![skill];
     battle.menu = MenuLevel::Skill;
-    assert_eq!(skill_choices(&data, &[1], battle.members[0].sp).len(), 1);
+    assert_eq!(
+        skill_choices(&data, &[1], battle.members[0].equipment_effects).len(),
+        1
+    );
     skill_menu(&press_enter(), &data, &mut battle);
     assert!(battle.menu == MenuLevel::Skill);
     assert!(matches!(battle.pending_se.last(), Some(BattleSe::Buzzer)));
@@ -108,7 +111,7 @@ fn unaffordable_and_zero_power_skills_stay_visible_without_allowing_invalid_orde
         items: vec![],
         skills: vec![expensive, zero_power],
     };
-    assert_eq!(skill_choices(&data, &[1, 2], 10).len(), 2);
+    assert_eq!(skill_choices(&data, &[1, 2], Default::default()).len(), 2);
     battle.menu = MenuLevel::Skill;
     battle.cursor = 0;
     skill_menu(&press_enter(), &data, &mut battle);

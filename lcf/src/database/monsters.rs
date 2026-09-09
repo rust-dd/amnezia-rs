@@ -60,6 +60,8 @@ impl Default for EnemyAction {
 /// bytes are kept here unpadded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Monster {
+    pub critical_hit: bool,
+    pub critical_hit_chance: u32,
     pub id: u32,
     pub name: String,
     pub battler: String,
@@ -160,6 +162,8 @@ pub fn parse_monsters(bytes: &[u8]) -> Result<Vec<Monster>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut monster = Monster {
+            critical_hit: false,
+            critical_hit_chance: 30,
             id,
             name: String::new(),
             battler: String::new(),
@@ -184,6 +188,8 @@ pub fn parse_monsters(bytes: &[u8]) -> Result<Vec<Monster>, LcfError> {
             let sub_data = reader.take(sub_size)?;
             match sub_id {
                 MONSTER_NAME => monster.name = decode_cp1250(sub_data),
+                0x15 => monster.critical_hit = Reader::new(sub_data).varint()? != 0,
+                0x16 => monster.critical_hit_chance = Reader::new(sub_data).varint()?,
                 MONSTER_BATTLER => monster.battler = decode_cp1250(sub_data),
                 MONSTER_MAX_HP => monster.max_hp = Reader::new(sub_data).varint()?,
                 MONSTER_MAX_SP => monster.max_sp = Reader::new(sub_data).varint()?,
@@ -234,6 +240,8 @@ mod tests {
         assert_eq!(
             monsters[0],
             Monster {
+                critical_hit: false,
+                critical_hit_chance: 30,
                 id: 1,
                 name: "Sárkány".to_string(),
                 battler: "Dragon1".to_string(),

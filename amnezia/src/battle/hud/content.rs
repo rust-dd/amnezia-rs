@@ -87,7 +87,7 @@ fn commands(battle: &Battle, data: &GameData, inventory: &Inventory, terms: &Ter
     };
     match battle.menu {
         MenuLevel::Command => command_labels(terms).into_iter().map(Row::plain).collect(),
-        MenuLevel::Skill => skill_choices(data, &actor.known_skills, actor.sp)
+        MenuLevel::Skill => skill_choices(data, &actor.known_skills, actor.equipment_effects)
             .into_iter()
             .map(|(id, cost, _)| {
                 let skill = data.skills.iter().find(|s| s.id == id).unwrap();
@@ -126,7 +126,7 @@ fn description(battle: &Battle, data: &GameData, inventory: &Inventory) -> Strin
         return String::new();
     };
     let value = match battle.menu {
-        MenuLevel::Skill => skill_choices(data, &actor.known_skills, actor.sp)
+        MenuLevel::Skill => skill_choices(data, &actor.known_skills, actor.equipment_effects)
             .get(battle.cursor)
             .and_then(|(id, _, _)| data.skills.iter().find(|s| s.id == *id))
             .map(|s| &s.description),

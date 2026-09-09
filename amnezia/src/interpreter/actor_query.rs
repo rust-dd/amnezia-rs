@@ -131,6 +131,9 @@ pub(super) mod fixtures {
 
     pub(in crate::interpreter) fn weapon(id: u32, atk: u32) -> ItemDef {
         ItemDef {
+            prevent_critical: false,
+            raise_evasion: false,
+            half_sp_cost: false,
             actor_set: Vec::new(),
             state_chance: 0,
             id,

@@ -271,6 +271,10 @@ pub struct AttributeDef {
 /// and the `exp`/`gold` reward for defeating it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MonsterDef {
+    #[serde(default)]
+    pub critical_hit: bool,
+    #[serde(default = "default_critical_denominator")]
+    pub critical_hit_chance: u32,
     pub id: u32,
     pub name: String,
     pub battler: String,

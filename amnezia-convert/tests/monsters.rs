@@ -139,6 +139,8 @@ fn converts_ldb_to_monsters_ron() {
             subchunk(0x06, &varint(180)),
             subchunk(0x0B, &varint(1500)),
             subchunk(0x0C, &varint(800)),
+            subchunk(0x15, &varint(1)),
+            subchunk(0x16, &varint(0)),
         ],
     );
     let slime = element(2, &[subchunk(0x01, b"Slime"), subchunk(0x04, &varint(30))]);
@@ -153,6 +155,8 @@ fn converts_ldb_to_monsters_ron() {
     assert_eq!(
         monsters[0],
         MonsterDef {
+            critical_hit: true,
+            critical_hit_chance: 0,
             id: 1,
             name: "Sárkány".to_string(),
             battler: "Dragon1".to_string(),
@@ -172,4 +176,6 @@ fn converts_ldb_to_monsters_ron() {
     assert_eq!(monsters[1].name, "Slime");
     assert_eq!(monsters[1].max_hp, 30);
     assert_eq!(monsters[1].attack, 0);
+    assert!(!monsters[1].critical_hit);
+    assert_eq!(monsters[1].critical_hit_chance, 30);
 }

@@ -3,6 +3,7 @@ use crate::battle::model::testkit::{build_1v2, build_party2};
 
 mod attributes;
 mod criticals;
+mod equipment;
 mod state_behavior;
 
 fn fire_attr() -> amnezia_data::AttributeDef {
@@ -210,6 +211,9 @@ fn medicine(
     cure_states: Vec<u32>,
 ) -> amnezia_data::ItemDef {
     amnezia_data::ItemDef {
+        prevent_critical: false,
+        raise_evasion: false,
+        half_sp_cost: false,
         actor_set: Vec::new(),
         state_chance: 0,
         id,

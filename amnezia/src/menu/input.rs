@@ -254,6 +254,7 @@ pub(super) fn menu_input(
                     &party,
                     &progression,
                     &mut vitals,
+                    &equipment,
                 )
             {
                 state.screen = MenuScreen::SkillList { member, cursor: 0 };

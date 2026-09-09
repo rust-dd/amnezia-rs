@@ -25,6 +25,9 @@ impl Battle {
             self.battler_stats(target).agility,
             self.state_restriction(target) != 1,
         );
+        let hit = self
+            .battler_equipment_effects(target)
+            .physical_hit(hit, self.state_restriction(target) != 1);
         let damage = if self.skill_roll(hit) {
             let base = logic::physical_damage(
                 self.battler_stats(source).attack,
@@ -72,6 +75,7 @@ impl Battle {
                 Source::Enemy(i) => self.enemies[i].hp = (self.enemies[i].hp - damage).max(0),
             }
             self.release_states_from_damage(target, 100);
+            self.weapon_states(source, target);
             match target {
                 Source::Party(i) => self.after_member_hit(i, damage),
                 Source::Enemy(i) => self.after_foe_hit(i, damage),

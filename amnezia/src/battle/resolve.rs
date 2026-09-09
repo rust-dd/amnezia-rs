@@ -19,6 +19,7 @@ mod end;
 mod enemy;
 mod enemy_ai;
 mod enemy_skill;
+mod equipment;
 mod hit;
 mod item;
 mod skill;

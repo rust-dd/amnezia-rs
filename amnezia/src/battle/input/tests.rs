@@ -18,6 +18,9 @@ use amnezia_data::{ItemDef, SkillDef};
 
 fn medicine(id: u32) -> ItemDef {
     ItemDef {
+        prevent_critical: false,
+        raise_evasion: false,
+        half_sp_cost: false,
         actor_set: Vec::new(),
         state_chance: 0,
         id,

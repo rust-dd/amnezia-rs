@@ -4,14 +4,10 @@
 //! level (see [`Progression::known_skill_ids`]); the list is those, not the whole
 //! database, and the caster member matters because casting spends *their* SP.
 //!
-//! A skill counts as field-usable here when it is a normal (`skill_type` 0)
-//! HP-recovery skill that targets an ally (`scope` 3 one ally, 4 all allies) with
-//! positive `power`. Everything else — attack, self, SP-only, teleport/escape/
-//! switch skills — is shown inert (tagged "(harc)", battle-only). Applying a field
-//! skill is deliberately simplified: it heals a flat `power` HP (not the full
-//! spirit/magical-rate battle formula) to the single chosen ally (an all-ally
-//! scope still resolves to one target), spending the caster's SP.
+//! Field recovery supports self, single-ally and whole-party targets. Equipment
+//! modifies the displayed and paid SP cost through the same shared rule.
 
+use crate::equipment::{Equipment, EquipmentEffects};
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::progression::Progression;
@@ -68,6 +64,7 @@ pub(super) fn skill_at<'a>(
 /// (defaulting to full when unrecorded) and heal the target a flat `power` HP,
 /// clamped to their maximum. Returns `false` — changing nothing — when the skill
 /// isn't field-usable or the caster can't afford its SP cost.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn apply_field_skill(
     caster: usize,
     target: usize,
@@ -76,6 +73,7 @@ pub(super) fn apply_field_skill(
     party: &Party,
     progression: &Progression,
     vitals: &mut Vitals,
+    equipment: &Equipment,
 ) -> bool {
     let roster = party.snapshot();
     let (Some(&caster_id), Some(&target_id)) = (roster.get(caster), roster.get(target)) else {
@@ -95,7 +93,8 @@ pub(super) fn apply_field_skill(
     let (caster_hp, caster_sp) = vitals
         .get_stored(caster_id)
         .unwrap_or((caster_max_hp, caster_max_sp));
-    let cost = skill.sp_cost as i32;
+    let cost = EquipmentEffects::from_slots(equipment.slots(caster_def), &data.items)
+        .skill_cost(skill.sp_cost) as i32;
     if caster_sp < cost || caster_hp <= 0 {
         return false;
     }
@@ -151,7 +150,14 @@ pub(super) fn compose_list(
     data: &GameData,
     party: &Party,
     progression: &Progression,
+    equipment: &Equipment,
 ) -> (String, Option<usize>) {
+    let effects = party
+        .snapshot()
+        .get(member)
+        .and_then(|&id| data.actor(id))
+        .map(|def| EquipmentEffects::from_slots(equipment.slots(def), &data.items))
+        .unwrap_or_default();
     let caster = party
         .snapshot()
         .get(member)
@@ -176,7 +182,7 @@ pub(super) fn compose_list(
         lines.push(format!(
             "{}  SP {}{tag}",
             i18n::tr(&skill.name),
-            skill.sp_cost
+            effects.skill_cost(skill.sp_cost)
         ));
     }
     lines.push(String::new());
@@ -232,6 +238,48 @@ mod tests {
     use crate::menu::testkit;
 
     #[test]
+    fn moonstone_cost_is_shared_by_the_field_list_and_actual_cast() {
+        let mut data = testkit::data();
+        data.skills = vec![testkit::heal_skill(2, "Gyógyítás", 9, 10)];
+        data.actors[0].learnings = vec![amnezia_data::Learning {
+            level: 1,
+            skill_id: 2,
+        }];
+        data.items = crate::assets::load_ron(&format!("{}/items.ron", crate::assets::asset_root()));
+        let mut equipment = Equipment::default();
+        equipment.set_slot(&data.actors[0], 1, 152);
+        equipment.set_slot(&data.actors[0], 2, 157);
+        let party = Party::default();
+        let progression = Progression::default();
+        let (text, _) = compose_list(0, 0, &data, &party, &progression, &equipment);
+        assert!(text.contains("SP 5"), "{text}");
+        let mut vitals = Vitals::default();
+        vitals.set(1, 20, 4);
+        assert!(!apply_field_skill(
+            0,
+            0,
+            2,
+            &data,
+            &party,
+            &progression,
+            &mut vitals,
+            &equipment
+        ));
+        vitals.set(1, 20, 5);
+        assert!(apply_field_skill(
+            0,
+            0,
+            2,
+            &data,
+            &party,
+            &progression,
+            &mut vitals,
+            &equipment
+        ));
+        assert_eq!(vitals.get_stored(1), Some((30, 0)));
+    }
+
+    #[test]
     fn field_usable_accepts_ally_hp_heals_and_rejects_battle_skills() {
         assert!(field_usable(&testkit::heal_skill(2, "Gyógyítás", 8, 40)));
         // A plain attack skill (scope 0) is battle-only.
@@ -257,8 +305,14 @@ mod tests {
                 skill_id: 3,
             },
         ];
-        let (text, cursor_line) =
-            compose_list(0, 0, &d, &Party::default(), &Progression::default());
+        let (text, cursor_line) = compose_list(
+            0,
+            0,
+            &d,
+            &Party::default(),
+            &Progression::default(),
+            &Equipment::default(),
+        );
         assert!(text.contains("Gyógyítás  SP 8"), "heal, no tag: {text}");
         assert!(
             text.contains("Tűzgolyó  SP 12  (harc)"),
@@ -287,7 +341,14 @@ mod tests {
                 skill_id: 3,
             },
         ];
-        let (text, _) = compose_list(0, 0, &d, &Party::default(), &Progression::default());
+        let (text, _) = compose_list(
+            0,
+            0,
+            &d,
+            &Party::default(),
+            &Progression::default(),
+            &Equipment::default(),
+        );
         assert!(text.contains("Gyógyítás"), "learned skill shown: {text}");
         assert!(!text.contains("Tűzgolyó"), "unlearned skill hidden: {text}");
     }
@@ -307,6 +368,7 @@ mod tests {
             &Party::default(),
             &Progression::default(),
             &mut vitals,
+            &Equipment::default(),
         );
         assert!(ok, "an affordable field heal applies");
         // HP 20 + 40 power = 60 (below the 63 max); SP 30 - 8 cost = 22.
@@ -325,7 +387,16 @@ mod tests {
 
         let mut broke = Vitals::default();
         broke.set(1, 20, 3); // only 3 SP, heal costs 8
-        assert!(!apply_field_skill(0, 0, 2, &d, &party, &prog, &mut broke));
+        assert!(!apply_field_skill(
+            0,
+            0,
+            2,
+            &d,
+            &party,
+            &prog,
+            &mut broke,
+            &Equipment::default()
+        ));
         assert_eq!(
             broke.get_stored(1),
             Some((20, 3)),
@@ -335,7 +406,7 @@ mod tests {
         let mut full = Vitals::default();
         full.set(1, 20, 30);
         assert!(
-            !apply_field_skill(0, 0, 3, &d, &party, &prog, &mut full),
+            !apply_field_skill(0, 0, 3, &d, &party, &prog, &mut full, &Equipment::default()),
             "a battle-only skill can't be cast in the field"
         );
     }

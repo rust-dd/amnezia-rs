@@ -69,6 +69,9 @@ fn converts_ldb_to_items_ron() {
             subchunk(0x11, &varint(85)),
             subchunk(0x12, &varint(5)),
             subchunk(0x14, &varint(2)),
+            subchunk(0x19, &varint(1)),
+            subchunk(0x1A, &varint(1)),
+            subchunk(0x1B, &varint(1)),
             subchunk(0x3E, &[1, 0, 0]),
             subchunk(0x42, &[1]),
         ],
@@ -98,6 +101,9 @@ fn converts_ldb_to_items_ron() {
     assert_eq!(
         items[0],
         ItemDef {
+            prevent_critical: true,
+            raise_evasion: true,
+            half_sp_cost: true,
             actor_set: vec![true, false, false],
             state_chance: 0,
             id: 1,
@@ -161,6 +167,7 @@ fn explicit_zero_item_fields_survive_ron_loading() {
     .unwrap();
     assert_eq!((item.uses, item.hit, item.weapon_animation), (0, 0, 0));
     assert!(item.actor_set.is_empty());
+    assert!(!item.prevent_critical && !item.raise_evasion && !item.half_sp_cost);
     assert!(item.usable_by_actor(1) && item.usable_by_actor(999));
     assert!(!item.usable_by_actor(0));
 }

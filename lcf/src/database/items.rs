@@ -33,6 +33,9 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// 1-based ids.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Item {
+    pub prevent_critical: bool,
+    pub raise_evasion: bool,
+    pub half_sp_cost: bool,
     pub actor_set: Vec<bool>,
     pub state_chance: u32,
     pub id: u32,
@@ -113,6 +116,9 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut item = Item {
+            prevent_critical: false,
+            raise_evasion: false,
+            half_sp_cost: false,
             actor_set: Vec::new(),
             state_chance: 0,
             id,
@@ -169,6 +175,9 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
                 ITEM_KO_ONLY => item.ko_only = Reader::new(sub_data).varint()? != 0,
                 ITEM_STATE_SET => item.state_set = decode_flag_ids(sub_data),
                 0x3E => item.actor_set = sub_data.iter().map(|byte| *byte != 0).collect(),
+                0x19 => item.prevent_critical = Reader::new(sub_data).varint()? != 0,
+                0x1A => item.raise_evasion = Reader::new(sub_data).varint()? != 0,
+                0x1B => item.half_sp_cost = Reader::new(sub_data).varint()? != 0,
                 0x43 => item.state_chance = Reader::new(sub_data).varint()?,
                 ITEM_ATTRIBUTE_SET => item.attribute_set = decode_flag_ids(sub_data),
                 _ => {}
@@ -224,6 +233,9 @@ mod tests {
         assert_eq!(
             items[0],
             Item {
+                prevent_critical: false,
+                raise_evasion: false,
+                half_sp_cost: false,
                 actor_set: Vec::new(),
                 state_chance: 0,
                 id: 1,

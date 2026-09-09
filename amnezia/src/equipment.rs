@@ -18,6 +18,9 @@ use amnezia_data::{ActorDef, ItemDef};
 use bevy::prelude::*;
 use std::collections::HashMap;
 
+mod effects;
+pub(crate) use effects::EquipmentEffects;
+
 /// The five gear slot indices, in `ActorDef` slot order.
 const SLOTS: usize = 5;
 
@@ -247,6 +250,9 @@ mod tests {
 
     fn item(id: u32, item_type: u32) -> ItemDef {
         ItemDef {
+            prevent_critical: false,
+            raise_evasion: false,
+            half_sp_cost: false,
             actor_set: Vec::new(),
             state_chance: 0,
             id,

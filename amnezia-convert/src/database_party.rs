@@ -140,9 +140,8 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
     let items = parsed
         .into_iter()
         .map(|i| {
-            // The raw `state_set`/`attribute_set` sets play different roles by
-            // category: on gear (types 1–5) they are the resisted attributes and
-            // guarded states, on a consumable the states it cures.
+            // Weapon sets are offensive; armor guards and consumable cures must
+            // remain separate so equipping a weapon cannot grant its protection.
             let is_equipment = matches!(i.item_type, 1..=5);
             let (cure_states, state_defense) = if is_equipment {
                 (Vec::new(), i.state_set)
@@ -155,6 +154,9 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
                 Vec::new()
             };
             ItemDef {
+                prevent_critical: i.prevent_critical,
+                raise_evasion: i.raise_evasion,
+                half_sp_cost: i.half_sp_cost,
                 actor_set: i.actor_set,
                 state_chance: i.state_chance,
                 id: i.id,

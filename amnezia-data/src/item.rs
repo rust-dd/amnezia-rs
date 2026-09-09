@@ -17,11 +17,17 @@ use serde::{Deserialize, Serialize};
 ///
 /// The equipment fields apply to gear (types 1–5): `atk`/`def`/`spi`/`agi` are
 /// the stat bonuses, `attribute_defense`/`state_defense` the 1-based attribute
-/// and state ids the gear resists or guards against, `two_handed` marks a
+/// and state ids the armor guards against (or the weapon inflicts), `two_handed` marks a
 /// two-handed weapon, `hit`/`crit` its hit and critical rates (percent), and
 /// `weapon_animation` its attack animation id.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemDef {
+    #[serde(default)]
+    pub prevent_critical: bool,
+    #[serde(default)]
+    pub raise_evasion: bool,
+    #[serde(default)]
+    pub half_sp_cost: bool,
     #[serde(default)]
     pub actor_set: Vec<bool>,
     #[serde(default)]

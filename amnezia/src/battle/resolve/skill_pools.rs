@@ -1,6 +1,11 @@
 use super::*;
 
 impl Battle {
+    pub(in crate::battle) fn skill_cost(&self, source: Source, skill: &SkillDef) -> u32 {
+        self.battler_equipment_effects(source)
+            .skill_cost(skill.sp_cost)
+    }
+
     pub(in crate::battle) fn skill_usable_by(&self, source: Source, skill: &SkillDef) -> bool {
         let (alive, sp) = match source {
             Source::Party(i) => self.members.get(i).map(|f| (f.alive(), f.sp)),
@@ -9,7 +14,7 @@ impl Battle {
         .unwrap_or_default();
         alive
             && skill.skill_type == 0
-            && i64::from(sp) >= i64::from(skill.sp_cost)
+            && i64::from(sp) >= i64::from(self.skill_cost(source, skill))
             && logic::states_allow_skill(self.battler_states(source), &self.states, skill)
     }
 
@@ -21,7 +26,7 @@ impl Battle {
         if !self.skill_usable_by(source, skill) {
             return false;
         }
-        self.change_sp(source, -(skill.sp_cost as i32));
+        self.change_sp(source, -(self.skill_cost(source, skill) as i32));
         true
     }
 

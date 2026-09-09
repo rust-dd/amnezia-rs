@@ -152,12 +152,18 @@ impl Battle {
         skill: &SkillDef,
     ) -> i32 {
         let can_act = logic::worst_restriction(self.battler_states(target), &self.states) != 1;
-        logic::skill_to_hit(
+        let hit = logic::skill_to_hit(
             skill,
             self.battler_stats(source).agility,
             self.battler_stats(target).agility,
             can_act,
             logic::state_hit_ratio(self.battler_states(source), &self.states),
-        )
+        );
+        if skill.failure_message == 3 && skill.scope < 2 {
+            self.battler_equipment_effects(target)
+                .physical_hit(hit, can_act)
+        } else {
+            hit
+        }
     }
 }

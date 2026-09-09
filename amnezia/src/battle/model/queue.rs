@@ -71,7 +71,7 @@ pub(in crate::battle) enum Step {
     },
     /// The damage beat after a "Kritikus!" announcement: land the precomputed
     /// `dmg` of member `pi`'s critical strike on enemy `ti`.
-    CritDamage { ti: usize, dmg: i32 },
+    CritDamage { pi: usize, ti: usize, dmg: i32 },
     /// Apply member `pi`'s planned normal-strike outcome on foe `ti` once its
     /// attack animation has played out: pop the dodge when `miss`, else land
     /// `dmg` — taking the critical announcement beat first when `crit`. RM2000

@@ -22,6 +22,8 @@ pub struct Fighter {
     pub weapon_crit: u32,
     pub base_critical_denominator: Option<u32>,
     pub weapon_attributes: Vec<u32>,
+    pub(in crate::battle) weapon_states: Vec<(u32, u32)>,
+    pub(in crate::battle) equipment_effects: crate::equipment::EquipmentEffects,
     /// The animation this member's normal attack plays on its target: the
     /// equipped weapon's `weapon_animation`, or the actor's `unarmed_animation`
     /// when it has no weapon. `0` means "no animation" and plays nothing.

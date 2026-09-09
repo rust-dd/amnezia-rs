@@ -93,16 +93,17 @@ fn party_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
 }
 
 /// Learned skills in database order, including disabled entries.
-pub fn skill_choices(data: &GameData, known: &[u32], _sp: i32) -> Vec<(u32, u32, String)> {
+pub fn skill_choices(
+    data: &GameData,
+    known: &[u32],
+    effects: crate::equipment::EquipmentEffects,
+) -> Vec<(u32, u32, String)> {
     data.skills
         .iter()
         .filter(|s| known.contains(&s.id))
         .map(|s| {
-            (
-                s.id,
-                s.sp_cost,
-                format!("{} (SP {})", i18n::tr(&s.name), s.sp_cost),
-            )
+            let cost = effects.skill_cost(s.sp_cost);
+            (s.id, cost, format!("{} (SP {})", i18n::tr(&s.name), cost))
         })
         .collect()
 }
@@ -153,8 +154,7 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
         return;
     }
     let known = battle.members[battle.turn].known_skills.clone();
-    let sp = battle.members[battle.turn].sp;
-    let choices = skill_choices(data, &known, sp);
+    let choices = skill_choices(data, &known, battle.members[battle.turn].equipment_effects);
     if move_grid_cursor(keys, &mut battle.cursor, choices.len()) {
         battle.pending_se.push(BattleSe::Cursor);
     }

@@ -35,6 +35,8 @@ pub fn actor(id: u32, level: u32, hp: u32, sp: u32) -> ActorDef {
 
 pub fn monster(id: u32, hp: u32, exp: u32, gold: u32) -> MonsterDef {
     MonsterDef {
+        critical_hit: false,
+        critical_hit_chance: 30,
         id,
         name: format!("M{id}"),
         battler: String::new(),
@@ -57,6 +59,9 @@ pub fn monster(id: u32, hp: u32, exp: u32, gold: u32) -> MonsterDef {
 
 pub fn item(id: u32, atk: u32, def: u32, hit: u32, crit: u32, element: u32) -> ItemDef {
     ItemDef {
+        prevent_critical: false,
+        raise_evasion: false,
+        half_sp_cost: false,
         actor_set: Vec::new(),
         state_chance: 0,
         id,

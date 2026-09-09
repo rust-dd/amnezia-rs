@@ -129,7 +129,7 @@ fn modified_stats_drive_physical_damage_and_the_next_round_order() {
 fn death_clears_stat_modifiers_and_a_weapon_kill_never_leaves_negative_hp() {
     let mut battle = build_1v2();
     battle.enemies[0].stat_modifiers = [5; 4];
-    battle.land_strike(0, 9999);
+    battle.land_strike(0, 0, 9999);
     assert_eq!(battle.enemies[0].hp, 0);
     assert_eq!(battle.enemies[0].stat_modifiers, [0; 4]);
     battle.members[0].stat_modifiers = [5; 4];
