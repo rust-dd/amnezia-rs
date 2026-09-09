@@ -120,6 +120,10 @@ struct SaveGame {
     #[serde(default)]
     timer_running: bool,
     #[serde(default)]
+    timer_visible: bool,
+    #[serde(default)]
+    timer_in_battle: bool,
+    #[serde(default)]
     vehicles: crate::vehicles::VehicleSave,
     #[serde(default)]
     system_bgm: crate::system_bgm::SystemBgm,
@@ -318,6 +322,8 @@ fn save_or_load(
                 playtime: scene.playtime.seconds,
                 timer_remaining: scene.game_clock.remaining,
                 timer_running: scene.game_clock.running,
+                timer_visible: scene.game_clock.visible,
+                timer_in_battle: scene.game_clock.in_battle,
                 vehicles: scene
                     .vehicles
                     .as_ref()
@@ -365,6 +371,9 @@ fn save_or_load(
             scene.playtime.seconds = game.playtime;
             scene.game_clock.remaining = game.timer_remaining;
             scene.game_clock.running = game.timer_running;
+            scene.game_clock.visible = game.timer_visible;
+            scene.game_clock.in_battle = game.timer_in_battle;
+            scene.game_clock.expired = false;
             if let Some(hidden) = scene.hero_hidden.as_mut() {
                 hidden.0 = game.hero_hidden;
             }

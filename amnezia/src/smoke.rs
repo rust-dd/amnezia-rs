@@ -20,6 +20,8 @@ impl Plugin for SmokePlugin {
             "airship"
         } else if std::env::args().any(|arg| arg == "--smoke-battle") {
             "battle"
+        } else if std::env::args().any(|arg| arg == "--smoke-timer") {
+            "timer"
         } else if std::env::args().any(|arg| arg == "--smoke-panorama") {
             "panorama"
         } else if std::env::args().any(|arg| arg == "--smoke-font") {
@@ -54,12 +56,15 @@ fn capture(world: &mut World, label: &str) {
 fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let advance = frame > 90
-        && !matches!(world.resource::<SmokeRun>().scenario, "font" | "panorama")
+        && !matches!(
+            world.resource::<SmokeRun>().scenario,
+            "font" | "panorama" | "timer"
+        )
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active
             || world.resource::<crate::battle::BattleActive>().0);
     let mut keys = world.resource_mut::<ButtonInput<KeyCode>>();
-    keys.release(KeyCode::Enter);
+    *keys = ButtonInput::default();
     if advance {
         keys.press(KeyCode::Enter);
     }
@@ -87,6 +92,10 @@ fn drive(world: &mut World) {
         world
             .resource_mut::<crate::state::Party>()
             .restore(vec![1, 2, 3, 4]);
+    }
+    if frame == 900 && scenario == "timer" {
+        assert!(world.resource::<crate::battle::BattleActive>().0);
+        world.resource_mut::<crate::timer::GameClock>().remaining = 1.0;
     }
     if frame.is_multiple_of(300) {
         let map = world.resource::<crate::world::MapData>().map_id;
@@ -129,6 +138,12 @@ fn drive(world: &mut World) {
             assert_eq!((hero.tile_x, hero.tile_y), (9, 4));
             assert_eq!(*visibility, Visibility::Hidden);
             scenarios::verify_airship_staging(world);
+        } else if scenario == "timer" {
+            let clock = world.resource::<crate::timer::GameClock>();
+            assert_eq!(clock.seconds(), 0);
+            assert!(!clock.running && !clock.visible);
+            assert!(!world.resource::<crate::battle::BattleActive>().0);
+            assert!(!world.resource::<crate::gameover::GameOverActive>().0);
         }
         world.write_message(AppExit::Success);
     }
@@ -166,13 +181,26 @@ fn start_scenario(world: &mut World, scenario: &str) {
             .position(|c| c.code == 10810)
             .map_or(commands.len(), |i| vehicle + i);
         commands[start..end].to_vec()
-    } else if scenario == "battle" {
-        vec![EventCommand {
+    } else if matches!(scenario, "battle" | "timer") {
+        let mut commands = if scenario == "timer" {
+            let mut commands = vec![EventCommand {
+                code: 10810,
+                indent: 0,
+                string: String::new(),
+                params: vec![3, 15, 6],
+            }];
+            commands.extend(scenarios::mission_timer_start());
+            commands
+        } else {
+            Vec::new()
+        };
+        commands.push(EventCommand {
             code: 10710,
             indent: 0,
             string: "Cave1".into(),
             params: vec![0, 2, 1, 0, 0, 0],
-        }]
+        });
+        commands
     } else if scenario == "font" {
         vec![
             EventCommand {

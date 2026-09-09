@@ -1,5 +1,5 @@
-//! The turn-based, front-view battle system (Milestone 7). The interpreter's
-//! `EnemyEncounter` (opcode 10710, `params[0]` = troop id) drives it through a
+//! The turn-based, front-view battle system. The interpreter's
+//! `EnemyEncounter` (opcode 10710, `params[1]` = troop id) drives it through a
 //! clean message/resource contract so the world stays decoupled from the fight:
 //!
 //! - **IN** — [`BattleRequest`] `{ troop_id }`: start a fight with that troop.
@@ -27,6 +27,7 @@ mod scene;
 mod systems;
 
 pub(crate) use logic::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus_slots};
+pub(crate) use systems::HudCamera;
 
 use crate::assets::{asset_root, load_ron};
 use crate::audio::{AudioRequest, BgmTrack};
@@ -60,6 +61,7 @@ pub enum BattleOutcome {
     Victory,
     Escape,
     Defeat,
+    Abort,
 }
 
 /// The finished battle's outcome, set once when the fight ends and cleared by the
@@ -87,8 +89,7 @@ struct BattleData {
 }
 
 /// The map BGM that was playing when the fight began, remembered so it restores
-/// when the battle tears down. A battle-scoped memorize/restore (the general
-/// `MemorizeBGM` opcode is #37); `None` means the map was silent, so teardown
+/// when the battle tears down. `None` means the map was silent, so teardown
 /// stops the BGM rather than replaying anything.
 #[derive(Resource, Default)]
 struct MapBgm(Option<BgmTrack>);
@@ -133,6 +134,13 @@ impl Plugin for BattlePlugin {
                     systems::start_on_request,
                     systems::debug_trigger,
                     input::command_input,
+                    systems::abort_expired_battle
+                        .after(crate::timer::ClockTick)
+                        .after(systems::start_on_request)
+                        .before(input::command_input)
+                        .before(systems::resolve_tick)
+                        .before(systems::apply_victory_rewards)
+                        .before(systems::outcome_input),
                     systems::resolve_tick,
                     systems::apply_victory_rewards
                         .after(systems::resolve_tick)

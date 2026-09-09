@@ -5,6 +5,8 @@ use crate::audio::BgmTrack;
 use amnezia_data::{MonsterDef, MusicDef, SkillDef, SoundDef, TroopDef, TroopMemberDef};
 use bevy::input::ButtonInput;
 
+mod timer;
+
 /// A System audio def with a battle track, start SE, and the per-hit effects
 /// set, so the battle-audio systems have names to play.
 fn test_system() -> SystemDef {

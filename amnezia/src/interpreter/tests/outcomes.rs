@@ -68,6 +68,7 @@ fn custom_battle_outcome_resumes_the_correct_branch_and_then_the_event() {
         (BattleOutcome::Victory, 1),
         (BattleOutcome::Escape, 2),
         (BattleOutcome::Defeat, 3),
+        (BattleOutcome::Abort, 0),
     ] {
         let mut app = interp_app();
         app.world_mut().resource_mut::<RunningEvent>().start(

@@ -55,6 +55,34 @@ pub(super) fn airship_interior_entry() -> Vec<EventCommand> {
     commands[start..=end].to_vec()
 }
 
+pub(super) fn mission_timer_start() -> Vec<EventCommand> {
+    let map = crate::assets::load_ron::<Map>(&format!(
+        "{}/maps/map_0098.ron",
+        crate::assets::asset_root()
+    ));
+    let commands = &map
+        .events
+        .iter()
+        .flat_map(|event| &event.pages)
+        .find(|page| {
+            page.commands
+                .iter()
+                .any(|command| command.code == 10230 && command.params.first() == Some(&0))
+        })
+        .expect("original timed house mission")
+        .commands;
+    let start = commands
+        .iter()
+        .position(|command| command.code == 10230 && command.params.first() == Some(&0))
+        .unwrap();
+    let end = start
+        + commands[start..]
+            .iter()
+            .position(|command| command.code == 10230 && command.params.first() == Some(&1))
+            .unwrap();
+    commands[start..=end].to_vec()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

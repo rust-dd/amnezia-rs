@@ -40,7 +40,7 @@ const PARTY_TARGET_HEIGHT: f32 = 48.0;
 /// world sprites — only the HUD, which `bevy_ui` composites by target camera, not
 /// by render layer.
 #[derive(Component)]
-pub(super) struct HudCamera;
+pub(crate) struct HudCamera;
 
 /// Spawn the HUD camera at startup (order 3, no clear), so [`crate::battle::hud`]'s
 /// windows can target it and paint over the effect overlay the battle scene draws on.
@@ -233,7 +233,7 @@ fn play_outcome_music(
     let (slot, music) = match outcome {
         BattleOutcome::Victory => (1, &system.battle_end_music),
         BattleOutcome::Defeat => (6, &system.gameover_music),
-        BattleOutcome::Escape => return,
+        BattleOutcome::Escape | BattleOutcome::Abort => return,
     };
     audio.write(AudioRequest::from_music(crate::system_bgm::resolve(
         overrides, slot, music,
@@ -360,7 +360,16 @@ pub(super) fn apply_victory_rewards(
     battle.log.extend(level_ups);
 }
 
-/// On the confirm key at the outcome screen: persist party HP/SP, publish the
+pub(super) fn abort_expired_battle(
+    clock: Option<Res<crate::timer::GameClock>>,
+    mut battle: ResMut<Battle>,
+) {
+    if clock.is_some_and(|clock| clock.expired) && battle.phase != Phase::Inactive {
+        battle.finish(BattleOutcome::Abort);
+    }
+}
+
+/// On confirmation, or immediately after a timer abort: persist HP/SP, publish the
 /// [`BattleResult`], and tear the battle down. The victory reward (gold and
 /// experience) was already paid by [`apply_victory_rewards`] on entering the
 /// outcome, so it is not applied again here.
@@ -376,7 +385,9 @@ pub(super) fn outcome_input(
     if battle.phase != Phase::Outcome {
         return;
     }
-    if !(keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter)) {
+    if battle.outcome != Some(BattleOutcome::Abort)
+        && !(keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter))
+    {
         return;
     }
     let outcome = battle.outcome.unwrap_or(BattleOutcome::Escape);
@@ -398,7 +409,6 @@ pub(super) fn outcome_input(
     result.0 = Some(outcome);
     active.0 = false;
     *battle = Battle::default();
-    // Restore the map BGM that the battle (and any fanfare) replaced.
     audio.write(map_bgm.restore());
 }
 

@@ -28,6 +28,8 @@ fn save_game_ron_round_trip() {
         playtime: 3661,
         timer_remaining: 45.5,
         timer_running: true,
+        timer_visible: true,
+        timer_in_battle: true,
         vehicles: default(),
         system_bgm: default(),
         panorama: None,
@@ -208,6 +210,8 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
         playtime: 0,
         timer_remaining: 0.0,
         timer_running: false,
+        timer_visible: false,
+        timer_in_battle: false,
         vehicles: default(),
         system_bgm: default(),
         panorama: None,
@@ -289,8 +293,10 @@ fn load_restores_name_charset_and_screen_state() {
         equipment: vec![],
         learned_skills: vec![],
         playtime: 0,
-        timer_remaining: 0.0,
-        timer_running: false,
+        timer_remaining: 724.5,
+        timer_running: true,
+        timer_visible: true,
+        timer_in_battle: true,
         vehicles: default(),
         system_bgm: default(),
         panorama: None,
@@ -334,6 +340,10 @@ fn load_restores_name_charset_and_screen_state() {
         "the saved weather type must be restored"
     );
     assert_eq!(world.resource::<WeatherStrength>().0, 8);
+    let clock = world.resource::<GameClock>();
+    assert_eq!(clock.remaining, 724.5);
+    assert!(clock.running && clock.visible && clock.in_battle);
+    assert!(!clock.expired);
     assert_eq!(
         world.resource::<TintState>().tone().map(|v| v as i32),
         [70, 60, 70, 100],
@@ -459,6 +469,8 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
         playtime: 0,
         timer_remaining: 0.0,
         timer_running: false,
+        timer_visible: false,
+        timer_in_battle: false,
         vehicles: default(),
         system_bgm: default(),
         panorama: None,

@@ -20,12 +20,12 @@ impl Battle {
     /// Total `(exp, gold)` for defeating the troop: every foe actually beaten. A
     /// fled foe (RM2000 Escape) is not defeated, so it grants nothing.
     pub fn victory_rewards(&self) -> (u32, u32) {
-        let rewards: Vec<(u32, u32)> = self
+        let rewards = self
             .enemies
             .iter()
             .filter(|e| !e.fled)
             .map(|e| (e.exp, e.gold))
-            .collect();
+            .collect::<Vec<_>>();
         logic::total_rewards(&rewards)
     }
 
@@ -87,6 +87,7 @@ impl Battle {
                 let line = i18n::tr(&self.text.defeat);
                 self.log.push(line);
             }
+            BattleOutcome::Abort => {}
         }
     }
 }

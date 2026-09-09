@@ -116,16 +116,10 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         TIMER => {
-            match command.params.first().copied().unwrap_or(0) {
-                0 => x
-                    .subsystems
-                    .mapfx
-                    .game_clock
-                    .set_secs(command.params.get(2).copied().unwrap_or(0).max(0) as u32),
-                1 => x.subsystems.mapfx.game_clock.start(),
-                2 => x.subsystems.mapfx.game_clock.stop(),
-                _ => {}
-            }
+            x.subsystems
+                .mapfx
+                .game_clock
+                .apply(&command.params, &x.variables);
             frame.ip += 1;
             Flow::Advance
         }
