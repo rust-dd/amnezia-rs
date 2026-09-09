@@ -27,6 +27,9 @@ fn subchunk(id: u32, data: &[u8]) -> Vec<u8> {
 fn element(id: u32, name: &[u8]) -> Vec<u8> {
     let mut out = varint(id);
     out.extend(subchunk(0x02, name));
+    if id == 1 {
+        out.extend(subchunk(3, &[9, 0, 2, 1, 0, 0]));
+    }
     out.extend(varint(0));
     out
 }
@@ -68,9 +71,18 @@ fn converts_ldb_to_chipsets_ron() {
         Chipset {
             id: 1,
             graphic: "basis".to_string(),
+            terrain_data: vec![9, 258, 0],
             passages_down: vec![0x0F; 162],
             passages_up: vec![0x0F; 144],
         }
     );
     assert_eq!(chipsets[1].graphic, "outline");
+    assert!(chipsets[1].terrain_data.is_empty());
+}
+
+#[test]
+fn old_chipset_ron_retains_the_all_grass_default() {
+    let chipset =
+        ron::from_str::<Chipset>(r#"(id:1,graphic:"x",passages_down:[],passages_up:[])"#).unwrap();
+    assert!(chipset.terrain_data.is_empty());
 }

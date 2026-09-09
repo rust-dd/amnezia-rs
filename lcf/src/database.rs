@@ -17,6 +17,7 @@ mod skills;
 mod states;
 mod system;
 mod terms;
+mod terrains;
 mod troops;
 
 pub use actors::{Actor, Learning, StatCurves, parse_actors};
@@ -29,6 +30,7 @@ pub use skills::{Skill, parse_skills};
 pub use states::{State, parse_states};
 pub use system::{Music, Sound, System, parse_system};
 pub use terms::{Terms, parse_terms};
+pub use terrains::{Terrain, parse_terrains};
 pub use troops::{Troop, TroopMember, TroopPage, TroopPageCondition, parse_troops};
 
 /// Locate one top-level LDB section (`ChunkData`) by id, returning its raw
@@ -67,6 +69,7 @@ pub(crate) fn find_section(
 pub struct Chipset {
     pub id: u32,
     pub name: String,
+    pub terrain_data: Vec<u16>,
     pub passages_down: Vec<u8>,
     pub passages_up: Vec<u8>,
 }
@@ -89,6 +92,7 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut name = String::new();
+        let mut terrain_data = Vec::new();
         let mut passages_down: Vec<u8> = Vec::new();
         let mut passages_up: Vec<u8> = Vec::new();
         loop {
@@ -100,6 +104,15 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
             let sub_data = reader.take(sub_size)?;
             match sub_id {
                 CHIPSET_NAME => name = String::from_utf8_lossy(sub_data).into_owned(),
+                0x03 => {
+                    if sub_data.len() % 2 != 0 {
+                        return Err(LcfError::UnexpectedEof);
+                    }
+                    terrain_data = sub_data
+                        .chunks_exact(2)
+                        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+                        .collect();
+                }
                 CHIPSET_PASSAGES_DOWN => passages_down = sub_data.to_vec(),
                 CHIPSET_PASSAGES_UP => passages_up = sub_data.to_vec(),
                 _ => {}
@@ -110,6 +123,7 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
         chipsets.push(Chipset {
             id,
             name,
+            terrain_data,
             passages_down,
             passages_up,
         });
@@ -121,6 +135,26 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk};
     use crate::{LcfError, parse_chipsets};
+
+    #[test]
+    fn terrain_tags_are_little_endian_and_omitted_lists_remain_empty() {
+        let ldb = make_ldb(&[(
+            0x14,
+            section(&[
+                element(1, &[subchunk(3, &[9, 0, 2, 1, 0, 0])]),
+                element(2, &[]),
+            ]),
+        )]);
+        let chipsets = parse_chipsets(&ldb).unwrap();
+        assert_eq!(chipsets[0].terrain_data, [9, 258, 0]);
+        assert!(chipsets[1].terrain_data.is_empty());
+    }
+
+    #[test]
+    fn truncated_terrain_tag_is_rejected() {
+        let ldb = make_ldb(&[(0x14, section(&[element(1, &[subchunk(3, &[9])])]))]);
+        assert!(matches!(parse_chipsets(&ldb), Err(LcfError::UnexpectedEof)));
+    }
 
     #[test]
     fn parses_chipset_graphic_names() {

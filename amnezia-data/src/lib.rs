@@ -15,6 +15,7 @@ mod move_route;
 mod panorama;
 mod system;
 mod terms;
+mod terrain;
 mod troop;
 mod vehicle;
 
@@ -25,6 +26,7 @@ pub use move_route::{MoveCommandDef, MoveRouteDef};
 pub use panorama::PanoramaDef;
 pub use system::{MusicDef, SoundDef, SystemDef};
 pub use terms::{ShopTerms, TermsDef};
+pub use terrain::TerrainDef;
 pub use troop::{TroopDef, TroopMemberDef, TroopPageConditionDef, TroopPageDef};
 pub use vehicle::VehicleDef;
 

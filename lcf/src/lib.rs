@@ -19,9 +19,10 @@ mod vehicles;
 pub use database::{
     Actor, Animation, AnimationCell, AnimationFrame, AnimationTiming, Attribute, Chipset,
     CommonEvent, EnemyAction, Item, Learning, Monster, Music, Skill, Sound, StatCurves, State,
-    System, Terms, Troop, TroopMember, TroopPage, TroopPageCondition, parse_actors,
+    System, Terms, Terrain, Troop, TroopMember, TroopPage, TroopPageCondition, parse_actors,
     parse_animations, parse_attributes, parse_chipsets, parse_common_events, parse_items,
-    parse_monsters, parse_skills, parse_states, parse_system, parse_terms, parse_troops,
+    parse_monsters, parse_skills, parse_states, parse_system, parse_terms, parse_terrains,
+    parse_troops,
 };
 pub use map::{
     Event, EventCommand, EventCondition, EventPage, MapUnit, MoveCommand, MoveRoute, parse_map,
@@ -46,6 +47,8 @@ pub enum LcfError {
     InvalidDimensions { width: u32, height: u32 },
     #[error("LCF database has no chipset section (chunk 0x14)")]
     MissingChipsets,
+    #[error("LCF database has no terrain section (chunk 0x10)")]
+    MissingTerrains,
     #[error("LCF database has no actor section (chunk 0x0B)")]
     MissingActors,
     #[error("LCF database has no skill section (chunk 0x0C)")]

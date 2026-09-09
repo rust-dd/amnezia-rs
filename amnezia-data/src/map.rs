@@ -139,6 +139,8 @@ pub struct CommonEvent {
 pub struct Chipset {
     pub id: u32,
     pub graphic: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub terrain_data: Vec<u16>,
     pub passages_down: Vec<u8>,
     pub passages_up: Vec<u8>,
 }

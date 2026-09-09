@@ -193,6 +193,7 @@ pub fn convert_chipsets(input: &Path, output: &Path) -> Result<usize> {
         .map(|c| Chipset {
             id: c.id,
             graphic: c.name,
+            terrain_data: c.terrain_data,
             passages_down: c.passages_down,
             passages_up: c.passages_up,
         })

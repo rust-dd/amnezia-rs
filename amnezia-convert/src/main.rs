@@ -36,6 +36,7 @@ fn main() -> Result<()> {
     let maps = amnezia_convert::convert_maps(&args.input, &args.output)?;
     let map_info = amnezia_convert::convert_map_info(&args.input, &args.output)?;
     let chipsets = amnezia_convert::convert_chipsets(&args.input, &args.output)?;
+    let terrains = amnezia_convert::convert_terrains(&args.input, &args.output)?;
     let actors = amnezia_convert::convert_actors(&args.input, &args.output)?;
     let items = amnezia_convert::convert_items(&args.input, &args.output)?;
     let skills = amnezia_convert::convert_skills(&args.input, &args.output)?;
@@ -56,7 +57,7 @@ fn main() -> Result<()> {
     amnezia_convert::convert_terms(&args.input, &args.output)?;
     amnezia_convert::convert_vehicles(&args.input, &args.output)?;
     println!(
-        "converted {images} images, {maps} maps, {map_info} map-info nodes, {chipsets} chipsets, \
+        "converted {images} images, {maps} maps, {map_info} map-info nodes, {chipsets} chipsets, {terrains} terrains, \
          {actors} actors, {items} items, {skills} skills, {states} states, \
          {attributes} attributes, {animations} animations, {monsters} monsters, {troops} troops, \
          {common_events} common events, {effects} sfx, {music} music, system audio; \
