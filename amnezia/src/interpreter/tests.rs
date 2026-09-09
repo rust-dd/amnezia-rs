@@ -34,6 +34,7 @@ mod actor_commands;
 mod camera;
 mod movement;
 mod outcomes;
+mod screen_coordinates;
 mod transfers;
 mod vehicles;
 

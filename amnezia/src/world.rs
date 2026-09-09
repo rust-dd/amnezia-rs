@@ -20,6 +20,7 @@ mod pages;
 mod render;
 mod route;
 mod scene_pause;
+mod screen;
 mod topology;
 mod touch;
 mod water;
@@ -31,6 +32,7 @@ pub(crate) use movement::{dir_delta, step_secs_for_speed};
 pub use route::RouteStepper;
 pub(crate) use route::{StepEffect, drive as drive_route};
 pub(crate) use scene_pause::ScenePause;
+pub(crate) use screen::MapScreen;
 pub(crate) use touch::TouchEvents;
 
 /// Developer start override. `None` uses the faithful LMT start (`start.ron`,

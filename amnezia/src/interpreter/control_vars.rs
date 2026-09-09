@@ -21,10 +21,18 @@ pub(super) enum Operand {
     Random { lo: i32, hi: i32 },
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct CharacterValue {
+    pub map_id: u32,
+    pub tile: (i32, i32),
+    pub direction: u32,
+    pub screen: (i32, i32),
+}
+
 /// Resolve a `ControlVariables` operand from its command parameters, reading
 /// `params[5]` as the first operand argument and `params[6]` as the second, per
-/// EasyRPG's decode. `character` is the referenced character's `(x, y, facing)`
-/// for operand type 6 (resolved by the caller, which holds the world queries).
+/// EasyRPG's decode. The caller resolves the character's live tile and screen
+/// coordinates for operand type 6.
 pub(super) fn resolve_operand(
     params: &[i32],
     variables: &Variables,
@@ -32,7 +40,7 @@ pub(super) fn resolve_operand(
     party: &Party,
     actors: &ActorCtx,
     timer_secs: u32,
-    character: Option<(i32, i32, u32)>,
+    character: Option<CharacterValue>,
 ) -> Operand {
     let a = params.get(5).copied().unwrap_or(0);
     let b = params.get(6).copied().unwrap_or(0);
@@ -87,18 +95,17 @@ fn equipped_count(item_id: u32, party: &Party, data: &GameData) -> i32 {
         .sum::<usize>() as i32
 }
 
-/// Operand type 6 (Character): read the referenced character's tile X (sub-op 1),
-/// tile Y (sub-op 2), or orientation code (sub-op 3). An unresolved character, or
-/// a sub-op needing the live map scroll (0 map id, 4 screen X, 5 screen Y), reads
-/// 0 — the scroll position is not plumbed into the interpreter.
-fn character_param(sub_op: i32, character: Option<(i32, i32, u32)>) -> i32 {
-    let Some((x, y, dir)) = character else {
+fn character_param(sub_op: i32, character: Option<CharacterValue>) -> i32 {
+    let Some(character) = character else {
         return 0;
     };
     match sub_op {
-        1 => x,
-        2 => y,
-        3 => facing_code(dir),
+        0 => character.map_id as i32,
+        1 => character.tile.0,
+        2 => character.tile.1,
+        3 => facing_code(character.direction),
+        4 => character.screen.0,
+        5 => character.screen.1,
         _ => 0,
     }
 }
@@ -319,7 +326,12 @@ mod tests {
         let (data, prog, vit) = (game_data(), Progression::default(), Vitals::default());
         let (party, inv, var) = (Party::default(), Inventory::default(), Variables::default());
         let c = ctx(&data, &prog, &vit);
-        let facing_up = Some((4, 9, 0));
+        let facing_up = Some(CharacterValue {
+            map_id: 29,
+            tile: (4, 9),
+            direction: 0,
+            screen: (72, 160),
+        });
         let field = |sub: i32| {
             value(resolve_operand(
                 &[0, 1, 1, 0, 6, 10001, sub],
@@ -334,6 +346,9 @@ mod tests {
         assert_eq!(field(1), 4, "tile X");
         assert_eq!(field(2), 9, "tile Y");
         assert_eq!(field(3), 8, "facing up maps to the RPG_RT code 8");
+        assert_eq!(field(0), 29);
+        assert_eq!(field(4), 72);
+        assert_eq!(field(5), 160);
     }
 
     #[test]

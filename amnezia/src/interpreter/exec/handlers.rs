@@ -7,7 +7,7 @@
 use super::super::actor_query::ActorCtx;
 use super::super::branch::branch_holds;
 use super::super::commands::{anim_frame_count, battle_anim_wait, resolve_anim_target};
-use super::super::control_vars::{apply_control_variables, resolve_operand};
+use super::super::control_vars::{CharacterValue, apply_control_variables, resolve_operand};
 use super::super::flow::skip_true_body;
 use super::super::frame::Frame;
 use super::super::present::{Present, parse_present};
@@ -19,15 +19,42 @@ use amnezia_data::EventCommand;
 /// `ControlVariables` (10220): resolve the operand from live state, then assign it
 /// under the command's target mode and operation.
 pub(super) fn control_variables(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -> Flow {
-    // Only the character operand (type 6) needs the world queries, resolved here.
     let character = if command.params.get(4).copied() == Some(6) {
+        let reference = command.params.get(5).copied().unwrap_or(0);
         resolve_character(
-            command.params.get(5).copied().unwrap_or(0),
+            reference,
             frame.event_id,
             &x.subsystems.flow.players,
             &x.event_movers,
             &x.subsystems.mapfx.vehicles,
         )
+        .map(|(x_tile, y_tile, direction)| {
+            let data = x.subsystems.flow.map_data.as_deref();
+            let vehicles = &x.subsystems.mapfx.vehicles;
+            CharacterValue {
+                map_id: if (10002..=10004).contains(&reference) {
+                    vehicles.save.vehicles[(reference - 10002) as usize]
+                        .definition
+                        .map_id
+                } else if reference == 10001 {
+                    data.map_or(0, |map| map.map_id)
+                } else {
+                    // RPG2000 reports zero for an event's map ID.
+                    0
+                },
+                tile: (x_tile, y_tile),
+                direction,
+                screen: data.map_or((0, 0), |map| {
+                    x.subsystems.flow.screen.character(
+                        reference,
+                        frame.event_id,
+                        map,
+                        vehicles,
+                        (x_tile, y_tile),
+                    )
+                }),
+            }
+        })
     } else {
         None
     };

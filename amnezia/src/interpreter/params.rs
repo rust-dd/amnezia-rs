@@ -91,6 +91,7 @@ pub(super) struct ActorEdits<'w> {
 /// are optional so the system still runs before a map has loaded.
 #[derive(SystemParam)]
 pub(super) struct FlowCtx<'w, 's> {
+    pub(super) screen: crate::world::MapScreen<'w, 's>,
     pub(super) map_events: Option<Res<'w, MapEvents>>,
     pub(super) map_data: Option<Res<'w, MapData>>,
     pub(super) players: Query<'w, 's, &'static Player>,

@@ -119,6 +119,16 @@ impl Vehicles {
         Some((vehicle.tile().0, vehicle.tile().1, vehicle.dir))
     }
 
+    pub(crate) fn pixel(&self, reference: i32, data: &crate::world::MapData) -> Option<Vec2> {
+        let index = usize::try_from(reference - 10002).ok()?;
+        let vehicle = self.save.vehicles.get(index)?;
+        Some(
+            self.motion[index].pixel.unwrap_or_else(|| {
+                Vec2::from(data.tile_center(vehicle.tile().0, vehicle.tile().1))
+            }),
+        )
+    }
+
     pub fn set_location(&mut self, index: usize, map_id: u32, x: u32, y: u32) {
         let Some(vehicle) = self.save.vehicles.get_mut(index) else {
             return;
