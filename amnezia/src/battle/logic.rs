@@ -20,8 +20,7 @@ mod stats;
 mod tests;
 
 pub(crate) use damage::{
-    critical_damage, defended, elemental_damage, physical_damage, skill_effect, usable_skills,
-    variance_adjust,
+    critical_damage, defended, elemental_damage, physical_damage, skill_effect, variance_adjust,
 };
 pub(crate) use enemy::{
     AI_PARTY_LEVEL, choose_enemy_action, enemy_command, hp_percent, select_target,

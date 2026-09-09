@@ -1,6 +1,8 @@
 use super::super::model::testkit::build_party2;
 use super::*;
 
+mod menus;
+
 #[test]
 fn a_disallowed_escape_buzzes_without_spending_the_party_turn() {
     let mut battle = build_party2();
@@ -66,7 +68,7 @@ fn skill_def(id: u32, power: u32, scope: u32) -> SkillDef {
 
 #[test]
 fn a_single_ally_skill_opens_the_ally_menu_then_commits_on_the_chosen_member() {
-    let heal = skill_def(2, 40, 3); // scope 3: single ally
+    let heal = skill_def(2, 40, 3);
     let data = GameData {
         actors: vec![],
         items: vec![],
@@ -83,7 +85,6 @@ fn a_single_ally_skill_opens_the_ally_menu_then_commits_on_the_chosen_member() {
     skill_menu(&keys, &data, &mut battle);
     assert!(battle.menu == MenuLevel::AllyTarget);
     assert_eq!(battle.pending_skill, Some(2));
-    // Point the cursor at the second member and confirm.
     battle.cursor = 1;
     let mut confirm_keys = ButtonInput::<KeyCode>::default();
     confirm_keys.press(KeyCode::Enter);
@@ -100,7 +101,7 @@ fn a_single_ally_skill_opens_the_ally_menu_then_commits_on_the_chosen_member() {
 
 #[test]
 fn a_self_scope_skill_commits_immediately_on_the_caster() {
-    let buff = skill_def(5, 30, 2); // scope 2: self
+    let buff = skill_def(5, 30, 2);
     let data = GameData {
         actors: vec![],
         items: vec![],
@@ -115,7 +116,6 @@ fn a_self_scope_skill_commits_immediately_on_the_caster() {
     let mut keys = ButtonInput::<KeyCode>::default();
     keys.press(KeyCode::Enter);
     skill_menu(&keys, &data, &mut battle);
-    // No target menu: committed at once against the caster (member 0).
     assert!(battle.menu == MenuLevel::Command);
     assert!(matches!(
         battle.members[0].command,
@@ -141,16 +141,14 @@ fn committing_an_item_targets_the_chosen_ally_and_consumes_one() {
     let mut keys = ButtonInput::<KeyCode>::default();
     keys.press(KeyCode::Enter);
     item_menu(&keys, &data, &inventory, &mut battle);
-    // Selecting the item opens the ally menu; nothing is consumed yet.
     assert!(battle.menu == MenuLevel::AllyTarget);
     assert_eq!(battle.pending_item, Some(50));
     assert_eq!(inventory.count(50), 2);
-    // Confirm the item on the second member.
     battle.cursor = 1;
     let mut confirm_keys = ButtonInput::<KeyCode>::default();
     confirm_keys.press(KeyCode::Enter);
     ally_target_menu(&confirm_keys, &mut inventory, &mut battle);
-    assert_eq!(inventory.count(50), 1); // one consumed on confirm
+    assert_eq!(inventory.count(50), 1);
     assert!(matches!(
         battle.members[0].command,
         Some(Command::Item {
@@ -168,8 +166,6 @@ fn press_enter() -> ButtonInput<KeyCode> {
 
 #[test]
 fn the_actor_command_list_resolves_to_the_parsed_terms_without_flee() {
-    // With parsed terms the labels resolve to the real RM2000 command terms,
-    // in RM2000 order — Defend before Item — and no per-actor flee row.
     let mut terms = Terms::default();
     terms.0.command_attack = "Attack".into();
     terms.0.command_skill = "Skill".into();
@@ -183,13 +179,11 @@ fn the_actor_command_list_resolves_to_the_parsed_terms_without_flee() {
         ["Attack", "Skill", "Defend", "Item"]
     );
     assert!(!command_labels(&terms).contains(&"Escape".to_string()));
-    // Escape lives on the party-level window instead.
     assert_eq!(party_labels(&terms), ["Fight", "Auto", "Escape"]);
 }
 
 #[test]
 fn command_labels_fall_back_to_the_hungarian_placeholders() {
-    // No parsed terms: the chrome still reads naturally in Hungarian.
     let terms = Terms::default();
     assert_eq!(
         command_labels(&terms),
@@ -201,12 +195,10 @@ fn command_labels_fall_back_to_the_hungarian_placeholders() {
 #[test]
 fn the_command_menu_maps_defend_to_row_two_and_item_to_row_three() {
     let mut battle = build_party2();
-    battle.begin_actor_commands(); // drop into per-actor entry
-    // Row 2 = Védekezés -> commit Defend for the first member.
+    battle.begin_actor_commands();
     battle.cursor = 2;
     command_menu(&press_enter(), &mut battle);
     assert!(matches!(battle.members[0].command, Some(Command::Defend)));
-    // Row 3 = Tárgy -> the second member opens the item menu (no flee row).
     battle.cursor = 3;
     command_menu(&press_enter(), &mut battle);
     assert!(battle.menu == MenuLevel::Item);
@@ -216,7 +208,7 @@ fn the_command_menu_maps_defend_to_row_two_and_item_to_row_three() {
 fn the_party_window_fight_option_enters_per_actor_command_entry() {
     let mut battle = build_party2();
     assert!(battle.phase == Phase::PartyCommand);
-    battle.cursor = 0; // Harc
+    battle.cursor = 0;
     party_menu(&press_enter(), &mut battle);
     assert!(battle.phase == Phase::Command);
     assert!(battle.menu == MenuLevel::Command);
@@ -224,8 +216,8 @@ fn the_party_window_fight_option_enters_per_actor_command_entry() {
 
 #[test]
 fn the_party_window_auto_option_orders_every_member_to_attack() {
-    let mut battle = build_party2(); // two members, one foe
-    battle.cursor = 1; // Auto
+    let mut battle = build_party2();
+    battle.cursor = 1;
     party_menu(&press_enter(), &mut battle);
     assert!(matches!(
         battle.members[0].command,
@@ -235,16 +227,15 @@ fn the_party_window_auto_option_orders_every_member_to_attack() {
         battle.members[1].command,
         Some(Command::Attack { .. })
     ));
-    assert!(battle.phase == Phase::Resolve); // the round is resolving
+    assert!(battle.phase == Phase::Resolve);
 }
 
 #[test]
 fn the_party_window_escape_forfeits_the_turn_on_failure() {
     let mut battle = build_party2();
-    battle.escape_chance = 0; // a 0% chance always fails
-    battle.cursor = 2; // Menekülés
+    battle.escape_chance = 0;
+    battle.cursor = 2;
     party_menu(&press_enter(), &mut battle);
-    // No member acted, yet the round resolves so the enemies act.
     assert!(battle.members.iter().all(|m| m.command.is_none()));
     assert!(battle.phase == Phase::Resolve);
     assert!(battle.log.iter().any(|l| l.contains("sikertelen")));
@@ -252,20 +243,15 @@ fn the_party_window_escape_forfeits_the_turn_on_failure() {
 
 #[test]
 fn navigating_the_battle_menu_plays_the_system_se() {
-    // Moves, confirms, and cancels feed the System cursor/decision/cancel SE
-    // (RM2000 SFX_Cursor/Decision/Cancel), drained like the other battle SE —
-    // the menu used to be silent.
     let mut battle = build_party2();
     let mut down = ButtonInput::<KeyCode>::default();
     down.press(KeyCode::ArrowDown);
     party_menu(&down, &mut battle);
     assert!(battle.pending_se.contains(&BattleSe::Cursor));
-    // Fight confirms with the decision SE and enters per-actor command entry.
     battle.pending_se.clear();
     battle.cursor = 0;
     party_menu(&press_enter(), &mut battle);
     assert!(battle.pending_se.contains(&BattleSe::Decision));
-    // Cancel on the first actor plays the cancel SE (and backs out).
     battle.pending_se.clear();
     let mut esc = ButtonInput::<KeyCode>::default();
     esc.press(KeyCode::Escape);

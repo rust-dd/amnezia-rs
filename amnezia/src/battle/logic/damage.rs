@@ -100,14 +100,3 @@ pub fn variance_adjust(base: i32, var: i32, roll: u64) -> i32 {
 pub fn defended(damage: i32) -> i32 {
     damage / 2
 }
-
-/// The offensive skills a caster with `sp` spirit-points can use this turn:
-/// affordable and dealing damage (positive power), excluding the database's
-/// divider rows (names starting with `-`). Per-actor skill ownership is deferred,
-/// so any member may pick from the shared list.
-pub fn usable_skills(skills: &[SkillDef], sp: i32) -> Vec<&SkillDef> {
-    skills
-        .iter()
-        .filter(|s| s.power > 0 && s.sp_cost as i32 <= sp && !s.name.starts_with('-'))
-        .collect()
-}

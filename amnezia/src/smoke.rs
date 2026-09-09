@@ -22,6 +22,8 @@ impl Plugin for SmokePlugin {
             "airship"
         } else if std::env::args().any(|arg| arg == "--smoke-battle") {
             "battle"
+        } else if std::env::args().any(|arg| arg == "--smoke-battle-menus") {
+            "battle-menus"
         } else if std::env::args().any(|arg| arg == "--smoke-timer") {
             "timer"
         } else if std::env::args().any(|arg| arg == "--smoke-panorama") {
@@ -57,9 +59,15 @@ impl Plugin for SmokePlugin {
 fn capture(world: &mut World, label: &str) {
     let path = std::env::temp_dir().join(format!("amnezia-smoke-{label}.png"));
     info!("smoke screenshot: {}", path.display());
+    let label = label.to_owned();
     world
         .spawn(Screenshot::primary_window())
-        .observe(save_to_disk(path));
+        .observe(save_to_disk(path))
+        .observe(
+            move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
+                crate::battle::smoke::verify_skin(&capture.image, &label);
+            },
+        );
 }
 
 fn input(world: &mut World) {
@@ -68,7 +76,7 @@ fn input(world: &mut World) {
         && world.resource::<SmokeRun>().finish_at.is_none()
         && !matches!(
             world.resource::<SmokeRun>().scenario,
-            "font" | "panorama" | "timer"
+            "font" | "panorama" | "timer" | "battle-menus"
         )
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active
@@ -94,6 +102,11 @@ fn drive(world: &mut World) {
         world.resource_mut::<crate::session::NewGameRequest>().0 = true;
     }
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario == "battle-menus"
+        && let Some(label) = crate::battle::smoke::show(world, frame)
+    {
+        capture(world, label);
+    }
     if frame == 150 && scenario != "intro" {
         start_scenario(world, scenario);
     }
@@ -151,7 +164,7 @@ fn drive(world: &mut World) {
         if scenario == "escape" {
             assert!(
                 world.resource::<SmokeRun>().finish_at.is_some(),
-                "airship escape never reached the forest scene"
+                "airship escape never reached the next dream scene"
             );
         }
         if scenario == "intro" {
@@ -194,6 +207,9 @@ fn start_scenario(world: &mut World, scenario: &str) {
     world.insert_resource(crate::teleport::Fade::default());
     world.insert_resource(crate::teleport::PendingTeleport::default());
     world.insert_resource(crate::player::HeroHidden::default());
+    if scenario == "battle-menus" {
+        crate::battle::smoke::prepare(world);
+    }
     let commands = if scenario == "airship" {
         let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(
             "{}/maps/map_0125.ron",
@@ -220,7 +236,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
             .position(|c| c.code == 10810)
             .map_or(commands.len(), |i| vehicle + i);
         commands[start..end].to_vec()
-    } else if matches!(scenario, "battle" | "timer") {
+    } else if matches!(scenario, "battle" | "timer" | "battle-menus") {
         let mut commands = if scenario == "timer" {
             let mut commands = vec![EventCommand {
                 code: 10810,

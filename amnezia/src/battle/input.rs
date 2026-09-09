@@ -4,7 +4,6 @@
 //! exact same lists the selection indexes into.
 
 use super::BattleOutcome;
-use super::logic::usable_skills;
 use super::model::{Battle, BattleSe, Command, MenuLevel, Phase};
 use crate::gamedata::GameData;
 use crate::i18n;
@@ -93,13 +92,10 @@ fn party_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     }
 }
 
-/// The affordable offensive skills as `(skill_id, sp_cost, label)` for a caster
-/// that `knows` the given skill ids and has `sp` points — the single source both
-/// the menu and the UI read. Restricting to `known` keeps the list to the actor's
-/// learned skills rather than the whole database.
-pub fn skill_choices(data: &GameData, known: &[u32], sp: i32) -> Vec<(u32, u32, String)> {
-    usable_skills(&data.skills, sp)
-        .into_iter()
+/// Learned skills in database order, including disabled entries.
+pub fn skill_choices(data: &GameData, known: &[u32], _sp: i32) -> Vec<(u32, u32, String)> {
+    data.skills
+        .iter()
         .filter(|s| known.contains(&s.id))
         .map(|s| {
             (
@@ -111,11 +107,19 @@ pub fn skill_choices(data: &GameData, known: &[u32], sp: i32) -> Vec<(u32, u32, 
         .collect()
 }
 
-/// The usable medicine items as `(item_id, label)` held in `inventory`.
+pub(super) fn skill_enabled(skill: &amnezia_data::SkillDef, sp: i32) -> bool {
+    skill.skill_type == 0 && skill.sp_cost as i32 <= sp
+}
+
+pub(super) fn item_enabled(item: &amnezia_data::ItemDef) -> bool {
+    item.item_type == MEDICINE && !item.only_field
+}
+
+/// Inventory entries in database order; unusable items stay visible but disabled.
 pub fn item_choices(data: &GameData, inventory: &Inventory) -> Vec<(u32, String)> {
     data.items
         .iter()
-        .filter(|i| i.item_type == MEDICINE && inventory.count(i.id) > 0)
+        .filter(|i| inventory.count(i.id) > 0)
         .map(|i| {
             (
                 i.id,
@@ -155,7 +159,7 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
     let known = battle.members[battle.turn].known_skills.clone();
     let sp = battle.members[battle.turn].sp;
     let choices = skill_choices(data, &known, sp);
-    if move_cursor(keys, &mut battle.cursor, choices.len()) {
+    if move_grid_cursor(keys, &mut battle.cursor, choices.len()) {
         battle.pending_se.push(BattleSe::Cursor);
     }
     if confirm(keys) {
@@ -163,6 +167,14 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
             battle.pending_se.push(BattleSe::Buzzer);
             return;
         };
+        if !data
+            .skills
+            .iter()
+            .any(|skill| skill.id == skill_id && skill_enabled(skill, sp))
+        {
+            battle.pending_se.push(BattleSe::Buzzer);
+            return;
+        }
         battle.pending_se.push(BattleSe::Decision);
         let scope = battle
             .skills
@@ -170,9 +182,6 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
             .find(|s| s.id == skill_id)
             .map(|s| s.scope);
         match scope {
-            // Self (2) and all-allies (4) need no target pick: resolve applies to
-            // the caster / loops the party, so commit at once. Single-ally (3)
-            // opens the ally target menu; enemy scopes (0/1) the enemy one.
             Some(2 | 4) => {
                 let target = battle.turn;
                 battle.commit(Command::Skill { skill_id, target });
@@ -195,7 +204,7 @@ fn item_menu(
         return;
     }
     let choices = item_choices(data, inventory);
-    if move_cursor(keys, &mut battle.cursor, choices.len()) {
+    if move_grid_cursor(keys, &mut battle.cursor, choices.len()) {
         battle.pending_se.push(BattleSe::Cursor);
     }
     if confirm(keys) {
@@ -203,6 +212,14 @@ fn item_menu(
             battle.pending_se.push(BattleSe::Buzzer);
             return;
         };
+        if !data
+            .items
+            .iter()
+            .any(|item| item.id == id && item_enabled(item))
+        {
+            battle.pending_se.push(BattleSe::Buzzer);
+            return;
+        }
         battle.pending_se.push(BattleSe::Decision);
         open_ally_target(battle, None, Some(id));
     }
@@ -278,7 +295,7 @@ fn open_target(battle: &mut Battle, skill: Option<u32>) {
         return;
     }
     battle.pending_skill = skill;
-    battle.menu = MenuLevel::Target;
+    enter(battle, MenuLevel::Target);
     battle.cursor = 0;
 }
 
@@ -290,22 +307,21 @@ fn open_ally_target(battle: &mut Battle, skill: Option<u32>, item: Option<u32>) 
     }
     battle.pending_skill = skill;
     battle.pending_item = item;
-    battle.menu = MenuLevel::AllyTarget;
+    enter(battle, MenuLevel::AllyTarget);
     battle.cursor = 0;
 }
 
-/// Switch to `level`, resetting the cursor.
+/// Preserve each window's selection when opening or cancelling a submenu.
 fn enter(battle: &mut Battle, level: MenuLevel) {
+    battle.menu_cursors[battle.menu as usize] = battle.cursor;
     battle.menu = level;
-    battle.cursor = 0;
+    battle.cursor = battle.menu_cursors[level as usize];
 }
 
 /// Attempt a party escape from the party-option window: play the escape SE, then
 /// on success end the fight, or on failure forfeit the whole party's turn (the
 /// enemies act) and resolve — RM2000 `ProcessSceneActionEscape`'s failure path.
 fn escape(battle: &mut Battle) {
-    // The escape SE plays on the attempt (RM2000 `SFX_Escape`), drained like the
-    // per-hit effects.
     battle.pending_se.push(BattleSe::Escape);
     if battle.attempt_escape() {
         battle.finish(BattleOutcome::Escape);
@@ -331,6 +347,24 @@ fn move_cursor(keys: &ButtonInput<KeyCode>, cursor: &mut usize, len: usize) -> b
         *cursor = (*cursor + len - 1) % len;
     }
     *cursor = (*cursor).min(len - 1);
+    *cursor != before
+}
+
+fn move_grid_cursor(keys: &ButtonInput<KeyCode>, cursor: &mut usize, len: usize) -> bool {
+    let before = *cursor;
+    *cursor = (*cursor).min(len.saturating_sub(1));
+    if keys.just_pressed(KeyCode::ArrowDown) && *cursor + 2 < len {
+        *cursor += 2;
+    }
+    if keys.just_pressed(KeyCode::ArrowUp) && *cursor >= 2 {
+        *cursor -= 2;
+    }
+    if keys.just_pressed(KeyCode::ArrowRight) && *cursor + 1 < len {
+        *cursor += 1;
+    }
+    if keys.just_pressed(KeyCode::ArrowLeft) && *cursor > 0 {
+        *cursor -= 1;
+    }
     *cursor != before
 }
 

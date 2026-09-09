@@ -24,6 +24,7 @@ pub(in crate::battle) mod logic;
 mod model;
 mod resolve;
 mod scene;
+pub(crate) mod smoke;
 mod systems;
 
 pub(crate) use logic::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus_slots};
