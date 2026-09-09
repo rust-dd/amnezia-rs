@@ -14,7 +14,7 @@ pub(in crate::battle) struct Dying {
     pub explode: bool,
 }
 
-/// A live enemy in the fight: current HP, stats, reward, and its position on the
+/// A live enemy in the fight: current HP/SP, stats, reward, and its position on the
 /// battle backdrop (RM2000 320×240 pixel space).
 pub struct Foe {
     pub name: String,
@@ -22,6 +22,8 @@ pub struct Foe {
     pub hp: i32,
     /// This foe's starting (maximum) HP, kept so HP-percent AI conditions resolve.
     pub max_hp: i32,
+    pub sp: i32,
+    pub max_sp: i32,
     pub stats: Stats,
     pub exp: u32,
     pub gold: u32,

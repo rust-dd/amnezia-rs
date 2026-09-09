@@ -15,9 +15,11 @@
 mod death;
 mod end;
 mod enemy;
+mod enemy_skill;
 mod hit;
 mod item;
 mod skill;
+mod skill_pools;
 mod state;
 mod step;
 mod strike;

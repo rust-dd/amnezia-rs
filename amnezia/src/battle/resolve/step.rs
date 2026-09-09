@@ -170,6 +170,9 @@ impl Battle {
                 };
                 let anchors = self.skill_anim_anchors(pi, &skill, target);
                 if skill.animation_id != 0 && !anchors.is_empty() {
+                    if !self.pay_skill(Source::Party(pi), &skill) {
+                        return;
+                    }
                     self.push_anim(skill.animation_id, anchors);
                     self.steps.push_back(Step::CastSkill {
                         pi,
@@ -226,6 +229,9 @@ impl Battle {
                 };
                 let anchors = self.enemy_skill_anim_anchors(ei, &skill, target);
                 if skill.animation_id != 0 && !anchors.is_empty() {
+                    if !self.pay_skill(Source::Enemy(ei), &skill) {
+                        return;
+                    }
                     self.push_anim(skill.animation_id, anchors);
                     self.steps.push_back(Step::EnemyCast {
                         ei,

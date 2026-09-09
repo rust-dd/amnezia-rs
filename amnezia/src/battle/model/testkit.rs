@@ -35,7 +35,7 @@ pub fn monster(id: u32, hp: u32, exp: u32, gold: u32) -> MonsterDef {
         name: format!("M{id}"),
         battler: String::new(),
         max_hp: hp,
-        max_sp: 0,
+        max_sp: 9999,
         attack: 20,
         defense: 8,
         spirit: 0,

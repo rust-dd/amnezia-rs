@@ -68,6 +68,9 @@ fn revival_without_hp_effect_uses_percentage_power_and_animates_the_fallen_ally(
 fn original_party_revival_includes_fallen_targets_in_deferred_steps() {
     let mut battle = build_party2();
     battle.skills = crate::assets::load_ron(&format!("{}/skills.ron", crate::assets::asset_root()));
+    let cost = battle.skills.iter().find(|s| s.id == 35).unwrap().sp_cost as i32;
+    battle.members[0].sp = cost;
+    battle.members[0].max_sp = cost;
     battle.members[0].hp = 7;
     battle.members[1].hp = 0;
     battle.members[1].states = vec![(1, 0)];

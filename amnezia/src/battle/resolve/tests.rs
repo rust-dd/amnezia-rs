@@ -243,5 +243,6 @@ mod item_consumption;
 mod presentation;
 mod recovery;
 mod skill_accuracy;
+mod skill_pools;
 mod skills;
 mod weapon_accuracy;

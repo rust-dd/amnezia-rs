@@ -81,7 +81,7 @@ impl Battle {
         if self.enemies[ti].defending {
             dmg = logic::defended(dmg);
         }
-        self.enemies[ti].hp -= dmg;
+        self.enemies[ti].hp = (self.enemies[ti].hp - dmg).max(0);
         self.release_states_on_enemy(ti);
         self.after_foe_hit(ti, dmg);
         dmg
@@ -96,7 +96,7 @@ impl Battle {
         if self.members[ti].defending {
             dmg = logic::defended(dmg);
         }
-        self.members[ti].hp -= dmg;
+        self.members[ti].hp = (self.members[ti].hp - dmg).max(0);
         self.release_states_on_member(ti);
         self.after_member_hit(ti, dmg);
         dmg

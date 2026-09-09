@@ -33,6 +33,8 @@ impl Battle {
                     battler: d.battler.clone(),
                     hp: d.max_hp as i32,
                     max_hp: d.max_hp as i32,
+                    sp: d.max_sp as i32,
+                    max_sp: d.max_sp as i32,
                     stats: Stats::from_monster(d),
                     exp: d.exp,
                     gold: d.gold,

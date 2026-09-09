@@ -53,6 +53,8 @@ fn retargeting_skips_a_dead_enemy() {
 #[test]
 fn a_fire_skill_amplifies_against_a_weak_foe() {
     let mut battle = build_1v2();
+    battle.enemies[0].hp = 200;
+    battle.enemies[0].max_hp = 200;
     battle.attributes = vec![fire_attr()];
     battle.enemies[0].attribute_ranks = vec![2, 2, 2, 2, 0];
     battle.skills = vec![damage_skill(1, 50, vec![5], vec![])];
