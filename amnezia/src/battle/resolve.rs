@@ -12,6 +12,7 @@
 //! [`state`] (per-turn status HP change and recovery), and [`end`] (end checks,
 //! rewards, and flee).
 
+mod battler;
 mod death;
 mod end;
 mod enemy;
@@ -21,7 +22,9 @@ mod hit;
 mod item;
 mod skill;
 mod skill_heal;
+mod skill_hit;
 mod skill_pools;
+mod skill_states;
 mod state;
 mod step;
 mod strike;

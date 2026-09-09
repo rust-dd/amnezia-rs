@@ -127,6 +127,27 @@ pub fn equipment_resist_slots(slots: [u32; 5], items: &[ItemDef]) -> Vec<u32> {
     resist
 }
 
+/// Only the strongest armor resistance applies; weapon states are offensive.
+pub fn equipment_state_guards(slots: [u32; 5], items: &[ItemDef]) -> Vec<(u32, u32)> {
+    let mut guards = std::collections::BTreeMap::<u32, u32>::new();
+    for item in slots
+        .into_iter()
+        .filter_map(|id| items.iter().find(|item| id != 0 && item.id == id))
+    {
+        if !matches!(item.item_type, 2..=5) {
+            continue;
+        }
+        for &state in &item.state_defense {
+            let multiplier = 100_u32.saturating_sub(item.state_chance);
+            guards
+                .entry(state)
+                .and_modify(|rate| *rate = (*rate).min(multiplier))
+                .or_insert(multiplier);
+        }
+    }
+    guards.into_iter().collect()
+}
+
 /// An actor's starting five-slot loadout in slot order (weapon, shield, armor,
 /// helmet, accessory), the fallback when no runtime loadout is supplied.
 #[cfg(test)]

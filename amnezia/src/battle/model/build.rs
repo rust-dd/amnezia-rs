@@ -135,6 +135,8 @@ impl Fighter {
                 .into_iter()
                 .map(|id| (id, 0))
                 .collect(),
+            state_ranks: actor.state_ranks.clone(),
+            state_guards: logic::equipment_state_guards(slots, items),
             resist_attributes: logic::equipment_resist_slots(slots, items),
             known_skills: progression.known_skill_ids(actor),
         }

@@ -3,16 +3,8 @@
 
 use amnezia_data::StateDef;
 
-/// The percent chance (`0..=100`) a status effect lands, from the target's A–E
-/// affliction rank for that state (0=A … 4=E): rank A always lands, E never.
-pub fn state_infliction_chance(rank: u8) -> u32 {
-    match rank {
-        0 => 100,
-        1 => 80,
-        2 => 60,
-        3 => 40,
-        _ => 0,
-    }
+pub fn state_infliction_chance(state: &StateDef, rank: u8) -> u32 {
+    state.rates.get(rank as usize).copied().unwrap_or(0)
 }
 
 /// The status id (RM2000 state 1) that marks a KO'd combatant. It is exempt from

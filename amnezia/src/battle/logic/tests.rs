@@ -283,12 +283,11 @@ fn elemental_damage_amplifies_weak_reduces_resist_and_passes_through() {
 
 #[test]
 fn state_infliction_chance_maps_ranks_a_through_e() {
-    assert_eq!(state_infliction_chance(0), 100);
-    assert_eq!(state_infliction_chance(1), 80);
-    assert_eq!(state_infliction_chance(2), 60);
-    assert_eq!(state_infliction_chance(3), 40);
-    assert_eq!(state_infliction_chance(4), 0);
-    assert_eq!(state_infliction_chance(9), 0);
+    let state = state(1, 0, 0, 0, 0);
+    for (rank, chance) in [100, 80, 60, 30, 0].into_iter().enumerate() {
+        assert_eq!(state_infliction_chance(&state, rank as u8), chance);
+    }
+    assert_eq!(state_infliction_chance(&state, 9), 0);
 }
 
 fn state(id: u32, restriction: u32, hold_turn: u32, auto: u32, by_damage: u32) -> StateDef {

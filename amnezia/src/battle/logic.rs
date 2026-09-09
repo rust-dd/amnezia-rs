@@ -37,6 +37,7 @@ pub(crate) use state::{
 pub(crate) use stats::equipment_bonus;
 pub(crate) use stats::{
     Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus_slots, equipment_resist_slots,
+    equipment_state_guards,
 };
 
 pub(super) use super::model::Command;

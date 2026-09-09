@@ -45,7 +45,7 @@ fn a_skill_can_miss_its_to_hit_roll_and_deal_nothing() {
     let mut s = damage_skill(1, 30, vec![], vec![]);
     s.hit = 50;
     battle.skills = vec![s];
-    // Wind the rng so the skill's first (to-hit) draw lands in the miss band.
+    // The variance draw precedes the per-effect hit checks.
     let hit = logic::skill_to_hit(
         &battle.skills[0],
         battle.members[0].stats.agility,
@@ -54,6 +54,7 @@ fn a_skill_can_miss_its_to_hit_roll_and_deal_nothing() {
     );
     loop {
         let mut probe = battle.rng;
+        rng_next(&mut probe);
         if (rng_next(&mut probe) % 100) as i32 >= hit {
             break;
         }

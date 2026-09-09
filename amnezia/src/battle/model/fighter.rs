@@ -30,6 +30,8 @@ pub struct Fighter {
     /// turn count drives [`crate::battle::logic::tick_recovery`]'s hold-then-wear-off
     /// schedule.
     pub states: Vec<(u32, u32)>,
+    pub(in crate::battle) state_ranks: Vec<u8>,
+    pub(in crate::battle) state_guards: Vec<(u32, u32)>,
     /// The skill ids this member knows at its current level (its actor `learnings`
     /// at or below the level), captured at build time. The battle skill command
     /// offers only these, not the whole database.

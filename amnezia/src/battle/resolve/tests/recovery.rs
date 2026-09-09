@@ -98,6 +98,7 @@ fn a_cure_only_skill_does_not_restore_hp_to_a_living_ally() {
 #[test]
 fn a_status_only_attack_does_not_deal_unconfigured_hp_damage() {
     let mut battle = build_1v2();
+    battle.states = vec![poison_state(3)];
     let mut skill = damage_skill(1, 100, vec![], vec![3]);
     skill.affect_hp = false;
     battle.enemies[0].state_ranks = vec![0; 3];
@@ -111,6 +112,7 @@ fn a_status_only_attack_does_not_deal_unconfigured_hp_damage() {
 #[test]
 fn an_instant_death_skill_fells_the_target_and_starts_its_death_effect() {
     let mut battle = build_1v2();
+    battle.states = vec![poison_state(1)];
     let mut skill = damage_skill(1, 0, vec![], vec![1]);
     skill.affect_hp = false;
     battle.enemies[0].state_ranks = vec![0];

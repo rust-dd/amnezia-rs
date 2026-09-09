@@ -49,70 +49,10 @@ impl Battle {
                 Vec::new()
             }
         } else if self.members.get(ti).is_some_and(|member| member.alive()) {
-            self.enemy_skill_hit_member(ei, ti, skill)
-                .into_iter()
-                .collect()
+            self.skill_hit_battler(Source::Enemy(ei), Source::Party(ti), skill)
         } else {
             Vec::new()
         }
-    }
-
-    fn enemy_skill_hit_member(&mut self, ei: usize, ti: usize, skill: &SkillDef) -> Option<String> {
-        let name = self.enemies[ei].name.clone();
-        let can_act = logic::worst_restriction(&self.members[ti].states, &self.states) != 1;
-        let hit = logic::skill_to_hit(
-            skill,
-            self.enemies[ei].stats.agility,
-            self.members[ti].stats.agility,
-            can_act,
-        );
-        if (rng_next(&mut self.rng) % 100) as i32 >= hit {
-            let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
-            self.pending_se.push(BattleSe::Dodge);
-            self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
-            return Some(format!(
-                "{name} varázsol: {} elkerülte",
-                self.members[ti].name
-            ));
-        }
-        let base = logic::skill_effect(
-            skill,
-            &self.enemies[ei].stats,
-            &self.members[ti].stats,
-            true,
-        );
-        let resisted = base > 0
-            && skill
-                .attributes
-                .iter()
-                .any(|a| self.members[ti].resist_attributes.contains(a));
-        let base = if resisted { (base / 2).max(1) } else { base };
-        let effect =
-            logic::variance_adjust(base, skill.variance as i32, rng_next(&mut self.rng)).max(0);
-        let old_hp = self.members[ti].hp.max(0);
-        let dmg = if skill.affect_hp {
-            self.hit_member(ti, effect, 0)
-        } else {
-            0
-        };
-        if skill.absorb && dmg > 0 {
-            let enemy = &mut self.enemies[ei];
-            enemy.hp = (enemy.hp + dmg.min(old_hp)).min(enemy.max_hp);
-        }
-        let sp_lost = if skill.affect_sp && self.members[ti].alive() {
-            self.skill_sp_damage(Source::Enemy(ei), Source::Party(ti), effect, skill.absorb)
-        } else {
-            0
-        };
-        let mut line = if skill.affect_sp && !skill.affect_hp {
-            format!("{name} varázsol: {} -{sp_lost} SP", self.members[ti].name)
-        } else {
-            format!("{name} varázsol: {} -{dmg}", self.members[ti].name)
-        };
-        if skill.affect_sp && skill.affect_hp {
-            line.push_str(&format!("; -{sp_lost} SP"));
-        }
-        Some(line)
     }
 
     fn foe_skill_target(&self, i: usize, skill: &SkillDef) -> bool {
