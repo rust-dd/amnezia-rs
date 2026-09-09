@@ -31,6 +31,7 @@ use amnezia_data::{CommonEvent, Event, EventCommand, EventPage};
 use bevy::prelude::*;
 
 mod actor_commands;
+mod movement;
 mod outcomes;
 mod transfers;
 mod vehicles;

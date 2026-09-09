@@ -176,8 +176,6 @@ pub(super) fn run_frame(
         frame.wait -= dt;
         return RunOutcome::Yielded;
     }
-    // `ProceedWithMovement` holds the frame until every forced move route has
-    // finished — the hero's and every event's stepper drained.
     if frame.wait_movement {
         if any_route_running(&x.hero_queue, &x.event_movers) || x.subsystems.mapfx.vehicles.moving()
         {
@@ -223,8 +221,12 @@ fn any_route_running(
         Without<Player>,
     >,
 ) -> bool {
-    hero_queue.iter().any(|(_, stepper)| stepper.active())
-        || event_movers.iter().any(|(_, _, stepper)| stepper.active())
+    hero_queue
+        .iter()
+        .any(|(_, stepper)| stepper.forced() && stepper.active())
+        || event_movers
+            .iter()
+            .any(|(_, _, stepper)| stepper.forced() && stepper.active())
 }
 
 /// Resolve an RM2000 character reference — 10001 the hero, 10005 this event, any
