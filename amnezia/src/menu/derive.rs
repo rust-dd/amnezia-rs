@@ -127,6 +127,7 @@ mod tests {
             cure_states: vec![],
             scope: 0,
             only_field: false,
+            ko_only: false,
             uses: 0,
             atk,
             def: 0,
@@ -147,7 +148,6 @@ mod tests {
         d.curves.max_hp = vec![100, 150, 200];
         d.curves.max_sp = vec![10, 20, 30];
         assert_eq!(max_hp_sp(&d, 2), (150, 20));
-        // Empty curve -> the actor's starting HP/SP.
         let empty = def();
         assert_eq!(max_hp_sp(&empty, 5), (63, 37));
     }
@@ -160,12 +160,10 @@ mod tests {
         d.curves.spirit = vec![8, 12];
         d.curves.agility = vec![6, 9];
         let items = vec![weapon(7, 5)];
-        // Level 2 -> index 1 curve value, plus the +5 attack weapon in slot 0.
         assert_eq!(
             stats_with_slots(&d, 2, &items, [7, 0, 0, 0, 0]),
             [35, 15, 12, 9]
         );
-        // Empty curve -> battle's linear fallback, still plus equipment.
         let bare = def();
         assert_eq!(
             stats_with_slots(&bare, 1, &items, [7, 0, 0, 0, 0]),

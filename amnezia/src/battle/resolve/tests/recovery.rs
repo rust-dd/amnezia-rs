@@ -14,6 +14,16 @@ fn the_original_life_potion_revives_its_recipient_with_half_hp() {
 }
 
 #[test]
+fn the_original_life_potion_has_no_effect_on_a_living_recipient() {
+    let mut battle = build_party2();
+    battle.items = crate::assets::load_ron(&format!("{}/items.ron", crate::assets::asset_root()));
+    battle.members[1].hp = 7;
+    battle.apply_item(0, 112, 1);
+    assert_eq!(battle.members[1].hp, 7);
+    assert!(battle.pending_numbers.is_empty());
+}
+
+#[test]
 fn ordinary_medicine_does_not_revive_or_redirect_to_the_user() {
     let mut battle = build_party2();
     battle.items = vec![medicine(1, 50, 0, vec![])];

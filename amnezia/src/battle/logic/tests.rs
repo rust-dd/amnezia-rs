@@ -38,6 +38,7 @@ fn gear(id: u32, atk: u32, def: u32, spi: u32, agi: u32) -> ItemDef {
         cure_states: vec![],
         scope: 0,
         only_field: false,
+        ko_only: false,
         uses: 0,
         atk,
         def,

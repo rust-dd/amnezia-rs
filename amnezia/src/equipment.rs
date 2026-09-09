@@ -237,6 +237,7 @@ mod tests {
             cure_states: vec![],
             scope: 0,
             only_field: false,
+            ko_only: false,
             uses: 0,
             atk: 0,
             def: 0,
@@ -257,10 +258,8 @@ mod tests {
         a.weapon = 4;
         a.armor = 7;
         let mut eq = Equipment::default();
-        // Unstored: falls back to the ActorDef starting gear.
         assert_eq!(eq.slots(&a), [4, 0, 7, 0, 0]);
         assert_eq!(eq.slot(&a, 2), 7);
-        // A direct set stores a full loadout, preserving the untouched slots.
         eq.set_slot(&a, 0, 9);
         assert_eq!(eq.slots(&a), [9, 0, 7, 0, 0]);
     }
@@ -268,17 +267,16 @@ mod tests {
     #[test]
     fn equip_swaps_the_slot_and_moves_items_through_the_inventory() {
         let mut a = actor(1);
-        a.weapon = 5; // starts wearing weapon 5
+        a.weapon = 5;
         let items = vec![item(5, 1), item(7, 1)];
         let mut eq = Equipment::default();
         let mut inv = Inventory::default();
-        inv.add_item(7, 1); // the new weapon is in the bag
+        inv.add_item(7, 1);
 
         assert!(eq.equip(&a, 0, 7, &items, &mut inv));
         assert_eq!(eq.slots(&a)[0], 7, "the new weapon is worn");
         assert_eq!(inv.count(7), 0, "it left the inventory");
         assert_eq!(inv.count(5), 1, "the old weapon returned to the inventory");
-        // Unequipping returns the worn item and empties the slot.
         assert!(eq.equip(&a, 0, 0, &items, &mut inv));
         assert_eq!(eq.slots(&a)[0], 0);
         assert_eq!(inv.count(7), 1, "the unequipped weapon is back in the bag");
@@ -304,7 +302,7 @@ mod tests {
     #[test]
     fn a_two_handed_weapon_clears_the_shield() {
         let mut a = actor(1);
-        a.shield = 20; // starts wearing a shield
+        a.shield = 20;
         let mut great_sword = item(10, 1);
         great_sword.two_handed = true;
         let items = vec![great_sword, item(20, 2)];

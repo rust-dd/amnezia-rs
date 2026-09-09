@@ -62,6 +62,7 @@ pub fn item(id: u32, atk: u32, def: u32, hit: u32, crit: u32, element: u32) -> I
         cure_states: vec![],
         scope: 0,
         only_field: false,
+        ko_only: false,
         uses: 0,
         atk,
         def,

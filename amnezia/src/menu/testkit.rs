@@ -69,6 +69,7 @@ pub(super) fn blank_item(id: u32, item_type: u32) -> ItemDef {
         cure_states: vec![],
         scope: 0,
         only_field: false,
+        ko_only: false,
         uses: 0,
         atk: 0,
         def: 0,

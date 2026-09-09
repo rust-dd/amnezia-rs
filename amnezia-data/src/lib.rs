@@ -8,6 +8,7 @@
 
 use serde::{Deserialize, Serialize};
 
+mod item;
 mod map;
 mod map_info;
 mod move_route;
@@ -16,6 +17,7 @@ mod system;
 mod terms;
 mod vehicle;
 
+pub use item::ItemDef;
 pub use map::{Chipset, CommonEvent, Event, EventCommand, EventCondition, EventPage, Map, Start};
 pub use map_info::{MapBgm, MapInfoDef, resolve_map_bgm};
 pub use move_route::{MoveCommandDef, MoveRouteDef};
@@ -109,69 +111,6 @@ pub struct ActorDef {
     pub face_name: String,
     #[serde(default)]
     pub face_index: u32,
-}
-
-/// An item's definition, read by the shop, item, and equip menus and the
-/// use-item systems: its 1-based id, name, description, category (`item_type`:
-/// 0 normal, 1 weapon, 2 shield, 3 armor, 4 helmet, 5 accessory, 6 medicine,
-/// 7 book, 8 material, 9 special, 10 switch), and buy price.
-///
-/// The use-effect fields apply when the item is consumed (a medicine, or a
-/// normal item used from the menu): `recover_hp`/`recover_sp` restore a fixed
-/// amount, `recover_hp_rate`/`recover_sp_rate` a percentage of the maximum,
-/// `cure_states` lists the 1-based state ids it lifts, `scope` targets one ally
-/// (`0`) or the whole party (`1`), `only_field` marks it usable only from the
-/// map menu, and `uses` is the number of uses before it is consumed (`0` =
-/// unlimited).
-///
-/// The equipment fields apply to gear (types 1–5): `atk`/`def`/`spi`/`agi` are
-/// the stat bonuses, `attribute_defense`/`state_defense` the 1-based attribute
-/// and state ids the gear resists or guards against, `two_handed` marks a
-/// two-handed weapon, `hit`/`crit` its hit and critical rates (percent), and
-/// `weapon_animation` its attack animation id.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ItemDef {
-    pub id: u32,
-    pub name: String,
-    pub description: String,
-    pub item_type: u32,
-    pub price: u32,
-    #[serde(default)]
-    pub recover_hp: u32,
-    #[serde(default)]
-    pub recover_hp_rate: u32,
-    #[serde(default)]
-    pub recover_sp: u32,
-    #[serde(default)]
-    pub recover_sp_rate: u32,
-    #[serde(default)]
-    pub cure_states: Vec<u32>,
-    #[serde(default)]
-    pub scope: u32,
-    #[serde(default)]
-    pub only_field: bool,
-    #[serde(default)]
-    pub uses: u32,
-    #[serde(default)]
-    pub atk: u32,
-    #[serde(default)]
-    pub def: u32,
-    #[serde(default)]
-    pub spi: u32,
-    #[serde(default)]
-    pub agi: u32,
-    #[serde(default)]
-    pub attribute_defense: Vec<u32>,
-    #[serde(default)]
-    pub state_defense: Vec<u32>,
-    #[serde(default)]
-    pub two_handed: bool,
-    #[serde(default)]
-    pub hit: u32,
-    #[serde(default)]
-    pub crit: u32,
-    #[serde(default)]
-    pub weapon_animation: u32,
 }
 
 /// A skill (spell/ability) definition, read by the skill menu and battle

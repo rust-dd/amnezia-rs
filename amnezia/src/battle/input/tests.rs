@@ -30,6 +30,7 @@ fn medicine(id: u32) -> ItemDef {
         cure_states: vec![],
         scope: 0,
         only_field: false,
+        ko_only: false,
         uses: 0,
         atk: 0,
         def: 0,

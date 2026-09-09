@@ -139,6 +139,7 @@ pub(super) mod fixtures {
             cure_states: Vec::new(),
             scope: 0,
             only_field: false,
+            ko_only: false,
             uses: 0,
             atk,
             def: 0,
@@ -187,7 +188,6 @@ mod tests {
             40,
             "max HP from the curve at level 1"
         );
-        // Attack = curve (20) + equipped weapon bonus (5).
         assert_eq!(
             actor_param(6, 1, &c),
             25,
@@ -212,9 +212,7 @@ mod tests {
         let data = game_data();
         let prog = Progression::default();
         let mut vit = Vitals::default();
-        // No stored vitals: current HP/SP is full at the current level.
         assert_eq!(actor_param(2, 1, &ctx(&data, &prog, &vit)), 40);
-        // Stored damage is read back once recorded.
         vit.set(1, 17, 4);
         let c = ctx(&data, &prog, &vit);
         assert_eq!(actor_param(2, 1, &c), 17, "stored HP is read back");

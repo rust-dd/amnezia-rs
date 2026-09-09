@@ -18,7 +18,8 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// amount and `recover_hp_rate`/`recover_sp_rate` a percentage of the maximum;
 /// `scope` picks the target (`0` one ally, `1` the whole party); `only_field`
 /// marks an item usable only from the map menu; and `uses` is the number of
-/// uses before it is consumed (`0` = unlimited).
+/// uses before it is consumed (`1` by default, `0` = unlimited). `ko_only`
+/// restricts recovery effects to fallen actors.
 ///
 /// The equipment fields apply to gear (types 1–5): `atk`/`def`/`spi`/`agi` are
 /// the stat bonuses, `two_handed` marks a two-handed weapon, `hit`/`crit` the
@@ -44,6 +45,7 @@ pub struct Item {
     pub recover_sp_rate: u32,
     pub scope: u32,
     pub only_field: bool,
+    pub ko_only: bool,
     pub atk: u32,
     pub def: u32,
     pub spi: u32,
@@ -76,6 +78,7 @@ const ITEM_RECOVER_HP: u32 = 0x21;
 const ITEM_RECOVER_SP_RATE: u32 = 0x22;
 const ITEM_RECOVER_SP: u32 = 0x23;
 const ITEM_OCCASION_FIELD: u32 = 0x25;
+const ITEM_KO_ONLY: u32 = 0x26;
 const ITEM_STATE_SET: u32 = 0x40;
 const ITEM_ATTRIBUTE_SET: u32 = 0x42;
 
@@ -95,11 +98,11 @@ fn decode_flag_ids(data: &[u8]) -> Vec<u32> {
 /// price `0x05`, uses `0x06`, atk `0x0B`, def `0x0C`, spi `0x0D`, agi `0x0E`,
 /// two_handed `0x0F`, hit `0x11`, critical_hit `0x12`, animation_id `0x14`,
 /// entire_party `0x1F`, recover_hp_rate `0x20`, recover_hp `0x21`,
-/// recover_sp_rate `0x22`, recover_sp `0x23`, occasion_field1 `0x25`, state_set
-/// `0x40`, attribute_set `0x42`. Scalars are integer chunks; `two_handed`,
-/// `entire_party`, and `occasion_field1` are 0/1 flags; the two sets are
-/// `vector<bool>` chunks (one byte per element). Omitted fields default to
-/// 0/false/empty.
+/// recover_sp_rate `0x22`, recover_sp `0x23`, occasion_field1 `0x25`, ko_only
+/// `0x26`, state_set `0x40`, attribute_set `0x42`. Scalars are integer chunks;
+/// `two_handed`, `entire_party`, `occasion_field1`, and `ko_only` are 0/1 flags; the sets are
+/// `vector<bool>` chunks (one byte per element). Omitted uses and animation id
+/// default to `1`, hit to `90`, and the other fields to 0/false/empty.
 pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
     let section = find_section(bytes, ITEM_SECTION, LcfError::MissingItems)?;
     let mut reader = Reader::new(section);
@@ -113,21 +116,22 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
             description: String::new(),
             item_type: 0,
             price: 0,
-            uses: 0,
+            uses: 1,
             recover_hp: 0,
             recover_hp_rate: 0,
             recover_sp: 0,
             recover_sp_rate: 0,
             scope: 0,
             only_field: false,
+            ko_only: false,
             atk: 0,
             def: 0,
             spi: 0,
             agi: 0,
             two_handed: false,
-            hit: 0,
+            hit: 90,
             crit: 0,
-            weapon_animation: 0,
+            weapon_animation: 1,
             state_set: Vec::new(),
             attribute_set: Vec::new(),
         };
@@ -158,6 +162,7 @@ pub fn parse_items(bytes: &[u8]) -> Result<Vec<Item>, LcfError> {
                 ITEM_RECOVER_SP_RATE => item.recover_sp_rate = Reader::new(sub_data).varint()?,
                 ITEM_RECOVER_SP => item.recover_sp = Reader::new(sub_data).varint()?,
                 ITEM_OCCASION_FIELD => item.only_field = Reader::new(sub_data).varint()? != 0,
+                ITEM_KO_ONLY => item.ko_only = Reader::new(sub_data).varint()? != 0,
                 ITEM_STATE_SET => item.state_set = decode_flag_ids(sub_data),
                 ITEM_ATTRIBUTE_SET => item.attribute_set = decode_flag_ids(sub_data),
                 _ => {}
@@ -175,9 +180,6 @@ mod tests {
 
     #[test]
     fn parses_weapon_equipment_fields() {
-        // Description bytes decode CP1250 "Éles penge" (0xC9 = 'É'). A two-handed
-        // weapon: atk 10, def 5, hit 85, crit 5, attack animation 2, carrying
-        // attribute (element) 1 and inflicting state 3.
         let desc = [0xC9, 0x6C, 0x65, 0x73, 0x20, 0x70, 0x65, 0x6E, 0x67, 0x65];
         let sword = element(
             1,
@@ -207,13 +209,14 @@ mod tests {
                 description: "Éles penge".to_string(),
                 item_type: 1,
                 price: 1200,
-                uses: 0,
+                uses: 1,
                 recover_hp: 0,
                 recover_hp_rate: 0,
                 recover_sp: 0,
                 recover_sp_rate: 0,
                 scope: 0,
                 only_field: false,
+                ko_only: false,
                 atk: 10,
                 def: 5,
                 spi: 0,
@@ -230,8 +233,6 @@ mod tests {
 
     #[test]
     fn parses_medicine_use_effect() {
-        // A whole-party medicine: recover 30% + 20 HP and 5 SP, curing states
-        // 1 and 4. `recover_hp_rate` is chunk 0x20, `recover_hp` chunk 0x21.
         let potion = element(
             2,
             &[
@@ -243,6 +244,7 @@ mod tests {
                 subchunk(0x21, &varint(20)),
                 subchunk(0x23, &varint(5)),
                 subchunk(0x25, &varint(1)),
+                subchunk(0x26, &varint(1)),
                 subchunk(0x40, &[1, 0, 0, 1]),
             ],
         );
@@ -255,6 +257,8 @@ mod tests {
         assert_eq!(item.recover_sp, 5);
         assert_eq!(item.scope, 1, "whole party");
         assert!(item.only_field, "usable only from the map");
+        assert!(item.ko_only, "effects restricted to fallen actors");
+        assert_eq!(item.uses, 1);
         assert_eq!(item.state_set, vec![1, 4], "cured states");
         assert!(item.attribute_set.is_empty());
     }
@@ -269,12 +273,27 @@ mod tests {
         assert_eq!(item.item_type, 0, "normal");
         assert_eq!(item.price, 0, "omitted price defaults to 0");
         assert_eq!((item.atk, item.def, item.spi, item.agi), (0, 0, 0, 0));
-        assert_eq!((item.hit, item.crit, item.weapon_animation), (0, 0, 0));
-        assert_eq!(item.uses, 0, "0 = unlimited");
-        assert!(!item.two_handed && !item.only_field);
+        assert_eq!((item.hit, item.crit, item.weapon_animation), (90, 0, 1));
+        assert_eq!(item.uses, 1);
+        assert!(!item.two_handed && !item.only_field && !item.ko_only);
         assert_eq!(item.scope, 0);
         assert!(item.state_set.is_empty() && item.attribute_set.is_empty());
         assert!(item.description.is_empty());
+    }
+
+    #[test]
+    fn explicit_zeroes_override_nonzero_item_defaults() {
+        let item = element(
+            1,
+            &[
+                subchunk(0x06, &varint(0)),
+                subchunk(0x11, &varint(0)),
+                subchunk(0x14, &varint(0)),
+            ],
+        );
+        let ldb = make_ldb(&[(0x0D, section(&[item]))]);
+        let item = &parse_items(&ldb).unwrap()[0];
+        assert_eq!((item.uses, item.hit, item.weapon_animation), (0, 0, 0));
     }
 
     #[test]

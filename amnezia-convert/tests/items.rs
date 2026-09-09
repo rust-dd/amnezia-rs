@@ -56,9 +56,6 @@ fn converts_ldb_to_items_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    // Description bytes are CP1250: 0xC9 0x6C 0x65 0x73 -> "Éles". The sword is a
-    // two-handed weapon: atk 10, def 5, hit 85, crit 5, attack animation 2, and
-    // carrying attribute (element) 1 — surfaced as `attribute_defense` for gear.
     let sword = element(
         1,
         &[
@@ -75,8 +72,6 @@ fn converts_ldb_to_items_ron() {
             subchunk(0x42, &[1]),
         ],
     );
-    // A medicine: recover 30% + 20 HP and 5 SP for the whole party, field-only,
-    // curing states 1 and 4.
     let potion = element(
         2,
         &[
@@ -87,6 +82,7 @@ fn converts_ldb_to_items_ron() {
             subchunk(0x21, &varint(20)),
             subchunk(0x23, &varint(5)),
             subchunk(0x25, &varint(1)),
+            subchunk(0x26, &varint(1)),
             subchunk(0x40, &[1, 0, 0, 1]),
         ],
     );
@@ -97,7 +93,7 @@ fn converts_ldb_to_items_ron() {
     assert_eq!(count, 2);
 
     let text = std::fs::read_to_string(output.join("items.ron")).unwrap();
-    let items: Vec<ItemDef> = ron::from_str(&text).unwrap();
+    let items = ron::from_str::<Vec<ItemDef>>(&text).unwrap();
     assert_eq!(
         items[0],
         ItemDef {
@@ -113,7 +109,8 @@ fn converts_ldb_to_items_ron() {
             cure_states: vec![],
             scope: 0,
             only_field: false,
-            uses: 0,
+            ko_only: false,
+            uses: 1,
             atk: 10,
             def: 5,
             spi: 0,
@@ -135,9 +132,29 @@ fn converts_ldb_to_items_ron() {
     assert_eq!(potion.recover_sp, 5);
     assert_eq!(potion.scope, 1, "whole party");
     assert!(potion.only_field);
+    assert!(potion.ko_only);
+    assert_eq!(potion.uses, 1);
     assert_eq!(potion.cure_states, vec![1, 4]);
     assert!(
         potion.state_defense.is_empty() && potion.attribute_defense.is_empty(),
         "a consumable's sets are cure_states, not gear defenses"
     );
+}
+
+#[test]
+fn omitted_item_fields_use_original_defaults_in_ron() {
+    let item =
+        ron::from_str::<ItemDef>(r#"(id:1,name:"Ital",description:"",item_type:6,price:10)"#)
+            .unwrap();
+    assert_eq!((item.uses, item.hit, item.weapon_animation), (1, 90, 1));
+    assert!(!item.ko_only);
+}
+
+#[test]
+fn explicit_zero_item_fields_survive_ron_loading() {
+    let item = ron::from_str::<ItemDef>(
+        r#"(id:1,name:"Ital",description:"",item_type:6,price:10,uses:0,hit:0,weapon_animation:0)"#,
+    )
+    .unwrap();
+    assert_eq!((item.uses, item.hit, item.weapon_animation), (0, 0, 0));
 }

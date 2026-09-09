@@ -142,6 +142,7 @@ mod tests {
             attribute_defense: vec![],
             scope: 0,
             only_field: false,
+            ko_only: false,
             uses: 0,
             atk: 0,
             def: 0,
@@ -186,22 +187,21 @@ mod tests {
         assert_eq!(inv.gold(), 800);
         assert_eq!(inv.count(2), 1);
         assert!(apply_trade(Mode::Sell, 2, &data, &mut inv));
-        assert_eq!(inv.gold(), 1400); // 800 + 1200/2
+        assert_eq!(inv.gold(), 1400);
         assert_eq!(inv.count(2), 0);
-        // Nothing held to sell: no transaction, gold unchanged.
         assert!(!apply_trade(Mode::Sell, 2, &data, &mut inv));
         assert_eq!(inv.gold(), 1400);
-        assert!(apply_trade(Mode::Buy, 2, &data, &mut inv)); // affordable, buy again
+        assert!(apply_trade(Mode::Buy, 2, &data, &mut inv));
         assert_eq!(inv.count(2), 1);
     }
 
     #[test]
     fn buy_max_respects_gold_and_the_99_cap() {
-        assert_eq!(buy_max(100, 250, 0), 2); // gold-bound
-        assert_eq!(buy_max(10, 100_000, 95), 4); // stock-bound (99 - 95)
-        assert_eq!(buy_max(0, 50, 0), 99); // free item, stock-bound only
-        assert_eq!(buy_max(100, 50, 0), 0); // can't afford even one
-        assert_eq!(buy_max(100, 100_000, 99), 0); // already at the cap
+        assert_eq!(buy_max(100, 250, 0), 2);
+        assert_eq!(buy_max(10, 100_000, 95), 4);
+        assert_eq!(buy_max(0, 50, 0), 99);
+        assert_eq!(buy_max(100, 50, 0), 0);
+        assert_eq!(buy_max(100, 100_000, 99), 0);
     }
 
     #[test]
@@ -217,7 +217,6 @@ mod tests {
         }
         assert_eq!(inv.count(5), 99);
         assert_eq!(inv.gold(), 100_000 - 40);
-        // One more would exceed 99: refused, nothing changes.
         assert!(!apply_trade(Mode::Buy, 5, &data, &mut inv));
         assert_eq!(inv.count(5), 99);
     }
@@ -233,17 +232,17 @@ mod tests {
             assert!(apply_trade(Mode::Buy, 5, &data, &mut inv));
         }
         assert_eq!(inv.gold(), 5);
-        assert!(!apply_trade(Mode::Buy, 5, &data, &mut inv)); // can't afford a third
+        assert!(!apply_trade(Mode::Buy, 5, &data, &mut inv));
     }
 
     #[test]
     fn price_zero_item_is_never_sellable() {
         let data = data(vec![item(1, 0), item(2, 100)]);
         let mut inv = Inventory::default();
-        inv.add_item(1, 3); // a held free item
+        inv.add_item(1, 3);
         inv.add_item(2, 2);
         let sellable = sellable_ids(&data, &inv);
-        assert!(!sellable.contains(&1)); // price 0 excluded
+        assert!(!sellable.contains(&1));
         assert!(sellable.contains(&2));
     }
 
@@ -258,19 +257,17 @@ mod tests {
         let mut inv = Inventory::default();
         inv.add_gold(30);
         let mut vitals = Vitals::default();
-        vitals.set(1, 5, 0); // damaged
+        vitals.set(1, 5, 0);
         let mut outcome = ShopOutcome::default();
 
-        // Unaffordable: refused, nothing changes.
         assert!(!resolve_stay(50, &mut inv, &mut vitals, &mut outcome));
         assert_eq!(inv.gold(), 30);
         assert_eq!(vitals.get_stored(1), Some((5, 0)));
         assert!(!outcome.transacted);
 
-        // Affordable: charged, healed, flagged.
         assert!(resolve_stay(20, &mut inv, &mut vitals, &mut outcome));
         assert_eq!(inv.gold(), 10);
-        assert_eq!(vitals.get_stored(1), None); // full-healed
+        assert_eq!(vitals.get_stored(1), None);
         assert!(outcome.transacted);
     }
 }

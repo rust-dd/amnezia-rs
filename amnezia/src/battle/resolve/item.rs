@@ -32,6 +32,9 @@ impl Battle {
     fn restore_with_item(&mut self, ti: usize, item: &amnezia_data::ItemDef) -> Vec<String> {
         let member = &mut self.members[ti];
         let was_dead = !member.alive();
+        if item.ko_only && !was_dead {
+            return Vec::new();
+        }
         let revives = item.cure_states.contains(&1);
         let old_hp = member.hp.max(0);
         let old_sp = member.sp;

@@ -133,7 +133,7 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
     let ldb = input.join("RPG_RT.ldb");
     let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
     let parsed = lcf::parse_items(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
-    let items: Vec<ItemDef> = parsed
+    let items = parsed
         .into_iter()
         .map(|i| {
             // The raw `state_set`/`attribute_set` sets play different roles by
@@ -163,6 +163,7 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
                 cure_states,
                 scope: i.scope,
                 only_field: i.only_field,
+                ko_only: i.ko_only,
                 uses: i.uses,
                 atk: i.atk,
                 def: i.def,
@@ -176,7 +177,7 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
                 weapon_animation: i.weapon_animation,
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
     let count = items.len();
     let serialised = ron::to_string(&items).context("serialising items to RON")?;
     std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;

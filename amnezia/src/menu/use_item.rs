@@ -96,6 +96,9 @@ pub(super) fn apply_field_item(
         };
         let full = derive::max_hp_sp(def, progression.level(def));
         let (hp, sp) = vitals.get_stored(actor_id).unwrap_or(full);
+        if item.ko_only && hp > 0 {
+            continue;
+        }
         if hp == 0 && !item.cure_states.contains(&1) {
             continue;
         }
@@ -151,6 +154,41 @@ pub(super) fn compose_target(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_original_life_potion_is_kept_when_used_on_a_living_actor() {
+        let mut data = testkit::data();
+        data.items = crate::assets::load_ron(&format!("{}/items.ron", crate::assets::asset_root()));
+        let mut inventory = Inventory::default();
+        inventory.add_item(112, 1);
+        let mut vitals = Vitals::default();
+        vitals.set(1, 7, 5);
+        assert!(!apply_field_item(
+            112,
+            0,
+            &data,
+            &Party::default(),
+            &Progression::default(),
+            &mut inventory,
+            &mut vitals,
+        ));
+        assert_eq!(vitals.get_stored(1), Some((7, 5)));
+        assert_eq!(inventory.count(112), 1);
+        vitals.set(1, 0, 5);
+        vitals.set_states(1, vec![1]);
+        assert!(apply_field_item(
+            112,
+            0,
+            &data,
+            &Party::default(),
+            &Progression::default(),
+            &mut inventory,
+            &mut vitals,
+        ));
+        assert_eq!(vitals.get_stored(1), Some((31, 5)));
+        assert!(vitals.states(1).is_empty());
+        assert_eq!(inventory.count(112), 0);
+    }
 
     #[test]
     fn antidote_cures_poison_and_ordinary_herbs_cannot_revive() {
@@ -211,12 +249,9 @@ mod tests {
 
     #[test]
     fn heal_adds_flat_plus_percent_and_clamps_to_max() {
-        let herb = testkit::herb(); // +20 flat, +10% of max
-        // 20 + 20 + (63 * 10 / 100 = 6) = 46, below the 63 max.
+        let herb = testkit::herb();
         assert_eq!(heal(20, 5, 63, 37, &herb), (46, 5));
-        // Already at max: the same gain clamps back to 63.
         assert_eq!(heal(63, 37, 63, 37, &herb), (63, 37));
-        // Near max: clamps to the cap rather than overshooting.
         assert_eq!(heal(60, 0, 63, 37, &herb).0, 63);
     }
 
@@ -224,7 +259,6 @@ mod tests {
     fn heal_touches_only_the_pools_the_item_restores() {
         let mut potion = testkit::blank_item(9, 6);
         potion.recover_sp = 15;
-        // HP untouched (no HP effect), SP gains the flat 15.
         assert_eq!(heal(10, 5, 63, 37, &potion), (10, 20));
     }
 
@@ -235,7 +269,6 @@ mod tests {
         let mut inv = Inventory::default();
         inv.add_item(7, 1);
         inv.add_item(ITEM_HERB, 2);
-        // Order follows `data.items` (herb id 5 before weapon id 7), not add order.
         assert_eq!(held_item_ids(&d, &inv), vec![ITEM_HERB, 7]);
     }
 
@@ -277,7 +310,6 @@ mod tests {
             &mut vitals,
         );
         assert!(!empty, "one herb left, so still in the target screen");
-        // 20 + 20 flat + 10% of 63 (=6) = 46; SP untouched.
         assert_eq!(vitals.get_stored(1), Some((46, 5)));
         assert_eq!(inv.count(ITEM_HERB), 1);
 
@@ -303,7 +335,6 @@ mod tests {
         let mut inv = Inventory::default();
         inv.add_item(ITEM_HERB, 1);
         let mut vitals = Vitals::default();
-        // No stored vitals -> full (63/37); healing keeps it at max.
         apply_field_item(
             ITEM_HERB,
             0,
