@@ -118,6 +118,11 @@ pub fn convert_monsters(input: &Path, output: &Path) -> Result<usize> {
                     condition_min: a.condition_min,
                     condition_max: a.condition_max,
                     priority: a.priority,
+                    switch_id: a.switch_id,
+                    switch_on: a.switch_on,
+                    switch_on_id: a.switch_on_id,
+                    switch_off: a.switch_off,
+                    switch_off_id: a.switch_off_id,
                 })
                 .collect(),
         })

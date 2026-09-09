@@ -7,20 +7,9 @@
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
 
-/// One entry in a monster's battle-AI list. Each turn RM2000 walks the list and
-/// performs the highest-`priority` action whose condition currently holds.
-///
-/// `kind` selects the action family: `0` a basic action (refined by `basic`:
-/// `0` attack, `1` dual attack, `2` defend, `3` observe, `4` charge, `5`
-/// self-destruct, `6` escape, `7` do nothing), `1` cast the skill named by
-/// `skill_id`, `2` transform into the monster named by `enemy_id`.
-///
-/// `condition_type` gates the action: `0` always, `1` a switch, `2` turn number,
-/// `3` this monster's HP%, `4` the party's HP%, `5` the party's average level,
-/// `6` party exhausted. `condition_min`/`condition_max` are that condition's two
-/// bounds (turn base and interval, or the low and high end of an HP/level
-/// range). `priority` (RM2000 "rating", 0–100) breaks ties between the eligible
-/// actions.
+/// A weighted enemy action, its trigger, and its post-action switch changes.
+/// Conditions are always/switch/turn/enemy count/HP%/SP%/party level/fatigue.
+/// For turn conditions, `condition_min` is the period and `condition_max` the offset.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EnemyAction {
     pub kind: u32,
@@ -31,6 +20,31 @@ pub struct EnemyAction {
     pub condition_min: u32,
     pub condition_max: u32,
     pub priority: u32,
+    pub switch_id: u32,
+    pub switch_on: bool,
+    pub switch_on_id: u32,
+    pub switch_off: bool,
+    pub switch_off_id: u32,
+}
+
+impl Default for EnemyAction {
+    fn default() -> Self {
+        Self {
+            kind: 0,
+            basic: 1,
+            skill_id: 1,
+            enemy_id: 1,
+            condition_type: 0,
+            condition_min: 0,
+            condition_max: 0,
+            priority: 50,
+            switch_id: 1,
+            switch_on: false,
+            switch_on_id: 1,
+            switch_off: false,
+            switch_off_id: 1,
+        }
+    }
 }
 
 /// A monster (enemy) definition: the battle-relevant scalar stats, the
@@ -88,32 +102,21 @@ const ACTION_ENEMY_ID: u32 = 0x04;
 const ACTION_CONDITION_TYPE: u32 = 0x05;
 const ACTION_CONDITION_MIN: u32 = 0x06;
 const ACTION_CONDITION_MAX: u32 = 0x07;
+const ACTION_SWITCH_ID: u32 = 0x08;
+const ACTION_SWITCH_ON: u32 = 0x09;
+const ACTION_SWITCH_ON_ID: u32 = 0x0A;
+const ACTION_SWITCH_OFF: u32 = 0x0B;
+const ACTION_SWITCH_OFF_ID: u32 = 0x0C;
 const ACTION_PRIORITY: u32 = 0x0D;
-const ACTION_DEFAULT_PRIORITY: u32 = 50;
 
-/// Parse a monster's `actions` array (`0x2A`): a `[count]` header then, per
-/// action, a 1-based index id and a chunk stream (kind `0x01`, basic `0x02`,
-/// skill_id `0x03`, enemy_id `0x04`, condition_type `0x05`, condition_min
-/// `0x06`, condition_max `0x07`, priority `0x0D`), matching the nested
-/// struct-list shape used elsewhere in the LCF. Switch-effect sub-chunks are
-/// skipped. Omitted fields default to 0 except `priority`, which defaults to the
-/// RM2000 neutral rating of 50.
+/// Parse the nested enemy action table with liblcf's field defaults.
 fn parse_actions(data: &[u8]) -> Result<Vec<EnemyAction>, LcfError> {
     let mut reader = Reader::new(data);
     let count = reader.varint()?;
     let mut actions = Vec::with_capacity(count as usize);
     for _ in 0..count {
         let _action_id = reader.varint()?;
-        let mut action = EnemyAction {
-            kind: 0,
-            basic: 0,
-            skill_id: 0,
-            enemy_id: 0,
-            condition_type: 0,
-            condition_min: 0,
-            condition_max: 0,
-            priority: ACTION_DEFAULT_PRIORITY,
-        };
+        let mut action = EnemyAction::default();
         loop {
             let sub_id = reader.varint()?;
             if sub_id == 0 {
@@ -130,6 +133,11 @@ fn parse_actions(data: &[u8]) -> Result<Vec<EnemyAction>, LcfError> {
                 ACTION_CONDITION_MIN => action.condition_min = Reader::new(sub_data).varint()?,
                 ACTION_CONDITION_MAX => action.condition_max = Reader::new(sub_data).varint()?,
                 ACTION_PRIORITY => action.priority = Reader::new(sub_data).varint()?,
+                ACTION_SWITCH_ID => action.switch_id = Reader::new(sub_data).varint()?,
+                ACTION_SWITCH_ON => action.switch_on = Reader::new(sub_data).varint()? != 0,
+                ACTION_SWITCH_ON_ID => action.switch_on_id = Reader::new(sub_data).varint()?,
+                ACTION_SWITCH_OFF => action.switch_off = Reader::new(sub_data).varint()? != 0,
+                ACTION_SWITCH_OFF_ID => action.switch_off_id = Reader::new(sub_data).varint()?,
                 _ => {}
             }
         }
@@ -268,12 +276,12 @@ mod tests {
         let skill = element(
             2,
             &[
-                subchunk(0x01, &varint(1)),  // kind: skill
-                subchunk(0x03, &varint(42)), // skill_id
-                subchunk(0x05, &varint(3)),  // condition_type: monster-hp%
-                subchunk(0x06, &varint(1)),  // condition_min
-                subchunk(0x07, &varint(25)), // condition_max
-                subchunk(0x0D, &varint(80)), // priority
+                subchunk(0x01, &varint(1)),
+                subchunk(0x03, &varint(42)),
+                subchunk(0x05, &varint(4)),
+                subchunk(0x06, &varint(1)),
+                subchunk(0x07, &varint(25)),
+                subchunk(0x0D, &varint(80)),
             ],
         );
         let mut actions = varint(2);
@@ -305,25 +313,19 @@ mod tests {
             EnemyAction {
                 kind: 0,
                 basic: 0,
-                skill_id: 0,
-                enemy_id: 0,
-                condition_type: 0,
-                condition_min: 0,
-                condition_max: 0,
-                priority: 50,
+                ..Default::default()
             }
         );
         assert_eq!(
             m.actions[1],
             EnemyAction {
                 kind: 1,
-                basic: 0,
                 skill_id: 42,
-                enemy_id: 0,
-                condition_type: 3,
+                condition_type: 4,
                 condition_min: 1,
                 condition_max: 25,
                 priority: 80,
+                ..Default::default()
             }
         );
     }

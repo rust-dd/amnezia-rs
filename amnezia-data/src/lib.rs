@@ -247,11 +247,10 @@ pub struct MonsterDef {
     pub actions: Vec<EnemyActionDef>,
 }
 
-/// One entry in a monster's battle-AI list (see `lcf::EnemyAction`): the action
-/// family (`kind`/`basic`), the `skill_id`/`enemy_id` it targets, the condition
-/// gating it (`condition_type` + `condition_min`/`condition_max`), and its
-/// `priority` for tie-breaking.
+/// A weighted enemy action with a condition and post-action switch changes.
+/// Turn conditions use `condition_min` as period and `condition_max` as offset.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct EnemyActionDef {
     pub kind: u32,
     pub basic: u32,
@@ -261,6 +260,31 @@ pub struct EnemyActionDef {
     pub condition_min: u32,
     pub condition_max: u32,
     pub priority: u32,
+    pub switch_id: u32,
+    pub switch_on: bool,
+    pub switch_on_id: u32,
+    pub switch_off: bool,
+    pub switch_off_id: u32,
+}
+
+impl Default for EnemyActionDef {
+    fn default() -> Self {
+        Self {
+            kind: 0,
+            basic: 1,
+            skill_id: 1,
+            enemy_id: 1,
+            condition_type: 0,
+            condition_min: 0,
+            condition_max: 0,
+            priority: 50,
+            switch_id: 1,
+            switch_on: false,
+            switch_on_id: 1,
+            switch_off: false,
+            switch_off_id: 1,
+        }
+    }
 }
 
 /// A battle-animation definition (see `lcf::Animation`), read by the battle

@@ -410,6 +410,7 @@ fn action(
         condition_min,
         condition_max,
         priority,
+        ..Default::default()
     }
 }
 

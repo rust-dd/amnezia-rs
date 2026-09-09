@@ -1,6 +1,79 @@
 use amnezia_data::MonsterDef;
 use std::path::Path;
 
+#[test]
+fn enemy_action_switch_conditions_effects_and_defaults_survive_conversion() {
+    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR")).join("converts_monster_actions_ron");
+    let input = tmp.join("in");
+    let output = tmp.join("out");
+    std::fs::create_dir_all(&input).unwrap();
+    let values = [
+        (1, 1),
+        (2, 0),
+        (3, 58),
+        (4, 0),
+        (5, 1),
+        (6, 0),
+        (7, 100),
+        (8, 545),
+        (9, 1),
+        (10, 617),
+        (11, 1),
+        (12, 545),
+        (13, 0),
+    ];
+    let mut actions = varint(2);
+    actions.extend(element(1, &[]));
+    actions.extend(element(
+        2,
+        &values
+            .into_iter()
+            .map(|(id, n)| subchunk(id, &varint(n)))
+            .collect::<Vec<_>>(),
+    ));
+    std::fs::write(
+        input.join("RPG_RT.ldb"),
+        make_ldb(0x0E, &[element(1, &[subchunk(0x2A, &actions)])]),
+    )
+    .unwrap();
+    amnezia_convert::convert_monsters(&input, &output).unwrap();
+    let monsters = ron::from_str::<Vec<MonsterDef>>(
+        &std::fs::read_to_string(output.join("monsters.ron")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        monsters[0].actions[0],
+        amnezia_data::EnemyActionDef::default()
+    );
+    assert_eq!(
+        monsters[0].actions[1],
+        amnezia_data::EnemyActionDef {
+            kind: 1,
+            basic: 0,
+            skill_id: 58,
+            enemy_id: 0,
+            condition_type: 1,
+            condition_min: 0,
+            condition_max: 100,
+            priority: 0,
+            switch_id: 545,
+            switch_on: true,
+            switch_on_id: 617,
+            switch_off: true,
+            switch_off_id: 545,
+        }
+    );
+    let legacy = ron::from_str::<amnezia_data::EnemyActionDef>(
+        "(kind:0,basic:0,skill_id:0,enemy_id:0,condition_type:0,condition_min:0,condition_max:0,priority:0)"
+    ).unwrap();
+    assert!(!legacy.switch_on && !legacy.switch_off);
+    assert_eq!((legacy.priority, legacy.basic, legacy.skill_id), (0, 0, 0));
+    assert_eq!(
+        (legacy.switch_id, legacy.switch_on_id, legacy.switch_off_id),
+        (1, 1, 1)
+    );
+}
+
 fn varint(mut v: u32) -> Vec<u8> {
     let mut groups = vec![(v & 0x7F) as u8];
     v >>= 7;

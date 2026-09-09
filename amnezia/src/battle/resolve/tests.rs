@@ -198,6 +198,7 @@ fn enemy_action_def(basic: u32) -> amnezia_data::EnemyActionDef {
         condition_min: 0,
         condition_max: 0,
         priority: 1,
+        ..Default::default()
     }
 }
 

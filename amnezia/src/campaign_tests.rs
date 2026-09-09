@@ -3,6 +3,7 @@ use amnezia_data::{Chipset, CommonEvent, EventCommand, Map, Start, TroopDef};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+mod enemy_actions;
 mod troop_events;
 
 fn maps() -> BTreeMap<u32, Map> {
