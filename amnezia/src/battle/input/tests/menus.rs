@@ -1,6 +1,27 @@
 use super::*;
 
 #[test]
+fn a_weapon_restricted_skill_remains_listed_but_cannot_open_target_selection() {
+    let mut battle = build_party2();
+    battle.attributes = crate::gamedata::attribute_definitions().to_vec();
+    battle.members[0].weapon_attributes.clear();
+    battle.members[0].known_skills = vec![1];
+    let mut skill = skill_def(1, 20, 0);
+    skill.attributes = vec![1];
+    battle.skills = vec![skill.clone()];
+    let data = GameData {
+        actors: vec![],
+        items: vec![],
+        skills: vec![skill],
+    };
+    battle.menu = MenuLevel::Skill;
+    skill_menu(&press_enter(), &data, &mut battle);
+    assert!(battle.menu == MenuLevel::Skill);
+    assert!(matches!(battle.pending_se.last(), Some(BattleSe::Buzzer)));
+    assert!(battle.pending_skill.is_none());
+}
+
+#[test]
 fn a_silenced_skill_stays_listed_but_cannot_be_confirmed() {
     let mut battle = build_party2();
     battle.states = crate::assets::load_ron(&format!("{}/states.ron", crate::assets::asset_root()));

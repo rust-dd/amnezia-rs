@@ -16,6 +16,14 @@ impl Battle {
             && skill.skill_type == 0
             && i64::from(sp) >= i64::from(self.skill_cost(source, skill))
             && logic::states_allow_skill(self.battler_states(source), &self.states, skill)
+            && match source {
+                Source::Party(i) => logic::weapon_allows_skill(
+                    skill,
+                    &self.members[i].weapon_attributes,
+                    &self.attributes,
+                ),
+                Source::Enemy(_) => true,
+            }
     }
 
     pub(in crate::battle::resolve) fn pay_skill(

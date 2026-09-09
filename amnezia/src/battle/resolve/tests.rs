@@ -5,13 +5,14 @@ mod attributes;
 mod criticals;
 mod drops;
 mod equipment;
+mod skill_requirements;
 mod state_behavior;
 
 fn fire_attr() -> amnezia_data::AttributeDef {
     amnezia_data::AttributeDef {
         id: 5,
         name: "Tűz".into(),
-        attribute_type: 0,
+        attribute_type: 1,
         a_rate: 200,
         b_rate: 150,
         c_rate: 100,

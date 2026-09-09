@@ -58,6 +58,24 @@ impl Field {
 }
 
 #[test]
+fn field_cast_checks_required_weapon_attributes_before_healing_or_spending() {
+    let mut field = Field::original();
+    field
+        .data
+        .skills
+        .iter_mut()
+        .find(|skill| skill.id == 7)
+        .unwrap()
+        .attributes = vec![1];
+    field.vitals.set(1, 1, field.full(1).1);
+    assert!(!field.cast(0, 0, 7));
+    assert_eq!(field.vitals.get_stored(1), Some((1, field.full(1).1)));
+    field.equipment.set_slot(field.data.actor(1).unwrap(), 0, 1);
+    assert!(field.cast(0, 0, 7));
+    assert_eq!(field.vitals.get_stored(1).unwrap().0, 51);
+}
+
+#[test]
 fn original_life_song_and_full_revival_restore_their_percentage_not_one_hp() {
     for (skill, percentage) in [(11, 200), (39, 999)] {
         let mut field = Field::original();

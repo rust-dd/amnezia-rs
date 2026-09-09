@@ -15,6 +15,7 @@ mod damage;
 mod enemy;
 mod escape;
 mod hit;
+mod skill_requirements;
 mod state;
 mod state_effects;
 mod stats;
@@ -34,6 +35,7 @@ pub(crate) use escape::{
     average_agility, escape_succeeds, init_escape_chance, total_rewards, turn_order,
 };
 pub(crate) use hit::{effective_hit, skill_to_hit, to_hit_vs};
+pub(crate) use skill_requirements::weapon_allows_skill;
 pub(crate) use state::{
     cure, has_state, inflict, release_on_damage, state_hp_delta, state_infliction_chance,
     state_sp_delta, tick_recovery, worst_restriction,

@@ -100,6 +100,20 @@ pub(in crate::menu) fn apply_field_skill(
     if !field_usable(skill) {
         return false;
     }
+    let weapon_attributes = equipment
+        .slots(caster_def)
+        .into_iter()
+        .filter_map(|id| data.item(id))
+        .filter(|item| item.item_type == 1)
+        .flat_map(|item| item.attribute_defense.iter().copied())
+        .collect::<Vec<_>>();
+    if !logic::weapon_allows_skill(
+        skill,
+        &weapon_attributes,
+        crate::gamedata::attribute_definitions(),
+    ) {
+        return false;
+    }
     let full = derive::max_hp_sp(caster_def, progression.level(caster_def));
     let (caster_hp, caster_sp) = vitals.get_stored(caster_id).unwrap_or(full);
     let cost = EquipmentEffects::from_slots(equipment.slots(caster_def), &data.items)
