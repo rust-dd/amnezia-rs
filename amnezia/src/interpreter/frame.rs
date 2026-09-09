@@ -37,6 +37,7 @@ pub(super) struct Frame {
     pub(super) commands: Vec<EventCommand>,
     pub(super) ip: usize,
     pub(super) active: bool,
+    pub(super) parallel: bool,
     pub(super) wait: f32,
     /// Set by `ProceedWithMovement` (11340): hold the frame until every forced
     /// move route on the map has finished. `MoveEvent` itself is fire-and-forget;
@@ -94,6 +95,7 @@ impl Frame {
 
     fn reset(&mut self) {
         self.active = false;
+        self.parallel = false;
         self.commands.clear();
         self.ip = 0;
         self.wait = 0.0;

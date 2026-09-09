@@ -32,6 +32,7 @@ use bevy::prelude::*;
 
 mod actor_commands;
 mod outcomes;
+mod transfers;
 mod vehicles;
 
 const CONTROL_SWITCHES: u32 = 10210;

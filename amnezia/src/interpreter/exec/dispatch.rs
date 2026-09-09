@@ -176,13 +176,16 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Yield
         }
         TELEPORT => {
-            // Queue the transfer and pause until the fade swaps the map; the event
-            // then resumes at the next command on the destination map.
             if let [map, tx, ty, ..] = command.params.as_slice() {
                 x.pending.0 = Some((*map as u32, *tx as u32, *ty as u32));
             }
             frame.ip += 1;
-            Flow::Yield
+            // RM2000 parallel pages execute their trailing commands before the map unloads.
+            if frame.parallel {
+                Flow::Advance
+            } else {
+                Flow::Yield
+            }
         }
         CONDITIONAL_BRANCH => handlers::conditional_branch(frame, &command, x),
         ELSE_BRANCH => {

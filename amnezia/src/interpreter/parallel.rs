@@ -128,6 +128,7 @@ pub(super) fn run_parallel(
                 (pf.event_id, pf.commands.clone())
             };
             pool.frames[i].frame.start(event_id, commands);
+            pool.frames[i].frame.parallel = true;
         }
         // A page that finishes in a single pass (no wait/loop) is left inactive and
         // restarts next frame, so it drives its effect once per frame rather than

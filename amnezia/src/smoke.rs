@@ -115,8 +115,15 @@ fn drive(world: &mut World) {
         {
             assert_eq!(world.resource::<SmokeRun>().escaped_cast, 0b11111);
             assert!(!world.resource::<crate::player::HeroHidden>().0);
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 90);
+        }
+        if world.resource::<SmokeRun>().finish_at == Some(frame + 10) {
+            assert!(!world.resource::<crate::teleport::Fade>().busy());
+            assert_eq!(
+                world.resource::<crate::screenfx::TintState>().tone(),
+                [100.0; 4]
+            );
             capture(world, "escape");
-            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 60);
         }
     }
     if frame.is_multiple_of(300) {
