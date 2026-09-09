@@ -1,7 +1,6 @@
 //! Integration tests for the foreground/background interpreter split: that a
-//! common autostart fires on its switch, that parallel-process events step each
-//! frame and loop, that the whole pool pauses when a scene owns the flow, and
-//! that state a parallel event writes is the same state the foreground reads.
+//! common autostart gates, parallel loops, scene pauses, prompt ownership and
+//! shared foreground/background state.
 
 use super::{CommonEvents, InterpreterPlugin, ParallelPool, RunningEvent};
 use crate::animation::{AnimationLibrary, ShowMapAnimation};
@@ -33,6 +32,7 @@ use bevy::prelude::*;
 mod actor_commands;
 mod camera;
 mod message_options;
+mod message_ownership;
 mod movement;
 mod outcomes;
 mod screen_coordinates;
@@ -277,7 +277,7 @@ fn parallel_map_page_runs_and_pauses_under_a_scene() {
 }
 
 #[test]
-fn parallel_pauses_while_a_message_is_open() {
+fn parallel_switches_continue_during_another_interpreters_message() {
     let mut app = interp_app();
     app.insert_resource(CommonEvents(vec![common(
         1,
@@ -287,17 +287,17 @@ fn parallel_pauses_while_a_message_is_open() {
     )]));
 
     app.update();
-    let before = switch_on(&app, 22);
-    // Open a dialogue: `scene_owns_flow` holds, freezing the pool.
     app.world_mut().resource_mut::<Dialogue>().active = true;
-    for _ in 0..4 {
-        app.update();
+    for continue_events in [false, true] {
+        app.world_mut()
+            .resource_mut::<crate::dialogue::MessageOptions>()
+            .continue_events = continue_events;
+        for _ in 0..3 {
+            let before = switch_on(&app, 22);
+            app.update();
+            assert_ne!(switch_on(&app, 22), before);
+        }
     }
-    assert_eq!(
-        switch_on(&app, 22),
-        before,
-        "a parallel event must not step behind an open message box"
-    );
 }
 
 #[test]

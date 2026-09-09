@@ -9,6 +9,7 @@
 mod actors;
 mod dispatch;
 mod handlers;
+mod message_gate;
 mod vehicles;
 
 use super::commands::key_code;
@@ -58,20 +59,28 @@ pub(super) struct Exec<'w, 's> {
 }
 
 impl Exec<'_, '_> {
-    /// Whether a foreground scene owns the shared UI/flow this frame — a message
-    /// box, a choice, a teleport fade, a queued transfer, the title, or a Game
-    /// Over. Both the foreground guard and the parallel pool pause on it, so a
-    /// message a parallel event opens freezes everything until it is dismissed,
-    /// exactly as RM2000's shared message window does.
+    /// Foreground execution waits on every message; parallel frames wait only
+    /// for their own prompt or for commands that require a free message window.
     pub(super) fn scene_owns_flow(&self, fade_busy: bool, overlay_open: bool) -> bool {
+        self.scene_paused(fade_busy, overlay_open) || self.message_active()
+    }
+
+    pub(super) fn scene_paused(&self, fade_busy: bool, overlay_open: bool) -> bool {
         fade_busy
             || overlay_open
-            || self.dialogue.active
-            || self.choice.active()
             || self.pending.0.is_some()
             || self.subsystems.flow.title.0
             || self.subsystems.gameover.0
-            || self.subsystems.input_number.active()
+    }
+
+    fn message_active(&self) -> bool {
+        self.dialogue.active || self.choice.active() || self.subsystems.input_number.active()
+    }
+
+    fn message_reserved(&self) -> bool {
+        self.message_active()
+            || self.choice.result.is_some()
+            || self.subsystems.input_number.result.is_some()
     }
 }
 
@@ -96,11 +105,8 @@ pub(super) enum RunOutcome {
 }
 
 /// Run one frame's worth of an interpreter: settle any pending resume, honour the
-/// pause conditions, then execute a bounded batch of commands. `scene_blocked`
-/// is the caller's pause decision (see [`Exec::scene_owns_flow`]) — the shared
-/// scene guard that stops foreground and background alike; `battle_pending` (a
-/// per-frame flag) is checked here so only the frame awaiting a fight pauses on
-/// it.
+/// pause conditions, then execute a bounded batch of commands. The caller blocks
+/// scenes globally; each frame owns its prompt, key, movement and battle waits.
 pub(super) fn run_frame(
     frame: &mut Frame,
     x: &mut Exec,
@@ -122,15 +128,23 @@ pub(super) fn run_frame(
         }
         frame.battle_outcome = Some(outcome);
     }
-    // Pause while a scene owns the flow, or while this frame still awaits its
-    // fight's result.
     if scene_blocked || frame.battle_pending {
         return RunOutcome::Yielded;
     }
-    // Resume after the player confirmed a choice: record the pick so the
-    // ShowChoice re-executes past the menu and the options self-select.
-    if let Some(result) = x.choice.result.take() {
-        frame.choices.insert(x.choice.indent, result);
+    if frame.message_pending {
+        if x.message_active() {
+            return RunOutcome::Yielded;
+        }
+        frame.message_pending = false;
+    }
+    if frame.choice_pending {
+        if x.choice.active() {
+            return RunOutcome::Yielded;
+        }
+        if let Some(result) = x.choice.result.take() {
+            frame.choices.insert(x.choice.indent, result);
+        }
+        frame.choice_pending = false;
     }
     // Resume after a merchant screen closes: record whether a trade happened and
     // step into the block so the Transaction/Stay (or NoTransaction/Cancel)
@@ -143,6 +157,9 @@ pub(super) fn run_frame(
     // Resume after the player entered a number: store it in the target variable,
     // then step past the InputNumber command.
     if frame.input_pending {
+        if x.subsystems.input_number.active() {
+            return RunOutcome::Yielded;
+        }
         if let Some(value) = x.subsystems.input_number.result.take() {
             x.variables
                 .set(x.subsystems.input_number.var_id, value as i32);
@@ -154,6 +171,9 @@ pub(super) fn run_frame(
     // pressed, store its RM2000 code in the target variable and step past the
     // command; otherwise keep the event paused for another frame.
     if frame.key_pending {
+        if x.message_active() {
+            return RunOutcome::Yielded;
+        }
         let keys = &x.subsystems.flow.keys;
         let code = key_code(
             &frame.key_accept,
@@ -197,6 +217,9 @@ pub(super) fn run_frame(
             frame.stop();
             return RunOutcome::Finished;
         };
+        if x.message_reserved() && message_gate::needs_free_message(&command) {
+            return RunOutcome::Yielded;
+        }
         match dispatch(frame, command, x) {
             Flow::Advance => {}
             Flow::Yield => return RunOutcome::Yielded,

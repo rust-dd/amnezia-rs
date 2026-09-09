@@ -53,6 +53,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                     }
                 }
                 x.dialogue.open(boxes);
+                frame.message_pending = true;
                 Flow::Yield
             }
         }
@@ -211,7 +212,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                 frame.ip += 1;
                 Flow::Advance
             } else {
-                let labels: Vec<String> = choice_labels(&frame.commands, frame.ip, command.indent)
+                let labels = choice_labels(&frame.commands, frame.ip, command.indent)
                     .iter()
                     .map(|l| {
                         text::substitute(
@@ -220,7 +221,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                             &x.variables,
                         )
                     })
-                    .collect();
+                    .collect::<Vec<_>>();
                 if labels.is_empty() {
                     frame.ip = skip_to_terminator(
                         &frame.commands,
@@ -233,6 +234,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                     // RM2000 `ShowChoices` cancel type is `parameters[0]`.
                     let cancel_type = command.params.first().copied().unwrap_or(0);
                     x.choice.open(labels, command.indent, cancel_type);
+                    frame.choice_pending = true;
                     Flow::Yield
                 }
             }

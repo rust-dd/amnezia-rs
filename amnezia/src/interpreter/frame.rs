@@ -44,6 +44,8 @@ pub(super) struct Frame {
     /// only this opcode blocks, mirroring RM2000's "wait until movement complete".
     pub(super) wait_movement: bool,
     pub(super) event_id: u32,
+    pub(super) message_pending: bool,
+    pub(super) choice_pending: bool,
     pub(super) choices: HashMap<u32, i32>,
     /// Suspended caller frames from `CallEvent`; a finished callee pops back to the
     /// top frame, and the run ends only when the stack is empty.
@@ -101,6 +103,8 @@ impl Frame {
         self.wait = 0.0;
         self.wait_movement = false;
         self.event_id = 0;
+        self.message_pending = false;
+        self.choice_pending = false;
         self.choices.clear();
         self.call_stack.clear();
         self.key_pending = false;

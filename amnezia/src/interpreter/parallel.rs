@@ -5,10 +5,8 @@
 //! through [`Exec`]. A finished background page loops from the top the next
 //! frame, matching RM2000's "runs continuously" semantics.
 //!
-//! The whole pool pauses whenever a foreground scene owns the shared flow — a
-//! message, choice, teleport fade, menu, shop, battle, title, or Game Over —
-//! exactly as the foreground interpreter pauses, so a parallel event never runs
-//! commands behind an open message box.
+//! Scene changes pause the pool. Messages pause their owner and message-sensitive
+//! commands, while other background scripts keep running.
 
 use super::exec::{Exec, run_frame};
 use super::frame::Frame;
@@ -89,6 +87,7 @@ pub(super) fn run_parallel(
     blockers: Blockers,
     mut pool: ResMut<ParallelPool>,
     common_events: Res<CommonEvents>,
+    foreground: Res<super::RunningEvent>,
     mut exec: Exec,
 ) {
     // Drop the previous map's parallel pages when the map changes; the reconcile
@@ -109,15 +108,13 @@ pub(super) fn run_parallel(
         &exec.party,
         &exec.inventory,
     );
+    discard_orphaned_results(&pool, &foreground.frame, &mut exec);
 
-    // Fade and the menu/shop/battle overlays can't change while the pool steps, so
-    // sample them once; the message/choice/teleport/title/Game-Over conditions can
-    // (a parallel event may open them), so they are re-checked each iteration.
     let static_blocked = fade.busy() || blockers.any();
     let dt = time.delta_secs();
     let mut i = 0;
     while i < pool.frames.len() {
-        if static_blocked || exec.scene_owns_flow(false, false) {
+        if static_blocked || exec.scene_paused(false, false) {
             break;
         }
         // A finished (or freshly reconciled) page restarts from the top — parallel
@@ -135,6 +132,20 @@ pub(super) fn run_parallel(
         // spinning to the step cap.
         let _ = run_frame(&mut pool.frames[i].frame, &mut exec, dt, false);
         i += 1;
+    }
+}
+
+fn discard_orphaned_results(pool: &ParallelPool, foreground: &Frame, exec: &mut Exec) {
+    // Another parallel event can change a prompt owner's page before confirmation.
+    if !foreground.choice_pending && !pool.frames.iter().any(|p| p.frame.choice_pending) {
+        exec.choice.result = None;
+    }
+    if !foreground.input_pending
+        && !pool.frames.iter().any(|p| p.frame.input_pending)
+        && let Some(value) = exec.subsystems.input_number.result.take()
+    {
+        exec.variables
+            .set(exec.subsystems.input_number.var_id, value as i32);
     }
 }
 
