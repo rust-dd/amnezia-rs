@@ -300,6 +300,16 @@ fn state_infliction_chance_maps_ranks_a_through_e() {
 
 fn state(id: u32, restriction: u32, hold_turn: u32, auto: u32, by_damage: u32) -> StateDef {
     StateDef {
+        affect_type: 0,
+        affect_stats: [false; 4],
+        reduce_hit_ratio: 100,
+        restrict_skill: false,
+        restrict_skill_level: 0,
+        restrict_magic: false,
+        restrict_magic_level: 0,
+        sp_change_type: 0,
+        sp_change_max: 0,
+        sp_change_val: 0,
         rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,
@@ -376,6 +386,16 @@ fn release_on_damage_lifts_by_chance_and_spares_the_death_state() {
 
 fn state_hp(id: u32, hp_change_type: u32, hp_change_max: u32, hp_change_val: u32) -> StateDef {
     StateDef {
+        affect_type: 0,
+        affect_stats: [false; 4],
+        reduce_hit_ratio: 100,
+        restrict_skill: false,
+        restrict_skill_level: 0,
+        restrict_magic: false,
+        restrict_magic_level: 0,
+        sp_change_type: 0,
+        sp_change_max: 0,
+        sp_change_val: 0,
         rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,

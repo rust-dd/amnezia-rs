@@ -185,7 +185,7 @@ pub struct SkillDef {
 /// 1-based id, name, and how it constrains and wears off a battler.
 /// `restriction` limits actions while it holds (`0` none, `1` can't act,
 /// `2` attack an enemy at random, `3` attack an ally at random) and `priority`
-/// (0–100) decides which active state's graphic and restriction dominate.
+/// (0–100) chooses the displayed state and suppresses lower-priority states.
 /// Recovery is governed by `hold_turn` (minimum turns held before it can lift),
 /// `auto_release_prob` (percent chance per turn to lift afterwards), and
 /// `release_by_damage` (percent chance to lift when hit by a physical attack).
@@ -198,6 +198,26 @@ pub struct SkillDef {
 /// 0 (a zero-amount no-op); Poison sets them to bleed HP each battle turn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateDef {
+    #[serde(default)]
+    pub affect_type: u32,
+    #[serde(default)]
+    pub affect_stats: [bool; 4],
+    #[serde(default = "default_hundred")]
+    pub reduce_hit_ratio: u32,
+    #[serde(default)]
+    pub restrict_skill: bool,
+    #[serde(default)]
+    pub restrict_skill_level: u32,
+    #[serde(default)]
+    pub restrict_magic: bool,
+    #[serde(default)]
+    pub restrict_magic_level: u32,
+    #[serde(default)]
+    pub sp_change_type: u32,
+    #[serde(default)]
+    pub sp_change_max: u32,
+    #[serde(default)]
+    pub sp_change_val: u32,
     #[serde(default = "default_state_rates")]
     pub rates: [u32; 5],
     #[serde(default)]
@@ -223,6 +243,10 @@ pub struct StateDef {
 
 fn default_state_rates() -> [u32; 5] {
     [100, 80, 60, 30, 0]
+}
+
+fn default_hundred() -> u32 {
+    100
 }
 
 /// An attribute (element) definition, read by the battle system: its 1-based

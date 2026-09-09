@@ -188,6 +188,16 @@ fn foe_attribute_rank_reads_the_vector_then_defaults_to_neutral_c() {
 
 fn state_def(id: u32, restriction: u32, auto_release_prob: u32) -> StateDef {
     StateDef {
+        affect_type: 0,
+        affect_stats: [false; 4],
+        reduce_hit_ratio: 100,
+        restrict_skill: false,
+        restrict_skill_level: 0,
+        restrict_magic: false,
+        restrict_magic_level: 0,
+        sp_change_type: 0,
+        sp_change_max: 0,
+        sp_change_val: 0,
         rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,

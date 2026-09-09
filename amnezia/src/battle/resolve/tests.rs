@@ -53,6 +53,16 @@ fn heal_skill(id: u32, power: u32) -> SkillDef {
 
 fn poison_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        affect_type: 0,
+        affect_stats: [false; 4],
+        reduce_hit_ratio: 100,
+        restrict_skill: false,
+        restrict_skill_level: 0,
+        restrict_magic: false,
+        restrict_magic_level: 0,
+        sp_change_type: 0,
+        sp_change_max: 0,
+        sp_change_val: 0,
         rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,
@@ -77,6 +87,16 @@ fn hp_change_state(
     hp_change_val: u32,
 ) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        affect_type: 0,
+        affect_stats: [false; 4],
+        reduce_hit_ratio: 100,
+        restrict_skill: false,
+        restrict_skill_level: 0,
+        restrict_magic: false,
+        restrict_magic_level: 0,
+        sp_change_type: 0,
+        sp_change_max: 0,
+        sp_change_val: 0,
         rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,
@@ -126,6 +146,16 @@ fn build_weapon_anim(weapon_animation: u32) -> Battle {
 
 fn damage_release_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        affect_type: 0,
+        affect_stats: [false; 4],
+        reduce_hit_ratio: 100,
+        restrict_skill: false,
+        restrict_skill_level: 0,
+        restrict_magic: false,
+        restrict_magic_level: 0,
+        sp_change_type: 0,
+        sp_change_max: 0,
+        sp_change_val: 0,
         rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,
@@ -145,6 +175,16 @@ fn damage_release_state(id: u32) -> amnezia_data::StateDef {
 
 fn confusion_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        affect_type: 0,
+        affect_stats: [false; 4],
+        reduce_hit_ratio: 100,
+        restrict_skill: false,
+        restrict_skill_level: 0,
+        restrict_magic: false,
+        restrict_magic_level: 0,
+        sp_change_type: 0,
+        sp_change_max: 0,
+        sp_change_val: 0,
         rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,
@@ -230,6 +270,16 @@ fn wind_enemy_hits(battle: &mut Battle, offsets: &[usize]) {
 /// A can't-act (restriction 1) state — asleep or paralyzed.
 fn sleep_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        affect_type: 0,
+        affect_stats: [false; 4],
+        reduce_hit_ratio: 100,
+        restrict_skill: false,
+        restrict_skill_level: 0,
+        restrict_magic: false,
+        restrict_magic_level: 0,
+        sp_change_type: 0,
+        sp_change_max: 0,
+        sp_change_val: 0,
         rates: [100, 80, 60, 30, 0],
         persistence: 0,
         id,

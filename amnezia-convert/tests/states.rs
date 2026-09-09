@@ -10,6 +10,15 @@ fn legacy_state_ron_uses_editor_rates_without_overwriting_explicit_zero() {
     );
     let explicit = legacy.replacen('(', "(rates:(0,0,0,0,0),", 1);
     assert_eq!(ron::from_str::<StateDef>(&explicit).unwrap().rates, [0; 5]);
+    let state = ron::from_str::<StateDef>(legacy).unwrap();
+    assert_eq!(state.reduce_hit_ratio, 100);
+    assert_eq!(state.affect_stats, [false; 4]);
+    assert!(!state.restrict_magic && !state.restrict_skill);
+    let zero = legacy.replacen('(', "(reduce_hit_ratio:0,", 1);
+    assert_eq!(
+        ron::from_str::<StateDef>(&zero).unwrap().reduce_hit_ratio,
+        0
+    );
 }
 
 fn varint(mut v: u32) -> Vec<u8> {
@@ -80,6 +89,19 @@ fn converts_ldb_to_states_ron() {
             subchunk(0x17, &varint(50)),
             subchunk(0x0B, &varint(0)),
             subchunk(0x0E, &varint(40)),
+            subchunk(0x1E, &varint(1)),
+            subchunk(0x1F, &varint(1)),
+            subchunk(0x20, &varint(1)),
+            subchunk(0x21, &varint(0)),
+            subchunk(0x22, &varint(1)),
+            subchunk(0x23, &varint(20)),
+            subchunk(0x29, &varint(1)),
+            subchunk(0x2A, &varint(4)),
+            subchunk(0x2B, &varint(1)),
+            subchunk(0x2C, &varint(1)),
+            subchunk(0x2E, &varint(1)),
+            subchunk(0x41, &varint(2)),
+            subchunk(0x42, &varint(1)),
         ],
     );
     // Poison: acts normally (restriction omitted -> 0), priority omitted -> 50,
@@ -105,6 +127,16 @@ fn converts_ldb_to_states_ron() {
     assert_eq!(
         states[0],
         StateDef {
+            affect_type: 1,
+            affect_stats: [true, true, false, true],
+            reduce_hit_ratio: 20,
+            restrict_skill: true,
+            restrict_skill_level: 4,
+            restrict_magic: true,
+            restrict_magic_level: 1,
+            sp_change_type: 1,
+            sp_change_max: 2,
+            sp_change_val: 1,
             rates: [0, 80, 60, 40, 0],
             persistence: 0,
             id: 1,

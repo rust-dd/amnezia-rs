@@ -11,8 +11,8 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// A state (status condition) definition. `restriction` limits the battler's
 /// actions while the state holds: `0` none (acts normally), `1` do nothing
 /// (can't act), `2` attack an enemy at random (berserk), `3` attack an ally at
-/// random (confusion). `priority` (0–100) picks which state's graphic and
-/// restriction dominate when several are active at once.
+/// random (confusion). `priority` (0–100) picks the displayed state and removes
+/// states at least ten points below the highest active priority.
 ///
 /// Recovery is governed by three odds: `hold_turn`, the minimum number of turns
 /// the state is held before it can lift; `auto_release_prob`, the percent chance
@@ -29,6 +29,16 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// default to `0` (a zero-amount no-op); Poison sets them to bleed HP each turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
+    pub affect_type: u32,
+    pub affect_stats: [bool; 4],
+    pub reduce_hit_ratio: u32,
+    pub restrict_skill: bool,
+    pub restrict_skill_level: u32,
+    pub restrict_magic: bool,
+    pub restrict_magic_level: u32,
+    pub sp_change_type: u32,
+    pub sp_change_max: u32,
+    pub sp_change_val: u32,
     pub rates: [u32; 5],
     pub persistence: u32,
     pub id: u32,
@@ -78,6 +88,16 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut state = State {
+            affect_type: 0,
+            affect_stats: [false; 4],
+            reduce_hit_ratio: 100,
+            restrict_skill: false,
+            restrict_skill_level: 0,
+            restrict_magic: false,
+            restrict_magic_level: 0,
+            sp_change_type: 0,
+            sp_change_max: 0,
+            sp_change_val: 0,
             rates: [100, 80, 60, 30, 0],
             persistence: 0,
             id,
@@ -101,6 +121,19 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
             let sub_size = reader.varint()? as usize;
             let sub_data = reader.take(sub_size)?;
             match sub_id {
+                0x1E => state.affect_type = Reader::new(sub_data).varint()?,
+                0x1F..=0x22 => {
+                    state.affect_stats[(sub_id - 0x1F) as usize] =
+                        Reader::new(sub_data).varint()? != 0
+                }
+                0x23 => state.reduce_hit_ratio = Reader::new(sub_data).varint()?,
+                0x29 => state.restrict_skill = Reader::new(sub_data).varint()? != 0,
+                0x2A => state.restrict_skill_level = Reader::new(sub_data).varint()?,
+                0x2B => state.restrict_magic = Reader::new(sub_data).varint()? != 0,
+                0x2C => state.restrict_magic_level = Reader::new(sub_data).varint()?,
+                0x2E => state.sp_change_type = Reader::new(sub_data).varint()?,
+                0x41 => state.sp_change_max = Reader::new(sub_data).varint()?,
+                0x42 => state.sp_change_val = Reader::new(sub_data).varint()?,
                 0x0B..=0x0F => {
                     state.rates[(sub_id - 0x0B) as usize] = Reader::new(sub_data).varint()?
                 }
@@ -157,6 +190,16 @@ mod tests {
         assert_eq!(
             states[0],
             State {
+                affect_type: 0,
+                affect_stats: [false; 4],
+                reduce_hit_ratio: 100,
+                restrict_skill: false,
+                restrict_skill_level: 0,
+                restrict_magic: false,
+                restrict_magic_level: 0,
+                sp_change_type: 0,
+                sp_change_max: 0,
+                sp_change_val: 0,
                 rates: [100, 80, 60, 30, 0],
                 persistence: 0,
                 id: 1,
@@ -264,6 +307,17 @@ mod tests {
         let ldb = make_ldb(&[(0x12, section(&[element(1, &[]), element(2, &chunks)]))]);
         let states = parse_states(&ldb).unwrap();
         assert_eq!(states[0].rates, [100, 80, 60, 30, 0]);
+        assert_eq!(states[0].affect_stats, [false; 4]);
+        assert_eq!(states[0].reduce_hit_ratio, 100);
+        assert!(!states[0].restrict_skill && !states[0].restrict_magic);
+        assert_eq!(
+            (
+                states[0].sp_change_type,
+                states[0].sp_change_max,
+                states[0].sp_change_val
+            ),
+            (0, 0, 0)
+        );
         assert_eq!(states[1].rates, [0, 85, 70, 40, 0]);
     }
 }
