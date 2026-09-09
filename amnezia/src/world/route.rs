@@ -150,16 +150,13 @@ pub(super) fn route_events(
     if guards.forced_route_paused() {
         return;
     }
-    // A running event or an open message pauses a page's own custom route (like
-    // autonomous movement), but not a forced `MoveEvent` route, which keeps going.
-    let scene_paused = guards.paused();
     let hero = players
         .single()
         .map(|p| (p.tile_x, p.tile_y))
         .unwrap_or((-1, -1));
     let dt = time.delta_secs();
     for (mut sprite_c, mut queue, mut stepper, mut sprite) in &mut movers {
-        if scene_paused && !stepper.forced() {
+        if !stepper.forced() && guards.autonomous_paused(sprite_c.id) {
             continue;
         }
         let (ex, ey) = (sprite_c.tile_x, sprite_c.tile_y);

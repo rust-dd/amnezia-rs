@@ -4,6 +4,7 @@
 //! each page letter by letter, [`view`] draws it, and the confirm key here
 //! fast-forwards the reveal or advances/closes the box.
 
+mod options;
 #[cfg(test)]
 mod tests;
 mod typewriter;
@@ -15,6 +16,7 @@ use crate::player::{Player, facing_tile};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::world::{MapData, MapEvents};
 use bevy::prelude::*;
+pub use options::MessageOptions;
 use typewriter::Typewriter;
 
 /// The active dialogue: the sequence of boxes, which one is showing, and the
@@ -62,8 +64,7 @@ impl Dialogue {
 /// [`MessagePosition::Bottom`] is RM2000's usual placement; [`view`] moves the
 /// box when the interpreter changes this. `Top`/`Middle` are only produced by
 /// the interpreter's MessageOptions arm, which lands separately.
-#[derive(Resource, Default, Clone, Copy, PartialEq, Eq)]
-#[allow(dead_code)]
+#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MessagePosition {
     Top,
     Middle,
@@ -80,6 +81,15 @@ pub struct DialoguePlugin;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct DialogueInput;
+
+pub(crate) fn verify_placement(world: &mut World, top: bool) {
+    let node = world
+        .query_filtered::<&Node, With<view::DialoguePanel>>()
+        .single(world)
+        .unwrap();
+    assert_eq!(node.top, if top { Val::Px(0.0) } else { Val::Auto });
+    assert_eq!(node.bottom, if top { Val::Auto } else { Val::Px(0.0) });
+}
 
 pub(crate) fn verify_battle_layer(world: &mut World) {
     assert!(world.resource::<Dialogue>().active);
@@ -98,6 +108,7 @@ pub(crate) fn verify_battle_layer(world: &mut World) {
 impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Dialogue>()
+            .init_resource::<MessageOptions>()
             .init_resource::<MessagePosition>()
             .init_resource::<MessageTransparent>()
             .add_systems(Startup, view::spawn_ui)

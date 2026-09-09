@@ -32,6 +32,7 @@ use bevy::prelude::*;
 
 mod actor_commands;
 mod camera;
+mod message_options;
 mod movement;
 mod outcomes;
 mod screen_coordinates;

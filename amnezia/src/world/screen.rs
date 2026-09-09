@@ -22,6 +22,7 @@ impl MapData {
 }
 
 #[derive(SystemParam)]
+#[allow(clippy::type_complexity)]
 pub(crate) struct MapScreen<'w, 's> {
     cameras: Query<'w, 's, &'static Transform, With<MainCamera>>,
     characters: Query<
@@ -37,6 +38,19 @@ pub(crate) struct MapScreen<'w, 's> {
 }
 
 impl MapScreen<'_, '_> {
+    pub(crate) fn hero_y(&self, data: &MapData) -> Option<i32> {
+        self.characters.iter().find_map(|(transform, player, _)| {
+            let player = player?;
+            Some(
+                self.project(
+                    transform.translation.truncate() - Vec2::Y * player.y_offset(),
+                    data,
+                )
+                .1,
+            )
+        })
+    }
+
     pub(crate) fn character(
         &self,
         reference: i32,

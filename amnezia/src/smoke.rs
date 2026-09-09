@@ -2,7 +2,9 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
 mod camera;
+mod capture;
 mod looping;
+mod message_options;
 mod scenarios;
 
 pub struct SmokePlugin;
@@ -20,7 +22,9 @@ impl Plugin for SmokePlugin {
         if !cfg!(debug_assertions) || !std::env::args().any(|arg| arg == "--smoke-test") {
             return;
         }
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-camera") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-message-options") {
+            "message-options"
+        } else if std::env::args().any(|arg| arg == "--smoke-camera") {
             "camera"
         } else if std::env::args().any(|arg| arg == "--smoke-looping") {
             "looping"
@@ -76,6 +80,7 @@ fn capture(world: &mut World, label: &str) {
         .observe(save_to_disk(path))
         .observe(
             move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
+                capture::verify_content(&capture.image, &label);
                 crate::battle::smoke::verify_skin(&capture.image, &label);
             },
         );
@@ -88,7 +93,7 @@ fn input(world: &mut World) {
         && world.resource::<SmokeRun>().finish_at.is_none()
         && !matches!(
             world.resource::<SmokeRun>().scenario,
-            "font" | "panorama" | "timer" | "battle-menus"
+            "font" | "panorama" | "timer" | "battle-menus" | "message-options"
         )
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active
@@ -127,6 +132,9 @@ fn drive(world: &mut World) {
     }
     if scenario == "camera" {
         camera::drive(world, frame);
+    }
+    if scenario == "message-options" {
+        message_options::drive(world, frame);
     }
     if frame == 240 && scenario == "battle-events" {
         crate::dialogue::verify_battle_layer(world);
@@ -242,7 +250,9 @@ fn start_scenario(world: &mut World, scenario: &str) {
     if scenario == "battle-menus" {
         crate::battle::smoke::prepare(world);
     }
-    let commands = if scenario == "camera" {
+    let commands = if scenario == "message-options" {
+        message_options::entry()
+    } else if scenario == "camera" {
         camera::entry()
     } else if scenario == "looping" {
         looping::entry()

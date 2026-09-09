@@ -36,6 +36,7 @@ const FPS: f32 = 60.0;
 /// count.
 #[derive(SystemParam)]
 pub(crate) struct MoveGuards<'w> {
+    message_options: Option<Res<'w, crate::dialogue::MessageOptions>>,
     dialogue: Res<'w, Dialogue>,
     fade: Res<'w, Fade>,
     running: Res<'w, RunningEvent>,
@@ -47,7 +48,20 @@ pub(crate) struct MoveGuards<'w> {
 }
 
 impl MoveGuards<'_> {
-    /// Whether any pause condition is active, freezing every NPC this frame.
+    pub(crate) fn autonomous_paused(&self, event_id: u32) -> bool {
+        self.forced_route_paused()
+            || if self
+                .message_options
+                .as_ref()
+                .is_some_and(|o| o.continue_events)
+            {
+                self.running.debug_id() == Some(event_id)
+            } else {
+                self.dialogue.active || self.running.active()
+            }
+    }
+
+    /// Whether manual movement input is paused.
     pub(crate) fn paused(&self) -> bool {
         self.dialogue.active
             || self.fade.busy()
@@ -264,9 +278,6 @@ pub(crate) fn autonomous_movement(
         Option<&mut RouteStepper>,
     )>,
 ) {
-    if guards.paused() {
-        return;
-    }
     let Ok(player) = players.single() else {
         return;
     };
@@ -278,7 +289,8 @@ pub(crate) fn autonomous_movement(
         // MoveEvent override) takes over, as RM2000's move_route_overwritten
         // suppresses the autonomous move_type. Like EasyRPG's stop_count, the delay
         // only counts down while the NPC stands still.
-        if auto.move_type == 0
+        if guards.autonomous_paused(sprite.id)
+            || auto.move_type == 0
             || auto.move_type == 6
             || queue.busy()
             || stepper.as_ref().is_some_and(|route| route.active())

@@ -78,6 +78,7 @@ pub(crate) struct InterpreterStep;
 impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RunningEvent>()
+            .init_resource::<crate::dialogue::MessageOptions>()
             .init_resource::<EventRng>()
             .init_resource::<ParallelPool>()
             .init_resource::<crate::vehicles::Vehicles>()

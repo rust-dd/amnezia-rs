@@ -69,6 +69,7 @@ pub(crate) fn clear_transient(world: &mut World) {
     reset::<Dialogue>(world);
     reset::<MessagePosition>(world);
     reset::<MessageTransparent>(world);
+    reset::<crate::dialogue::MessageOptions>(world);
     reset::<crate::choice::Choice>(world);
     reset::<crate::inputnumber::InputNumber>(world);
     reset::<crate::menu::MenuOpen>(world);

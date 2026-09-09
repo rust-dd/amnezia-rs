@@ -329,21 +329,42 @@ pub(super) fn render_reveal(
     }
 }
 
-/// Anchor the dialogue box to the top, middle, or bottom of the screen when
-/// [`MessagePosition`] changes, mirroring `Window_Message`'s three fixed slots for
-/// its 240px-tall box: top edge, screen centre ((240−80)/2 = 80 → 240 at ×3), or
-/// flush against the bottom (the spawn default).
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub(super) fn update_position(
     position: Res<MessagePosition>,
+    options: Res<super::MessageOptions>,
+    dialogue: Res<Dialogue>,
+    map: Option<Res<crate::world::MapData>>,
+    screen: crate::world::MapScreen,
+    battle: Option<Res<crate::battle::BattleActive>>,
+    mut previous: Local<Option<(u64, usize, MessagePosition, super::MessageOptions, bool)>>,
     mut panels: Query<&mut Node, With<DialoguePanel>>,
 ) {
-    if !position.is_changed() {
+    if !dialogue.active {
+        *previous = None;
         return;
     }
+    let battle = battle.is_some_and(|b| b.0);
+    let snapshot = (
+        dialogue.generation,
+        dialogue.index,
+        *position,
+        *options,
+        battle,
+    );
+    if *previous == Some(snapshot) {
+        return;
+    }
+    *previous = Some(snapshot);
+    let hero_y = map
+        .as_deref()
+        .and_then(|map| screen.hero_y(map))
+        .unwrap_or(128);
+    let position = options.position(*position, hero_y, battle);
     let Ok(mut node) = panels.single_mut() else {
         return;
     };
-    match *position {
+    match position {
         MessagePosition::Top => {
             node.top = Val::Px(0.0);
             node.bottom = Val::Auto;

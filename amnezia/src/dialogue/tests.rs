@@ -1,6 +1,67 @@
 use super::*;
 
 #[test]
+fn automatic_dialogue_position_is_chosen_once_per_box_and_battle_stays_at_the_bottom() {
+    let mut app = App::new();
+    app.insert_resource(MapData::for_test(20, 15))
+        .init_resource::<MessagePosition>()
+        .init_resource::<MessageOptions>()
+        .init_resource::<Dialogue>()
+        .add_systems(Update, view::update_position);
+    app.world_mut()
+        .spawn((crate::world::MainCamera, Transform::default()));
+    let hero = app
+        .world_mut()
+        .spawn((
+            Player {
+                tile_x: 10,
+                tile_y: 11,
+                dir: 2,
+                frame: 1,
+                charset: String::new(),
+                index: 0,
+            },
+            Transform::from_xyz(0.0, -56.0, 4.0),
+        ))
+        .id();
+    let panel = app
+        .world_mut()
+        .spawn((view::DialoguePanel, Node::default()))
+        .id();
+    app.world_mut().resource_mut::<Dialogue>().open(vec![
+        MessageBox {
+            face: None,
+            face_index: 0,
+            lines: vec!["Első".into()],
+        },
+        MessageBox {
+            face: None,
+            face_index: 0,
+            lines: vec!["Második".into()],
+        },
+    ]);
+    app.update();
+    assert_eq!(app.world().get::<Node>(panel).unwrap().top, Val::Px(0.0));
+    app.world_mut()
+        .get_mut::<Transform>(hero)
+        .unwrap()
+        .translation
+        .y = 72.0;
+    app.update();
+    assert_eq!(app.world().get::<Node>(panel).unwrap().top, Val::Px(0.0));
+    app.world_mut().resource_mut::<Dialogue>().advance();
+    app.update();
+    assert_eq!(app.world().get::<Node>(panel).unwrap().bottom, Val::Px(0.0));
+    app.world_mut().resource_mut::<MessageOptions>().fixed = true;
+    *app.world_mut().resource_mut::<MessagePosition>() = MessagePosition::Top;
+    app.update();
+    assert_eq!(app.world().get::<Node>(panel).unwrap().top, Val::Px(0.0));
+    app.insert_resource(crate::battle::BattleActive(true));
+    app.update();
+    assert_eq!(app.world().get::<Node>(panel).unwrap().bottom, Val::Px(0.0));
+}
+
+#[test]
 fn action_key_reaches_an_event_on_the_opposite_loop_edge() {
     let mut page = crate::assets::load_ron::<amnezia_data::Map>(&format!(
         "{}/maps/map_0001.ron",

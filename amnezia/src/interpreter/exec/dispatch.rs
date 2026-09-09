@@ -104,6 +104,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         }
         CHANGE_EVENT_LOCATION => handlers::change_event_location(frame, &command, x),
         MESSAGE_OPTIONS => {
+            x.subsystems.mapfx.message_options.apply(&command.params);
             x.subsystems.mapfx.message_transparent.0 =
                 command.params.first().copied().unwrap_or(0) != 0;
             *x.subsystems.mapfx.message_position = match command.params.get(1).copied().unwrap_or(2)

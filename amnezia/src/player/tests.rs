@@ -175,6 +175,24 @@ fn menu_freezes_a_step_already_in_flight() {
 }
 
 #[test]
+fn continue_events_does_not_restore_player_input_during_dialogue() {
+    let mut app = movement_app(vec![]);
+    app.insert_resource(crate::dialogue::MessageOptions {
+        fixed: false,
+        continue_events: true,
+    });
+    app.world_mut().resource_mut::<Dialogue>().active = true;
+    app.world_mut()
+        .resource_mut::<ButtonInput<KeyCode>>()
+        .press(KeyCode::ArrowRight);
+    for _ in 0..20 {
+        app.update();
+    }
+    let world = app.world_mut();
+    assert_eq!(world.query::<&Player>().single(world).unwrap().tile_x, 3);
+}
+
+#[test]
 fn pan_eases_toward_target_then_snaps() {
     // A full step moves exactly `step` along the direction to the target.
     assert_eq!(

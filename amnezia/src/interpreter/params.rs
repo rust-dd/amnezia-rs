@@ -50,6 +50,7 @@ impl Blockers<'_> {
 /// 16-parameter cap once the access/actor/flow bundles below are added.
 #[derive(SystemParam)]
 pub(super) struct MapFx<'w> {
+    pub(super) message_options: ResMut<'w, crate::dialogue::MessageOptions>,
     pub(super) camera_pan: ResMut<'w, CameraPan>,
     pub(super) hero_hidden: ResMut<'w, HeroHidden>,
     pub(super) weather: ResMut<'w, Weather>,

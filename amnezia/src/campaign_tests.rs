@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 mod enemy_actions;
+mod message_options;
 mod scrolling;
 mod state_resistance;
 mod troop_events;

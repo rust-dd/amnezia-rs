@@ -84,6 +84,91 @@ fn chasing_enemy_starts_its_touch_event_when_it_reaches_the_hero() {
 }
 
 #[test]
+fn continue_events_allows_other_npcs_to_walk_but_keeps_the_speaking_npc_paused() {
+    for (continues, event_id, menu, moves) in [
+        (false, 2, false, false),
+        (true, 2, false, true),
+        (true, 1, false, false),
+        (true, 2, true, false),
+    ] {
+        let mut app = chasing_app();
+        app.insert_resource(crate::dialogue::MessageOptions {
+            fixed: false,
+            continue_events: continues,
+        });
+        let world = app.world_mut();
+        world
+            .query::<&mut Player>()
+            .single_mut(world)
+            .unwrap()
+            .tile_y = 4;
+        world.resource_mut::<RunningEvent>().start(
+            event_id,
+            vec![amnezia_data::EventCommand {
+                code: 11410,
+                indent: 0,
+                string: String::new(),
+                params: vec![100],
+            }],
+        );
+        world.resource_mut::<Dialogue>().active = true;
+        world.resource_mut::<MenuOpen>().0 = menu;
+        app.update();
+        assert_eq!(
+            app.world().resource::<MapEvents>().events[0].y,
+            if moves { 5 } else { 6 }
+        );
+    }
+}
+
+#[test]
+fn continue_events_resumes_an_autonomous_custom_route_during_another_events_message() {
+    let mut app = chasing_app();
+    app.insert_resource(crate::dialogue::MessageOptions {
+        fixed: false,
+        continue_events: true,
+    });
+    app.add_message::<crate::audio::AudioRequest>();
+    app.add_systems(
+        Update,
+        super::super::route::route_events.before(autonomous_movement),
+    );
+    let world = app.world_mut();
+    let npc = world
+        .query_filtered::<Entity, With<EventSprite>>()
+        .single(world)
+        .unwrap();
+    world.entity_mut(npc).insert((
+        Sprite::default(),
+        RouteStepper::from_page(
+            &amnezia_data::MoveRouteDef {
+                commands: vec![amnezia_data::MoveCommandDef {
+                    code: 2,
+                    string: String::new(),
+                    params: vec![],
+                }],
+                repeat: false,
+                skippable: false,
+            },
+            4,
+            8,
+        ),
+    ));
+    world.resource_mut::<RunningEvent>().start(
+        2,
+        vec![amnezia_data::EventCommand {
+            code: 11410,
+            indent: 0,
+            string: String::new(),
+            params: vec![100],
+        }],
+    );
+    world.resource_mut::<Dialogue>().active = true;
+    app.update();
+    assert_eq!(app.world().resource::<MapEvents>().events[0].y, 7);
+}
+
+#[test]
 fn chasing_npc_uses_the_short_path_and_touch_collision_across_a_seam() {
     for hero_y in [8, 9] {
         let mut app = chasing_app();
