@@ -297,6 +297,8 @@ pub(super) fn drain_pending_anims(
     if battle.pending_anims.is_empty() {
         return;
     }
+    // A short animation can finish before the next low-FPS resolution update.
+    battle.anim_seen = true;
     for anim in battle.pending_anims.drain(..) {
         let targets = anim
             .targets
@@ -314,6 +316,7 @@ pub(super) fn drain_pending_anims(
             targets,
             screen_center: BATTLE_SCREEN_CENTER,
             global: false,
+            sound_only: anim.sound_only,
         });
     }
 }

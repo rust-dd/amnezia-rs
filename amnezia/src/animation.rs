@@ -1,7 +1,7 @@
 //! The battle effect-animation player: it plays a converted RM2000 animation
 //! (from `animations.ron`) as on-screen sprites. A [`PlayAnimation`] message
 //! names an animation id and a screen position; this plugin spawns a
-//! [`LiveAnimation`] that steps its frames at a fixed rate, drawing each frame's
+//! [`playback::LiveAnimation`] that steps its frames at a fixed rate, drawing each frame's
 //! cells (see [`render`]) and firing that frame's sound-effect and flash
 //! timings. It owns the renderer plus the fixed overlay camera (render order 2)
 //! the effects draw on, which the battle backdrop and battlers ([`crate::battle`])
@@ -16,6 +16,7 @@
 //! concern: it resolves them into the `(x, y)` it passes here.
 
 mod cells;
+mod playback;
 mod render;
 pub(crate) mod smoke;
 
@@ -30,9 +31,10 @@ use crate::world::{EventSprite, MainCamera};
 use amnezia_data::{AnimationDef, AnimationTimingDef};
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
-use cells::CellRenderer;
-use render::{fade_flashes, next_frame, spawn_screen_flash};
+use playback::{start_animations, step_animations, track_active_animations};
+use render::{FlashStamp, fade_flashes, spawn_screen_flash};
 
+pub(crate) use playback::AnimationSet;
 pub(crate) use render::flash_power_level;
 pub use render::{overlay_layer, overlay_translation};
 
@@ -42,13 +44,6 @@ pub use render::{overlay_layer, overlay_translation};
 /// `GetRealFrame() = frame / 2`), so a data frame lasts `2/60 = 1/30 s`. The
 /// data cadence is independent of the flash envelope.
 pub const FRAME_SECS: f32 = 1.0 / 30.0;
-
-/// Seconds one 60 fps game-frame lasts: half a data frame. The flash envelope
-/// ([`render::flash_envelope`]) counts these game-frames — EasyRPG holds a flash
-/// over its `UpdateFlashGeneric` window of eleven game-frames (`delta_frames <=
-/// 10`) — so the window stays decoupled from [`FRAME_SECS`]: halving the per-frame
-/// step for the 15→30 fps fix must not reshape it.
-const GAME_FRAME_SECS: f32 = FRAME_SECS / 2.0;
 
 /// The flash channel `flash_scope` value that flashes the whole screen; `1`
 /// flashes the target, `0` nothing.
@@ -98,11 +93,13 @@ pub struct PlayAnimation {
     pub targets: Vec<AnimAnchor>,
     pub screen_center: Vec2,
     pub global: bool,
+    /// Front-view party targets play only sound, truncated to 40 game frames.
+    pub sound_only: bool,
 }
 
 /// A request to flash-tint a target battler sprite as an animation's target
 /// flash fires: `pos` is the battler's RM2000 screen offset from centre (the same
-/// point the animation plays on), `rgb` the flash colour (0..1), and `power` the
+/// point the animation plays on), `rgb` the flash colour in bytes, and `power` the
 /// RM2000 flash strength (`0..=31`) that drives the stepped [`render::flash_envelope`].
 /// `battle::scene` finds the battler at `pos` and drives its sprite colour over
 /// the ~11-game-frame envelope. RM2000 front view draws no party sprites, so a
@@ -110,8 +107,9 @@ pub struct PlayAnimation {
 #[derive(Message)]
 pub struct BattlerFlash {
     pub pos: Vec2,
-    pub rgb: [f32; 3],
+    pub rgb: [u8; 3],
     pub power: u32,
+    pub age: u32,
 }
 
 /// The character a [`ShowMapAnimation`] plays on, already resolved from the
@@ -148,23 +146,6 @@ pub struct AnimationLibrary(pub Vec<AnimationDef>);
 #[derive(Resource, Default)]
 pub struct ActiveAnimations(pub usize);
 
-/// A playing animation: which library entry it is, the screen points its cells
-/// draw at (`draw_anchors` — one per target, or a single centred point for a
-/// screen-scope animation), the target centres its flashes fire at
-/// (`flash_anchors` — every target, so the battler-match points survive the
-/// position offset baked into `draw_anchors`), the current frame, the per-frame
-/// timer, and the cell entities of that frame (kept so they can be despawned when
-/// the frame advances).
-#[derive(Component)]
-struct LiveAnimation {
-    index: usize,
-    draw_anchors: Vec<Vec2>,
-    flash_anchors: Vec<Vec2>,
-    frame: usize,
-    timer: Timer,
-    cells: Vec<Entity>,
-}
-
 pub struct AnimationPlugin;
 
 impl Plugin for AnimationPlugin {
@@ -182,15 +163,18 @@ impl Plugin for AnimationPlugin {
             .add_systems(
                 Update,
                 (
+                    (fade_flashes, step_animations, track_active_animations)
+                        .chain()
+                        .in_set(AnimationSet::Advance),
                     (
                         resolve_map_animation,
                         debug_preview,
                         start_animations,
-                        step_animations.run_if(crate::transitions::scene_running),
+                        track_active_animations,
                     )
-                        .chain(),
-                    fade_flashes,
-                    track_active_animations,
+                        .chain()
+                        .in_set(AnimationSet::Start)
+                        .after(AnimationSet::Advance),
                 ),
             );
     }
@@ -223,47 +207,6 @@ fn spawn_overlay_camera(mut commands: Commands) {
     ));
 }
 
-/// Spawn a [`LiveAnimation`] for each [`PlayAnimation`], drawing its first frame
-/// and firing that frame's timings immediately.
-fn start_animations(
-    mut commands: Commands,
-    mut renderer: CellRenderer,
-    library: Res<AnimationLibrary>,
-    mut requests: MessageReader<PlayAnimation>,
-    mut audio: MessageWriter<AudioRequest>,
-    mut battler_flash: MessageWriter<BattlerFlash>,
-) {
-    for request in requests.read() {
-        let Some(index) = library.0.iter().position(|a| a.id == request.anim_id) else {
-            continue;
-        };
-        let def = &library.0[index];
-        if def.frames.is_empty() {
-            continue;
-        }
-        let draw_anchors =
-            draw_anchors(def, &request.targets, request.screen_center, request.global);
-        let flash_anchors: Vec<Vec2> = request.targets.iter().map(|t| t.pos).collect();
-        let cells = spawn_cells_at(&mut commands, &mut renderer, def, 0, &draw_anchors);
-        fire_timings(
-            &mut commands,
-            &mut audio,
-            &mut battler_flash,
-            def,
-            0,
-            &flash_anchors,
-        );
-        commands.spawn(LiveAnimation {
-            index,
-            draw_anchors,
-            flash_anchors,
-            frame: 0,
-            timer: Timer::from_seconds(FRAME_SECS, TimerMode::Repeating),
-            cells,
-        });
-    }
-}
-
 /// The screen points an animation's cells draw at: a `global` animation tiles its
 /// cells 3×3 across the screen around `screen_center` (EasyRPG
 /// `BattleAnimationMap::DrawGlobal`), overriding scope; otherwise a screen-scope
@@ -289,75 +232,6 @@ fn draw_anchors(
         .collect()
 }
 
-/// Spawn frame `frame`'s cells at every anchor in `bases`, returning all the cell
-/// entities together so they despawn as one when the frame advances.
-fn spawn_cells_at(
-    commands: &mut Commands,
-    renderer: &mut CellRenderer,
-    def: &AnimationDef,
-    frame: usize,
-    bases: &[Vec2],
-) -> Vec<Entity> {
-    let mut cells = Vec::new();
-    for &base in bases {
-        cells.extend(renderer.spawn_frame(commands, def, frame, base));
-    }
-    cells
-}
-
-/// Advance every live animation one frame per timer tick: despawn the old
-/// frame's cells, then draw the next frame and fire its timings, or despawn the
-/// animation once its last frame has played.
-fn step_animations(
-    time: Res<Time>,
-    mut commands: Commands,
-    mut renderer: CellRenderer,
-    library: Res<AnimationLibrary>,
-    mut audio: MessageWriter<AudioRequest>,
-    mut battler_flash: MessageWriter<BattlerFlash>,
-    mut animations: Query<(Entity, &mut LiveAnimation)>,
-) {
-    for (entity, mut anim) in &mut animations {
-        if !anim.timer.tick(time.delta()).just_finished() {
-            continue;
-        }
-        for cell in anim.cells.drain(..) {
-            commands.entity(cell).despawn();
-        }
-        let def = &library.0[anim.index];
-        match next_frame(anim.frame, def.frames.len()) {
-            Some(frame) => {
-                anim.frame = frame;
-                anim.cells =
-                    spawn_cells_at(&mut commands, &mut renderer, def, frame, &anim.draw_anchors);
-                fire_timings(
-                    &mut commands,
-                    &mut audio,
-                    &mut battler_flash,
-                    def,
-                    frame,
-                    &anim.flash_anchors,
-                );
-            }
-            None => commands.entity(entity).despawn(),
-        }
-    }
-}
-
-/// Keep [`ActiveAnimations`] in step with the live [`LiveAnimation`] count, so the
-/// battle resolver can tell whether a strike/cast animation is still playing. A
-/// just-finished animation's despawn applies a frame later, so the count trails
-/// its end by a frame — harmless for the hold, which only needs "has it gone".
-fn track_active_animations(
-    animations: Query<(), With<LiveAnimation>>,
-    mut active: ResMut<ActiveAnimations>,
-) {
-    let count = animations.iter().count();
-    if active.0 != count {
-        active.0 = count;
-    }
-}
-
 /// Fire every timing that lands on `frame` (0-based; timings store 1-based frame
 /// numbers): emit its sound effect **once** for the whole cast, then its flash —
 /// a single full-screen quad for a screen flash, or one target tint per anchor.
@@ -370,10 +244,13 @@ fn fire_timings(
     def: &AnimationDef,
     frame: usize,
     flash_anchors: &[Vec2],
+    flash_stamp: Option<FlashStamp>,
 ) {
     for timing in def.timings.iter().filter(|t| t.frame as usize == frame + 1) {
         emit_sound(audio, timing);
-        emit_flash(commands, battler_flash, timing, flash_anchors);
+        if let Some(stamp) = flash_stamp {
+            emit_flash(commands, battler_flash, timing, flash_anchors, stamp);
+        }
     }
 }
 
@@ -400,6 +277,7 @@ fn emit_flash(
     battler_flash: &mut MessageWriter<BattlerFlash>,
     timing: &AnimationTimingDef,
     flash_anchors: &[Vec2],
+    stamp: FlashStamp,
 ) {
     let rgb = [
         flash_channel(timing.flash_red),
@@ -408,19 +286,24 @@ fn emit_flash(
     ];
     let power = timing.flash_power;
     match timing.flash_scope {
-        FLASH_SCOPE_SCREEN => spawn_screen_flash(commands, rgb, power),
+        FLASH_SCOPE_SCREEN => spawn_screen_flash(commands, rgb, power, stamp),
         FLASH_SCOPE_TARGET => {
             for &pos in flash_anchors {
-                battler_flash.write(BattlerFlash { pos, rgb, power });
+                battler_flash.write(BattlerFlash {
+                    pos,
+                    rgb,
+                    power,
+                    age: stamp.age,
+                });
             }
         }
         _ => {}
     }
 }
 
-/// An RM2000 flash channel (0..=31) as a 0..1 component.
-fn flash_channel(value: u32) -> f32 {
-    (value as f32 / 31.0).clamp(0.0, 1.0)
+/// RPG_RT expands each 5-bit channel by shifting, not by normalizing to 255.
+fn flash_channel(value: u32) -> u8 {
+    (value.min(31) * 8) as u8
 }
 
 /// The RM2000 screen-space y-offset (down positive) the [`AnimationDef::position`]
@@ -458,6 +341,7 @@ fn debug_preview(
             }],
             screen_center: MAP_SCREEN_CENTER,
             global: false,
+            sound_only: false,
         });
     }
 }
@@ -500,6 +384,7 @@ fn resolve_map_animation(
             }],
             screen_center: MAP_SCREEN_CENTER,
             global: request.global,
+            sound_only: false,
         });
     }
 }
@@ -517,3 +402,6 @@ fn target_screen_offset(target: Vec2, camera: Vec2) -> Vec2 {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod playback_tests;

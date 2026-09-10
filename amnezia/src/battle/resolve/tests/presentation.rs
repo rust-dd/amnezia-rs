@@ -78,6 +78,7 @@ fn new_round_clears_the_pending_animation_queue() {
     battle.pending_anims.push(PendingAnim {
         anim_id: 5,
         targets: vec![(1.0, 2.0)],
+        sound_only: false,
     });
     battle.new_round();
     assert!(battle.pending_anims.is_empty());
@@ -125,7 +126,7 @@ fn an_all_enemy_skill_queues_one_animation_over_every_living_foe() {
 }
 
 #[test]
-fn an_all_ally_heal_queues_one_animation_per_living_member_at_the_party_area() {
+fn an_all_ally_heal_queues_one_sound_timeline_for_its_living_targets() {
     let mut battle = build_party2();
     let mut s = heal_skill(2, 30);
     s.scope = 4;
@@ -138,11 +139,12 @@ fn an_all_ally_heal_queues_one_animation_per_living_member_at_the_party_area() {
         .filter(|a| a.anim_id == 5)
         .collect();
     assert_eq!(heals.len(), 1, "one animation for the multi-target heal");
+    assert!(heals[0].sound_only);
     let slots = &heals[0].targets;
     assert_eq!(slots.len(), 2, "one target per living ally");
     assert!(
         slots.iter().all(|&(_, y)| (y - 80.0).abs() < 1e-6),
-        "each plays at the party-area y"
+        "each target retains its internal party anchor"
     );
     assert!(
         (slots[0].0 - slots[1].0).abs() > 1e-6,

@@ -117,11 +117,9 @@ fn step(
             .find(|(battler, _)| battler.base.distance_squared(message.pos) < FLASH_MATCH_EPS)
         {
             effects.flash = Some(Flash::Animation {
-                rgb: message
-                    .rgb
-                    .map(|value| (value.clamp(0.0, 1.0) * 31.0).round() as u8 * 8),
+                rgb: message.rgb,
                 power: message.power,
-                age: 0,
+                age: message.age,
             });
         }
     }

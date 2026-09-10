@@ -47,7 +47,7 @@ pub(super) fn register(app: &mut App) {
         .add_systems(Startup, setup_mesh);
 }
 
-fn setup_mesh(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
+pub(super) fn setup_mesh(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     commands.insert_resource(CellMesh(meshes.add(Rectangle::new(1.0, 1.0))));
 }
 

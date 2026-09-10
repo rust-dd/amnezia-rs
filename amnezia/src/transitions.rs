@@ -28,10 +28,6 @@ impl TransitionPause<'_> {
     }
 }
 
-pub(crate) fn scene_running(pause: TransitionPause) -> bool {
-    !pause.paused()
-}
-
 #[derive(Resource, Default)]
 pub(crate) struct Transition {
     effect: Option<Effect>,

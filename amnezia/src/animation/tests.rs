@@ -27,6 +27,7 @@ fn a_screen_scope_flash_spawns_a_fullscreen_quad_and_no_battler_flash() {
                 &mut bf,
                 &flash_timing(2),
                 &[Vec2::new(16.0, -24.0)],
+                FlashStamp::default(),
             );
         },
     );
@@ -53,6 +54,7 @@ fn a_screen_flash_spawns_one_quad_even_with_many_target_anchors() {
                 &mut bf,
                 &flash_timing(2),
                 &[Vec2::new(-60.0, -20.0), Vec2::new(40.0, -20.0)],
+                FlashStamp::default(),
             );
         },
     );
@@ -74,6 +76,7 @@ fn a_target_scope_flash_publishes_a_battler_flash_not_a_box() {
                 &mut bf,
                 &flash_timing(1),
                 &[Vec2::new(16.0, -24.0)],
+                FlashStamp::default(),
             );
         },
     );
@@ -100,6 +103,7 @@ fn a_target_flash_fires_once_per_anchor() {
                 &mut bf,
                 &flash_timing(1),
                 &[Vec2::new(-60.0, -20.0), Vec2::new(40.0, -20.0)],
+                FlashStamp::default(),
             );
         },
     );
@@ -115,10 +119,10 @@ fn a_target_flash_fires_once_per_anchor() {
 
 #[test]
 fn flash_channel_normalises_and_clamps_the_0_31_scale() {
-    assert_eq!(flash_channel(0), 0.0);
-    assert_eq!(flash_channel(31), 1.0);
-    assert_eq!(flash_channel(62), 1.0);
-    assert!((flash_channel(15) - 15.0 / 31.0).abs() < 1e-6);
+    assert_eq!(flash_channel(0), 0);
+    assert_eq!(flash_channel(31), 248);
+    assert_eq!(flash_channel(62), 248);
+    assert_eq!(flash_channel(15), 120);
 }
 
 #[test]
@@ -216,7 +220,7 @@ fn anim_def(id: u32, scope: u32, position: u32, timings: Vec<AnimationTimingDef>
     }
 }
 
-fn se_timing(name: &str) -> AnimationTimingDef {
+pub(super) fn se_timing(name: &str) -> AnimationTimingDef {
     AnimationTimingDef {
         frame: 1,
         se_name: name.to_string(),
@@ -318,7 +322,15 @@ fn a_multi_target_cast_plays_its_sound_effect_once() {
         move |mut commands: Commands,
               mut audio: MessageWriter<AudioRequest>,
               mut bf: MessageWriter<BattlerFlash>| {
-            fire_timings(&mut commands, &mut audio, &mut bf, &def, 0, &anchors);
+            fire_timings(
+                &mut commands,
+                &mut audio,
+                &mut bf,
+                &def,
+                0,
+                &anchors,
+                Some(FlashStamp::default()),
+            );
         },
     );
     app.update();

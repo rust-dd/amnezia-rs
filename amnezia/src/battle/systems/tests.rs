@@ -9,6 +9,24 @@ mod drops;
 mod timer;
 mod transitions;
 
+#[test]
+fn draining_an_animation_acknowledges_even_an_effect_shorter_than_a_render_update() {
+    use bevy::ecs::system::RunSystemOnce;
+    let mut world = World::new();
+    let mut battle = Battle::default();
+    battle.begin_anim_hold();
+    battle.push_anim(1, vec![(0.0, 0.0)]);
+    world.insert_resource(battle);
+    world.init_resource::<Messages<PlayAnimation>>();
+    world.run_system_once(drain_pending_anims).unwrap();
+    let mut battle = world.resource_mut::<Battle>();
+    assert!(battle.pending_anims.is_empty());
+    assert!(
+        !battle.tick_anim_hold(false),
+        "no render-count-dependent grace delay"
+    );
+}
+
 #[derive(Resource, Default)]
 struct AudioLog(Vec<AudioRequest>);
 

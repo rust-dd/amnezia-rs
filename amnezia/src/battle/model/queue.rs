@@ -113,6 +113,7 @@ pub(in crate::battle) enum Step {
 pub(in crate::battle) struct PendingAnim {
     pub anim_id: u32,
     pub targets: Vec<(f32, f32)>,
+    pub sound_only: bool,
 }
 
 /// Hit classification for diagnostic traces and resolution regressions.

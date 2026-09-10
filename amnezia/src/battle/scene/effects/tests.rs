@@ -150,16 +150,18 @@ fn animation_flashes_reach_only_the_matching_enemy_with_original_eight_bit_stren
     let (mut app, enemies) = fixture();
     app.world_mut().write_message(BattlerFlash {
         pos: Vec2::new(0.0, 80.0),
-        rgb: [1.0; 3],
+        rgb: [248; 3],
         power: 31,
+        age: 0,
     });
     frame(&mut app, 1);
     assert_eq!(alpha(&app, enemies[0]), 0);
     let base = app.world().get::<Battler>(enemies[0]).unwrap().base;
     app.world_mut().write_message(BattlerFlash {
         pos: base,
-        rgb: [1.0, 0.6, 0.3],
+        rgb: [248, 152, 72],
         power: 31,
+        age: 0,
     });
     frame(&mut app, 2);
     assert_eq!(

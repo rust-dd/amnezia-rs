@@ -1,6 +1,7 @@
 use super::*;
 use crate::battle::model::testkit::{build_1v2, build_party2};
 
+mod animation_mode;
 mod attributes;
 mod criticals;
 mod drops;

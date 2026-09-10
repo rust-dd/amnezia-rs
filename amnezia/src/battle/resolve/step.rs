@@ -228,7 +228,7 @@ impl Battle {
                     if !self.pay_skill(Source::Party(pi), &skill) {
                         return;
                     }
-                    self.push_anim(skill.animation_id, anchors);
+                    self.push_skill_anim(Source::Party(pi), &skill, target);
                     self.steps.push_back(Step::CastSkill {
                         pi,
                         skill_id,
@@ -283,7 +283,7 @@ impl Battle {
                     if !self.pay_skill(Source::Enemy(ei), &skill) {
                         return;
                     }
-                    self.push_anim(skill.animation_id, anchors);
+                    self.push_skill_anim(Source::Enemy(ei), &skill, target);
                     self.steps.push_back(Step::EnemyCast {
                         ei,
                         skill_id,

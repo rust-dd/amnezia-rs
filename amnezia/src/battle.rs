@@ -146,6 +146,7 @@ impl Plugin for BattlePlugin {
                         .run_if(hud::commands_ready),
                     events::drive
                         .run_if(flow::playing)
+                        .after(crate::animation::AnimationSet::Advance)
                         .after(systems::start_on_request)
                         .after(crate::dialogue::DialogueInput)
                         .before(input::command_input)
@@ -161,7 +162,9 @@ impl Plugin for BattlePlugin {
                         .before(systems::resolve_tick)
                         .before(systems::apply_victory_rewards)
                         .before(systems::outcome_input),
-                    systems::resolve_tick.run_if(flow::playing),
+                    systems::resolve_tick
+                        .run_if(flow::playing)
+                        .after(crate::animation::AnimationSet::Advance),
                     events::sync_switches
                         .after(systems::resolve_tick)
                         .before(systems::outcome_input),
@@ -172,7 +175,8 @@ impl Plugin for BattlePlugin {
                     systems::outcome_input.run_if(flow::playing),
                     systems::drain_pending_anims
                         .run_if(flow::playing)
-                        .after(systems::resolve_tick),
+                        .after(systems::resolve_tick)
+                        .before(crate::animation::AnimationSet::Start),
                     systems::drain_pending_se
                         .run_if(flow::playing)
                         .after(systems::resolve_tick),

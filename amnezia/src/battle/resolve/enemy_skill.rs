@@ -13,8 +13,7 @@ impl Battle {
             if !self.pay_skill(Source::Enemy(ei), &skill) {
                 return None;
             }
-            let anchors = self.enemy_skill_anim_anchors(ei, &skill, target);
-            self.push_anim(skill.animation_id, anchors);
+            self.push_skill_anim(Source::Enemy(ei), &skill, target);
         }
         let targets = self.enemy_skill_targets(ei, &skill, target);
         let mut targets = targets.into_iter();

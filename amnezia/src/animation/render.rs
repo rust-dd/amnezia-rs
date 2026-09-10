@@ -29,14 +29,19 @@ pub fn overlay_translation(pos: Vec2, z: f32) -> Vec3 {
     Vec3::new(pos.x, -pos.y, z)
 }
 
-/// A flash quad following the RM2000 stepped envelope: `rgb` its colour (0..1),
-/// `power` the RM2000 flash strength (`0..=31`), and `elapsed` the time since it
-/// fired. Its alpha is [`flash_envelope`] of those, not a linear fade.
+#[derive(Clone, Copy, Default)]
+pub(super) struct FlashStamp {
+    pub age: u32,
+    pub frame: u32,
+}
+
+/// Screen flash age is measured in logical frames, including skipped render frames.
 #[derive(Component)]
 pub(super) struct FlashQuad {
-    pub elapsed: f32,
+    elapsed: u32,
+    last: u32,
     pub power: u32,
-    pub rgb: [f32; 3],
+    rgb: [u8; 3],
 }
 
 /// The last 60 fps game-frame a flash is lit: EasyRPG shows it while
@@ -56,21 +61,9 @@ pub(crate) fn flash_power_level(frames: u32, power: u32) -> u32 {
     (f * power as i32 / 6).clamp(0, 31) as u32
 }
 
-/// The flash tint strength (0..1) at `elapsed` seconds into a flash of RM2000
-/// strength `power` (`0..=31`), or `None` once the ~11-game-frame window has
-/// passed (the flash is spent). Shared by the screen-flash quad and the battler
-/// target tint so both follow the same stepped [`flash_power_level`] envelope; the
-/// `0..=31` level normalises by 31 onto the 0..1 scale the sprite alpha and
-/// `blend` use.
-pub fn flash_envelope(elapsed: f32, power: u32) -> Option<f32> {
-    let frame = (elapsed / super::GAME_FRAME_SECS) as u32;
-    (frame <= FLASH_LAST_FRAME).then(|| flash_power_level(frame, power) as f32 / 31.0)
-}
-
-/// The frame after `frame`, or `None` once the last frame has played.
-pub(super) fn next_frame(frame: usize, len: usize) -> Option<usize> {
-    let next = frame + 1;
-    (next < len).then_some(next)
+/// The original 5-bit strength expands to a byte with ×8, including at its peak.
+pub fn flash_envelope(frame: u32, power: u32) -> Option<f32> {
+    (frame <= FLASH_LAST_FRAME).then(|| (flash_power_level(frame, power) * 8) as f32 / 255.0)
 }
 
 /// The nine draw points of a `global` map animation (RM2000 opcode 11210's global
@@ -92,44 +85,66 @@ pub(super) fn global_anchors(center: Vec2) -> Vec<Vec2> {
     anchors
 }
 
-/// Spawn a full-screen screen-flash quad of colour `rgb` and RM2000 strength
-/// `power` (`0..=31`), whose alpha follows the stepped [`flash_envelope`]. It
-/// covers the whole 320×240 overlay at [`SCREEN_FLASH_Z`]; RM2000's animation
-/// screen flash is a full-screen tint, not a box on the target.
-pub(super) fn spawn_screen_flash(commands: &mut Commands, rgb: [f32; 3], power: u32) {
-    let alpha = flash_envelope(0.0, power).unwrap_or(0.0);
-    commands.spawn((
-        Sprite::from_color(
-            Color::srgba(rgb[0], rgb[1], rgb[2], alpha),
-            Vec2::new(SCREEN_W, SCREEN_H),
-        ),
-        Transform::from_translation(overlay_translation(Vec2::ZERO, SCREEN_FLASH_Z)),
-        overlay_layer(),
-        FlashQuad {
-            elapsed: 0.0,
-            power,
-            rgb,
-        },
-    ));
+pub(super) fn spawn_screen_flash(
+    commands: &mut Commands,
+    rgb: [u8; 3],
+    power: u32,
+    stamp: FlashStamp,
+) {
+    // Game_Screen has one flash channel; later timings replace it, never stack.
+    commands.queue(move |world: &mut World| {
+        let existing = world
+            .query_filtered::<Entity, With<FlashQuad>>()
+            .iter(world)
+            .next();
+        let Some(alpha) = flash_envelope(stamp.age, power) else {
+            if let Some(entity) = existing {
+                world.despawn(entity);
+            }
+            return;
+        };
+        let components = (
+            Sprite::from_color(flash_color(rgb, alpha), Vec2::new(SCREEN_W, SCREEN_H)),
+            Transform::from_translation(overlay_translation(Vec2::ZERO, SCREEN_FLASH_Z)),
+            overlay_layer(),
+            FlashQuad {
+                elapsed: stamp.age,
+                last: stamp.frame,
+                power,
+                rgb,
+            },
+        );
+        if let Some(entity) = existing {
+            world.entity_mut(entity).insert(components);
+        } else {
+            world.spawn(components);
+        }
+    });
+}
+
+fn flash_color(rgb: [u8; 3], alpha: f32) -> Color {
+    let [r, g, b] = rgb.map(|v| v as f32 / 255.0);
+    Color::srgba(r, g, b, alpha)
 }
 
 /// Step each live flash quad's alpha along the RM2000 [`flash_envelope`],
 /// despawning it once the ~11-game-frame window has passed.
 pub(super) fn fade_flashes(
     transition: crate::transitions::TransitionPause,
-    time: Res<Time>,
+    frames: Res<crate::timing::GameFrames>,
     mut commands: Commands,
     mut flashes: Query<(Entity, &mut FlashQuad, &mut Sprite)>,
 ) {
-    if transition.paused() {
-        return;
-    }
-    let dt = time.delta_secs();
     for (entity, mut flash, mut sprite) in &mut flashes {
-        flash.elapsed += dt;
+        let delta = frames.frame.wrapping_sub(flash.last);
+        flash.last = frames.frame;
+        if transition.paused() {
+            continue;
+        }
+        flash.elapsed = flash.elapsed.saturating_add(delta);
         match flash_envelope(flash.elapsed, flash.power) {
             Some(alpha) => {
-                sprite.color = Color::srgba(flash.rgb[0], flash.rgb[1], flash.rgb[2], alpha);
+                sprite.color = flash_color(flash.rgb, alpha);
             }
             None => {
                 commands.entity(entity).despawn();
@@ -157,30 +172,20 @@ mod tests {
     }
 
     #[test]
-    fn next_frame_advances_then_finishes() {
-        assert_eq!(next_frame(0, 58), Some(1));
-        assert_eq!(next_frame(56, 58), Some(57));
-        assert_eq!(next_frame(57, 58), None);
-        assert_eq!(next_frame(0, 1), None);
-        assert_eq!(next_frame(0, 0), None);
-    }
-
-    #[test]
     fn spawn_screen_flash_makes_a_fullscreen_overlay_quad() {
         use bevy::ecs::world::CommandQueue;
         let mut world = World::new();
         let mut queue = CommandQueue::default();
         {
             let mut commands = Commands::new(&mut queue, &world);
-            spawn_screen_flash(&mut commands, [1.0, 1.0, 1.0], 31);
+            spawn_screen_flash(&mut commands, [248; 3], 31, FlashStamp::default());
         }
         queue.apply(&mut world);
         let mut quads = world.query::<(&FlashQuad, &Sprite)>();
         let (flash, sprite) = quads.single(&world).expect("a screen flash quad");
         assert_eq!(sprite.custom_size, Some(Vec2::new(SCREEN_W, SCREEN_H)));
         assert_eq!(flash.power, 31);
-        // A full-strength flash starts at its plateau (level 31 → alpha 1.0).
-        assert!((sprite.color.alpha() - 1.0).abs() < 1e-6);
+        assert_eq!(sprite.color.alpha(), 248.0 / 255.0);
     }
 
     #[test]
@@ -206,13 +211,115 @@ mod tests {
 
     #[test]
     fn flash_envelope_holds_then_steps_then_ends() {
-        // Frame 0 (t=0) is the plateau; the envelope normalises the level by 31.
-        let gf = super::super::GAME_FRAME_SECS;
-        assert_eq!(flash_envelope(0.0, 31), Some(1.0));
-        // Frame 3 has stepped down to level 25.
-        assert_eq!(flash_envelope(3.5 * gf, 31), Some(25.0 / 31.0));
-        // Frame 10 is the last lit frame (level 10); frame 11 is spent.
-        assert_eq!(flash_envelope(10.5 * gf, 31), Some(10.0 / 31.0));
-        assert_eq!(flash_envelope(11.5 * gf, 31), None);
+        assert_eq!(flash_envelope(0, 31), Some(248.0 / 255.0));
+        assert_eq!(flash_envelope(3, 31), Some(200.0 / 255.0));
+        assert_eq!(flash_envelope(10, 31), Some(80.0 / 255.0));
+        assert_eq!(flash_envelope(11, 31), None);
+    }
+
+    #[test]
+    fn subsequent_screen_flashes_replace_the_previous_color_without_stacking() {
+        use bevy::ecs::system::RunSystemOnce;
+        let mut world = World::new();
+        world
+            .run_system_once(|mut commands: Commands| {
+                spawn_screen_flash(&mut commands, [248; 3], 31, FlashStamp::default());
+                spawn_screen_flash(
+                    &mut commands,
+                    [248, 0, 0],
+                    18,
+                    FlashStamp { age: 3, frame: 4 },
+                );
+            })
+            .unwrap();
+        let (flash, sprite) = world
+            .query::<(&FlashQuad, &Sprite)>()
+            .single(&world)
+            .unwrap();
+        assert_eq!(flash.elapsed, 3);
+        assert_eq!(
+            sprite.color,
+            Color::srgba(248.0 / 255.0, 0.0, 0.0, 120.0 / 255.0)
+        );
+        world
+            .run_system_once(|mut commands: Commands| {
+                spawn_screen_flash(
+                    &mut commands,
+                    [0, 248, 0],
+                    31,
+                    FlashStamp { age: 11, frame: 20 },
+                );
+            })
+            .unwrap();
+        assert_eq!(world.query::<&FlashQuad>().iter(&world).count(), 0);
+    }
+
+    #[test]
+    fn screen_flash_pauses_and_counts_wrapped_logical_frames() {
+        use crate::timing::GameFrames;
+        use bevy::ecs::system::RunSystemOnce;
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .init_resource::<GameFrames>()
+            .add_systems(Update, fade_flashes);
+        app.world_mut().resource_mut::<GameFrames>().frame = u32::MAX - 1;
+        app.world_mut()
+            .run_system_once(|mut commands: Commands| {
+                spawn_screen_flash(
+                    &mut commands,
+                    [248; 3],
+                    31,
+                    FlashStamp {
+                        age: 0,
+                        frame: u32::MAX - 1,
+                    },
+                );
+            })
+            .unwrap();
+        app.update();
+        app.world_mut().resource_mut::<GameFrames>().frame = 1;
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&FlashQuad>()
+                .single(app.world())
+                .unwrap()
+                .elapsed,
+            3
+        );
+        let mut transition = crate::transitions::Transition::default();
+        transition.start(crate::transitions::Kind::Fade, true, 0, IVec2::ZERO);
+        app.insert_resource(transition);
+        app.world_mut().resource_mut::<GameFrames>().frame = 80;
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&FlashQuad>()
+                .single(app.world())
+                .unwrap()
+                .elapsed,
+            3
+        );
+        app.world_mut()
+            .remove_resource::<crate::transitions::Transition>();
+        app.world_mut().resource_mut::<GameFrames>().frame = 83;
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&FlashQuad>()
+                .single(app.world())
+                .unwrap()
+                .elapsed,
+            6
+        );
+        app.world_mut().resource_mut::<GameFrames>().frame = 91;
+        app.update();
+        assert_eq!(
+            app.world_mut()
+                .query::<&FlashQuad>()
+                .iter(app.world())
+                .count(),
+            0
+        );
     }
 }

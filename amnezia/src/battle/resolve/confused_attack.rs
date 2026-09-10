@@ -49,7 +49,11 @@ impl Battle {
             None
         };
         if animation != 0 {
-            self.push_anim(animation, vec![self.battler_pos(target)]);
+            self.push_anim_mode(
+                animation,
+                vec![self.battler_pos(target)],
+                matches!(target, Source::Party(_)),
+            );
             self.steps.push_back(Step::AllyStrikeImpact {
                 source,
                 target,

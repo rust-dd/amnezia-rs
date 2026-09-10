@@ -44,12 +44,10 @@ pub(in crate::battle::resolve) use super::model::{
 };
 pub(in crate::battle::resolve) use amnezia_data::SkillDef;
 
-/// RM2000 front-view draws no party sprites, so a hit a member takes animates at
-/// the bottom-centre party area — just below the screen centre (y grows down).
+/// Internal report anchors for undrawn party members; these are not sprite positions.
 const PARTY_ANIM_Y: f32 = 80.0;
 
-/// Horizontal spacing between adjacent members' incoming-hit animations, so a
-/// multi-member party doesn't stack every hit at the exact centre.
+/// Keep each undrawn party member's diagnostic anchor distinct.
 const PARTY_ANIM_SPREAD: f32 = 16.0;
 
 /// Seconds a slain foe blinks and fades out before it is cleared (RM2000

@@ -11,14 +11,44 @@ impl Battle {
     /// is skipped, so an attacker with neither a weapon nor an unarmed animation
     /// plays nothing rather than a stray effect.
     pub(in crate::battle) fn push_anim(&mut self, anim_id: u32, targets: Vec<(f32, f32)>) {
+        self.push_anim_mode(anim_id, targets, false);
+    }
+
+    pub(in crate::battle::resolve) fn push_anim_mode(
+        &mut self,
+        anim_id: u32,
+        targets: Vec<(f32, f32)>,
+        sound_only: bool,
+    ) {
         if anim_id != 0 && !targets.is_empty() {
-            self.pending_anims.push(PendingAnim { anim_id, targets });
+            self.pending_anims.push(PendingAnim {
+                anim_id,
+                targets,
+                sound_only,
+            });
         }
     }
 
-    /// The horizontal screen offset for member `ti`'s incoming-hit animation:
-    /// centred on 0 and fanned out a little by member index (see
-    /// [`PARTY_ANIM_SPREAD`]), since the party isn't drawn in front view.
+    pub(in crate::battle::resolve) fn push_skill_anim(
+        &mut self,
+        source: Source,
+        skill: &SkillDef,
+        target: usize,
+    ) {
+        let (anchors, sound_only) = match source {
+            Source::Party(i) => (
+                self.skill_anim_anchors(i, skill, target),
+                matches!(skill.scope, 2..=4),
+            ),
+            Source::Enemy(i) => (
+                self.enemy_skill_anim_anchors(i, skill, target),
+                !matches!(skill.scope, 2..=4),
+            ),
+        };
+        self.push_anim_mode(skill.animation_id, anchors, sound_only);
+    }
+
+    /// Stable diagnostic anchor for an undrawn party slot.
     pub(in crate::battle::resolve) fn party_anim_x(&self, ti: usize) -> f32 {
         let count = self.members.len().max(1) as f32;
         (ti as f32 - (count - 1.0) / 2.0) * PARTY_ANIM_SPREAD

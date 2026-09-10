@@ -19,8 +19,7 @@ impl Battle {
             if !self.pay_skill(Source::Party(pi), &skill) {
                 return None;
             }
-            let anchors = self.skill_anim_anchors(pi, &skill, target);
-            self.push_anim(skill.animation_id, anchors);
+            self.push_skill_anim(Source::Party(pi), &skill, target);
         }
         let mut lines: Vec<String> = Vec::new();
         match skill.scope {

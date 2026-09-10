@@ -129,9 +129,8 @@ pub struct Battle {
     /// then the damage). Set when the animation is queued; `battle::resolve_tick`
     /// drives it down through [`Battle::tick_anim_hold`].
     pub(in crate::battle) anim_hold: bool,
-    /// Whether the held animation has been observed live at least once, so the
-    /// hold releases on its disappearance rather than the one-tick lag between
-    /// queuing the animation and its `LiveAnimation` overlay appearing.
+    /// The renderer acknowledged the request or reported a live animation.
+    /// Acknowledgement also covers effects that finish within one low-FPS update.
     pub(in crate::battle) anim_seen: bool,
     /// Frames the current hold has waited without the animation ever appearing,
     /// bounding the wait for an unknown/absent animation id (see

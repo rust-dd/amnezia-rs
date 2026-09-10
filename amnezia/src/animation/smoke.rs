@@ -9,6 +9,8 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+mod timing;
+
 const LABELS: [&str; 8] = [
     "animation-gray-23",
     "animation-gray-46",
@@ -37,10 +39,13 @@ pub(crate) struct Snapshot {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if frame >= 1180 {
+        return timing::drive(world, frame);
+    }
     if frame == 260 {
         world.spawn((
             Sprite::from_color(Color::BLACK, Vec2::new(320.0, 240.0)),
-            Transform::from_translation(overlay_translation(Vec2::ZERO, 500.0)),
+            Transform::from_translation(overlay_translation(Vec2::ZERO, 0.0)),
             overlay_layer(),
         ));
     }
@@ -120,6 +125,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 }
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
+    if let Some(pixels) = timing::pixels(world, label) {
+        return Some(checked_snapshot(world, label, pixels));
+    }
     if !LABELS.contains(&label) {
         return None;
     }
@@ -174,14 +182,18 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             pixels.push(color);
         }
     }
+    Some(checked_snapshot(world, label, pixels))
+}
+
+fn checked_snapshot(world: &mut World, label: &str, pixels: Vec<[u8; 3]>) -> Snapshot {
     let complete = Arc::new(AtomicBool::new(false));
     world.init_resource::<Checks>();
     world.resource_mut::<Checks>().0.push(complete.clone());
-    Some(Snapshot {
+    Snapshot {
         pixels,
         complete,
         label: label.into(),
-    })
+    }
 }
 
 impl Snapshot {
@@ -207,15 +219,12 @@ impl Snapshot {
             );
         }
         self.complete.store(true, Ordering::SeqCst);
-        info!(
-            "{}: 76800 animation pixels match original tone, opacity and sampling",
-            self.label
-        );
+        info!("{}: 76800 animation reference pixels verified", self.label);
     }
 }
 
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!(checks.0.len(), LABELS.len());
+    assert_eq!(checks.0.len(), LABELS.len() + timing::COUNT);
     assert!(checks.0.iter().all(|done| done.load(Ordering::SeqCst)));
 }
