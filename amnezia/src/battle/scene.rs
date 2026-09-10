@@ -10,6 +10,7 @@ pub(crate) use effects::EffectsSet;
 use super::model::{Battle, Dying, Phase};
 use crate::animation::{overlay_layer, overlay_translation};
 use crate::assets::resolve_png;
+use crate::legacy_colors::{hue::HueShift, tone::SpriteTone};
 use bevy::prelude::*;
 
 /// World z of the full-screen backdrop on the overlay: below the battlers.
@@ -29,7 +30,7 @@ const FLASH_MATCH_EPS: f32 = 0.5;
 /// `GetAnimationCellHeight() / 2` = 48 (`battle_animation.cpp`).
 const FALLBACK_BATTLER_HEIGHT: f32 = 48.0;
 
-/// A backdrop, battler, or floating-number sprite belonging to the live fight;
+/// A backdrop or battler sprite belonging to the live fight;
 /// despawned together when the fight ends (or a new one starts).
 #[derive(Component)]
 pub(super) struct SceneEntity;
@@ -60,6 +61,7 @@ fn battler_base(x: u32, y: u32) -> Vec2 {
 fn sync_scene(
     mut commands: Commands,
     battle: Res<Battle>,
+    tint: Option<Res<crate::screenfx::TintState>>,
     asset_server: Res<AssetServer>,
     scene: Query<Entity, With<SceneEntity>>,
     mut synced: Local<u64>,
@@ -74,9 +76,11 @@ fn sync_scene(
     if battle.phase == Phase::Inactive {
         return;
     }
+    let tone = SpriteTone(tint.as_ref().map_or([100.0; 4], |tint| tint.tone()));
+    let image = asset_server.load(resolve_png("Backdrop", &battle.background));
     commands.spawn((
         Sprite {
-            image: asset_server.load(resolve_png("Backdrop", &battle.background)),
+            image: image.clone(),
             custom_size: Some(Vec2::new(320.0, 240.0)),
             image_mode: SpriteImageMode::Tiled {
                 tile_x: true,
@@ -88,6 +92,11 @@ fn sync_scene(
         Transform::from_translation(overlay_translation(Vec2::ZERO, BACKDROP_Z)),
         overlay_layer(),
         SceneEntity,
+        HueShift {
+            original: image,
+            degrees: 0,
+        },
+        tone,
     ));
     for (index, foe) in battle.enemies.iter().enumerate() {
         let base = battler_base(foe.x, foe.y);
@@ -101,10 +110,11 @@ fn sync_scene(
             Transform::from_translation(overlay_translation(base, BATTLER_Z + index as f32 * 0.1)),
             overlay_layer(),
             SceneEntity,
-            crate::legacy_colors::hue::HueShift {
+            HueShift {
                 original: image,
                 degrees: foe.battler_hue,
             },
+            tone,
             Battler {
                 index,
                 base,
@@ -161,6 +171,18 @@ fn battler_look(alive: bool, dying: Option<&Dying>) -> (Color, f32) {
     }
 }
 
+fn sync_tone(
+    tint: Option<Res<crate::screenfx::TintState>>,
+    mut sprites: Query<&mut SpriteTone, With<SceneEntity>>,
+) {
+    let Some(tint) = tint else {
+        return;
+    };
+    for mut tone in &mut sprites {
+        tone.set_if_neq(SpriteTone(tint.tone()));
+    }
+}
+
 pub fn register(app: &mut App) {
     effects::register(app);
     app.add_systems(
@@ -169,5 +191,9 @@ pub fn register(app: &mut App) {
             sync_scene.after(super::flow::drive),
             measure_battlers.after(sync_scene),
         ),
+    )
+    .add_systems(
+        PostUpdate,
+        sync_tone.before(crate::legacy_colors::hue::HueSet),
     );
 }

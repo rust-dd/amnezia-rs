@@ -1,5 +1,15 @@
 use bevy::prelude::*;
 
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+#[require(super::raster::Rasterized)]
+pub(crate) struct SpriteTone(pub [f32; 4]);
+
+impl Default for SpriteTone {
+    fn default() -> Self {
+        Self([100.0; 4])
+    }
+}
+
 pub(crate) fn uniform(percent: [f32; 4]) -> Vec4 {
     Vec4::from_array(percent.map(|value| (value * 128.0 / 100.0).trunc().clamp(0.0, 255.0)))
 }
@@ -26,6 +36,9 @@ pub(crate) fn apply(source: [u8; 3], percent: [f32; 4]) -> [u8; 3] {
         }
     })
 }
+
+#[cfg(test)]
+mod sprites_tests;
 
 #[cfg(test)]
 mod tests {

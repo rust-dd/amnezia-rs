@@ -25,10 +25,12 @@ fn apply(
     mut sprites: Query<(
         &HueShift,
         &mut Sprite,
-        Option<(&super::flash::SpriteFlash, &mut super::flash::Rasterized)>,
+        Option<&super::flash::SpriteFlash>,
+        Option<&super::tone::SpriteTone>,
+        Option<&mut super::raster::Rasterized>,
     )>,
 ) {
-    for (shift, mut sprite, flash) in &mut sprites {
+    for (shift, mut sprite, flash, tone, rasterized) in &mut sprites {
         let key = (shift.original.id(), shift.degrees);
         let image = if shift.degrees == 0 {
             shift.original.clone()
@@ -51,8 +53,8 @@ fn apply(
             cache.0.insert(key, image.clone());
             image
         };
-        let image = if let Some((flash, mut rasterized)) = flash {
-            super::flash::render(&image, flash, &mut rasterized, &mut images)
+        let image = if let Some(mut rasterized) = rasterized {
+            super::raster::render(&image, flash, tone, &mut rasterized, &mut images)
         } else {
             image
         };

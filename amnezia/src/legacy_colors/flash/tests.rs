@@ -115,3 +115,40 @@ fn unloaded_flash_sources_do_not_allocate_or_recolor_other_sprites() {
         source
     );
 }
+
+#[test]
+fn effect_textures_never_overwrite_bevys_shared_default_image() {
+    let mut app = App::new();
+    app.init_resource::<Assets<Image>>();
+    hue::register(&mut app);
+    let default_image = Image::default();
+    let mut images = app.world_mut().resource_mut::<Assets<Image>>();
+    images
+        .insert(Handle::<Image>::default().id(), default_image.clone())
+        .unwrap();
+    let source = images.add(default_image.clone());
+    let entities = [[248, 0, 0, 192], [0, 248, 0, 96]].map(|color| {
+        app.world_mut()
+            .spawn((
+                Sprite::from_image(source.clone()),
+                HueShift {
+                    original: source.clone(),
+                    degrees: 0,
+                },
+                SpriteFlash(color),
+            ))
+            .id()
+    });
+    app.update();
+    let textures = entities.map(|entity| app.world().get::<Sprite>(entity).unwrap().image.clone());
+    assert_ne!(textures[0], Handle::<Image>::default());
+    assert_ne!(textures[1], Handle::<Image>::default());
+    assert_ne!(textures[0], textures[1]);
+    let images = app.world().resource::<Assets<Image>>();
+    assert_eq!(
+        images.get(&Handle::<Image>::default()).unwrap().data,
+        default_image.data
+    );
+    assert_eq!(images.get(&source).unwrap().data, default_image.data);
+    assert_eq!(images.len(), 4);
+}

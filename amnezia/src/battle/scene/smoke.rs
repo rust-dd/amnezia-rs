@@ -1,5 +1,5 @@
 use super::*;
-use crate::legacy_colors::{flash::SpriteFlash, hue::HueShift};
+use crate::legacy_colors::{flash::SpriteFlash, hue::HueShift, tone::SpriteTone};
 
 pub(crate) struct Snapshot(Vec<(u32, u32, [u8; 4])>);
 
@@ -15,13 +15,15 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             | "battle-hit-restored"
             | "battle-action-flash"
             | "battle-action-fade"
+            | "battle-tone"
+            | "battle-tone-light"
     ) {
         return None;
     }
     let mut enemies = world
-        .query::<(&Battler, &Sprite, &HueShift, &SpriteFlash)>()
+        .query::<(&Battler, &Sprite, &HueShift, &SpriteFlash, &SpriteTone)>()
         .iter(world)
-        .map(|(b, s, h, f)| {
+        .map(|(b, s, h, f, t)| {
             (
                 b.index,
                 b.base,
@@ -29,6 +31,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
                 h.degrees,
                 f.0,
                 s.color.alpha(),
+                t.0,
             )
         })
         .collect::<Vec<_>>();
@@ -49,17 +52,28 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             1.0
         }
     );
-    let backdrop = world
-        .query_filtered::<&Sprite, (With<SceneEntity>, Without<Battler>)>()
+    let (backdrop, tone) = world
+        .query_filtered::<(&HueShift, &SpriteTone), (With<SceneEntity>, Without<Battler>)>()
         .single(world)
-        .unwrap()
-        .image
-        .clone();
+        .map(|(hue, tone)| (hue.original.clone(), tone.0))
+        .unwrap();
+    assert_eq!(
+        tone,
+        match label {
+            "battle-tone" => [50.0, 100.0, 150.0, 0.0],
+            "battle-tone-light" => [200.0, 200.0, 200.0, 100.0],
+            _ => [100.0; 4],
+        }
+    );
     let images = world.resource::<Assets<Image>>();
     let backdrop = images.get(&backdrop).unwrap();
     assert_eq!(backdrop.size(), UVec2::new(320, 160));
     let mut expected = (0..320 * 160)
-        .map(|i| rgba(backdrop, i % 320, i / 320))
+        .map(|i| {
+            let pixel = rgba(backdrop, i % 320, i / 320);
+            let rgb = crate::legacy_colors::tone::apply([pixel[0], pixel[1], pixel[2]], tone);
+            [rgb[0], rgb[1], rgb[2], pixel[3]]
+        })
         .collect::<Vec<_>>();
     let mut sampled = vec![false; expected.len()];
     for y in 32..156 {
@@ -67,7 +81,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             sampled[y * 320 + x] = true;
         }
     }
-    for (_, base, source, hue, flash, opacity) in enemies {
+    for (_, base, source, hue, flash, opacity, tone) in enemies {
         let source = images.get(&source).unwrap();
         let left = base.x as i32 + 160 - source.width() as i32 / 2;
         let top = base.y as i32 + 120 - source.height() as i32 / 2;
@@ -86,6 +100,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
                 }
                 let mut rgb =
                     crate::legacy_colors::hue::rotate([pixel[0], pixel[1], pixel[2]], hue);
+                rgb = crate::legacy_colors::tone::apply(rgb, tone);
                 if flash[3] != 0 {
                     for (channel, overlay) in rgb.iter_mut().zip(flash) {
                         *channel = ((u32::from(*channel) * u32::from(255 - flash[3]) + 127) / 255

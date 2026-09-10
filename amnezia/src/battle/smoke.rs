@@ -64,6 +64,16 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
 pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     let impact = messages::drive(world, frame);
     status_colors(world, frame);
+    if let Some(tone) = match frame {
+        900 => Some([50.0, 100.0, 150.0, 0.0]),
+        920 => Some([200.0, 200.0, 200.0, 100.0]),
+        940 => Some([100.0; 4]),
+        _ => None,
+    } {
+        world
+            .resource_mut::<crate::screenfx::TintState>()
+            .set_tone(tone);
+    }
     if frame == 1040 {
         let mut battle = world.resource_mut::<Battle>();
         let foe = &battle.enemies[0];
@@ -128,6 +138,8 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         830 => Some("battle-items"),
         845 => Some("battle-item-target-overlay"),
         880 => Some("battle-item-target-return"),
+        910 => Some("battle-tone"),
+        930 => Some("battle-tone-light"),
         980 => Some("battle-target"),
         1010 => Some("battle-target-flash"),
         1018 => Some("battle-target-fade"),
@@ -217,9 +229,12 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
 pub(crate) fn verify_skin(image: &Image, label: &str) {
     let xs: &[u32] = match label {
         "battle-commands" | "battle-status-colors" => &[12, 120, 256],
-        "battle-skills" | "battle-skills-scrolled" | "battle-scroll-arrows" | "battle-items" => {
-            &[12, 150, 308]
-        }
+        "battle-skills"
+        | "battle-skills-scrolled"
+        | "battle-scroll-arrows"
+        | "battle-items"
+        | "battle-tone"
+        | "battle-tone-light" => &[12, 150, 308],
         "battle-target" | "battle-skill-target-overlay" | "battle-item-target-overlay" => {
             &[12, 140, 256]
         }

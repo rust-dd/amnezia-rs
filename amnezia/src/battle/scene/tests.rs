@@ -28,8 +28,12 @@ fn original_monster_hues_reach_each_live_battler_sprite() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default()))
         .init_asset::<Image>()
+        .init_resource::<crate::screenfx::TintState>()
         .insert_resource(battle)
         .add_systems(Update, sync_scene);
+    app.world_mut()
+        .resource_mut::<crate::screenfx::TintState>()
+        .set_tone([50.0, 100.0, 150.0, 0.0]);
     app.update();
     let world = app.world_mut();
     let backdrop = world
@@ -54,6 +58,50 @@ fn original_monster_hues_reach_each_live_battler_sprite() {
             .unwrap();
         assert_eq!(hue.degrees, expected.battler_hue);
         assert_eq!(sprite.image, hue.original);
+    }
+    assert_eq!(
+        world
+            .query_filtered::<Entity, (
+                With<SceneEntity>,
+                With<crate::legacy_colors::tone::SpriteTone>
+            )>()
+            .iter(world)
+            .count(),
+        8,
+        "the backdrop and every enemy must follow the screen tone"
+    );
+    assert!(
+        world
+            .query::<&SpriteTone>()
+            .iter(world)
+            .all(|tone| tone.0 == [50.0, 100.0, 150.0, 0.0])
+    );
+}
+
+#[test]
+fn battle_screen_tone_updates_only_live_scene_sprites() {
+    let mut app = App::new();
+    app.init_resource::<crate::screenfx::TintState>()
+        .add_systems(PostUpdate, sync_tone);
+    let battle = app
+        .world_mut()
+        .spawn((SceneEntity, SpriteTone::default()))
+        .id();
+    let other_layer = app.world_mut().spawn(SpriteTone::default()).id();
+    for value in [
+        [50.0, 100.0, 150.0, 0.0],
+        [200.0, 200.0, 200.0, 100.0],
+        [100.0; 4],
+    ] {
+        app.world_mut()
+            .resource_mut::<crate::screenfx::TintState>()
+            .set_tone(value);
+        app.update();
+        assert_eq!(app.world().get::<SpriteTone>(battle).unwrap().0, value);
+        assert_eq!(
+            app.world().get::<SpriteTone>(other_layer).unwrap().0,
+            [100.0; 4]
+        );
     }
 }
 
