@@ -58,11 +58,7 @@ impl Battle {
             self.enemies[i].dying = None;
         }
         if shown > 0 {
-            self.push_number(
-                self.battler_pos(target),
-                shown.to_string(),
-                NumberKind::Heal,
-            );
+            self.report_hit(self.battler_pos(target), shown.to_string(), HitKind::Heal);
         }
         let mut lines = if success {
             vec![format!("{caster_name} varázsol: {target_name} +{shown}")]

@@ -1,6 +1,6 @@
 //! The turn-queue vocabulary — chosen commands, their source and agility-ordered
 //! entries, the deferred resolution sub-steps — and the per-tick pending effects
-//! (animations, floating numbers, and sound effects) the resolution enqueues.
+//! (animations, hit reports, and sound effects) the resolution enqueues.
 
 /// A chosen action, from either side, awaiting resolution. Party members choose
 /// `Attack`, `Skill`, `Item`, `Defend`, or `Nothing`; the enemy AI reuses `Attack`,
@@ -115,25 +115,20 @@ pub(in crate::battle) struct PendingAnim {
     pub targets: Vec<(f32, f32)>,
 }
 
-/// What a floating battle number represents, which tints it: white HP `Damage`,
-/// green `Heal` (an HP or SP restore), and a pale `Miss` for a dodge or a blocked
-/// (0-damage) blow. Mirrors RM2000's damage-pop colouring.
-#[derive(Clone, Copy, PartialEq)]
-pub(in crate::battle) enum NumberKind {
+/// Hit classification for diagnostic traces and resolution regressions.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(in crate::battle) enum HitKind {
     Damage,
     Heal,
     Miss,
 }
 
-/// A floating number queued as an action resolves — the RM2000 damage/heal pop —
-/// drained by `battle::floaters` into rising, fading overlay text. `pos` is the
-/// target's RM2000 screen offset from centre (y downward): a foe's anim pos or a
-/// member's party slot. `text` is the digits (or "Miss") and `kind` its colour.
+/// A resolved hit for diagnostics; it does not create a visual effect.
 #[derive(Clone)]
-pub(in crate::battle) struct PendingNumber {
+pub(in crate::battle) struct HitReport {
     pub pos: (f32, f32),
     pub text: String,
-    pub kind: NumberKind,
+    pub kind: HitKind,
 }
 
 /// A System-defined battle sound effect queued as an action resolves, drained by

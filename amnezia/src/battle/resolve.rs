@@ -6,7 +6,7 @@
 //!
 //! Grouped by responsibility into submodules that each add methods to [`Battle`]:
 //! [`step`] (the resolution engine and action dispatch), [`hit`] (the damage
-//! application and pop/queue primitives), [`strike`] (physical strikes), [`skill`]
+//! application and feedback queues), [`strike`] (physical strikes), [`skill`]
 //! (skill casts, party and enemy), [`item`] (item use), [`enemy`] (the enemy-AI
 //! action pick, command flow, and retargeting), [`death`] (foe death-outs),
 //! [`state`] (per-turn status HP change and recovery), and [`end`] (end checks,
@@ -39,8 +39,8 @@ mod tests;
 pub(in crate::battle::resolve) use super::BattleOutcome;
 pub(in crate::battle::resolve) use super::logic;
 pub(in crate::battle::resolve) use super::model::{
-    Action, Battle, BattleSe, Command, Dying, NumberKind, PendingAnim, PendingNumber, Phase,
-    Source, Step, rng_next,
+    Action, Battle, BattleSe, Command, Dying, HitKind, HitReport, PendingAnim, Phase, Source, Step,
+    rng_next,
 };
 pub(in crate::battle::resolve) use amnezia_data::SkillDef;
 
@@ -68,13 +68,11 @@ enum Strike {
     Hit { dmg: i32, crit: bool },
 }
 
-/// The floating-number text and colour for a landed blow of `dmg`: the digits in
-/// white for a real hit, or a pale "0" for a blocked/immune blow (RM2000 pops "0"
-/// on an undamaged hit — distinct from a dodge, which pops "Miss").
-fn number_for(dmg: i32) -> (String, NumberKind) {
+/// Diagnostic hit value; zero damage remains distinct from an evaded blow.
+fn damage_report(dmg: i32) -> (String, HitKind) {
     if dmg > 0 {
-        (dmg.to_string(), NumberKind::Damage)
+        (dmg.to_string(), HitKind::Damage)
     } else {
-        ("0".to_string(), NumberKind::Miss)
+        ("0".to_string(), HitKind::Miss)
     }
 }

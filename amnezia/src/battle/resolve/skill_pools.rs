@@ -69,7 +69,7 @@ impl Battle {
             Source::Party(i) => (self.party_anim_x(i), PARTY_ANIM_Y),
             Source::Enemy(i) => self.foe_anim_pos(i),
         };
-        self.push_number(pos, lost.to_string(), NumberKind::Damage);
+        self.report_hit(pos, lost.to_string(), HitKind::Damage);
         lost
     }
 }

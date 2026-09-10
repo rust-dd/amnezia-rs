@@ -26,10 +26,10 @@ impl Battle {
             };
             if skill.absorb && dealt > 0 {
                 let absorbed = self.restore_skill_hp(source, dealt.min(old_hp));
-                self.push_number(
+                self.report_hit(
                     self.battler_pos(source),
                     absorbed.to_string(),
-                    NumberKind::Heal,
+                    HitKind::Heal,
                 );
             }
             success = !skill.absorb || dealt.min(old_hp) > 0;
@@ -53,11 +53,7 @@ impl Battle {
         }
         if !success {
             self.pending_se.push(BattleSe::Dodge);
-            self.push_number(
-                self.battler_pos(target),
-                "Miss".to_string(),
-                NumberKind::Miss,
-            );
+            self.report_hit(self.battler_pos(target), "Miss".to_string(), HitKind::Miss);
             lines.push(format!("{caster} varázsol: {name} elkerülte"));
         }
         lines

@@ -1,5 +1,5 @@
 //! The shared damage-application primitives: screen anchors, the pending
-//! animation/number/blink/SE queues, and the two "apply damage to a battler" steps.
+//! animation/report/blink/SE queues, and damage application on both sides.
 
 use super::*;
 
@@ -34,19 +34,18 @@ impl Battle {
         )
     }
 
-    /// Queue a floating number to pop on a battler at `pos` as this action
-    /// resolves; `battle::floaters` spawns and rises it. Bevy-free.
-    pub(in crate::battle::resolve) fn push_number(
+    /// Record the resolved hit for tracing and tests without drawing overlay text.
+    pub(in crate::battle::resolve) fn report_hit(
         &mut self,
         pos: (f32, f32),
         text: String,
-        kind: NumberKind,
+        kind: HitKind,
     ) {
-        self.pending_numbers.push(PendingNumber { pos, text, kind });
+        self.hit_reports.push(HitReport { pos, text, kind });
     }
 
-    /// Register a landed blow of `dmg` on foe `ti`: play the enemy-damaged SE, pop
-    /// its damage number, owe it a guaranteed visibility blink (RM2000 blinks a
+    /// Register a landed blow of `dmg` on foe `ti`: play the enemy-damaged SE and
+    /// owe it a guaranteed visibility blink (RM2000 blinks a
     /// struck sprite every hit, animation-flash or not), and start its death-out if
     /// the blow felled it. The SE fires on any landed blow (even a blocked 0), like
     /// EasyRPG's damage-message substate; a felled foe then adds the kill SE via
@@ -54,24 +53,21 @@ impl Battle {
     pub(in crate::battle::resolve) fn after_foe_hit(&mut self, ti: usize, dmg: i32) {
         let pos = self.foe_anim_pos(ti);
         self.pending_se.push(BattleSe::EnemyDamaged);
-        let (text, kind) = number_for(dmg);
-        self.push_number(pos, text, kind);
+        let (text, kind) = damage_report(dmg);
+        self.report_hit(pos, text, kind);
         self.pending_blinks.push(pos);
         self.start_foe_death(ti, false);
     }
 
-    /// Register a landed blow of `dmg` on member `ti`: play the actor-damaged SE
-    /// and pop its damage number at the party slot. Party members have no
-    /// front-view sprite, so the number is their whole visual feedback (no blink,
-    /// no death-out).
+    /// Apply KO and damage sound feedback; front view has no party sprites.
     pub(in crate::battle::resolve) fn after_member_hit(&mut self, ti: usize, dmg: i32) {
         if self.members[ti].hp <= 0 {
             self.mark_knocked_out(Source::Party(ti));
         }
         let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
         self.pending_se.push(BattleSe::ActorDamaged);
-        let (text, kind) = number_for(dmg);
-        self.push_number(pos, text, kind);
+        let (text, kind) = damage_report(dmg);
+        self.report_hit(pos, text, kind);
     }
 
     /// Apply `base` damage to enemy `ti` with `var` variance (4 for a physical

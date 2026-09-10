@@ -20,7 +20,7 @@ fn the_original_life_potion_has_no_effect_on_a_living_recipient() {
     battle.members[1].hp = 7;
     battle.apply_item(0, 112, 1);
     assert_eq!(battle.members[1].hp, 7);
-    assert!(battle.pending_numbers.is_empty());
+    assert!(battle.hit_reports.is_empty());
 }
 
 #[test]
@@ -106,7 +106,7 @@ fn a_status_only_attack_does_not_deal_unconfigured_hp_damage() {
     battle.skill_hit_enemy(0, 0, &skill);
     assert_eq!(battle.enemies[0].hp, hp);
     assert!(logic::has_state(&battle.enemies[0].states, 3));
-    assert!(battle.pending_numbers.is_empty());
+    assert!(battle.hit_reports.is_empty());
 }
 
 #[test]

@@ -33,7 +33,7 @@ pub use queue::{Action, Command, Source};
 pub(in crate::battle) use super::BattleOutcome;
 pub(in crate::battle) use battle::rng_next;
 pub(in crate::battle) use foe::Dying;
-pub(in crate::battle) use queue::{BattleSe, NumberKind, PendingAnim, PendingNumber, Step};
+pub(in crate::battle) use queue::{BattleSe, HitKind, HitReport, PendingAnim, Step};
 
 pub(in crate::battle) use super::logic::{self, Stats};
 pub(crate) use crate::progression::Progression;

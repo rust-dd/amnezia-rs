@@ -85,7 +85,7 @@ impl Battle {
             ));
         } else {
             self.pending_se.push(BattleSe::Dodge);
-            self.push_number(self.battler_pos(target), "Miss".into(), NumberKind::Miss);
+            self.report_hit(self.battler_pos(target), "Miss".into(), HitKind::Miss);
             self.log.push(format!(
                 "{source_name} zavartan lesújt: {target_name} elkerülte"
             ));

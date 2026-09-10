@@ -200,40 +200,37 @@ fn an_enemy_ally_scope_cast_queues_the_animation_on_the_casting_foe() {
 }
 
 #[test]
-fn a_landed_strike_pops_a_damage_number_at_the_foe() {
+fn a_landed_strike_reports_the_damage_at_the_foe() {
     let mut battle = build_1v2();
     battle.members[0].weapon_hit = 100;
     let Strike::Hit { dmg, .. } = battle.strike_enemy(0, 0) else {
         panic!("a forced-hit strike missed");
     };
     let pos = battle.foe_anim_pos(0);
-    let (text, kind) = number_for(dmg);
+    let (text, kind) = damage_report(dmg);
     let number = battle
-        .pending_numbers
+        .hit_reports
         .last()
-        .expect("a landed hit pops a floating number");
+        .expect("a landed hit has a diagnostic report");
     assert_eq!(number.pos, pos);
     assert_eq!(number.text, text);
     assert!(number.kind == kind);
 }
 
 #[test]
-fn a_heal_pops_a_heal_coloured_number() {
+fn a_heal_reports_its_result() {
     let mut battle = build_1v2();
     battle.skills = vec![heal_skill(2, 40)];
     battle.members[0].hp = 10;
     battle.cast_skill(0, 2, 0);
     assert!(
-        battle
-            .pending_numbers
-            .iter()
-            .any(|n| n.kind == NumberKind::Heal),
-        "a heal enqueues a heal-coloured number"
+        battle.hit_reports.iter().any(|n| n.kind == HitKind::Heal),
+        "a heal has a diagnostic report"
     );
 }
 
 #[test]
-fn a_missed_strike_pops_a_miss_number() {
+fn a_missed_strike_reports_a_miss() {
     let mut battle = build_1v2();
     battle.members[0].weapon_hit = 90;
     let hit = logic::to_hit(
@@ -249,9 +246,12 @@ fn a_missed_strike_pops_a_miss_number() {
         rng_next(&mut battle.rng);
     }
     assert!(matches!(battle.strike_enemy(0, 0), Strike::Miss));
-    let number = battle.pending_numbers.last().expect("a miss pops a number");
+    let number = battle
+        .hit_reports
+        .last()
+        .expect("a miss has a diagnostic report");
     assert_eq!(number.text, "Miss");
-    assert!(number.kind == NumberKind::Miss);
+    assert!(number.kind == HitKind::Miss);
 }
 
 #[test]
@@ -297,13 +297,13 @@ fn self_destruct_starts_an_explosion_death_out() {
 }
 
 #[test]
-fn a_multi_target_cast_staggers_its_damage_numbers_across_ticks() {
+fn a_multi_target_cast_staggers_its_hits_across_ticks() {
     let mut battle = build_1v2();
     let mut s = damage_skill(1, 20, vec![], vec![]);
     s.scope = 1;
     battle.skills = vec![s];
     // The foes survive the cast (so no death-hold) and only defend, so the sole
-    // damage numbers each tick come from the staggered cast, not enemy attacks.
+    // hit reports each tick come from the staggered cast, not enemy attacks.
     for e in &mut battle.enemies {
         e.hp = 500;
         e.actions = vec![enemy_action_def(2)];
@@ -313,21 +313,21 @@ fn a_multi_target_cast_staggers_its_damage_numbers_across_ticks() {
         target: 0,
     });
     let mut per_tick: Vec<usize> = Vec::new();
-    let mut prev = battle.pending_numbers.len();
+    let mut prev = battle.hit_reports.len();
     while battle.resolve_next() {
-        let now = battle.pending_numbers.len();
+        let now = battle.hit_reports.len();
         per_tick.push(now - prev);
         prev = now;
     }
-    let ticks_with_a_number = per_tick.iter().filter(|&&c| c > 0).count();
+    let ticks_with_a_hit = per_tick.iter().filter(|&&c| c > 0).count();
     assert!(
-        ticks_with_a_number >= 2,
-        "an all-enemy cast should stagger its numbers across ticks, got {per_tick:?}"
+        ticks_with_a_hit >= 2,
+        "an all-enemy cast should stagger its hits across ticks, got {per_tick:?}"
     );
     assert_eq!(
         per_tick.iter().sum::<usize>(),
         2,
-        "exactly the two foe damage numbers landed, one per tick"
+        "exactly the two foe hits landed, one per tick"
     );
 }
 
@@ -416,7 +416,7 @@ fn a_missed_strike_enqueues_the_dodge_se() {
 }
 
 #[test]
-fn an_animated_strike_defers_its_damage_number_until_after_the_animation() {
+fn an_animated_strike_defers_its_hit_report_until_after_the_animation() {
     // A member wielding a weapon whose attack animation is 7: RM2000 plays the
     // swing, waits for it, and only then shows the damage.
     let mut battle = build_weapon_anim(7);
@@ -430,8 +430,8 @@ fn an_animated_strike_defers_its_damage_number_until_after_the_animation() {
         "the attack animation is queued when the action begins"
     );
     assert!(
-        battle.pending_numbers.is_empty(),
-        "no number pops on the same tick as the animation"
+        battle.hit_reports.is_empty(),
+        "no hit is reported on the same tick as the animation"
     );
     assert!(
         battle.anim_hold_active(),
@@ -444,8 +444,8 @@ fn an_animated_strike_defers_its_damage_number_until_after_the_animation() {
     );
     battle.resolve_next();
     assert!(
-        !battle.pending_numbers.is_empty(),
-        "the number pops only once the deferred impact resolves"
+        !battle.hit_reports.is_empty(),
+        "the hit is reported only once the deferred impact resolves"
     );
 }
 
@@ -467,13 +467,13 @@ fn a_zero_animation_strike_applies_immediately_without_holding() {
     );
     assert!(battle.enemies[0].hp < before, "the blow lands on this tick");
     assert!(
-        !battle.pending_numbers.is_empty(),
-        "its damage number pops immediately"
+        !battle.hit_reports.is_empty(),
+        "its hit is reported immediately"
     );
 }
 
 #[test]
-fn an_enemy_normal_attack_applies_and_pops_a_number_without_holding() {
+fn an_enemy_normal_attack_applies_and_reports_damage_without_holding() {
     // An rpg2k enemy normal attack plays no animation, so it applies immediately
     // (paced only by the step timer), queues no animation, and never holds.
     let mut battle = build_1v2();
@@ -497,8 +497,8 @@ fn an_enemy_normal_attack_applies_and_pops_a_number_without_holding() {
         "no animation is queued for an enemy normal attack"
     );
     assert!(
-        !battle.pending_numbers.is_empty(),
-        "the damage number pops on this tick"
+        !battle.hit_reports.is_empty(),
+        "the hit is reported on this tick"
     );
 }
 

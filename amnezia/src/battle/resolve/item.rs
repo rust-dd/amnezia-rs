@@ -73,7 +73,7 @@ impl Battle {
         self.states_changed(Source::Party(ti), old_restriction, false);
         if shown > 0 {
             let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
-            self.push_number(pos, shown.to_string(), NumberKind::Heal);
+            self.report_hit(pos, shown.to_string(), HitKind::Heal);
         }
         lines
     }

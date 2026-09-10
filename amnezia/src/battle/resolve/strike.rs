@@ -10,7 +10,7 @@ impl Battle {
     /// resistance ranks, a critical that triples, the `var=4` variance, and the
     /// defending-foe halving — *without applying it or showing anything yet*. The
     /// attack animation is queued on the struck foe up front (the swing shows
-    /// whether the blow lands); both the "Miss" pop and the landing are deferred
+    /// whether the blow lands); both the miss feedback and the landing are deferred
     /// to [`Battle::resolve_strike_impact`], which runs only once the animation
     /// has played. The RNG draw order is identical to a single-shot strike.
     pub(in crate::battle::resolve) fn plan_strike(&mut self, pi: usize, ti: usize) -> Strike {
@@ -64,7 +64,7 @@ impl Battle {
     }
 
     /// Land a planned strike of `dmg` on enemy `ti`: subtract the HP, roll its
-    /// states' damage wear-off, and pop the damage number, visibility blink, and
+    /// states' damage wear-off, and trigger the hit report, visibility blink, and
     /// death-out (see [`Battle::after_foe_hit`]).
     pub(in crate::battle::resolve) fn land_strike(&mut self, pi: usize, ti: usize, dmg: i32) {
         self.enemies[ti].hp = (self.enemies[ti].hp - dmg).max(0);
@@ -75,7 +75,7 @@ impl Battle {
 
     /// Apply a member's planned strike `outcome` on foe `ti` once its swing
     /// animation has played (RM2000 `ProcessBattleActionApply`/`Damage`): a miss
-    /// pops the dodge SE and "Miss" number, a critical announces on its own beat
+    /// plays the dodge SE and reports the miss, a critical announces on its own beat
     /// and lands its precomputed `dmg` on the next tick ([`Step::CritDamage`]),
     /// and a plain hit lands at once. State recovery and weapon afflictions are
     /// rolled at impact, after the precomputed HP damage.
@@ -93,7 +93,7 @@ impl Battle {
             Strike::Miss => {
                 let pos = self.foe_anim_pos(ti);
                 self.pending_se.push(BattleSe::Dodge);
-                self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
+                self.report_hit(pos, "Miss".to_string(), HitKind::Miss);
                 self.log
                     .push(format!("{enemy}{}", crate::i18n::tr(&self.text.dodge)));
             }
@@ -155,7 +155,7 @@ impl Battle {
         if (rng_next(&mut self.rng) % 100) as i32 >= hit {
             let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
             self.pending_se.push(BattleSe::Dodge);
-            self.push_number(pos, "Miss".to_string(), NumberKind::Miss);
+            self.report_hit(pos, "Miss".to_string(), HitKind::Miss);
             return None;
         }
         let mut base = logic::physical_damage(

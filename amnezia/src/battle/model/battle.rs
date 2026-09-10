@@ -3,8 +3,8 @@
 //! lives in [`super::build`]; the resolution mathematics in [`crate::battle::resolve`].
 
 use super::{
-    Action, BattleOutcome, BattleSe, Command, Fighter, Foe, PendingAnim, PendingNumber, Source,
-    Step, logic,
+    Action, BattleOutcome, BattleSe, Command, Fighter, Foe, HitReport, PendingAnim, Source, Step,
+    logic,
 };
 use amnezia_data::{AttributeDef, ItemDef, SkillDef, StateDef};
 use bevy::prelude::*;
@@ -107,10 +107,8 @@ pub struct Battle {
     /// each frame by `battle.rs` into `PlayAnimation` overlays and cleared by
     /// [`Battle::new_round`] (a fresh [`Battle::build`] starts it empty).
     pub(in crate::battle) pending_anims: Vec<PendingAnim>,
-    /// Floating damage/heal numbers queued as the current tick's actions resolve,
-    /// drained each frame by `battle::floaters` into rising overlay text and
-    /// cleared by [`Battle::new_round`] (a fresh [`Battle::build`] starts empty).
-    pub(in crate::battle) pending_numbers: Vec<PendingNumber>,
+    /// Per-tick hit reports drained into diagnostic traces, not drawn on screen.
+    pub(in crate::battle) hit_reports: Vec<HitReport>,
     /// Foe screen positions owed a guaranteed per-hit visibility blink, drained by
     /// `battle::scene` into a blink on each struck sprite. Every landed blow
     /// enqueues one, independent of the played animation's own flash timings.
@@ -121,7 +119,7 @@ pub struct Battle {
     /// [`Battle::new_round`] (a fresh [`Battle::build`] starts empty).
     pub(in crate::battle) pending_se: Vec<BattleSe>,
     /// Sub-steps the action currently resolving still owes, drained one per
-    /// resolve tick (see [`Step`]) so a multi-target cast staggers its numbers
+    /// resolve tick (see [`Step`]) so a multi-target cast staggers its messages
     /// and a critical announces on its own beat. Cleared by [`Battle::new_round`]
     /// and [`Battle::begin_resolve`].
     pub(in crate::battle) steps: std::collections::VecDeque<Step>,
@@ -365,7 +363,7 @@ impl Battle {
         self.steps.clear();
         self.clear_anim_hold();
         self.pending_anims.clear();
-        self.pending_numbers.clear();
+        self.hit_reports.clear();
         self.pending_blinks.clear();
         self.pending_se.clear();
         self.menu = MenuLevel::Command;

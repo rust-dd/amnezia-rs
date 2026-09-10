@@ -17,7 +17,7 @@
 //! contract, and the battle-only database.
 
 mod events;
-mod floaters;
+mod feedback;
 pub(crate) mod flow;
 pub(crate) mod hud;
 mod input;
@@ -180,7 +180,7 @@ impl Plugin for BattlePlugin {
             );
         flow::register(app);
         scene::register(app);
-        floaters::register(app);
+        feedback::register(app);
         hud::register(app);
     }
 }

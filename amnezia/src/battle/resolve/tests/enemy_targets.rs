@@ -22,7 +22,7 @@ fn original_right_cannon_and_reaper_rockets_hit_each_living_hero() {
         while battle.resolve_next() {}
         assert!(battle.members[1].hp < 1000);
         assert!(1000 - battle.members[1].hp < 1000 - battle.members[0].hp);
-        assert_eq!(battle.pending_numbers.len(), 2);
+        assert_eq!(battle.hit_reports.len(), 2);
         assert_eq!(battle.pending_anims.len(), 1);
     }
 }
@@ -41,7 +41,7 @@ fn a_dead_multi_target_recipient_is_skipped_without_hitting_someone_twice() {
     while battle.resolve_next() {}
     assert_eq!(battle.members[0].hp, first_hp);
     assert_eq!(battle.members[1].hp, 0);
-    assert_eq!(battle.pending_numbers.len(), 1);
+    assert_eq!(battle.hit_reports.len(), 1);
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn original_probe_heals_its_whole_living_team() {
     assert_eq!(battle.pending_anims[0].targets.len(), 2);
     while battle.resolve_next() {}
     assert_eq!(battle.enemies[1].hp, 30);
-    assert_eq!(battle.pending_numbers.len(), 2);
+    assert_eq!(battle.hit_reports.len(), 2);
 }
 
 #[test]

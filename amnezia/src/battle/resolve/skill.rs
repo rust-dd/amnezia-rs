@@ -26,7 +26,7 @@ impl Battle {
         match skill.scope {
             1 => {
                 let foes = self.living_enemies();
-                // Separate ticks keep multi-target damage numbers readable.
+                // Each target's result has its own message beat.
                 let mut targets = foes.into_iter();
                 if let Some(first) = targets.next() {
                     lines.extend(self.skill_hit_enemy(pi, first, &skill));
