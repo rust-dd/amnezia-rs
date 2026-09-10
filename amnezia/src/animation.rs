@@ -3,7 +3,7 @@
 //! names an animation id and a screen position; this plugin spawns a
 //! [`LiveAnimation`] that steps its frames at a fixed rate, drawing each frame's
 //! cells (see [`render`]) and firing that frame's sound-effect and flash
-//! timings. It owns the renderer plus the fixed overlay camera (render order 1)
+//! timings. It owns the renderer plus the fixed overlay camera (render order 2)
 //! the effects draw on, which the battle backdrop and battlers ([`crate::battle`])
 //! share, so effects composite over the map and land on the battlers by
 //! construction; `battle` emits a [`PlayAnimation`] per physical hit, and the
@@ -15,7 +15,9 @@
 //! (single vs screen) and `position` (head/centre/feet anchor) are the caller's
 //! concern: it resolves them into the `(x, y)` it passes here.
 
+mod cells;
 mod render;
+pub(crate) mod smoke;
 
 use crate::assets::{asset_root, load_ron};
 use crate::audio::AudioRequest;
@@ -28,7 +30,8 @@ use crate::world::{EventSprite, MainCamera};
 use amnezia_data::{AnimationDef, AnimationTimingDef};
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
-use render::{fade_flashes, next_frame, spawn_frame_cells, spawn_screen_flash};
+use cells::CellRenderer;
+use render::{fade_flashes, next_frame, spawn_screen_flash};
 
 pub use render::{flash_envelope, overlay_layer, overlay_translation};
 
@@ -36,7 +39,7 @@ pub use render::{flash_envelope, overlay_layer, overlay_translation};
 /// the animation once per 60 fps game-frame and shows each data frame for two of
 /// them (`battle_animation.cpp`: `num_frames = GetRealFrames() * 2`,
 /// `GetRealFrame() = frame / 2`), so a data frame lasts `2/60 = 1/30 s`. The
-/// timer is real-time, so this stays a fixed step.
+/// data cadence is independent of the flash envelope.
 pub const FRAME_SECS: f32 = 1.0 / 30.0;
 
 /// Seconds one 60 fps game-frame lasts: half a data frame. The flash envelope
@@ -165,6 +168,7 @@ pub struct AnimationPlugin;
 
 impl Plugin for AnimationPlugin {
     fn build(&self, app: &mut App) {
+        cells::register(app);
         app.add_message::<PlayAnimation>()
             .add_message::<ShowMapAnimation>()
             .add_message::<BattlerFlash>()
@@ -222,7 +226,7 @@ fn spawn_overlay_camera(mut commands: Commands) {
 /// and firing that frame's timings immediately.
 fn start_animations(
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
+    mut renderer: CellRenderer,
     library: Res<AnimationLibrary>,
     mut requests: MessageReader<PlayAnimation>,
     mut audio: MessageWriter<AudioRequest>,
@@ -239,7 +243,7 @@ fn start_animations(
         let draw_anchors =
             draw_anchors(def, &request.targets, request.screen_center, request.global);
         let flash_anchors: Vec<Vec2> = request.targets.iter().map(|t| t.pos).collect();
-        let cells = spawn_cells_at(&mut commands, &asset_server, def, 0, &draw_anchors);
+        let cells = spawn_cells_at(&mut commands, &mut renderer, def, 0, &draw_anchors);
         fire_timings(
             &mut commands,
             &mut audio,
@@ -288,14 +292,14 @@ fn draw_anchors(
 /// entities together so they despawn as one when the frame advances.
 fn spawn_cells_at(
     commands: &mut Commands,
-    asset_server: &AssetServer,
+    renderer: &mut CellRenderer,
     def: &AnimationDef,
     frame: usize,
     bases: &[Vec2],
 ) -> Vec<Entity> {
     let mut cells = Vec::new();
     for &base in bases {
-        cells.extend(spawn_frame_cells(commands, asset_server, def, frame, base));
+        cells.extend(renderer.spawn_frame(commands, def, frame, base));
     }
     cells
 }
@@ -306,7 +310,7 @@ fn spawn_cells_at(
 fn step_animations(
     time: Res<Time>,
     mut commands: Commands,
-    asset_server: Res<AssetServer>,
+    mut renderer: CellRenderer,
     library: Res<AnimationLibrary>,
     mut audio: MessageWriter<AudioRequest>,
     mut battler_flash: MessageWriter<BattlerFlash>,
@@ -324,7 +328,7 @@ fn step_animations(
             Some(frame) => {
                 anim.frame = frame;
                 anim.cells =
-                    spawn_cells_at(&mut commands, &asset_server, def, frame, &anim.draw_anchors);
+                    spawn_cells_at(&mut commands, &mut renderer, def, frame, &anim.draw_anchors);
                 fire_timings(
                     &mut commands,
                     &mut audio,

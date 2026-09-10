@@ -4,7 +4,6 @@ pub(crate) fn uniform(percent: [f32; 4]) -> Vec4 {
     Vec4::from_array(percent.map(|value| (value * 128.0 / 100.0).trunc().clamp(0.0, 255.0)))
 }
 
-#[cfg(test)]
 pub(crate) fn apply(source: [u8; 3], percent: [f32; 4]) -> [u8; 3] {
     let tone = uniform(percent).to_array().map(|v| v as i32);
     let mut rgb = source.map(i32::from);

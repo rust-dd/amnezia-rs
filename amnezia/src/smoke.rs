@@ -24,7 +24,9 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-display") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-animation-colors") {
+            "animation-colors"
+        } else if std::env::args().any(|arg| arg == "--smoke-display") {
             "display"
         } else if std::env::args().any(|arg| arg == "--smoke-colors") {
             "colors"
@@ -93,6 +95,7 @@ fn capture(world: &mut World, label: &str) {
     info!("smoke screenshot: {}", path.display());
     let picture_pixels = crate::picture::smoke::expected_pixels(world, label);
     let display_snapshot = crate::display::smoke::capture_native(world, label, prefix);
+    let animation_snapshot = crate::animation::smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -102,6 +105,9 @@ fn capture(world: &mut World, label: &str) {
             crate::legacy_colors::smoke::verify(&capture.image, &label);
             if let Some(snapshot) = &display_snapshot {
                 snapshot.submit(&capture.image, false);
+            }
+            if let Some(snapshot) = &animation_snapshot {
+                snapshot.verify(&capture.image);
             }
         },
     );
@@ -176,6 +182,11 @@ fn drive(world: &mut World) {
         crate::dialogue::verify_battle_layer(world);
         capture(world, "battle-events-message");
     }
+    if scenario == "animation-colors"
+        && let Some(label) = crate::animation::smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if frame == 300 && scenario == "menu" {
         world.resource_mut::<crate::menu::MenuOpen>().0 = true;
         world
@@ -235,6 +246,8 @@ fn drive(world: &mut World) {
         }
         if scenario == "display" {
             crate::display::smoke::verify_finished(world);
+        } else if scenario == "animation-colors" {
+            crate::animation::smoke::verify_finished(world);
         } else if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(
@@ -290,7 +303,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
     }
     let commands = if matches!(
         scenario,
-        "message-options" | "pictures" | "colors" | "display"
+        "message-options" | "pictures" | "colors" | "display" | "animation-colors"
     ) {
         message_options::entry()
     } else if scenario == "camera" {
