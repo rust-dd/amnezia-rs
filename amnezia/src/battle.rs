@@ -18,6 +18,7 @@
 
 mod events;
 mod floaters;
+pub(crate) mod flow;
 mod hud;
 mod input;
 mod log_terms;
@@ -29,6 +30,7 @@ mod scene;
 pub(crate) mod smoke;
 mod systems;
 
+pub(crate) use flow::BattleFlow;
 pub(crate) use logic::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus_slots};
 pub(crate) use systems::HudCamera;
 
@@ -51,6 +53,7 @@ pub struct BattleRequest {
 pub(crate) fn reset_session(world: &mut World) {
     world.insert_resource(Battle::default());
     world.insert_resource(MapBgm::default());
+    world.insert_resource(BattleFlow::default());
 }
 
 /// Whether a battle is running. The movement/interpreter pause guards OR this in
@@ -136,8 +139,9 @@ impl Plugin for BattlePlugin {
                 (
                     systems::start_on_request.after(crate::audio::AudioRequests),
                     systems::debug_trigger,
-                    input::command_input,
+                    input::command_input.run_if(flow::playing),
                     events::drive
+                        .run_if(flow::playing)
                         .after(systems::start_on_request)
                         .after(crate::dialogue::DialogueInput)
                         .before(input::command_input)
@@ -145,6 +149,7 @@ impl Plugin for BattlePlugin {
                         .before(systems::apply_victory_rewards)
                         .before(systems::outcome_input),
                     systems::abort_expired_battle
+                        .run_if(flow::playing)
                         .after(crate::timer::ClockTick)
                         .after(systems::start_on_request)
                         .before(events::drive)
@@ -152,18 +157,24 @@ impl Plugin for BattlePlugin {
                         .before(systems::resolve_tick)
                         .before(systems::apply_victory_rewards)
                         .before(systems::outcome_input),
-                    systems::resolve_tick,
+                    systems::resolve_tick.run_if(flow::playing),
                     events::sync_switches
                         .after(systems::resolve_tick)
                         .before(systems::outcome_input),
                     systems::apply_victory_rewards
+                        .run_if(flow::playing)
                         .after(systems::resolve_tick)
                         .before(systems::outcome_input),
-                    systems::outcome_input,
-                    systems::drain_pending_anims.after(systems::resolve_tick),
-                    systems::drain_pending_se.after(systems::resolve_tick),
+                    systems::outcome_input.run_if(flow::playing),
+                    systems::drain_pending_anims
+                        .run_if(flow::playing)
+                        .after(systems::resolve_tick),
+                    systems::drain_pending_se
+                        .run_if(flow::playing)
+                        .after(systems::resolve_tick),
                 ),
             );
+        flow::register(app);
         scene::register(app);
         floaters::register(app);
         hud::register(app);

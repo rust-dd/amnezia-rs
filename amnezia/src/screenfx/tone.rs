@@ -132,7 +132,7 @@ impl Plugin for ScreenTonePlugin {
 /// Ingest a `TintScreen`, interpolate the current tone toward its target over the
 /// command's duration, and push the result into the main camera's [`ScreenTone`].
 fn update_tone(
-    transition: Option<Res<crate::transitions::Transition>>,
+    transition: crate::transitions::TransitionPause,
     time: Res<Time>,
     mut effects: MessageReader<ScreenEffect>,
     mut state: ResMut<TintState>,
@@ -147,7 +147,7 @@ fn update_tone(
             }
         }
     }
-    if !transition.as_ref().is_some_and(|t| t.busy()) {
+    if !transition.paused() {
         step_tint(&mut state, time.delta_secs());
     }
     let uniform = tone_uniform(state.current);

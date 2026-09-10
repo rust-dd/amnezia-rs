@@ -60,6 +60,28 @@ impl TransitionIo<'_> {
         self.settings.get(slot, &self.defaults)
     }
 
+    pub(crate) fn begin_battle(&mut self, center: IVec2) -> bool {
+        if self.state.busy() {
+            return false;
+        }
+        let (kind, duration, flashes) = if self.state.erased() {
+            (Kind::None, 40, false)
+        } else {
+            let kind = self.kind(2);
+            if kind == Kind::None {
+                (Kind::Cut, 40, true)
+            } else {
+                (kind, kind.frames(), true)
+            }
+        };
+        self.state
+            .start_for(kind, true, self.frames.frame, center, duration);
+        if flashes {
+            self.state.prepend_battle_flashes();
+        }
+        true
+    }
+
     pub(crate) fn event(&mut self, id: i32, erase: bool, center: IVec2) -> bool {
         let kind = if id == -1 {
             self.kind(usize::from(!erase))

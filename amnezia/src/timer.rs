@@ -88,7 +88,7 @@ pub(crate) struct ClockTick;
 
 #[derive(bevy::ecs::system::SystemParam)]
 pub(super) struct ClockScene<'w> {
-    transition: Option<Res<'w, crate::transitions::Transition>>,
+    transition: crate::transitions::TransitionPause<'w>,
     menu: Option<Res<'w, crate::menu::MenuOpen>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
     title: Option<Res<'w, crate::title::TitleActive>>,
@@ -103,7 +103,7 @@ impl ClockScene<'_> {
 
     fn paused(&self) -> bool {
         self.outside_game()
-            || self.transition.as_ref().is_some_and(|t| t.busy())
+            || self.transition.paused()
             || self.menu.as_ref().is_some_and(|v| v.0)
             || self.shop.as_ref().is_some_and(|v| v.0)
     }

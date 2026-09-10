@@ -2,11 +2,31 @@
 
 use super::*;
 use crate::audio::BgmTrack;
-use amnezia_data::{MonsterDef, MusicDef, SkillDef, SoundDef, TroopDef, TroopMemberDef};
+use amnezia_data::{ActorDef, MonsterDef, MusicDef, SkillDef, SoundDef, TroopDef, TroopMemberDef};
 use bevy::input::ButtonInput;
 
 mod drops;
 mod timer;
+mod transitions;
+
+#[derive(Resource, Default)]
+struct AudioLog(Vec<AudioRequest>);
+
+fn finish_transition(app: &mut App) {
+    for _ in 0..160 {
+        if !app.world().resource::<crate::battle::BattleFlow>().busy() {
+            return;
+        }
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .clear();
+        app.world_mut()
+            .resource_mut::<crate::timing::GameFrames>()
+            .frame += 1;
+        app.update();
+    }
+    panic!("battle transition did not finish");
+}
 
 /// A System audio def with a battle track, start SE, and the per-hit effects
 /// set, so the battle-audio systems have names to play.
@@ -49,6 +69,7 @@ fn poison_survives_battles_but_temporary_sleep_does_not() {
         ..default()
     });
     app.update();
+    finish_transition(&mut app);
     assert_eq!(
         app.world().resource::<Battle>().members[0].states,
         vec![(2, 0)]
@@ -70,6 +91,7 @@ fn poison_survives_battles_but_temporary_sleep_does_not() {
 fn logic_app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
+    app.add_plugins(crate::transitions::TransitionPlugin);
     app.add_message::<BattleRequest>();
     app.add_message::<AudioRequest>();
     app.insert_resource(GameData {
@@ -152,6 +174,14 @@ fn logic_app() -> App {
     app.init_resource::<CurrentBgm>();
     app.init_resource::<Terms>();
     app.init_resource::<ButtonInput<KeyCode>>();
+    app.init_resource::<AudioLog>();
+    crate::battle::flow::register(&mut app);
+    app.add_systems(
+        PostUpdate,
+        |mut messages: MessageReader<AudioRequest>, mut log: ResMut<AudioLog>| {
+            log.0.extend(messages.read().cloned());
+        },
+    );
     app.add_systems(
         Update,
         (
@@ -175,6 +205,7 @@ fn f6_starts_a_battle_and_confirming_a_win_publishes_the_contract_out() {
         .resource_mut::<ButtonInput<KeyCode>>()
         .clear();
     app.update();
+    finish_transition(&mut app);
     assert!(
         app.world().resource::<BattleActive>().0,
         "battle should be running"
@@ -192,6 +223,7 @@ fn f6_starts_a_battle_and_confirming_a_win_publishes_the_contract_out() {
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::Enter);
     app.update();
+    finish_transition(&mut app);
     assert_eq!(
         app.world().resource::<BattleResult>().0,
         Some(BattleOutcome::Victory)
@@ -212,6 +244,7 @@ fn f6_starts_a_battle_and_confirming_a_win_publishes_the_contract_out() {
 fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
+    app.init_resource::<crate::battle::BattleFlow>();
     let ron = ActorDef {
         critical_hit: false,
         critical_hit_chance: 30,
@@ -412,6 +445,7 @@ fn battle_start_plays_battle_music_and_stores_the_prior_bgm() {
         ..default()
     });
     app.update();
+    finish_transition(&mut app);
     let battle = app.world().resource::<Battle>();
     assert_eq!(battle.background, "Town");
     assert!(!battle.allow_escape);
@@ -424,9 +458,7 @@ fn battle_start_plays_battle_music_and_stores_the_prior_bgm() {
             speed: 1.0
         })
     );
-    let messages = app.world().resource::<Messages<AudioRequest>>();
-    let mut cursor = messages.get_cursor();
-    let played: Vec<AudioRequest> = cursor.read(messages).cloned().collect();
+    let played = &app.world().resource::<AudioLog>().0;
     assert!(
         played
             .iter()

@@ -2,8 +2,7 @@ use super::*;
 
 #[test]
 fn victory_grants_each_drop_once_and_waits_until_all_reward_pages_are_confirmed() {
-    let mut app = App::new();
-    app.add_plugins(MinimalPlugins);
+    let mut app = logic_app();
     let items = crate::assets::load_ron::<Vec<amnezia_data::ItemDef>>(&format!(
         "{}/items.ron",
         crate::assets::asset_root()
@@ -31,7 +30,6 @@ fn victory_grants_each_drop_once_and_waits_until_all_reward_pages_are_confirmed(
     app.init_resource::<MapBgm>();
     app.init_resource::<ButtonInput<KeyCode>>();
     app.add_message::<AudioRequest>();
-    app.add_systems(Update, (apply_victory_rewards, outcome_input).chain());
     app.update();
     assert_eq!(app.world().resource::<Inventory>().count(139), 2);
     assert_eq!(
@@ -64,6 +62,7 @@ fn victory_grants_each_drop_once_and_waits_until_all_reward_pages_are_confirmed(
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::Enter);
     app.update();
+    finish_transition(&mut app);
     assert_eq!(
         app.world().resource::<BattleResult>().0,
         Some(BattleOutcome::Victory)

@@ -9,15 +9,17 @@ use std::sync::{
 struct Case {
     label: &'static str,
     kind: Kind,
+    flashes: bool,
     erase: bool,
     from_erased: bool,
     frame: u32,
     center: IVec2,
 }
 
-const CASES: [Case; 9] = [
+const CASES: [Case; 12] = [
     Case {
         label: "transition-fade-out",
+        flashes: false,
         kind: Kind::Fade,
         erase: true,
         from_erased: false,
@@ -26,6 +28,7 @@ const CASES: [Case; 9] = [
     },
     Case {
         label: "transition-fade-in",
+        flashes: false,
         kind: Kind::Fade,
         erase: false,
         from_erased: true,
@@ -34,6 +37,7 @@ const CASES: [Case; 9] = [
     },
     Case {
         label: "transition-crossfade",
+        flashes: false,
         kind: Kind::Fade,
         erase: false,
         from_erased: false,
@@ -42,6 +46,7 @@ const CASES: [Case; 9] = [
     },
     Case {
         label: "transition-mosaic-out",
+        flashes: false,
         kind: Kind::Mosaic,
         erase: true,
         from_erased: false,
@@ -50,6 +55,7 @@ const CASES: [Case; 9] = [
     },
     Case {
         label: "transition-mosaic-in",
+        flashes: false,
         kind: Kind::Mosaic,
         erase: false,
         from_erased: true,
@@ -58,6 +64,7 @@ const CASES: [Case; 9] = [
     },
     Case {
         label: "transition-zoom-out",
+        flashes: false,
         kind: Kind::Zoom,
         erase: true,
         from_erased: false,
@@ -66,6 +73,7 @@ const CASES: [Case; 9] = [
     },
     Case {
         label: "transition-zoom-in",
+        flashes: false,
         kind: Kind::Zoom,
         erase: false,
         from_erased: true,
@@ -74,6 +82,7 @@ const CASES: [Case; 9] = [
     },
     Case {
         label: "transition-cut-out",
+        flashes: false,
         kind: Kind::Cut,
         erase: true,
         from_erased: false,
@@ -82,11 +91,39 @@ const CASES: [Case; 9] = [
     },
     Case {
         label: "transition-cut-in",
+        flashes: false,
         kind: Kind::Cut,
         erase: false,
         from_erased: true,
         frame: 0,
         center: IVec2::ZERO,
+    },
+    Case {
+        label: "transition-battle-flash-peak",
+        kind: Kind::Zoom,
+        flashes: true,
+        erase: true,
+        from_erased: false,
+        frame: 0,
+        center: IVec2::ZERO,
+    },
+    Case {
+        label: "transition-battle-flash-decay",
+        kind: Kind::Zoom,
+        flashes: true,
+        erase: true,
+        from_erased: false,
+        frame: 15,
+        center: IVec2::ZERO,
+    },
+    Case {
+        label: "transition-battle-zoom",
+        kind: Kind::Zoom,
+        flashes: true,
+        erase: true,
+        from_erased: false,
+        frame: 40,
+        center: IVec2::new(16, 200),
     },
 ];
 
@@ -179,7 +216,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         setup(world);
     }
     for (index, case) in CASES.iter().enumerate() {
-        let start = 260 + index as u32 * 100;
+        let start = 260 + index as u32 * 80;
         if frame == start - 10 {
             world.resource_mut::<Transition>().clear();
             world.resource_mut::<crate::timing::GameFrames>().frame = 0;
@@ -197,6 +234,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             let mut state = world.resource_mut::<Transition>();
             state.erased = case.from_erased;
             assert!(state.start(case.kind, case.erase, 0, case.center));
+            if case.flashes {
+                state.prepend_battle_flashes();
+            }
             if case.kind == Kind::Mosaic {
                 state.effect.as_mut().unwrap().offsets = (0..41).map(|i| i * 7 % (i + 1)).collect();
             }
@@ -231,7 +271,7 @@ impl Snapshot {
     pub(crate) fn verify(&self, image: &Image) {
         let case = &CASES[self.index];
         let crop = match case.label {
-            "transition-zoom-out" => [0, 110, 160, 120],
+            "transition-zoom-out" | "transition-battle-zoom" => [0, 110, 160, 120],
             "transition-zoom-in" => [294, 14, 8, 6],
             _ => [0, 0, 320, 240],
         };
@@ -262,7 +302,12 @@ impl Snapshot {
                 } else {
                     (x, y)
                 };
-                let expected = if case.kind == Kind::Fade {
+                let expected = if case.flashes && case.frame < 20 {
+                    let alpha = if case.frame == 0 { 248 } else { 123 };
+                    color(x, y, 0).map(|channel| {
+                        ((channel as u32 * (255 - alpha) + 248 * alpha + 127) / 255) as u8
+                    })
+                } else if case.kind == Kind::Fade {
                     let first = if case.from_erased {
                         [0; 3]
                     } else {

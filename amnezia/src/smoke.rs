@@ -24,7 +24,9 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-screen-events") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-battle-transitions") {
+            "battle-transitions"
+        } else if std::env::args().any(|arg| arg == "--smoke-screen-events") {
             "screen-events"
         } else if std::env::args().any(|arg| arg == "--smoke-transitions") {
             "transitions"
@@ -130,11 +132,17 @@ fn capture(world: &mut World, label: &str) {
 fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let advance = frame > 90
-        && (world.resource::<SmokeRun>().scenario != "battle-events" || frame > 240)
+        && (world.resource::<SmokeRun>().scenario != "battle-events" || frame > 360)
         && world.resource::<SmokeRun>().finish_at.is_none()
         && !matches!(
             world.resource::<SmokeRun>().scenario,
-            "font" | "panorama" | "timer" | "battle-menus" | "message-options" | "display"
+            "font"
+                | "panorama"
+                | "timer"
+                | "battle-menus"
+                | "battle-transitions"
+                | "message-options"
+                | "display"
         )
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active
@@ -192,7 +200,7 @@ fn drive(world: &mut World) {
     {
         capture(world, label);
     }
-    if frame == 240 && scenario == "battle-events" {
+    if frame == 350 && scenario == "battle-events" {
         crate::dialogue::verify_battle_layer(world);
         capture(world, "battle-events-message");
     }
@@ -203,6 +211,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "screen-events"
         && let Some(label) = crate::transitions::event_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "battle-transitions"
+        && let Some(label) = crate::battle::flow::smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -284,6 +297,8 @@ fn drive(world: &mut World) {
             crate::transitions::smoke::verify_finished(world);
         } else if scenario == "screen-events" {
             crate::transitions::event_smoke::verify_finished(world);
+        } else if scenario == "battle-transitions" {
+            crate::battle::flow::smoke::verify_finished(world);
         } else if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(
@@ -350,6 +365,8 @@ fn start_scenario(world: &mut World, scenario: &str) {
         message_options::entry()
     } else if scenario == "screen-events" {
         crate::transitions::event_smoke::entry()
+    } else if scenario == "battle-transitions" {
+        crate::battle::flow::smoke::entry()
     } else if scenario == "camera" {
         camera::entry()
     } else if scenario == "looping" {

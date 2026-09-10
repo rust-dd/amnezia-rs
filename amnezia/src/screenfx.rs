@@ -158,7 +158,7 @@ fn transparent() -> BackgroundColor {
 
 /// Ingest new effects, advance every running effect, and repaint the overlays.
 fn step_effects(
-    transition: Option<Res<crate::transitions::Transition>>,
+    transition: crate::transitions::TransitionPause,
     time: Res<Time>,
     mut effects: MessageReader<ScreenEffect>,
     mut fx: ResMut<Fx>,
@@ -167,7 +167,7 @@ fn step_effects(
     for effect in effects.read() {
         apply_effect(&mut fx, effect);
     }
-    if !transition.as_ref().is_some_and(|t| t.busy()) {
+    if !transition.paused() {
         let dt = time.delta_secs();
         step_flash(&mut fx, dt);
         step_shake(&mut fx, dt);

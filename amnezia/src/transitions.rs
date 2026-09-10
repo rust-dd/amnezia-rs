@@ -15,8 +15,21 @@ pub(crate) use settings::{Defaults, Settings, TransitionIo};
 #[derive(Component)]
 pub(crate) struct SnapshotImage(pub Handle<Image>);
 
-pub(crate) fn scene_running(transition: Option<Res<Transition>>) -> bool {
-    !transition.as_ref().is_some_and(|t| t.busy())
+#[derive(bevy::ecs::system::SystemParam)]
+pub(crate) struct TransitionPause<'w> {
+    transition: Option<Res<'w, Transition>>,
+    battle: Option<Res<'w, crate::battle::BattleFlow>>,
+}
+
+impl TransitionPause<'_> {
+    pub(crate) fn paused(&self) -> bool {
+        self.transition.as_ref().is_some_and(|t| t.busy())
+            || self.battle.as_ref().is_some_and(|b| b.busy())
+    }
+}
+
+pub(crate) fn scene_running(pause: TransitionPause) -> bool {
+    !pause.paused()
 }
 
 #[derive(Resource, Default)]
@@ -32,6 +45,10 @@ pub(crate) struct Transition {
 impl Transition {
     pub(crate) fn busy(&self) -> bool {
         self.effect.is_some()
+    }
+
+    pub(crate) fn age(&self) -> u32 {
+        self.frame
     }
 
     pub(crate) fn erased(&self) -> bool {
@@ -71,12 +88,18 @@ impl Transition {
         self.event_erased = false;
     }
 
+    pub(crate) fn prepend_battle_flashes(&mut self) {
+        if let Some(effect) = &mut self.effect {
+            effect.flash_frames = 20;
+        }
+    }
+
     fn advance(&mut self, now: u32) {
         let Some(effect) = &self.effect else {
             return;
         };
         self.frame = now.wrapping_sub(self.started);
-        if self.frame >= effect.duration {
+        if self.frame >= effect.flash_frames + effect.duration {
             if effect.kind != Kind::None {
                 self.erased = effect.erase;
             }

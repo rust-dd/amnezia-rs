@@ -13,7 +13,7 @@ use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 use crate::terms::Terms;
 use crate::vitals::Vitals;
-use amnezia_data::{ActorDef, SystemDef};
+use amnezia_data::SystemDef;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 
@@ -34,7 +34,7 @@ const BATTLE_SCREEN_CENTER: Vec2 = Vec2::new(0.0, -40.0);
 /// fallback EasyRPG uses when a battler bitmap is not yet ready.
 const PARTY_TARGET_HEIGHT: f32 = 48.0;
 
-/// The order-2 HUD camera the battle windows render on. It sits above the order-1
+/// The order-3 HUD camera the battle windows render on. It sits above the order-2
 /// effect overlay (backdrop, battlers, animations) and the order-0 world. Its
 /// [`RenderLayers`] points at the otherwise-unused layer 2 so its 2D pass draws no
 /// world sprites — only the HUD, which `bevy_ui` composites by target camera, not
@@ -57,8 +57,8 @@ pub(super) fn spawn_hud_camera(mut commands: Commands) {
     ));
 }
 
-/// Build a live encounter when a [`BattleRequest`] arrives (ignored while one is
-/// already running), instantiating the troop and the current party roster.
+/// Prepare the troop and current party roster before the scene controller
+/// transitions from the map. Requests during another encounter are ignored.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn start_on_request(
     mut requests: MessageReader<BattleRequest>,
@@ -70,10 +70,9 @@ pub(super) fn start_on_request(
     equipment: Res<Equipment>,
     terms: Res<Terms>,
     current_bgm: Res<CurrentBgm>,
-    system_bgm: Option<Res<crate::system_bgm::SystemBgm>>,
     mut map_bgm: ResMut<MapBgm>,
     mut audio: MessageWriter<AudioRequest>,
-    mut battle: ResMut<Battle>,
+    mut flow: ResMut<super::BattleFlow>,
     mut active: ResMut<BattleActive>,
     mut result: ResMut<BattleResult>,
     mut dialogue: Option<ResMut<crate::dialogue::Dialogue>>,
@@ -94,16 +93,20 @@ pub(super) fn start_on_request(
         return;
     }
     let roster = party.snapshot();
-    let actors: Vec<&ActorDef> = roster.iter().filter_map(|id| data.actor(*id)).collect();
+    let actors = roster
+        .iter()
+        .filter_map(|id| data.actor(*id))
+        .collect::<Vec<_>>();
     if actors.is_empty() {
         result.0 = Some(BattleOutcome::Defeat);
         return;
     }
-    // Resolve each member's runtime loadout so the fight reads the gear the equip
-    // menu changed, not the static ActorDef starting gear.
-    let equipped: Vec<[u32; 5]> = actors.iter().map(|a| equipment.slots(a)).collect();
+    let equipped = actors
+        .iter()
+        .map(|a| equipment.slots(a))
+        .collect::<Vec<_>>();
     let seed = seed_now() ^ (request.troop_id as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
-    *battle = Battle::build(
+    let mut battle = Battle::build(
         troop,
         &battle_data.monsters,
         &actors,
@@ -124,6 +127,7 @@ pub(super) fn start_on_request(
     battle.allow_escape = request.allow_escape;
     battle.first_strike = request.first_strike;
     battle.text.apply(&terms.0);
+    flow.enter(battle);
     active.0 = true;
     result.0 = None;
     if let Some(dialogue) = dialogue.as_deref_mut() {
@@ -138,11 +142,6 @@ pub(super) fn start_on_request(
     ) {
         audio.write(se);
     }
-    audio.write(AudioRequest::from_music(crate::system_bgm::resolve(
-        system_bgm.as_deref(),
-        0,
-        &system.battle_music,
-    )));
 }
 
 /// Opt-in sample fight; never interrupt a scripted scene.
@@ -387,22 +386,16 @@ pub(super) fn abort_expired_battle(
     }
 }
 
-/// On confirmation, or immediately after a timer abort: persist HP/SP, publish the
-/// [`BattleResult`], and tear the battle down. The victory reward (gold and
-/// experience) was already paid by [`apply_victory_rewards`] on entering the
-/// outcome, so it is not applied again here.
-#[allow(clippy::too_many_arguments)]
+/// Persist the confirmed outcome before the exit transitions. Rewards were
+/// already paid on entering the outcome; the scene controller publishes the result.
 pub(super) fn outcome_input(
     keys: Res<ButtonInput<KeyCode>>,
-    map_bgm: Res<MapBgm>,
-    mut audio: MessageWriter<AudioRequest>,
     mut battle: ResMut<Battle>,
-    mut active: ResMut<BattleActive>,
-    mut result: ResMut<BattleResult>,
+    mut flow: ResMut<super::BattleFlow>,
     mut vitals: ResMut<Vitals>,
     mut dialogue: Option<ResMut<crate::dialogue::Dialogue>>,
 ) {
-    if battle.phase != Phase::Outcome {
+    if battle.phase != Phase::Outcome || flow.busy() {
         return;
     }
     if battle.outcome != Some(BattleOutcome::Abort)
@@ -434,10 +427,7 @@ pub(super) fn outcome_input(
             .collect::<Vec<_>>();
         vitals.set_states(fighter.actor_id, states);
     }
-    result.0 = Some(outcome);
-    active.0 = false;
-    *battle = Battle::default();
-    audio.write(map_bgm.restore());
+    flow.leave(outcome);
 }
 
 /// A time-derived battle seed; the low bit is forced set by [`Battle::build`].

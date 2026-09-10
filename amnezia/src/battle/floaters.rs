@@ -93,7 +93,13 @@ fn number_color(kind: NumberKind) -> Color {
 
 /// Register the floating-number systems: spawn queued pops and animate them.
 pub fn register(app: &mut App) {
-    app.add_systems(Update, (spawn_pending_numbers, animate_floating_numbers));
+    app.add_systems(
+        Update,
+        (
+            spawn_pending_numbers,
+            animate_floating_numbers.run_if(crate::transitions::scene_running),
+        ),
+    );
 }
 
 #[cfg(test)]

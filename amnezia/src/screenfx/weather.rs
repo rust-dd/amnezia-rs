@@ -250,19 +250,14 @@ fn init_fog(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
 /// Whether the weather should keep animating: paused while a map-suspending scene
 /// is on top, mirroring how RPG_RT freezes the map's screen update there.
 fn weather_running(
-    transition: Option<Res<crate::transitions::Transition>>,
+    transition: crate::transitions::TransitionPause,
     battle: Res<BattleActive>,
     menu: Res<MenuOpen>,
     shop: Res<ShopOpen>,
     title: Res<TitleActive>,
     gameover: Res<GameOverActive>,
 ) -> bool {
-    !(transition.as_ref().is_some_and(|t| t.busy())
-        || battle.0
-        || menu.0
-        || shop.0
-        || title.0
-        || gameover.0)
+    !(transition.paused() || battle.0 || menu.0 || shop.0 || title.0 || gameover.0)
 }
 
 /// Rebuild the weather entities when the type/strength changes or the map swaps:

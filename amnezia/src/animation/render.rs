@@ -116,12 +116,12 @@ pub(super) fn spawn_screen_flash(commands: &mut Commands, rgb: [f32; 3], power: 
 /// Step each live flash quad's alpha along the RM2000 [`flash_envelope`],
 /// despawning it once the ~11-game-frame window has passed.
 pub(super) fn fade_flashes(
-    transition: Option<Res<crate::transitions::Transition>>,
+    transition: crate::transitions::TransitionPause,
     time: Res<Time>,
     mut commands: Commands,
     mut flashes: Query<(Entity, &mut FlashQuad, &mut Sprite)>,
 ) {
-    if transition.as_ref().is_some_and(|t| t.busy()) {
+    if transition.paused() {
         return;
     }
     let dt = time.delta_secs();

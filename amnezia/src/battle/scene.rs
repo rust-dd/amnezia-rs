@@ -341,9 +341,9 @@ pub fn register(app: &mut App) {
     app.add_systems(
         Update,
         (
-            sync_scene,
+            sync_scene.after(super::flow::drive),
             measure_battlers,
-            drive_battlers,
+            drive_battlers.run_if(crate::transitions::scene_running),
             apply_battler_flash,
             paint_battlers,
         ),

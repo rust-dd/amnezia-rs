@@ -81,6 +81,11 @@ fn sync(
             return;
         }
         capture.erase = effect.erase;
+        if let Some(alpha) = effect.flash_alpha(transition.frame) {
+            material.control = Vec4::new(22.0, 1.0, 0.0, alpha as f32 / 255.0);
+            return;
+        }
+        let frame = transition.frame.saturating_sub(effect.flash_frames);
         material.control = Vec4::new(
             if effect.kind == Kind::None && effect.from_erased {
                 21.0
@@ -89,14 +94,14 @@ fn sync(
             },
             u8::from(effect.erase) as f32,
             u8::from(effect.from_erased) as f32,
-            effect.fade_alpha(transition.frame) as f32 / 255.0,
+            effect.fade_alpha(frame) as f32 / 255.0,
         );
         match effect.kind {
             Kind::Mosaic => {
-                let (size, offset) = effect.mosaic(transition.frame);
+                let (size, offset) = effect.mosaic(frame);
                 material.mosaic = Vec4::new(size as f32, offset as f32, 0.0, 0.0);
             }
-            Kind::Zoom => material.crop = effect.zoom_rect(transition.frame).as_vec4(),
+            Kind::Zoom => material.crop = effect.zoom_rect(frame).as_vec4(),
             _ => {}
         }
     } else {

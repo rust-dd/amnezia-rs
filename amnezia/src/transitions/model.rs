@@ -39,6 +39,7 @@ pub(super) struct Effect {
     pub erase: bool,
     pub from_erased: bool,
     pub duration: u32,
+    pub flash_frames: u32,
     pub center: IVec2,
     pub offsets: Vec<u32>,
 }
@@ -51,6 +52,7 @@ impl Effect {
             erase,
             from_erased,
             duration: kind.frames(),
+            flash_frames: 0,
             center: center.clamp(IVec2::ZERO, IVec2::new(320, 240)),
             offsets: if kind == Kind::Mosaic {
                 (0..kind.frames())
@@ -64,6 +66,11 @@ impl Effect {
 
     pub fn fade_alpha(&self, frame: u32) -> u32 {
         ((frame + 1) * 255 / self.duration.saturating_sub(2).max(1)).min(255)
+    }
+
+    pub fn flash_alpha(&self, frame: u32) -> Option<u32> {
+        const ALPHA: [u32; 10] = [248, 223, 198, 173, 148, 123, 99, 74, 49, 24];
+        (frame < self.flash_frames).then(|| ALPHA[frame as usize % ALPHA.len()])
     }
 
     pub fn mosaic(&self, frame: u32) -> (u32, u32) {

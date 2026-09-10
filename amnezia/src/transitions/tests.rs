@@ -1,6 +1,59 @@
 use super::*;
 
 #[test]
+fn battle_flashes_keep_two_full_ten_frame_envelopes_before_the_zoom() {
+    let mut state = Transition::default();
+    state.start(Kind::Zoom, true, 0, IVec2::ZERO);
+    state.prepend_battle_flashes();
+    for frame in 0..20 {
+        let mut level = 31.0_f64;
+        let mut remaining = 10;
+        for _ in 0..frame % 10 {
+            level -= level / remaining as f64;
+            remaining -= 1;
+        }
+        state.advance(frame);
+        let effect = state.effect.as_ref().unwrap();
+        assert_eq!(effect.flash_alpha(state.frame), Some((level * 8.0) as u32));
+    }
+    state.advance(20);
+    assert_eq!(state.effect.as_ref().unwrap().flash_alpha(20), None);
+    state.advance(60);
+    assert!(state.busy());
+    state.advance(61);
+    assert!(!state.busy());
+    assert!(state.erased());
+}
+
+#[test]
+fn battle_none_and_already_erased_entry_keep_the_original_forty_frame_wait() {
+    use bevy::ecs::system::RunSystemOnce;
+    for erased in [false, true] {
+        let mut world = World::new();
+        world.init_resource::<Transition>();
+        world.init_resource::<Settings>();
+        world.init_resource::<crate::timing::GameFrames>();
+        world.insert_resource(Defaults([0, 0, 20, 0, 0, 0]));
+        world.resource_mut::<Transition>().erased = erased;
+        world
+            .run_system_once(|mut io: TransitionIo| assert!(io.begin_battle(IVec2::ZERO)))
+            .unwrap();
+        let state = world.resource::<Transition>();
+        let effect = state.effect.as_ref().unwrap();
+        assert_eq!(effect.kind, if erased { Kind::None } else { Kind::Cut });
+        assert_eq!(effect.duration, 40);
+        assert_eq!(effect.flash_frames, if erased { 0 } else { 20 });
+        let total = if erased { 40 } else { 60 };
+        let mut state = world.resource_mut::<Transition>();
+        state.advance(total - 1);
+        assert!(state.busy());
+        state.advance(total);
+        assert!(!state.busy());
+        assert!(state.erased());
+    }
+}
+
+#[test]
 fn none_preserves_erasure_and_repeated_erase_is_skipped() {
     let mut state = Transition::default();
     assert!(state.start(Kind::None, true, 0, IVec2::ZERO));
