@@ -1,12 +1,6 @@
-//! Screen presentation effects driven by the event interpreter: the erase/show
-//! black fade, the color tint, the brief flash, and the camera shake. The
-//! interpreter stays decoupled by emitting a [`ScreenEffect`] message; the
-//! plugins here consume it.
-//!
-//! The color tint is a faithful camera post-process (see the [`tone`] submodule)
-//! that can darken, brighten, and desaturate the whole scene; flash and fade stay
-//! as fullscreen UI overlays, and the shake offsets the camera. The [`shake`] and
-//! [`fade`] submodules hold the RM2000-matched motion and timing maths.
+//! Event-driven tint, flash and camera shake. Erase/show is handled by the shared
+//! scene-transition controller. Tint is a world-camera post-process; flash uses
+//! a fullscreen overlay below message/menu windows.
 //!
 //! The shake avoids touching `player.rs`: [`apply_camera_shake`] runs in
 //! `PostUpdate` (after camera follow has set the base position)
@@ -19,13 +13,11 @@ use bevy::transform::TransformSystems;
 use flash::Flashing;
 use shake::ShakeState;
 
-mod fade;
 mod flash;
 mod shake;
 mod tone;
 mod weather;
 
-pub use fade::transition_secs;
 pub use tone::{FrontCamera, PICTURE_LAYER, ScreenTone, TintState};
 pub use weather::{Weather, WeatherStrength};
 
@@ -33,10 +25,6 @@ pub use weather::{Weather, WeatherStrength};
 /// the tint, by the [`tone`] submodule).
 #[derive(Message, Debug, Clone, PartialEq)]
 pub enum ScreenEffect {
-    /// Fade to black over `secs` and hold (`EraseScreen` 11010).
-    Erase { secs: f32 },
-    /// Fade from black back to the scene over `secs` (`ShowScreen` 11020).
-    Show { secs: f32 },
     /// Shift the screen color over `secs` (`TintScreen` 11030). `r,g,b,sat` are
     /// RM2000 0..200, 100 = neutral.
     Tint {
@@ -108,20 +96,12 @@ fn tenths(v: i32) -> f32 {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScreenShakeSet;
 
-/// Which overlay a fullscreen node is, so one query drives both.
-#[derive(Component, Clone, Copy)]
-enum FxLayer {
-    Flash,
-    Fade,
-}
+#[derive(Component)]
+struct FlashOverlay;
 
-/// The live effect state: fade progress, the decaying flash, and the running
-/// shake with its current offset. The tint lives in the [`tone`] submodule.
+/// Flash and shake state. The tint lives in the [`tone`] submodule.
 #[derive(Resource, Default)]
 struct Fx {
-    fade_alpha: f32,
-    fade_target: f32,
-    fade_secs: f32,
     flash: Option<Flashing>,
     shake: ShakeState,
     shake_offset: Vec2,
@@ -150,22 +130,12 @@ impl Plugin for ScreenFxPlugin {
     }
 }
 
-/// The two fullscreen overlays. They render on the front (picture/UI) camera, so
-/// they sit above the toned world and pictures. The flash sits below the
-/// menu/message UI; the erase fade sits above everything so a black-out truly
-/// covers the screen. Weather draws on its own layer-0 sprites (see [`weather`]).
 fn spawn_overlays(mut commands: Commands) {
     commands.spawn((
         full_screen(),
         transparent(),
         GlobalZIndex(-10),
-        FxLayer::Flash,
-    ));
-    commands.spawn((
-        full_screen(),
-        transparent(),
-        GlobalZIndex(1003),
-        FxLayer::Fade,
+        FlashOverlay,
     ));
 }
 
@@ -188,20 +158,22 @@ fn transparent() -> BackgroundColor {
 
 /// Ingest new effects, advance every running effect, and repaint the overlays.
 fn step_effects(
+    transition: Option<Res<crate::transitions::Transition>>,
     time: Res<Time>,
     mut effects: MessageReader<ScreenEffect>,
     mut fx: ResMut<Fx>,
-    mut layers: Query<(&mut BackgroundColor, &FxLayer)>,
+    mut layers: Query<&mut BackgroundColor, With<FlashOverlay>>,
 ) {
     for effect in effects.read() {
         apply_effect(&mut fx, effect);
     }
-    let dt = time.delta_secs();
-    step_fade(&mut fx, dt);
-    step_flash(&mut fx, dt);
-    step_shake(&mut fx, dt);
-    for (mut background, layer) in &mut layers {
-        background.0 = overlay_color(&fx, *layer);
+    if !transition.as_ref().is_some_and(|t| t.busy()) {
+        let dt = time.delta_secs();
+        step_flash(&mut fx, dt);
+        step_shake(&mut fx, dt);
+    }
+    for mut background in &mut layers {
+        background.0 = fx.flash.as_ref().map_or(Color::NONE, |flash| flash.color());
     }
 }
 
@@ -209,14 +181,6 @@ fn step_effects(
 /// by the [`tone`] submodule, so it is a no-op here.
 fn apply_effect(fx: &mut Fx, effect: &ScreenEffect) {
     match *effect {
-        ScreenEffect::Erase { secs } => {
-            fx.fade_target = 1.0;
-            fx.fade_secs = secs;
-        }
-        ScreenEffect::Show { secs } => {
-            fx.fade_target = 0.0;
-            fx.fade_secs = secs;
-        }
         ScreenEffect::Tint { .. } => {}
         ScreenEffect::Flash {
             r,
@@ -233,16 +197,6 @@ fn apply_effect(fx: &mut Fx, effect: &ScreenEffect) {
     }
 }
 
-/// Advance the fade linearly so it reaches its target after `fade_secs` seconds
-/// (a zero duration snaps, matching an instant transition).
-fn step_fade(fx: &mut Fx, dt: f32) {
-    if fx.fade_secs <= 0.0 {
-        fx.fade_alpha = fx.fade_target;
-        return;
-    }
-    fx.fade_alpha = approach(fx.fade_alpha, fx.fade_target, dt / fx.fade_secs);
-}
-
 fn step_flash(fx: &mut Fx, dt: f32) {
     if fx.flash.as_mut().is_some_and(|flash| !flash.step(dt)) {
         fx.flash = None;
@@ -251,17 +205,6 @@ fn step_flash(fx: &mut Fx, dt: f32) {
 
 fn step_shake(fx: &mut Fx, dt: f32) {
     fx.shake_offset = Vec2::new(fx.shake.step(dt), 0.0);
-}
-
-/// The color an overlay should paint given the current state.
-fn overlay_color(fx: &Fx, layer: FxLayer) -> Color {
-    match layer {
-        FxLayer::Fade => Color::srgba(0.0, 0.0, 0.0, fx.fade_alpha),
-        FxLayer::Flash => match &fx.flash {
-            Some(flash) => flash.color(),
-            None => Color::srgba(0.0, 0.0, 0.0, 0.0),
-        },
-    }
 }
 
 /// Add the current shake offset to the camera after `camera_follow` set its base
@@ -275,49 +218,43 @@ fn apply_camera_shake(fx: Res<Fx>, mut cameras: Query<&mut Transform, With<MainC
     camera.translation.y += fx.shake_offset.y;
 }
 
-/// Step `cur` toward `target` by at most `step`.
-fn approach(cur: f32, target: f32, step: f32) -> f32 {
-    if cur < target {
-        (cur + step).min(target)
-    } else {
-        (cur - step).max(target)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn fade_reaches_target_over_its_duration() {
-        let mut fx = Fx {
-            fade_target: 1.0,
-            fade_secs: 0.5,
-            ..default()
-        };
-        step_fade(&mut fx, 0.25);
-        assert!((fx.fade_alpha - 0.5).abs() < 1e-6);
-        step_fade(&mut fx, 0.25);
-        assert!((fx.fade_alpha - 1.0).abs() < 1e-6);
-    }
-
-    #[test]
-    fn instant_fade_snaps_to_target() {
-        let mut fx = Fx {
-            fade_target: 1.0,
-            fade_secs: 0.0,
-            ..default()
-        };
-        step_fade(&mut fx, 0.016);
-        assert_eq!(fx.fade_alpha, 1.0);
-    }
-
-    #[test]
-    fn approach_moves_toward_target_without_overshoot() {
-        assert_eq!(approach(0.0, 1.0, 0.3), 0.3);
-        assert_eq!(approach(0.9, 1.0, 0.3), 1.0);
-        assert_eq!(approach(1.0, 0.0, 0.3), 0.7);
-        assert_eq!(approach(0.1, 0.0, 0.3), 0.0);
+    fn scene_transition_holds_a_flash_until_scene_updates_resume() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_millis(100),
+            ))
+            .init_resource::<Fx>()
+            .init_resource::<crate::transitions::Transition>()
+            .add_message::<ScreenEffect>()
+            .add_systems(Update, step_effects);
+        app.world_mut()
+            .resource_mut::<crate::transitions::Transition>()
+            .start(crate::transitions::Kind::Mosaic, true, 0, IVec2::ZERO);
+        app.world_mut()
+            .write_message(ScreenEffect::flash(&[31, 31, 31, 31, 10, 0]));
+        app.update();
+        let initial = app.world().resource::<Fx>().flash.as_ref().unwrap().color();
+        for _ in 0..4 {
+            app.update();
+        }
+        assert_eq!(
+            app.world().resource::<Fx>().flash.as_ref().unwrap().color(),
+            initial
+        );
+        app.world_mut()
+            .resource_mut::<crate::transitions::Transition>()
+            .clear();
+        app.update();
+        assert_ne!(
+            app.world().resource::<Fx>().flash.as_ref().unwrap().color(),
+            initial
+        );
     }
 
     #[test]

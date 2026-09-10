@@ -88,6 +88,7 @@ pub(crate) struct ClockTick;
 
 #[derive(bevy::ecs::system::SystemParam)]
 pub(super) struct ClockScene<'w> {
+    transition: Option<Res<'w, crate::transitions::Transition>>,
     menu: Option<Res<'w, crate::menu::MenuOpen>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
     title: Option<Res<'w, crate::title::TitleActive>>,
@@ -102,6 +103,7 @@ impl ClockScene<'_> {
 
     fn paused(&self) -> bool {
         self.outside_game()
+            || self.transition.as_ref().is_some_and(|t| t.busy())
             || self.menu.as_ref().is_some_and(|v| v.0)
             || self.shop.as_ref().is_some_and(|v| v.0)
     }
@@ -143,6 +145,41 @@ fn tick_playtime(time: Res<Time>, scene: ClockScene, mut play: ResMut<PlayTime>)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transitions_pause_countdowns_but_not_total_playtime() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_millis(250),
+            ))
+            .init_resource::<GameClock>()
+            .init_resource::<PlayTime>()
+            .init_resource::<crate::transitions::Transition>()
+            .add_systems(Update, (tick_clock, tick_playtime));
+        app.world_mut().resource_mut::<GameClock>().set_secs(60);
+        app.world_mut().resource_mut::<GameClock>().start();
+        app.update();
+        app.world_mut()
+            .resource_mut::<crate::transitions::Transition>()
+            .start(crate::transitions::Kind::Mosaic, true, 0, IVec2::ZERO);
+        for _ in 0..4 {
+            app.update();
+        }
+        assert_eq!(
+            app.world().resource::<GameClock>().remaining,
+            60.0 + 59.0 / 60.0
+        );
+        assert_eq!(app.world().resource::<PlayTime>().seconds, 1);
+        app.world_mut()
+            .resource_mut::<crate::transitions::Transition>()
+            .clear();
+        app.update();
+        assert_eq!(
+            app.world().resource::<GameClock>().remaining,
+            60.0 + 59.0 / 60.0 - 0.25
+        );
+    }
 
     #[test]
     fn set_secs_sets_remaining_seconds() {

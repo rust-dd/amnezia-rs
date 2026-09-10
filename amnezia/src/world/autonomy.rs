@@ -34,6 +34,7 @@ const FPS: f32 = 60.0;
 /// Shared movement gates for scenes, foreground events and input prompts.
 #[derive(SystemParam)]
 pub(crate) struct MoveGuards<'w> {
+    transition: Option<Res<'w, crate::transitions::Transition>>,
     prompts: crate::dialogue::InputPrompts<'w>,
     message_options: Option<Res<'w, crate::dialogue::MessageOptions>>,
     dialogue: Res<'w, Dialogue>,
@@ -63,6 +64,7 @@ impl MoveGuards<'_> {
     /// Whether manual movement input is paused.
     pub(crate) fn paused(&self) -> bool {
         self.dialogue.active
+            || self.transition.as_ref().is_some_and(|v| v.busy())
             || self.prompts.active()
             || self.fade.busy()
             || self.running.active()
@@ -82,6 +84,7 @@ impl MoveGuards<'_> {
     /// cutscene movement (the intro walking the hero in) plays while the event runs.
     pub(crate) fn forced_route_paused(&self) -> bool {
         self.fade.busy()
+            || self.transition.as_ref().is_some_and(|v| v.busy())
             || self.menu.0
             || self.shop.0
             || self.battle.0

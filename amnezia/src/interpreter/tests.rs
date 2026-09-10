@@ -37,6 +37,7 @@ mod movement;
 mod outcomes;
 mod screen_coordinates;
 mod transfers;
+mod transitions;
 mod vehicles;
 
 const CONTROL_SWITCHES: u32 = 10210;

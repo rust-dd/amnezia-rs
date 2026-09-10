@@ -116,7 +116,7 @@ pub(super) fn apply_commands(
                         .add(PictureMaterial {
                             channels: tone_channels(tone),
                             extra: opacity_extra(transparency, use_transparent_color),
-                            image,
+                            image: image.clone(),
                             wave: Vec4::ZERO,
                         });
                 world.spawn((
@@ -137,6 +137,7 @@ pub(super) fn apply_commands(
                     },
                     Mesh2d(mesh.clone()),
                     MeshMaterial2d(material),
+                    crate::transitions::SnapshotImage(image),
                     Transform::from_translation(screen_offset(x, y).extend(picture_z(id)))
                         .with_scale(Vec3::ZERO),
                     RenderLayers::layer(PICTURE_LAYER),

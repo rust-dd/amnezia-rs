@@ -10,6 +10,20 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
+    pub(super) fn from_id(id: i32) -> Self {
+        match id {
+            0 => Self::Fade,
+            16 => Self::Zoom,
+            17 => Self::Mosaic,
+            19 => Self::Cut,
+            1..=15 | 18 => {
+                warn!("unused transition type {id} is not implemented; falling back to fade");
+                Self::Fade
+            }
+            _ => Self::None,
+        }
+    }
+
     pub(super) fn frames(self) -> u32 {
         match self {
             Self::Fade => 35,

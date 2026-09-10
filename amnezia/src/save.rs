@@ -80,6 +80,8 @@ pub fn save_slot_exists() -> bool {
 struct SaveGame {
     #[serde(default)]
     game_frames: crate::timing::GameFrames,
+    #[serde(default)]
+    transitions: crate::transitions::Settings,
     map_id: u32,
     x: u32,
     y: u32,
@@ -173,6 +175,7 @@ impl Plugin for SavePlugin {
 /// 16-parameter cap.
 #[derive(SystemParam)]
 struct SaveIo<'w, 's> {
+    transition: Option<Res<'w, crate::transitions::Transition>>,
     commands: Commands<'w, 's>,
     outcome: ResMut<'w, LoadOutcome>,
     load_request: ResMut<'w, LoadRequest>,
@@ -195,6 +198,7 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    transitions: Option<ResMut<'w, crate::transitions::Settings>>,
     game_frames: Option<ResMut<'w, crate::timing::GameFrames>>,
     appearance: Option<ResMut<'w, crate::appearance::Appearance>>,
     menu_access: Option<ResMut<'w, crate::menu::MenuAccess>>,
@@ -274,7 +278,7 @@ fn save_or_load(
     save_io.save_request.0 = false;
     // A fade defers every save and load. A pending interpreter save is left set
     // (not consumed) so it retries once the fade ends.
-    if fade.busy() {
+    if fade.busy() || save_io.transition.as_ref().is_some_and(|t| t.busy()) {
         return;
     }
     let event_save = std::mem::take(&mut save_io.event_save.0);
@@ -296,6 +300,7 @@ fn save_or_load(
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
                 game_frames: scene.game_frames.as_deref().copied().unwrap_or_default(),
+                transitions: scene.transitions.as_deref().cloned().unwrap_or_default(),
                 map_id: map_data.map_id,
                 x: player.tile_x.max(0) as u32,
                 y: player.tile_y.max(0) as u32,
@@ -376,6 +381,9 @@ fn save_or_load(
             if let Some(frames) = scene.game_frames.as_deref_mut() {
                 *frames = game.game_frames;
                 frames.sanitize();
+            }
+            if let Some(transitions) = scene.transitions.as_deref_mut() {
+                *transitions = game.transitions;
             }
             scene.game_clock.remaining = game.timer_remaining;
             scene.game_clock.running = game.timer_running;

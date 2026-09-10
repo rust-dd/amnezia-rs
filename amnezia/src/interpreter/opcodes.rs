@@ -131,7 +131,7 @@ pub(super) const CHANGE_EQUIPMENT: u32 = 10450;
 pub(super) const CHANGE_CONDITION: u32 = 10480;
 /// Override a scene's system BGM (battle, victory, inn, vehicles, or game over).
 pub(super) const CHANGE_SYSTEM_BGM: u32 = 10660;
-/// Choose the map/battle transition style. A cosmetic no-op: the fade is fixed.
+/// Override an erase/show transition for teleport, battle start or battle end.
 pub(super) const CHANGE_SCREEN_TRANSITIONS: u32 = 10690;
 /// Board the nearby vehicle or disembark from the current one.
 pub(super) const ENTER_EXIT_VEHICLE: u32 = 10840;

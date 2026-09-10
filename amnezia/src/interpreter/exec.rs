@@ -67,6 +67,7 @@ impl Exec<'_, '_> {
 
     pub(super) fn scene_paused(&self, fade_busy: bool, overlay_open: bool) -> bool {
         fade_busy
+            || self.subsystems.mapfx.transitions.state.busy()
             || overlay_open
             || self.pending.0.is_some()
             || self.subsystems.flow.title.0

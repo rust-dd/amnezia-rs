@@ -2,10 +2,15 @@ use super::*;
 use crate::timing::GameFrames;
 
 #[test]
-fn save_load_keeps_global_animation_phase_and_old_slots_default_to_zero() {
+fn save_load_keeps_global_animation_phase_and_transition_overrides() {
     let path = temp_slot("frame_clock");
     let mut app = save_app(path.clone());
     app.init_resource::<RunningEvent>();
+    app.init_resource::<crate::transitions::Settings>();
+    let defaults = crate::transitions::Defaults([0, 0, 16, 17, 17, 16]);
+    app.world_mut()
+        .resource_mut::<crate::transitions::Settings>()
+        .change(&[0, 20], &defaults);
     let mut map = MapData::for_test(20, 15);
     map.map_id = 2;
     app.insert_resource(map);
@@ -22,14 +27,24 @@ fn save_load_keeps_global_animation_phase_and_old_slots_default_to_zero() {
     app.world_mut().resource_mut::<EventSaveRequest>().0 = true;
     app.update();
     app.world_mut().resource_mut::<GameFrames>().advance(100.0);
+    app.world_mut()
+        .resource_mut::<crate::transitions::Settings>()
+        .change(&[0, 0], &defaults);
     app.world_mut().resource_mut::<LoadRequest>().0 = true;
     app.update();
     assert_eq!(app.world().resource::<LoadOutcome>().0, Some(true));
     assert_eq!(*app.world().resource::<GameFrames>(), before);
+    assert_eq!(
+        app.world()
+            .resource::<crate::transitions::Settings>()
+            .get(0, &defaults),
+        crate::transitions::Kind::None
+    );
     let legacy = ron::from_str::<SaveGame>(
         "(map_id:1,x:0,y:0,dir:0,switches:[],variables:[],party:[1],items:[],gold:0)",
     )
     .unwrap();
     assert_eq!(legacy.game_frames, GameFrames::default());
+    assert_eq!(legacy.transitions, crate::transitions::Settings::default());
     std::fs::remove_file(path).unwrap();
 }

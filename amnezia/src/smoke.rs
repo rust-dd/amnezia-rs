@@ -24,7 +24,9 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-transitions") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-screen-events") {
+            "screen-events"
+        } else if std::env::args().any(|arg| arg == "--smoke-transitions") {
             "transitions"
         } else if std::env::args().any(|arg| arg == "--smoke-water") {
             "water"
@@ -199,6 +201,11 @@ fn drive(world: &mut World) {
     {
         capture(world, label);
     }
+    if scenario == "screen-events"
+        && let Some(label) = crate::transitions::event_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "water"
         && let Some(label) = crate::world::water_smoke::drive(world, frame)
     {
@@ -227,7 +234,8 @@ fn drive(world: &mut World) {
         {
             assert_eq!(world.resource::<SmokeRun>().escaped_cast, 0b11111);
             assert!(!world.resource::<crate::player::HeroHidden>().0);
-            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 90);
+            // The 60-frame tint resumes after the transfer's 35-frame show.
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 120);
         }
         if world.resource::<SmokeRun>().finish_at == Some(frame + 10) {
             assert!(!world.resource::<crate::teleport::Fade>().busy());
@@ -274,6 +282,8 @@ fn drive(world: &mut World) {
             crate::world::water_smoke::verify_finished(world);
         } else if scenario == "transitions" {
             crate::transitions::smoke::verify_finished(world);
+        } else if scenario == "screen-events" {
+            crate::transitions::event_smoke::verify_finished(world);
         } else if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(
@@ -338,6 +348,8 @@ fn start_scenario(world: &mut World, scenario: &str) {
             | "transitions"
     ) {
         message_options::entry()
+    } else if scenario == "screen-events" {
+        crate::transitions::event_smoke::entry()
     } else if scenario == "camera" {
         camera::entry()
     } else if scenario == "looping" {

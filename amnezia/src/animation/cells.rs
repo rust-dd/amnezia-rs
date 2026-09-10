@@ -112,6 +112,7 @@ impl CellRenderer<'_> {
                     .spawn((
                         Mesh2d(self.mesh.0.clone()),
                         MeshMaterial2d(material),
+                        crate::transitions::SnapshotImage(image.clone()),
                         Transform::from_translation(overlay_translation(
                             center,
                             CELL_Z + index as f32 * 0.1,

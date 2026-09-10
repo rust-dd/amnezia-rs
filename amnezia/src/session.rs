@@ -38,6 +38,7 @@ fn start_new_game(world: &mut World) {
     reset::<HeroHidden>(world);
     reset::<crate::audio::MemorizedBgm>(world);
     reset::<crate::system_bgm::SystemBgm>(world);
+    reset::<crate::transitions::Settings>(world);
     reset::<crate::panorama::Panorama>(world);
     reset::<crate::screenfx::TintState>(world);
     reset::<crate::screenfx::Weather>(world);
@@ -93,6 +94,9 @@ pub(crate) fn clear_transient(world: &mut World) {
     clear_messages::<crate::animation::ShowMapAnimation>(world);
     clear_messages::<crate::animation::PlayAnimation>(world);
     crate::screenfx::reset_transient(world);
+    if let Some(mut transition) = world.get_resource_mut::<crate::transitions::Transition>() {
+        transition.clear();
+    }
     if let Some(mut vehicles) = world.get_resource_mut::<crate::vehicles::Vehicles>() {
         vehicles.clear_motion();
     }

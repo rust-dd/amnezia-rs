@@ -185,7 +185,7 @@ impl Plugin for AnimationPlugin {
                         resolve_map_animation,
                         debug_preview,
                         start_animations,
-                        step_animations,
+                        step_animations.run_if(crate::transitions::scene_running),
                     )
                         .chain(),
                     fade_flashes,

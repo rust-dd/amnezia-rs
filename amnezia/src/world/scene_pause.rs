@@ -3,6 +3,7 @@ use bevy::prelude::*;
 
 #[derive(SystemParam)]
 pub(crate) struct ScenePause<'w> {
+    transition: Option<Res<'w, crate::transitions::Transition>>,
     fade: Option<Res<'w, crate::teleport::Fade>>,
     menu: Option<Res<'w, crate::menu::MenuOpen>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
@@ -15,6 +16,7 @@ pub(crate) struct ScenePause<'w> {
 impl ScenePause<'_> {
     pub(crate) fn paused(&self) -> bool {
         self.fade.as_ref().is_some_and(|v| v.busy())
+            || self.transition.as_ref().is_some_and(|v| v.busy())
             || self.menu.as_ref().is_some_and(|v| v.0)
             || self.shop.as_ref().is_some_and(|v| v.0)
             || self.battle.as_ref().is_some_and(|v| v.0)

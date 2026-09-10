@@ -526,7 +526,15 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             frame.ip += 1;
             Flow::Advance
         }
-        CHANGE_SCREEN_TRANSITIONS | FLASH_SPRITE | COMMENT | COMMENT_2 | END_MARKER => {
+        CHANGE_SCREEN_TRANSITIONS => {
+            let transitions = &mut x.subsystems.mapfx.transitions;
+            transitions
+                .settings
+                .change(&command.params, &transitions.defaults);
+            frame.ip += 1;
+            Flow::Advance
+        }
+        FLASH_SPRITE | COMMENT | COMMENT_2 | END_MARKER => {
             // Faithfully decoded but deliberately inert in this remake (each
             // rationale is on its constant in `opcodes`).
             frame.ip += 1;

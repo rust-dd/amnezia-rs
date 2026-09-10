@@ -1,12 +1,23 @@
 use bevy::prelude::*;
 
+pub(crate) mod event_smoke;
 mod model;
 pub(crate) mod render;
+mod settings;
 pub(crate) mod smoke;
 mod snapshots;
 
 use model::Effect;
 pub(crate) use model::Kind;
+pub(crate) use settings::{Defaults, Settings, TransitionIo};
+
+/// Images sampled by custom materials must also finish loading before show.
+#[derive(Component)]
+pub(crate) struct SnapshotImage(pub Handle<Image>);
+
+pub(crate) fn scene_running(transition: Option<Res<Transition>>) -> bool {
+    !transition.as_ref().is_some_and(|t| t.busy())
+}
 
 #[derive(Resource, Default)]
 pub(crate) struct Transition {
@@ -15,6 +26,7 @@ pub(crate) struct Transition {
     serial: u64,
     started: u32,
     frame: u32,
+    pub(crate) event_erased: bool,
 }
 
 impl Transition {
@@ -22,23 +34,41 @@ impl Transition {
         self.effect.is_some()
     }
 
+    pub(crate) fn erased(&self) -> bool {
+        self.erased && !self.busy()
+    }
+
     pub(crate) fn start(&mut self, kind: Kind, erase: bool, now: u32, center: IVec2) -> bool {
+        self.start_for(kind, erase, now, center, kind.frames())
+    }
+
+    pub(crate) fn start_for(
+        &mut self,
+        kind: Kind,
+        erase: bool,
+        now: u32,
+        center: IVec2,
+        duration: u32,
+    ) -> bool {
         if self.busy() {
             return false;
         }
-        if kind == Kind::None || (erase && self.erased) {
+        if duration == 0 || (kind != Kind::None && erase && self.erased) {
             return true;
         }
         self.serial = self.serial.wrapping_add(1);
         self.started = now;
         self.frame = 0;
-        self.effect = Some(Effect::new(kind, erase, self.erased, center));
+        let mut effect = Effect::new(kind, erase, self.erased, center);
+        effect.duration = duration;
+        self.effect = Some(effect);
         true
     }
 
     pub(crate) fn clear(&mut self) {
         self.effect = None;
         self.erased = false;
+        self.event_erased = false;
     }
 
     fn advance(&mut self, now: u32) {
@@ -47,7 +77,9 @@ impl Transition {
         };
         self.frame = now.wrapping_sub(self.started);
         if self.frame >= effect.duration {
-            self.erased = effect.erase;
+            if effect.kind != Kind::None {
+                self.erased = effect.erase;
+            }
             self.effect = None;
         }
     }
@@ -58,6 +90,9 @@ pub(crate) struct TransitionPlugin;
 impl Plugin for TransitionPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Transition>()
+            .init_resource::<crate::timing::GameFrames>()
+            .init_resource::<Settings>()
+            .init_resource::<Defaults>()
             .add_systems(PreUpdate, tick.after(crate::timing::FrameClockSet));
     }
 }

@@ -10,6 +10,8 @@ fn new_game_clears_progress_and_rebuilds_even_the_same_start_map() {
     app.add_plugins((
         MinimalPlugins,
         AssetPlugin::default(),
+        crate::timing::TimingPlugin,
+        crate::transitions::TransitionPlugin,
         TeleportPlugin,
         SessionPlugin,
     ))
@@ -32,6 +34,9 @@ fn new_game_clears_progress_and_rebuilds_even_the_same_start_map() {
     let mut frames = crate::timing::GameFrames::default();
     frames.advance(100.0);
     app.insert_resource(frames);
+    app.world_mut()
+        .resource_mut::<crate::transitions::Settings>()
+        .change(&[0, 20], &crate::transitions::Defaults([0; 6]));
     let old_scene = app.world_mut().spawn(MapScene).id();
     let hero = app
         .world_mut()
@@ -50,13 +55,22 @@ fn new_game_clears_progress_and_rebuilds_even_the_same_start_map() {
         ))
         .id();
     app.world_mut().resource_mut::<NewGameRequest>().0 = true;
-    for _ in 0..80 {
+    app.update();
+    assert_eq!(app.world().resource::<crate::timing::GameFrames>().frame, 0);
+    for _ in 1..80 {
         app.update();
     }
     assert!(!app.world().resource::<Switches>().get(8));
     assert_eq!(app.world().resource::<Inventory>().gold(), 0);
-    assert_eq!(app.world().resource::<crate::timing::GameFrames>().frame, 0);
+    assert_eq!(
+        app.world().resource::<crate::timing::GameFrames>().frame,
+        79
+    );
     assert!(!app.world().resource::<RunningEvent>().active());
+    assert_eq!(
+        *app.world().resource::<crate::transitions::Settings>(),
+        crate::transitions::Settings::default()
+    );
     assert!(app.world().get_entity(old_scene).is_err());
     assert!(!app.world().resource::<MapEvents>().events.is_empty());
     let player = app.world().get::<Player>(hero).unwrap();

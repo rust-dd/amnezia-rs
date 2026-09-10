@@ -40,6 +40,7 @@ use super::{
 /// 16-parameter cap. A menu already up ignores these — only opening is gated.
 #[derive(SystemParam)]
 pub(super) struct OpenBlockers<'w> {
+    transition: Option<Res<'w, crate::transitions::Transition>>,
     dialogue: Res<'w, Dialogue>,
     running: Res<'w, RunningEvent>,
     choice: Res<'w, Choice>,
@@ -52,6 +53,7 @@ impl OpenBlockers<'_> {
     /// Whether any transient flow is live, so the menu must refuse to open.
     fn any(&self) -> bool {
         self.dialogue.active
+            || self.transition.as_ref().is_some_and(|v| v.busy())
             || self.running.active()
             || self.choice.active()
             || self.input_number.active()

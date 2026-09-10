@@ -1,25 +1,12 @@
-//! Map transfer with a fade: a teleport request fades the screen to black,
-//! swaps the map at the black peak (despawn scene, load destination, reposition
-//! the persistent hero), then fades back in. Movement and interaction are
-//! suppressed while a fade is in progress.
+//! Map transfers share the event transition state, preserving explicit erasure.
 
 use crate::player::{CameraPan, Player};
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::tiles::CHAR_Y_OFFSET;
+use crate::transitions::{Kind, TransitionIo};
 use crate::world::{MapChanged, MapData, MapEvents, MapScene, MoveQueue, RouteStepper, load_map};
 use bevy::prelude::*;
 
-/// Frames (at 60 fps) each fade phase runs — RM2000's map-transfer transition
-/// default (EasyRPG `Transition::GetDefaultFrames`), matching `screenfx::fade`'s
-/// 35-frame screen fade. The previous 0.25 s fade was ~2.3× too fast.
-const FADE_FRAMES: f32 = 35.0;
-
-/// Overlay alpha added per second, so a full fade-out (or fade-in) spans
-/// [`FADE_FRAMES`] frames.
-const FADE_SPEED: f32 = 60.0 / FADE_FRAMES;
-
-/// A pending teleport `(map_id, x, y)`, set by an interaction or a touch, and
-/// picked up by the fade. At most one is queued at a time.
 #[derive(Resource, Default)]
 pub struct PendingTeleport(pub Option<(u32, u32, u32)>, bool);
 
@@ -31,42 +18,28 @@ impl PendingTeleport {
     }
 }
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(Default, PartialEq, Eq, Clone, Copy)]
 enum Phase {
+    #[default]
     Idle,
     Out,
+    Prepare,
     In,
 }
 
-/// The teleport fade state machine.
-#[derive(Resource)]
+/// Map-transfer progress, including rebuilding the scene between transitions.
+#[derive(Resource, Default)]
 pub struct Fade {
     phase: Phase,
-    alpha: f32,
     target: Option<(u32, u32, u32)>,
     reload: bool,
 }
 
 impl Fade {
-    /// Whether a teleport fade is in progress (movement/interaction paused).
     pub fn busy(&self) -> bool {
         self.phase != Phase::Idle
     }
 }
-
-impl Default for Fade {
-    fn default() -> Self {
-        Self {
-            phase: Phase::Idle,
-            alpha: 0.0,
-            target: None,
-            reload: false,
-        }
-    }
-}
-
-#[derive(Component)]
-struct FadeOverlay;
 
 pub struct TeleportPlugin;
 
@@ -74,31 +47,16 @@ impl Plugin for TeleportPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PendingTeleport>()
             .init_resource::<Fade>()
-            .add_systems(Startup, spawn_overlay)
-            .add_systems(Update, drive_fade);
+            .add_systems(
+                Update,
+                drive_fade.before(crate::interpreter::InterpreterStep),
+            );
     }
-}
-
-/// A full-screen black overlay whose alpha the fade drives; on top of everything.
-fn spawn_overlay(mut commands: Commands) {
-    commands.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(0.0),
-            right: Val::Px(0.0),
-            top: Val::Px(0.0),
-            bottom: Val::Px(0.0),
-            ..default()
-        },
-        BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0)),
-        GlobalZIndex(1000),
-        FadeOverlay,
-    ));
 }
 
 #[allow(clippy::too_many_arguments)]
 fn drive_fade(
-    time: Res<Time>,
+    mut transition: TransitionIo,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
     switches: Res<Switches>,
@@ -118,55 +76,64 @@ fn drive_fade(
         &mut MoveQueue,
         &mut RouteStepper,
     )>,
-    mut overlay: Query<&mut BackgroundColor, With<FadeOverlay>>,
 ) {
-    if fade.phase == Phase::Idle
-        && let Some(target) = pending.0.take()
-    {
-        fade.target = Some(target);
-        fade.reload = std::mem::take(&mut pending.1);
-        fade.phase = Phase::Out;
+    if transition.state.busy() {
+        return;
     }
-    let step = FADE_SPEED * time.delta_secs();
+    let now = transition.frames.frame;
+    let center = IVec2::new(160, 120);
     match fade.phase {
+        Phase::Idle => {
+            let Some(target) = pending.0.take() else {
+                return;
+            };
+            fade.target = Some(target);
+            fade.reload = std::mem::take(&mut pending.1);
+            let kind = if fade.reload {
+                Kind::Fade
+            } else {
+                transition.kind(0)
+            };
+            if !transition.state.erased() {
+                transition.state.start(kind, true, now, center);
+            }
+            fade.phase = Phase::Out;
+        }
         Phase::Out => {
-            fade.alpha += step;
-            if fade.alpha >= 1.0 {
-                fade.alpha = 1.0;
-                if let Some((map_id, x, y)) = fade.target.take() {
-                    swap_map(
-                        &mut commands,
-                        &asset_server,
-                        &switches,
-                        &variables,
-                        &party,
-                        &inventory,
-                        &mut map_data,
-                        &mut map_events,
-                        &mut pan,
-                        &scene,
-                        &mut players,
-                        map_id,
-                        x,
-                        y,
-                        fade.reload,
-                    );
-                    map_changed.write(MapChanged);
-                }
-                fade.phase = Phase::In;
+            if let Some((map_id, x, y)) = fade.target.take() {
+                swap_map(
+                    &mut commands,
+                    &asset_server,
+                    &switches,
+                    &variables,
+                    &party,
+                    &inventory,
+                    &mut map_data,
+                    &mut map_events,
+                    &mut pan,
+                    &scene,
+                    &mut players,
+                    map_id,
+                    x,
+                    y,
+                    fade.reload,
+                );
+                map_changed.write(MapChanged);
             }
+            fade.phase = Phase::Prepare;
         }
-        Phase::In => {
-            fade.alpha -= step;
-            if fade.alpha <= 0.0 {
-                fade.alpha = 0.0;
-                fade.phase = Phase::Idle;
+        Phase::Prepare => {
+            if !transition.state.event_erased {
+                let kind = if fade.reload {
+                    Kind::Fade
+                } else {
+                    transition.kind(1)
+                };
+                transition.state.start(kind, false, now, center);
             }
+            fade.phase = Phase::In;
         }
-        Phase::Idle => {}
-    }
-    if let Ok(mut background) = overlay.single_mut() {
-        background.0 = Color::srgba(0.0, 0.0, 0.0, fade.alpha);
+        Phase::In => fade.phase = Phase::Idle,
     }
 }
 
@@ -247,6 +214,9 @@ fn reposition_hero(
 }
 
 #[cfg(test)]
+mod transition_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -307,12 +277,5 @@ mod tests {
         for entity in scene {
             assert!(app.world().get_entity(entity).is_ok());
         }
-    }
-
-    #[test]
-    fn fade_phase_matches_the_thirty_five_frame_transition() {
-        // Each fade phase spans 35 frames at 60 fps ≈ 0.583 s: FADE_SPEED alpha
-        // per second fills 0→1 in exactly that time.
-        assert!((1.0 / FADE_SPEED - FADE_FRAMES / 60.0).abs() < 1e-6);
     }
 }

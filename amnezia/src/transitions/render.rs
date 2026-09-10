@@ -1,4 +1,5 @@
 use super::{Kind, Transition, snapshots};
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use bevy::render::render_resource::{AsBindGroup, TextureFormat, TextureUsages};
 use bevy::shader::ShaderRef;
@@ -59,6 +60,7 @@ pub(crate) fn setup(
 }
 
 fn sync(
+    graphics: PendingGraphics,
     transition: Option<Res<Transition>>,
     output: Option<Res<OutputMaterial>>,
     capture: Option<ResMut<snapshots::Capture>>,
@@ -73,9 +75,18 @@ fn sync(
     capture.serial = transition.serial;
     capture.active = transition.busy();
     if let Some(effect) = &transition.effect {
+        if effect.from_erased && !capture.ready(transition.serial) && graphics.pending() {
+            capture.active = false;
+            material.control = Vec4::new(21.0, 0.0, 0.0, 0.0);
+            return;
+        }
         capture.erase = effect.erase;
         material.control = Vec4::new(
-            effect.kind as u32 as f32,
+            if effect.kind == Kind::None && effect.from_erased {
+                21.0
+            } else {
+                effect.kind as u32 as f32
+            },
             u8::from(effect.erase) as f32,
             u8::from(effect.from_erased) as f32,
             effect.fade_alpha(transition.frame) as f32 / 255.0,
@@ -90,5 +101,41 @@ fn sync(
         }
     } else {
         material.control = Vec4::new(if transition.erased { 21.0 } else { 20.0 }, 0.0, 0.0, 0.0);
+    }
+}
+
+#[derive(SystemParam)]
+struct PendingGraphics<'w, 's> {
+    server: Res<'w, AssetServer>,
+    sprites: Query<'w, 's, &'static Sprite>,
+    custom: Query<'w, 's, &'static super::SnapshotImage>,
+    ui: Query<'w, 's, &'static ImageNode>,
+    fonts: Query<'w, 's, &'static TextFont>,
+}
+
+impl PendingGraphics<'_, '_> {
+    fn pending(&self) -> bool {
+        let waiting = |id| {
+            self.server.get_load_state(id).is_some_and(|state| {
+                matches!(
+                    state,
+                    bevy::asset::LoadState::NotLoaded | bevy::asset::LoadState::Loading
+                )
+            })
+        };
+        self.sprites
+            .iter()
+            .any(|sprite| waiting(sprite.image.id().untyped()))
+            || self
+                .custom
+                .iter()
+                .any(|image| waiting(image.0.id().untyped()))
+            || self
+                .ui
+                .iter()
+                .any(|node| waiting(node.image.id().untyped()))
+            || self.fonts.iter().any(|font| {
+                matches!(&font.font, bevy::text::FontSource::Handle(handle) if waiting(handle.id().untyped()))
+            })
     }
 }

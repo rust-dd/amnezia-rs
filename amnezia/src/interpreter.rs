@@ -84,6 +84,10 @@ impl Plugin for InterpreterPlugin {
             .init_resource::<crate::vehicles::Vehicles>()
             .init_resource::<crate::system_bgm::SystemBgm>()
             .init_resource::<crate::panorama::Panorama>()
+            .init_resource::<crate::transitions::Transition>()
+            .init_resource::<crate::transitions::Settings>()
+            .init_resource::<crate::transitions::Defaults>()
+            .init_resource::<crate::timing::GameFrames>()
             .insert_resource(CommonEvents::load())
             .add_systems(
                 Update,
@@ -138,12 +142,14 @@ fn autorun(
     battle: Res<BattleActive>,
     title: Res<TitleActive>,
     gameover: Res<GameOverActive>,
+    transition: Res<crate::transitions::Transition>,
     mut running: ResMut<RunningEvent>,
 ) {
     if running.active()
         || prompts.active()
         || dialogue.active
         || fade.busy()
+        || transition.busy()
         || menu.0
         || shop.0
         || battle.0

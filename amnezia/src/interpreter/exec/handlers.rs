@@ -15,6 +15,7 @@ use super::{Exec, Flow, resolve_character};
 use crate::animation::ShowMapAnimation;
 use crate::world::{RelocateEvent, RouteStepper};
 use amnezia_data::EventCommand;
+use bevy::prelude::IVec2;
 
 /// `ControlVariables` (10220): resolve the operand from live state, then assign it
 /// under the command's target mode and operation.
@@ -250,6 +251,28 @@ pub(super) fn show_battle_animation(
 /// effect must finish before the next command; Game Over ends the run.
 pub(super) fn present(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -> Flow {
     match parse_present(command, &x.variables) {
+        Some(Present::Transition { kind, erase }) => {
+            let center = x
+                .subsystems
+                .flow
+                .map_data
+                .as_ref()
+                .map_or(IVec2::new(160, 120), |map| {
+                    let (x, y) = x.subsystems.flow.screen.character(
+                        10001,
+                        frame.event_id,
+                        map,
+                        &x.subsystems.mapfx.vehicles,
+                        (0, 0),
+                    );
+                    IVec2::new(x, y - 8)
+                });
+            if !x.subsystems.mapfx.transitions.event(kind, erase, center) {
+                return Flow::Yield;
+            }
+            frame.ip += 1;
+            Flow::Yield
+        }
         Some(Present::Screen(effect, wait)) => {
             x.subsystems.screen_writer.write(effect);
             frame.ip += 1;

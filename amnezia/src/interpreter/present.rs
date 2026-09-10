@@ -5,7 +5,7 @@
 
 use super::opcodes::*;
 use crate::picture::PictureCommand;
-use crate::screenfx::{ScreenEffect, transition_secs};
+use crate::screenfx::ScreenEffect;
 use crate::state::Variables;
 use amnezia_data::EventCommand;
 
@@ -13,27 +13,22 @@ use amnezia_data::EventCommand;
 /// or picture command (optionally waiting `secs` for it to finish), or open the
 /// Game Over screen.
 pub(super) enum Present {
+    Transition { kind: i32, erase: bool },
     Screen(ScreenEffect, Option<f32>),
     Picture(PictureCommand, Option<f32>),
     GameOver,
 }
 
-/// Translate a presentation command, or `None` if it isn't one. Screen fades wait
-/// for their transition duration (from `params[0]`, see [`transition_secs`]) so
-/// the next command runs against the settled screen; tint/flash/shake/move wait
-/// only when their command's wait flag is set.
+/// Translate presentation commands; transitions retain their type for the scene
+/// controller, while tint/flash/shake/move use the command's optional wait flag.
 pub(super) fn parse_present(command: &EventCommand, variables: &Variables) -> Option<Present> {
     let params = command.params.as_slice();
     let id = || params.first().copied().unwrap_or(0) as u32;
     match command.code {
-        ERASE_SCREEN => {
-            let secs = transition_secs(params.first().copied().unwrap_or(0));
-            Some(Present::Screen(ScreenEffect::Erase { secs }, Some(secs)))
-        }
-        SHOW_SCREEN => {
-            let secs = transition_secs(params.first().copied().unwrap_or(0));
-            Some(Present::Screen(ScreenEffect::Show { secs }, Some(secs)))
-        }
+        ERASE_SCREEN | SHOW_SCREEN => Some(Present::Transition {
+            kind: params.first().copied().unwrap_or(0),
+            erase: command.code == ERASE_SCREEN,
+        }),
         TINT_SCREEN => Some(Present::Screen(
             ScreenEffect::tint(params),
             wait_secs(params, 5, 4),
@@ -102,21 +97,16 @@ mod tests {
     }
 
     #[test]
-    fn erase_and_show_wait_for_the_fade() {
+    fn erase_and_show_preserve_the_transition_type_and_direction() {
         let vars = Variables::default();
-        // A default (type 0) fade runs 35 frames ≈ 0.583 s, and the interpreter
-        // waits that long for it to settle.
-        let erase = parse_present(&command(ERASE_SCREEN, "", vec![0]), &vars);
-        assert!(matches!(
-            erase,
-            Some(Present::Screen(ScreenEffect::Erase { secs }, Some(w)))
-                if (secs - 35.0 / 60.0).abs() < 1e-6 && (w - 35.0 / 60.0).abs() < 1e-6
-        ));
-        let show = parse_present(&command(SHOW_SCREEN, "", vec![0]), &vars);
-        assert!(matches!(
-            show,
-            Some(Present::Screen(ScreenEffect::Show { .. }, Some(_)))
-        ));
+        for kind in [-1, 0, 16, 17, 19, 20] {
+            assert!(
+                matches!(parse_present(&command(ERASE_SCREEN, "", vec![kind]), &vars), Some(Present::Transition { kind: actual, erase: true }) if actual == kind)
+            );
+            assert!(
+                matches!(parse_present(&command(SHOW_SCREEN, "", vec![kind]), &vars), Some(Present::Transition { kind: actual, erase: false }) if actual == kind)
+            );
+        }
     }
 
     #[test]

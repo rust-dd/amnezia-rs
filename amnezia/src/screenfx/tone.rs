@@ -132,6 +132,7 @@ impl Plugin for ScreenTonePlugin {
 /// Ingest a `TintScreen`, interpolate the current tone toward its target over the
 /// command's duration, and push the result into the main camera's [`ScreenTone`].
 fn update_tone(
+    transition: Option<Res<crate::transitions::Transition>>,
     time: Res<Time>,
     mut effects: MessageReader<ScreenEffect>,
     mut state: ResMut<TintState>,
@@ -146,7 +147,9 @@ fn update_tone(
             }
         }
     }
-    step_tint(&mut state, time.delta_secs());
+    if !transition.as_ref().is_some_and(|t| t.busy()) {
+        step_tint(&mut state, time.delta_secs());
+    }
     let uniform = tone_uniform(state.current);
     for mut tone in &mut tinted {
         tone.channels = uniform;
@@ -193,6 +196,45 @@ mod tests {
     use super::*;
 
     use crate::legacy_colors::tone::apply;
+
+    #[test]
+    fn transitions_hold_tint_tweens_but_accept_immediate_command_changes() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins)
+            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_millis(250),
+            ))
+            .init_resource::<TintState>()
+            .init_resource::<crate::transitions::Transition>()
+            .add_message::<ScreenEffect>()
+            .add_systems(Update, update_tone);
+        app.world_mut()
+            .resource_mut::<crate::transitions::Transition>()
+            .start(crate::transitions::Kind::Mosaic, true, 0, IVec2::ZERO);
+        app.world_mut()
+            .write_message(ScreenEffect::tint(&[0, 0, 0, 100, 20, 0]));
+        app.update();
+        for _ in 0..4 {
+            app.update();
+        }
+        assert_eq!(app.world().resource::<TintState>().tone(), NEUTRAL);
+        assert_eq!(app.world().resource::<TintState>().secs_left, 2.0);
+        app.world_mut()
+            .resource_mut::<crate::transitions::Transition>()
+            .clear();
+        app.update();
+        assert_eq!(app.world().resource::<TintState>().tone()[0], 87.5);
+        app.world_mut()
+            .resource_mut::<crate::transitions::Transition>()
+            .start(crate::transitions::Kind::Mosaic, true, 0, IVec2::ZERO);
+        app.world_mut()
+            .write_message(ScreenEffect::tint(&[50, 50, 50, 100, 0, 0]));
+        app.update();
+        assert_eq!(
+            app.world().resource::<TintState>().tone(),
+            [50.0, 50.0, 50.0, 100.0]
+        );
+    }
 
     #[test]
     fn channel_maps_neutral_and_clamps_to_original_byte_range() {
