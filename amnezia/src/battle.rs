@@ -141,7 +141,9 @@ impl Plugin for BattlePlugin {
                 (
                     systems::start_on_request.after(crate::audio::AudioRequests),
                     systems::debug_trigger,
-                    input::command_input.run_if(flow::playing),
+                    input::command_input
+                        .run_if(flow::playing)
+                        .run_if(hud::commands_ready),
                     events::drive
                         .run_if(flow::playing)
                         .after(systems::start_on_request)

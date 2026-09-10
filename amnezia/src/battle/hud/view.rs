@@ -148,8 +148,12 @@ pub(super) fn spawn(
     }
 }
 
-pub(super) fn panels(battle: Res<Battle>, mut panels: Query<(&Panel, &mut Node, &mut Visibility)>) {
-    if !battle.is_changed() {
+pub(super) fn panels(
+    battle: Res<Battle>,
+    windows: Res<motion::CommandWindows>,
+    mut panels: Query<(&Panel, &mut Node, &mut Visibility)>,
+) {
+    if !battle.is_changed() && !windows.is_changed() {
         return;
     }
     for (panel, mut node, mut visible) in &mut panels {
@@ -158,6 +162,7 @@ pub(super) fn panels(battle: Res<Battle>, mut panels: Query<(&Panel, &mut Node, 
             continue;
         };
         *visible = Visibility::Inherited;
+        let x = windows.x(*panel).unwrap_or(x);
         node.left = Val::Percent(x / 320.0 * 100.0);
         node.top = Val::Percent(y / 240.0 * 100.0);
         node.width = Val::Percent(w / 320.0 * 100.0);

@@ -120,6 +120,7 @@ fn capture(world: &mut World, label: &str) {
     let gameover_snapshot = crate::gameover::smoke::snapshot(world, label);
     let font_snapshot = crate::font::bitmap::smoke::snapshot(world, label);
     let arrow_snapshot = crate::battle::hud::arrow_snapshot(world, label);
+    let movement_snapshot = crate::battle::hud::movement_snapshot(world, label);
     let battler_snapshot = crate::battle::battler_snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
@@ -147,6 +148,9 @@ fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &arrow_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &movement_snapshot {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &battler_snapshot {

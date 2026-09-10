@@ -48,6 +48,7 @@ impl WindowClocks {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn tick(
     frames: Res<GameFrames>,
     battle: Res<Battle>,
@@ -55,6 +56,7 @@ pub(super) fn tick(
     inventory: Res<Inventory>,
     terms: Res<Terms>,
     pause: crate::transitions::TransitionPause,
+    windows: Res<motion::CommandWindows>,
     mut clocks: ResMut<WindowClocks>,
 ) {
     if clocks.generation != battle.generation {
@@ -80,7 +82,11 @@ pub(super) fn tick(
             };
         }
     }
-    let active = Panel::active(&battle);
+    let active = if windows.moving() {
+        None
+    } else {
+        Panel::active(&battle)
+    };
     clocks.advance(delta, active);
 }
 

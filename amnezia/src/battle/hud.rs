@@ -4,11 +4,15 @@ mod arrows;
 mod clocks;
 mod content;
 mod layout;
+mod motion;
 mod status;
 mod view;
 
 pub(crate) use arrows::snapshot as arrow_snapshot;
 pub(super) use arrows::verify as verify_arrows;
+pub(super) use motion::ready as commands_ready;
+pub(super) use motion::smoke::label as movement_label;
+pub(crate) use motion::smoke::snapshot as movement_snapshot;
 pub(super) use view::verify_bounds;
 pub(super) use view::verify_layers;
 
@@ -108,12 +112,14 @@ fn scroll(battle: Res<Battle>, mut scroll: ResMut<ListScroll>) {
 }
 
 pub fn register(app: &mut App) {
+    motion::register(app);
     app.init_resource::<ListScroll>()
         .init_resource::<clocks::WindowClocks>()
         .add_systems(Startup, view::spawn.after(super::systems::spawn_hud_camera))
         .add_systems(
             Update,
             (
+                motion::observe,
                 scroll,
                 clocks::tick,
                 view::panels,

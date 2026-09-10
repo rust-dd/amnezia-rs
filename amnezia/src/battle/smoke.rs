@@ -50,8 +50,9 @@ pub(crate) fn prepare(world: &mut World) {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        540 | 835 => Some(KeyCode::Enter),
-        565 | 860 => Some(KeyCode::Escape),
+        400 | 403 | 443 | 470 | 540 | 835 => Some(KeyCode::Enter),
+        407 | 447 => Some(KeyCode::ArrowDown),
+        440 | 565 | 860 => Some(KeyCode::Escape),
         _ => None,
     }
 }
@@ -86,7 +87,6 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         battle.members[0].known_skills = skills;
     }
     let state = match frame {
-        400 => Some((MenuLevel::Command, 0)),
         500 => Some((MenuLevel::Skill, 0)),
         650 => Some((MenuLevel::Skill, 11)),
         700 => Some((MenuLevel::Command, 1)),
@@ -130,7 +130,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         1061 => Some("battle-hit-restored"),
         1130 => Some("battle-ally-target"),
         1230 => Some("battle-resized"),
-        _ => None,
+        _ => super::hud::movement_label(frame),
     };
     if label.is_some() {
         super::hud::verify_bounds(world);
