@@ -18,7 +18,7 @@ fn a_recover_hp_item_raises_the_users_hp_clamped_to_max() {
     battle.members[0].hp = 10;
     let line = battle.apply_item(0, 50, 0);
     assert_eq!(battle.members[0].hp, 30);
-    assert!(line.contains("+20 HP"));
+    assert!(line.contains("HP 20 visszatért"));
     battle.members[0].hp = max - 5;
     battle.items = vec![medicine(51, 200, 0, vec![])];
     battle.apply_item(0, 51, 0);
@@ -36,7 +36,7 @@ fn an_item_used_on_an_ally_heals_that_member_not_the_caster() {
     let line = battle.apply_item(0, 50, 1);
     assert_eq!(battle.members[1].hp, (before_ally + 20).min(max));
     assert_eq!(battle.members[0].hp, before_caster);
-    assert!(line.contains("+20 HP"));
+    assert!(line.contains("HP 20 visszatért"));
 }
 
 #[test]

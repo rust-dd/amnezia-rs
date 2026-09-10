@@ -1,6 +1,6 @@
 use super::*;
 
-fn original_text(battle: &mut Battle) {
+pub(super) fn original_text(battle: &mut Battle) {
     let root = crate::assets::asset_root();
     battle
         .text

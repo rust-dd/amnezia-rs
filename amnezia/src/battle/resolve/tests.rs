@@ -6,9 +6,11 @@ mod attributes;
 mod criticals;
 mod drops;
 mod equipment;
+mod item_messages;
 mod messages;
 mod skill_requirements;
 mod state_behavior;
+mod state_messages;
 
 fn fire_attr() -> amnezia_data::AttributeDef {
     amnezia_data::AttributeDef {

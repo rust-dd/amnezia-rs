@@ -32,6 +32,7 @@ impl Default for BattleText {
             health_points: "HP".into(),
             spirit_points: "SP".into(),
             hp_recovery: " visszatért".into(),
+            use_item: " használata".into(),
             attack: "Támadóerő".into(),
             defense: "Védőerő".into(),
             spirit: "Mentál".into(),

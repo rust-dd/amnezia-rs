@@ -16,13 +16,12 @@ impl Battle {
             .filter(|state| logic::has_state(self.battler_states(source), state.id))
             .map(|state| {
                 (
-                    state.name.clone(),
                     logic::state_hp_delta(state, max_hp),
                     logic::state_sp_delta(state, max_sp),
                 )
             })
             .collect::<Vec<_>>();
-        for (state, hp_delta, sp_delta) in changes {
+        for (hp_delta, sp_delta) in changes {
             let (hp, sp) = match source {
                 Source::Party(i) => {
                     let member = &mut self.members[i];
@@ -35,13 +34,6 @@ impl Battle {
             };
             *hp = hp.saturating_add(hp_delta).clamp(1, max_hp);
             *sp = sp.saturating_add(sp_delta).clamp(0, max_sp);
-            let name = self.battler_name(source).to_string();
-            if hp_delta != 0 {
-                self.log.push(format!("{name}: {state} {hp_delta:+}"));
-            }
-            if sp_delta != 0 {
-                self.log.push(format!("{name}: {state} {sp_delta:+} SP"));
-            }
         }
     }
 
@@ -54,8 +46,32 @@ impl Battle {
         let lifted = logic::tick_recovery(active, &self.states, || {
             (rng_next(&mut self.rng) % 100) as u32
         });
-        self.log_state_recovery(target, &lifted);
+        self.log_action_state(target, &lifted);
         self.states_changed(target, before, false);
+    }
+
+    fn log_action_state(&mut self, target: Source, lifted: &[u32]) {
+        let Some(state) = self
+            .states
+            .iter()
+            .filter(|state| {
+                lifted.contains(&state.id)
+                    || logic::has_state(self.battler_states(target), state.id)
+            })
+            .max_by_key(|state| (state.priority, state.id))
+        else {
+            return;
+        };
+        let healed = lifted.contains(&state.id);
+        let message = if healed {
+            &state.message_recovery
+        } else {
+            &state.message_affected
+        };
+        if healed || !message.is_empty() {
+            self.log
+                .push(format!("{}{message}", self.battler_name(target)));
+        }
     }
 
     pub(in crate::battle::resolve) fn release_states_from_damage(
@@ -82,9 +98,9 @@ impl Battle {
         for id in lifted {
             if let Some(state) = self.states.iter().find(|state| state.id == *id) {
                 self.log.push(format!(
-                    "{}: {} elmúlt",
+                    "{}{}",
                     self.battler_name(target),
-                    state.name
+                    state.message_recovery
                 ));
             }
         }

@@ -9,11 +9,12 @@ fn poison_drains_a_fighter_and_a_foe_by_val_plus_max_percent_at_turn_start() {
     battle.enemies[0].states = vec![(2, 0)];
     let (m_max, f_max) = (battle.members[0].max_hp, battle.enemies[0].max_hp);
     let (m_before, f_before) = (battle.members[0].hp, battle.enemies[0].hp);
+    let log = battle.log.clone();
     battle.tick_state_hp(Source::Party(0));
     battle.tick_state_hp(Source::Enemy(0));
     assert_eq!(m_before - battle.members[0].hp, 1 + m_max * 5 / 100);
     assert_eq!(f_before - battle.enemies[0].hp, 1 + f_max * 5 / 100);
-    assert!(battle.log.iter().any(|l| l.contains("Méreg -")));
+    assert_eq!(battle.log, log);
 }
 
 #[test]
@@ -121,5 +122,11 @@ fn a_cure_states_item_lifts_that_state_from_the_user() {
     battle.items = vec![medicine(60, 0, 0, vec![3])];
     let line = battle.apply_item(0, 60, 0);
     assert!(!logic::has_state(&battle.members[0].states, 3));
-    assert!(line.contains("gyógyul"));
+    assert_eq!(
+        line,
+        format!(
+            "{} Gyógyfű használata\n{}",
+            battle.members[0].name, battle.members[0].name
+        )
+    );
 }

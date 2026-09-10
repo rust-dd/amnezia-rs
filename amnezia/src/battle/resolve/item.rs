@@ -13,7 +13,7 @@ impl Battle {
     ) -> String {
         let user = self.members[pi].name.clone();
         let Some(item) = self.items.iter().find(|i| i.id == item_id).cloned() else {
-            return format!("{user} használ");
+            return String::new();
         };
         let targets = if item.scope == 1 {
             (0..self.members.len()).collect::<Vec<_>>()
@@ -22,7 +22,7 @@ impl Battle {
         } else {
             Vec::new()
         };
-        let mut lines = vec![format!("{user} használ: {}", item.name)];
+        let mut lines = vec![format!("{user} {}{}", item.name, self.text.use_item)];
         for ti in targets {
             lines.extend(self.restore_with_item(ti, &item));
         }
@@ -52,22 +52,19 @@ impl Battle {
         let sp_gain = member.sp - old_sp;
         let recipient = member.name.clone();
         let mut lines = Vec::new();
+        if !was_dead && (item.recover_hp != 0 || item.recover_hp_rate != 0) {
+            lines.push(self.text.recovered(&recipient, true, hp_gain));
+        }
+        if sp_gain > 0 {
+            lines.push(self.text.recovered(&recipient, false, sp_gain));
+        }
         for &sid in &item.cure_states {
             if logic::has_state(&member.states, sid) || (sid == 1 && was_dead) {
                 logic::cure(&mut member.states, sid);
                 if let Some(state) = self.states.iter().find(|s| s.id == sid) {
-                    lines.push(format!("{recipient} gyógyul: {}", state.name));
+                    lines.push(format!("{recipient}{}", state.message_recovery));
                 }
             }
-        }
-        let gain = match (hp_gain > 0, sp_gain > 0) {
-            (true, true) => format!(" (+{hp_gain} HP, +{sp_gain} SP)"),
-            (true, false) => format!(" (+{hp_gain} HP)"),
-            (false, true) => format!(" (+{sp_gain} SP)"),
-            (false, false) => String::new(),
-        };
-        if !gain.is_empty() {
-            lines.insert(0, format!("{recipient}{gain}"));
         }
         let shown = hp_gain.max(sp_gain);
         self.states_changed(Source::Party(ti), old_restriction, false);

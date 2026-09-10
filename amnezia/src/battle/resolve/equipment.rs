@@ -28,8 +28,12 @@ impl Battle {
                 && self.inflict_battler_state(target, id)
             {
                 let state = self.states.iter().find(|state| state.id == id).unwrap();
+                let message = match target {
+                    Source::Party(_) => &state.message_actor,
+                    Source::Enemy(_) => &state.message_enemy,
+                };
                 self.log
-                    .push(format!("{}: {}", self.battler_name(target), state.name));
+                    .push(format!("{}{message}", self.battler_name(target)));
             }
         }
     }
