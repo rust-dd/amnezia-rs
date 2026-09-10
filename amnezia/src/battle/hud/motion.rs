@@ -15,11 +15,17 @@ pub(in crate::battle) struct CommandWindows {
     generation: u64,
     last: Option<u32>,
     context: Option<(Phase, MenuLevel)>,
+    chooser: Option<usize>,
+    status_cursor: Option<usize>,
     x: i32,
     slide: Option<Slide>,
 }
 
 impl CommandWindows {
+    pub(super) fn status_cursor(&self) -> Option<usize> {
+        self.status_cursor
+    }
+
     pub(super) fn moving(&self) -> bool {
         self.slide.is_some()
     }
@@ -50,6 +56,21 @@ impl CommandWindows {
             };
         }
         let context = (battle.phase, battle.menu);
+        if battle.phase == Phase::PartyCommand {
+            self.status_cursor = None;
+        } else if battle.phase == Phase::Command {
+            if self.chooser != Some(battle.turn)
+                || self
+                    .context
+                    .is_none_or(|(phase, _)| phase != Phase::Command)
+            {
+                self.status_cursor = Some(battle.turn);
+            }
+            if battle.menu == MenuLevel::AllyTarget {
+                self.status_cursor = Some(battle.cursor);
+            }
+            self.chooser = Some(battle.turn);
+        }
         if self.context == Some(context) {
             return;
         }

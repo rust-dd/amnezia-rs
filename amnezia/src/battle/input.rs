@@ -162,6 +162,7 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
         battle.pending_se.push(BattleSe::Cursor);
     }
     if confirm(keys) {
+        remember_skill_cursor(battle);
         let Some(&(skill_id, _, _)) = choices.get(battle.cursor) else {
             battle.pending_se.push(BattleSe::Buzzer);
             return;
@@ -325,9 +326,30 @@ fn open_ally_target(battle: &mut Battle, skill: Option<u32>, item: Option<u32>) 
 
 /// Preserve each window's selection when opening or cancelling a submenu.
 fn enter(battle: &mut Battle, level: MenuLevel) {
+    if battle.menu == MenuLevel::Skill {
+        remember_skill_cursor(battle);
+    }
     battle.menu_cursors[battle.menu as usize] = battle.cursor;
+    if level == MenuLevel::Skill && battle.menu == MenuLevel::Command {
+        let remembered = battle.skill_cursors.get(battle.turn).copied().unwrap_or(0);
+        let count = battle.members.get(battle.turn).map_or(0, |actor| {
+            battle
+                .skills
+                .iter()
+                .filter(|skill| actor.known_skills.contains(&skill.id))
+                .count()
+        });
+        battle.menu_cursors[level as usize] = remembered.min(count.saturating_sub(1));
+    }
     battle.menu = level;
     battle.cursor = battle.menu_cursors[level as usize];
+}
+
+fn remember_skill_cursor(battle: &mut Battle) {
+    battle.menu_cursors[MenuLevel::Skill as usize] = battle.cursor;
+    if let Some(cursor) = battle.skill_cursors.get_mut(battle.turn) {
+        *cursor = battle.cursor;
+    }
 }
 
 /// Attempt a party escape from the party-option window: play the escape SE, then

@@ -1,6 +1,57 @@
 use super::*;
 
 #[test]
+fn skill_cursors_belong_to_party_slots_across_group_casts_cancel_undo_and_new_rounds() {
+    let skills = (1..=3).map(|id| skill_def(id, 20, 1)).collect::<Vec<_>>();
+    let data = GameData {
+        actors: vec![],
+        items: vec![],
+        skills: skills.clone(),
+    };
+    let mut battle = build_party2();
+    battle.skills = skills;
+    for actor in &mut battle.members {
+        actor.known_skills = vec![1, 2, 3];
+    }
+    battle.begin_actor_commands();
+    battle.cursor = 1;
+    command_menu(&press_enter(), &mut battle);
+    assert_eq!(battle.cursor, 0);
+    battle.cursor = 2;
+    skill_menu(&press_enter(), &data, &mut battle);
+    assert_eq!(battle.turn, 1);
+    battle.cursor = 1;
+    command_menu(&press_enter(), &mut battle);
+    assert_eq!(
+        battle.cursor, 0,
+        "second actor must not inherit the first actor's index"
+    );
+    battle.cursor = 1;
+    let mut cancel = ButtonInput::<KeyCode>::default();
+    cancel.press(KeyCode::Escape);
+    skill_menu(&cancel, &data, &mut battle);
+    command_menu(&cancel, &mut battle);
+    assert_eq!(battle.turn, 0);
+    battle.cursor = 1;
+    command_menu(&press_enter(), &mut battle);
+    assert_eq!(
+        battle.cursor, 2,
+        "undo must restore the first actor's group-cast index"
+    );
+    battle.phase = Phase::Resolve;
+    battle.new_round();
+    battle.begin_actor_commands();
+    battle.cursor = 1;
+    command_menu(&press_enter(), &mut battle);
+    assert_eq!(battle.cursor, 2);
+    battle.turn = 1;
+    battle.menu = MenuLevel::Command;
+    battle.cursor = 1;
+    command_menu(&press_enter(), &mut battle);
+    assert_eq!(battle.cursor, 1);
+}
+
+#[test]
 fn an_attack_clears_an_earlier_medicine_target_context() {
     let mut battle = build_party2();
     battle.begin_actor_commands();
@@ -9,6 +60,23 @@ fn an_attack_clears_an_earlier_medicine_target_context() {
     assert!(battle.menu == MenuLevel::Target);
     assert_eq!(battle.pending_item, None);
     assert_eq!(battle.pending_skill, None);
+}
+
+#[test]
+fn remembered_skill_indices_are_clamped_when_reopening_a_shorter_or_empty_list() {
+    let mut battle = build_party2();
+    battle.skills = (1..=3).map(|id| skill_def(id, 20, 1)).collect();
+    battle.members[0].known_skills = vec![1, 2, 3];
+    battle.skill_cursors[0] = 11;
+    battle.begin_actor_commands();
+    battle.cursor = 1;
+    command_menu(&press_enter(), &mut battle);
+    assert_eq!(battle.cursor, 2);
+    battle.menu = MenuLevel::Command;
+    battle.members[0].known_skills.clear();
+    battle.cursor = 1;
+    command_menu(&press_enter(), &mut battle);
+    assert_eq!(battle.cursor, 0);
 }
 
 #[test]

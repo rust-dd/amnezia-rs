@@ -230,12 +230,19 @@ pub(super) fn rows(
 
 pub(super) fn cursors(
     clocks: Res<clocks::WindowClocks>,
+    windows: Res<motion::CommandWindows>,
     battle: Res<Battle>,
     scroll: Res<ListScroll>,
     mut cursors: Query<(&Cursor, &mut Node, &mut Visibility, &mut ImageNode)>,
 ) {
     for (cursor, mut node, mut visible, mut image) in &mut cursors {
-        let Some((index, columns)) = layout::selection(cursor.0, &battle) else {
+        let selection = if cursor.0 == Panel::Status {
+            layout::rectangle(Panel::Status, &battle)
+                .and_then(|_| windows.status_cursor().map(|index| (index, 1)))
+        } else {
+            layout::selection(cursor.0, &battle)
+        };
+        let Some((index, columns)) = selection else {
             *visible = Visibility::Hidden;
             continue;
         };

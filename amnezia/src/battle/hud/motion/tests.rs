@@ -2,6 +2,37 @@ use super::*;
 use crate::battle::model::testkit::build_party2;
 
 #[test]
+fn status_keeps_the_last_ally_cursor_until_the_chooser_changes_or_party_options_reopen() {
+    let mut battle = build_party2();
+    let mut windows = CommandWindows::default();
+    windows.observe(&battle);
+    assert_eq!(windows.status_cursor(), None);
+    battle.begin_actor_commands();
+    windows.observe(&battle);
+    assert_eq!(windows.status_cursor(), Some(0));
+    battle.menu = MenuLevel::Item;
+    windows.observe(&battle);
+    battle.menu = MenuLevel::AllyTarget;
+    battle.cursor = 1;
+    windows.observe(&battle);
+    assert_eq!(windows.status_cursor(), Some(1));
+    for menu in [MenuLevel::Item, MenuLevel::Command, MenuLevel::Target] {
+        battle.menu = menu;
+        windows.observe(&battle);
+        assert_eq!(windows.status_cursor(), Some(1));
+    }
+    battle.menu = MenuLevel::Command;
+    battle.turn = 1;
+    windows.observe(&battle);
+    battle.turn = 0;
+    windows.observe(&battle);
+    assert_eq!(windows.status_cursor(), Some(0));
+    battle.phase = Phase::PartyCommand;
+    windows.observe(&battle);
+    assert_eq!(windows.status_cursor(), None);
+}
+
+#[test]
 fn command_windows_move_eight_integer_frames_in_both_directions_then_unlock_input() {
     let mut battle = build_party2();
     let mut windows = CommandWindows::default();

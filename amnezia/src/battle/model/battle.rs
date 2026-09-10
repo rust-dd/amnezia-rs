@@ -85,6 +85,7 @@ pub struct Battle {
     pub menu: MenuLevel,
     pub cursor: usize,
     pub(in crate::battle) menu_cursors: [usize; 5],
+    pub(in crate::battle) skill_cursors: [usize; 4],
     /// The chosen skill's id while its target is being picked.
     pub pending_skill: Option<u32>,
     /// The chosen item's id while its ally target is being picked.

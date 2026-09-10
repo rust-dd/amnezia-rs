@@ -50,9 +50,10 @@ pub(crate) fn prepare(world: &mut World) {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        400 | 403 | 443 | 470 | 540 | 835 => Some(KeyCode::Enter),
-        407 | 447 => Some(KeyCode::ArrowDown),
-        440 | 565 | 860 => Some(KeyCode::Escape),
+        400 | 403 | 443 | 470 | 540 | 586 | 592 | 626 | 835 => Some(KeyCode::Enter),
+        407 | 447 | 591 | 625 => Some(KeyCode::ArrowDown),
+        585 => Some(KeyCode::ArrowRight),
+        440 | 565 | 610 | 620 | 860 => Some(KeyCode::Escape),
         _ => None,
     }
 }
@@ -115,6 +116,8 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         530 => Some("battle-skills"),
         550 => Some("battle-skill-target-overlay"),
         580 => Some("battle-skill-target-return"),
+        600 => Some("battle-second-actor-skills"),
+        630 => Some("battle-restored-actor-skills"),
         670 => Some("battle-scroll-arrows"),
         680 => Some("battle-skills-scrolled"),
         730 => Some("battle-status-colors"),
@@ -145,6 +148,27 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     }
     if frame == 670 {
         super::hud::verify_arrows(world);
+    }
+    if matches!(frame, 600 | 630) {
+        let battle = world.resource::<Battle>();
+        assert!(battle.menu == MenuLevel::Skill);
+        assert_eq!(
+            (battle.turn, battle.cursor),
+            if frame == 600 { (1, 0) } else { (0, 1) }
+        );
+        assert_eq!(
+            battle.members[0].sp, 37,
+            "selection and undo must not spend Ron's SP"
+        );
+        assert_eq!(battle.skill_cursors[0], 1);
+        if frame == 600 {
+            assert!(matches!(
+                battle.members[0].command,
+                Some(super::model::Command::Skill { skill_id: 2, .. })
+            ));
+        } else {
+            assert!(battle.members[0].command.is_none());
+        }
     }
     if matches!(frame, 550 | 580 | 845 | 880) {
         super::hud::verify_layers(world);
