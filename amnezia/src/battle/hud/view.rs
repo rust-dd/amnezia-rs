@@ -115,6 +115,7 @@ pub(super) fn spawn(
                     ..default()
                 },
                 panel,
+                GlobalZIndex(panel as i32),
                 Visibility::Hidden,
                 UiTargetCamera(camera),
             ))
@@ -178,16 +179,8 @@ pub(super) fn rows(
     }
     for panel in Panel::ALL {
         let content = content::rows(panel, &battle, &data, &inventory, &terms);
-        let columns = if panel == Panel::Command {
-            list_columns(&battle)
-        } else {
-            1
-        };
-        let first = if matches!(panel, Panel::Command | Panel::Option) {
-            scroll.first
-        } else {
-            0
-        };
+        let columns = panel.columns();
+        let first = scroll.first[panel as usize];
         let width = layout::rectangle(panel, &battle).map_or(320.0, |r| r.2);
         for (slot, mut text, mut node, mut visibility) in &mut rows {
             if slot.0 != panel {
@@ -242,17 +235,13 @@ pub(super) fn cursors(
             continue;
         };
         let width = layout::rectangle(cursor.0, &battle).unwrap().2;
-        let first = if matches!(cursor.0, Panel::Option | Panel::Command) {
-            scroll.first
-        } else {
-            0
-        };
+        let first = scroll.first[cursor.0 as usize];
         let index = index.saturating_sub(first);
         *visible = Visibility::Inherited;
         node.left = Val::Px((4.0 + (index % columns) as f32 * width / columns as f32) * 3.0);
         node.top = Val::Px((8.0 + (index / columns) as f32 * 16.0) * 3.0);
         node.width = Val::Px((width / columns as f32 - 8.0) * 3.0);
-        let x = clocks.cursor_x(cursor.0, &battle);
+        let x = clocks.cursor_x(cursor.0);
         image.rect = Some(Rect::new(x, 0.0, x + 32.0, 32.0));
     }
 }
@@ -277,4 +266,23 @@ pub(in crate::battle) fn verify_bounds(world: &mut World) {
         }
     }
     assert!(count > 0, "battle menu has no visible text");
+}
+
+pub(in crate::battle) fn verify_layers(world: &mut World) {
+    let visible = world
+        .query::<(&Panel, &InheritedVisibility)>()
+        .iter(world)
+        .filter(|(_, v)| v.get())
+        .map(|(p, _)| *p)
+        .collect::<Vec<_>>();
+    let battle = world.resource::<Battle>();
+    for panel in Panel::ALL {
+        assert_eq!(
+            visible.contains(&panel),
+            layout::rectangle(panel, battle).is_some(),
+            "{panel:?}"
+        );
+    }
+    assert!(visible.contains(&Panel::Help));
+    assert!(visible.contains(&Panel::Skill) || visible.contains(&Panel::Item));
 }

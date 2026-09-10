@@ -4,33 +4,6 @@ use crate::state::Inventory;
 use crate::terms::Terms;
 use crate::timing::GameFrames;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum WindowId {
-    Option,
-    Status,
-    Command,
-    Skill,
-    Item,
-    Target,
-    Message,
-    Help,
-}
-
-pub(super) fn window(panel: Panel, battle: &Battle) -> WindowId {
-    match panel {
-        Panel::Option => WindowId::Option,
-        Panel::Status => WindowId::Status,
-        Panel::Message => WindowId::Message,
-        Panel::Help => WindowId::Help,
-        Panel::Command => match battle.menu {
-            MenuLevel::Skill => WindowId::Skill,
-            MenuLevel::Item => WindowId::Item,
-            MenuLevel::Target => WindowId::Target,
-            _ => WindowId::Command,
-        },
-    }
-}
-
 #[derive(Resource, Default)]
 pub(super) struct WindowClocks {
     generation: u64,
@@ -41,12 +14,12 @@ pub(super) struct WindowClocks {
 }
 
 impl WindowClocks {
-    fn advance(&mut self, frames: u32, active: Option<WindowId>) {
+    fn advance(&mut self, frames: u32, active: Option<Panel>) {
         for i in 0..8 {
             if active.is_some_and(|active| active as usize == i) {
                 self.cursor[i] = (self.cursor[i] + frames % 21) % 21;
             }
-            let capacity = if i == WindowId::Item as usize || i == WindowId::Skill as usize {
+            let capacity = if i == Panel::Item as usize || i == Panel::Skill as usize {
                 8
             } else {
                 4
@@ -57,21 +30,17 @@ impl WindowClocks {
         }
     }
 
-    pub fn cursor_x(&self, panel: Panel, battle: &Battle) -> f32 {
-        if self.cursor[window(panel, battle) as usize] <= 10 {
+    pub fn cursor_x(&self, panel: Panel) -> f32 {
+        if self.cursor[panel as usize] <= 10 {
             64.0
         } else {
             96.0
         }
     }
 
-    pub fn arrows(&self, panel: Panel, battle: &Battle, first: usize) -> [bool; 2] {
-        let id = window(panel, battle) as usize;
-        let capacity = if panel == Panel::Command {
-            list_columns(battle) * 4
-        } else {
-            4
-        };
+    pub fn arrows(&self, panel: Panel, first: usize) -> [bool; 2] {
+        let id = panel as usize;
+        let capacity = panel.columns() * 4;
         if self.arrow[id] >= 20 {
             return [false; 2];
         }
@@ -103,7 +72,7 @@ pub(super) fn tick(
     }
     for panel in Panel::ALL {
         if layout::rectangle(panel, &battle).is_some() {
-            let id = window(panel, &battle) as usize;
+            let id = panel as usize;
             clocks.counts[id] = if panel == Panel::Status {
                 battle.members.len()
             } else {
@@ -111,50 +80,42 @@ pub(super) fn tick(
             };
         }
     }
-    let active = match battle.phase {
-        Phase::PartyCommand => Some(WindowId::Option),
-        Phase::Command if battle.menu == MenuLevel::AllyTarget => Some(WindowId::Status),
-        Phase::Command => Some(window(Panel::Command, &battle)),
-        _ => None,
-    };
+    let active = Panel::active(&battle);
     clocks.advance(delta, active);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::battle::model::testkit::build_party2;
 
     #[test]
     fn cursor_and_scroll_arrows_keep_their_original_cycles_at_different_fps() {
         for fps in [15, 30, 60, 144] {
             let mut clock = GameFrames::default();
             let mut windows = WindowClocks::default();
-            windows.counts[WindowId::Skill as usize] = 12;
+            windows.counts[Panel::Skill as usize] = 12;
             for _ in 0..fps * 3 {
                 let before = clock.frame;
                 clock.advance(1.0 / fps as f64);
-                windows.advance(clock.frame - before, Some(WindowId::Skill));
-                assert_eq!(windows.cursor[WindowId::Skill as usize], clock.frame % 21);
-                assert_eq!(windows.arrow[WindowId::Skill as usize], clock.frame % 40);
-                assert_eq!(windows.cursor[WindowId::Status as usize], 0);
+                windows.advance(clock.frame - before, Some(Panel::Skill));
+                assert_eq!(windows.cursor[Panel::Skill as usize], clock.frame % 21);
+                assert_eq!(windows.arrow[Panel::Skill as usize], clock.frame % 40);
+                assert_eq!(windows.cursor[Panel::Status as usize], 0);
             }
         }
     }
 
     #[test]
     fn scroll_arrows_point_only_to_hidden_rows_and_share_the_twenty_frame_blink() {
-        let mut battle = build_party2();
-        battle.menu = MenuLevel::Skill;
         let mut clock = WindowClocks::default();
-        clock.counts[WindowId::Skill as usize] = 12;
-        assert_eq!(clock.arrows(Panel::Command, &battle, 0), [false, true]);
-        assert_eq!(clock.arrows(Panel::Command, &battle, 2), [true, true]);
-        assert_eq!(clock.arrows(Panel::Command, &battle, 4), [true, false]);
-        clock.advance(20, Some(WindowId::Skill));
-        assert_eq!(clock.arrows(Panel::Command, &battle, 2), [false, false]);
+        clock.counts[Panel::Skill as usize] = 12;
+        assert_eq!(clock.arrows(Panel::Skill, 0), [false, true]);
+        assert_eq!(clock.arrows(Panel::Skill, 2), [true, true]);
+        assert_eq!(clock.arrows(Panel::Skill, 4), [true, false]);
+        clock.advance(20, Some(Panel::Skill));
+        assert_eq!(clock.arrows(Panel::Skill, 2), [false, false]);
         clock.advance(20, None);
-        assert_eq!(clock.arrows(Panel::Command, &battle, 2), [true, true]);
-        assert_eq!(clock.cursor[WindowId::Skill as usize], 20);
+        assert_eq!(clock.arrows(Panel::Skill, 2), [true, true]);
+        assert_eq!(clock.cursor[Panel::Skill as usize], 20);
     }
 }

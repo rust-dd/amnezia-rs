@@ -306,6 +306,7 @@ fn open_target(battle: &mut Battle, skill: Option<u32>) {
         return;
     }
     battle.pending_skill = skill;
+    battle.pending_item = None;
     enter(battle, MenuLevel::Target);
     battle.cursor = 0;
 }

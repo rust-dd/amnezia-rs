@@ -10,41 +10,75 @@ mod view;
 pub(crate) use arrows::snapshot as arrow_snapshot;
 pub(super) use arrows::verify as verify_arrows;
 pub(super) use view::verify_bounds;
+pub(super) use view::verify_layers;
 
 use super::model::{Battle, MenuLevel, Phase};
 use bevy::prelude::*;
 
-#[derive(Component, Clone, Copy, PartialEq, Eq)]
+#[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 enum Panel {
     Option,
-    Command,
-    Status,
-    Message,
     Help,
+    Item,
+    Skill,
+    Status,
+    Command,
+    Message,
+    Target,
 }
 
 impl Panel {
-    const ALL: [Self; 5] = [
+    const ALL: [Self; 8] = [
         Self::Option,
-        Self::Command,
-        Self::Status,
-        Self::Message,
         Self::Help,
+        Self::Item,
+        Self::Skill,
+        Self::Status,
+        Self::Command,
+        Self::Message,
+        Self::Target,
     ];
-}
 
-fn list_columns(battle: &Battle) -> usize {
-    if matches!(battle.menu, MenuLevel::Skill | MenuLevel::Item) {
-        2
-    } else {
-        1
+    fn columns(self) -> usize {
+        if matches!(self, Self::Skill | Self::Item) {
+            2
+        } else {
+            1
+        }
+    }
+
+    fn active(battle: &Battle) -> Option<Self> {
+        match battle.phase {
+            Phase::PartyCommand => Some(Self::Option),
+            Phase::Command => Some(match battle.menu {
+                MenuLevel::Command => Self::Command,
+                MenuLevel::Skill => Self::Skill,
+                MenuLevel::Item => Self::Item,
+                MenuLevel::Target => Self::Target,
+                MenuLevel::AllyTarget => Self::Status,
+            }),
+            _ => None,
+        }
+    }
+
+    fn cursor(self, battle: &Battle) -> usize {
+        if Self::active(battle) == Some(self) {
+            return battle.cursor;
+        }
+        match self {
+            Self::Command => battle.menu_cursors[MenuLevel::Command as usize],
+            Self::Skill => battle.menu_cursors[MenuLevel::Skill as usize],
+            Self::Item => battle.menu_cursors[MenuLevel::Item as usize],
+            Self::Status => battle.turn,
+            _ => 0,
+        }
     }
 }
 
 #[derive(Resource, Default)]
 struct ListScroll {
-    context: Option<(u64, Phase, MenuLevel, usize)>,
-    first: usize,
+    generation: u64,
+    first: [usize; 8],
 }
 
 fn first_visible(first: usize, cursor: usize, columns: usize) -> usize {
@@ -61,12 +95,16 @@ fn scroll(battle: Res<Battle>, mut scroll: ResMut<ListScroll>) {
     if !battle.is_changed() {
         return;
     }
-    let context = Some((battle.generation, battle.phase, battle.menu, battle.turn));
-    if scroll.context != context {
-        scroll.context = context;
-        scroll.first = 0;
+    if scroll.generation != battle.generation {
+        *scroll = ListScroll {
+            generation: battle.generation,
+            ..default()
+        };
     }
-    scroll.first = first_visible(scroll.first, battle.cursor, list_columns(&battle));
+    if let Some(panel) = Panel::active(&battle) {
+        let first = &mut scroll.first[panel as usize];
+        *first = first_visible(*first, battle.cursor, panel.columns());
+    }
 }
 
 pub fn register(app: &mut App) {

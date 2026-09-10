@@ -7,7 +7,7 @@ pub(super) struct Arrow {
 }
 
 pub(super) fn spawn(parent: &mut ChildSpawnerCommands, system: &Handle<Image>, panel: Panel) {
-    if !matches!(panel, Panel::Command | Panel::Option) {
+    if matches!(panel, Panel::Status | Panel::Help | Panel::Message) {
         return;
     }
     for up in [true, false] {
@@ -48,7 +48,8 @@ pub(super) fn update(
             *visibility = Visibility::Hidden;
             continue;
         };
-        let shown = clocks.arrows(arrow.panel, &battle, scroll.first)[usize::from(!arrow.up)];
+        let shown =
+            clocks.arrows(arrow.panel, scroll.first[arrow.panel as usize])[usize::from(!arrow.up)];
         *visibility = if shown {
             Visibility::Inherited
         } else {
@@ -77,7 +78,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let sources = world
         .query::<(&Arrow, &ImageNode)>()
         .iter(world)
-        .filter(|(a, _)| a.panel == Panel::Command)
+        .filter(|(a, _)| a.panel == Panel::Skill)
         .map(|(a, image)| (a.up, image.image.clone()))
         .collect::<Vec<_>>();
     let mut pixels = Vec::new();

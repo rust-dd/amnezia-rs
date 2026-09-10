@@ -37,7 +37,9 @@ pub(super) fn rows(
                 enabled: i != 2 || battle.allow_escape,
             })
             .collect(),
-        Panel::Command => commands(battle, data, inventory, terms),
+        Panel::Command | Panel::Skill | Panel::Item | Panel::Target => {
+            commands(panel, battle, data, inventory, terms)
+        }
         Panel::Status => Vec::new(),
         Panel::Message => {
             if battle.phase == Phase::Outcome {
@@ -61,16 +63,22 @@ pub(super) fn rows(
     }
 }
 
-fn commands(battle: &Battle, data: &GameData, inventory: &Inventory, terms: &Terms) -> Vec<Row> {
+fn commands(
+    panel: Panel,
+    battle: &Battle,
+    data: &GameData,
+    inventory: &Inventory,
+    terms: &Terms,
+) -> Vec<Row> {
     let Some(actor) = battle.members.get(battle.turn) else {
         return Vec::new();
     };
-    match battle.menu {
-        MenuLevel::Command => command_labels(terms, data.actor(actor.actor_id))
+    match panel {
+        Panel::Command => command_labels(terms, data.actor(actor.actor_id))
             .into_iter()
             .map(Row::plain)
             .collect(),
-        MenuLevel::Skill => skill_choices(data, &actor.known_skills, actor.equipment_effects)
+        Panel::Skill => skill_choices(data, &actor.known_skills, actor.equipment_effects)
             .into_iter()
             .map(|(id, cost, _)| {
                 let skill = data.skills.iter().find(|s| s.id == id).unwrap();
@@ -81,7 +89,7 @@ fn commands(battle: &Battle, data: &GameData, inventory: &Inventory, terms: &Ter
                 }
             })
             .collect(),
-        MenuLevel::Item => item_choices(data, inventory)
+        Panel::Item => item_choices(data, inventory)
             .into_iter()
             .map(|(id, _)| {
                 let item = data.items.iter().find(|i| i.id == id).unwrap();
@@ -95,12 +103,12 @@ fn commands(battle: &Battle, data: &GameData, inventory: &Inventory, terms: &Ter
                 }
             })
             .collect(),
-        MenuLevel::Target => battle
+        Panel::Target => battle
             .living_enemies()
             .iter()
             .map(|&i| Row::plain(i18n::tr(&battle.enemies[i].name)))
             .collect(),
-        MenuLevel::AllyTarget => Vec::new(),
+        _ => Vec::new(),
     }
 }
 
@@ -108,13 +116,13 @@ fn description(battle: &Battle, data: &GameData, inventory: &Inventory) -> Strin
     let Some(actor) = battle.members.get(battle.turn) else {
         return String::new();
     };
-    let value = match battle.menu {
+    let value = match layout::base_menu(battle) {
         MenuLevel::Skill => skill_choices(data, &actor.known_skills, actor.equipment_effects)
-            .get(battle.cursor)
+            .get(Panel::Skill.cursor(battle))
             .and_then(|(id, _, _)| data.skills.iter().find(|s| s.id == *id))
             .map(|s| &s.description),
         MenuLevel::Item => item_choices(data, inventory)
-            .get(battle.cursor)
+            .get(Panel::Item.cursor(battle))
             .and_then(|(id, _)| data.items.iter().find(|item| item.id == *id))
             .map(|i| &i.description),
         _ => None,
@@ -155,7 +163,13 @@ mod tests {
         ] {
             battle.turn = id as usize % 2;
             battle.members[battle.turn].actor_id = id;
-            let rows = commands(&battle, &data, &Inventory::default(), &terms);
+            let rows = commands(
+                Panel::Command,
+                &battle,
+                &data,
+                &Inventory::default(),
+                &terms,
+            );
             assert_eq!(rows.len(), 4);
             assert_eq!(rows[1].text, expected, "actor {id}");
             assert!(rows[1].enabled);

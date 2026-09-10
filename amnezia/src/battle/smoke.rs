@@ -48,6 +48,14 @@ pub(crate) fn prepare(world: &mut World) {
     }
 }
 
+pub(crate) fn input(frame: u32) -> Option<KeyCode> {
+    match frame {
+        540 | 835 => Some(KeyCode::Enter),
+        565 | 860 => Some(KeyCode::Escape),
+        _ => None,
+    }
+}
+
 pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     status_colors(world, frame);
     if frame == 1040 {
@@ -92,14 +100,27 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         battle.phase = Phase::Command;
         battle.menu = menu;
         battle.cursor = cursor;
+        battle.pending_skill = None;
+        battle.pending_item = None;
+        if menu == MenuLevel::AllyTarget {
+            battle.pending_item = battle
+                .items
+                .iter()
+                .find(|item| item.item_type == 6)
+                .map(|item| item.id);
+        }
     }
     let label = match frame {
         430 => Some("battle-commands"),
         530 => Some("battle-skills"),
+        550 => Some("battle-skill-target-overlay"),
+        580 => Some("battle-skill-target-return"),
         670 => Some("battle-scroll-arrows"),
         680 => Some("battle-skills-scrolled"),
         730 => Some("battle-status-colors"),
         830 => Some("battle-items"),
+        845 => Some("battle-item-target-overlay"),
+        880 => Some("battle-item-target-return"),
         980 => Some("battle-target"),
         1010 => Some("battle-target-flash"),
         1018 => Some("battle-target-fade"),
@@ -125,6 +146,20 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 670 {
         super::hud::verify_arrows(world);
     }
+    if matches!(frame, 550 | 580 | 845 | 880) {
+        super::hud::verify_layers(world);
+        let battle = world.resource::<Battle>();
+        let expected = match frame {
+            550 => MenuLevel::Target,
+            580 => MenuLevel::Skill,
+            845 => MenuLevel::AllyTarget,
+            _ => MenuLevel::Item,
+        };
+        assert!(
+            battle.menu == expected,
+            "frame {frame}: target overlay/return"
+        );
+    }
     label
 }
 
@@ -134,7 +169,9 @@ pub(crate) fn verify_skin(image: &Image, label: &str) {
         "battle-skills" | "battle-skills-scrolled" | "battle-scroll-arrows" | "battle-items" => {
             &[12, 150, 308]
         }
-        "battle-target" => &[12, 120],
+        "battle-target" | "battle-skill-target-overlay" | "battle-item-target-overlay" => {
+            &[12, 140, 256]
+        }
         "battle-ally-target" | "battle-resized" => &[12, 232],
         _ => return,
     };

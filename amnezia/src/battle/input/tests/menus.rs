@@ -1,6 +1,17 @@
 use super::*;
 
 #[test]
+fn an_attack_clears_an_earlier_medicine_target_context() {
+    let mut battle = build_party2();
+    battle.begin_actor_commands();
+    battle.pending_item = Some(50);
+    open_target(&mut battle, None);
+    assert!(battle.menu == MenuLevel::Target);
+    assert_eq!(battle.pending_item, None);
+    assert_eq!(battle.pending_skill, None);
+}
+
+#[test]
 fn group_skills_commit_without_an_individual_target_window_or_early_sp_cost() {
     for scope in [1, 4] {
         let skill = skill_def(1, 20, scope);
