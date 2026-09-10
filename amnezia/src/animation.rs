@@ -89,12 +89,21 @@ pub struct AnimAnchor {
 /// global flag) tiles the cells 3×3 across the screen instead, overriding scope.
 #[derive(Message)]
 pub struct PlayAnimation {
+    pub slot: AnimationSlot,
     pub anim_id: u32,
     pub targets: Vec<AnimAnchor>,
     pub screen_center: Vec2,
     pub global: bool,
     /// Front-view party targets play only sound, truncated to 40 game frames.
     pub sound_only: bool,
+}
+
+/// The original keeps one map animation and one battle animation per target side.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnimationSlot {
+    Map,
+    Party,
+    Enemies,
 }
 
 /// A request to flash-tint a target battler sprite as an animation's target
@@ -334,6 +343,7 @@ fn debug_preview(
     }
     if keys.just_pressed(KeyCode::F4) {
         plays.write(PlayAnimation {
+            slot: AnimationSlot::Map,
             anim_id: 1,
             targets: vec![AnimAnchor {
                 pos: Vec2::ZERO,
@@ -377,6 +387,7 @@ fn resolve_map_animation(
         };
         let offset = target_screen_offset(target_pos, camera_pos);
         plays.write(PlayAnimation {
+            slot: AnimationSlot::Map,
             anim_id: request.anim_id,
             targets: vec![AnimAnchor {
                 pos: offset,

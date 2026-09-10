@@ -34,6 +34,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             .unwrap();
         assert_eq!(def.frames.len(), 58, "original Ron unarmed animation");
         world.write_message(PlayAnimation {
+            slot: crate::animation::AnimationSlot::Party,
             anim_id: 1,
             targets: vec![AnimAnchor {
                 pos: Vec2::ZERO,

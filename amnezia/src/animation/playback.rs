@@ -10,6 +10,7 @@ pub(crate) enum AnimationSet {
 
 #[derive(Component)]
 pub(super) struct LiveAnimation {
+    pub(super) slot: AnimationSlot,
     index: usize,
     draw_anchors: Vec<Vec2>,
     flash_anchors: Vec<Vec2>,
@@ -27,11 +28,25 @@ pub(super) fn start_animations(
     mut renderer: CellRenderer,
     library: Res<AnimationLibrary>,
     mut requests: MessageReader<PlayAnimation>,
+    mut animations: Query<(Entity, &mut LiveAnimation)>,
 ) {
+    let mut pending = Vec::<(&PlayAnimation, usize)>::new();
     for request in requests.read() {
         let Some(index) = library.0.iter().position(|a| a.id == request.anim_id) else {
             continue;
         };
+        pending.retain(|(previous, _)| previous.slot != request.slot);
+        pending.push((request, index));
+    }
+    for (request, index) in pending {
+        for (entity, mut previous) in &mut animations {
+            if previous.slot == request.slot {
+                for cell in previous.cells.drain(..) {
+                    commands.entity(cell).despawn();
+                }
+                commands.entity(entity).despawn();
+            }
+        }
         let def = &library.0[index];
         let mut duration = def.frames.len() as u32 * 2;
         if request.sound_only {
@@ -47,6 +62,7 @@ pub(super) fn start_animations(
         };
         let cells = spawn_cells_at(&mut commands, &mut renderer, def, 0, &draw_anchors);
         commands.spawn(LiveAnimation {
+            slot: request.slot,
             index,
             draw_anchors,
             flash_anchors: request.targets.iter().map(|t| t.pos).collect(),

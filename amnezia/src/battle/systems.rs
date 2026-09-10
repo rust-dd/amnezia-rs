@@ -316,6 +316,11 @@ pub(super) fn drain_pending_anims(
             })
             .collect();
         plays.write(PlayAnimation {
+            slot: if anim.sound_only {
+                crate::animation::AnimationSlot::Party
+            } else {
+                crate::animation::AnimationSlot::Enemies
+            },
             anim_id: anim.anim_id,
             targets,
             screen_center: BATTLE_SCREEN_CENTER,
