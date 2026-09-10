@@ -347,7 +347,7 @@ pub(super) fn apply_victory_rewards(
             let line = format!(
                 "{}{}",
                 crate::i18n::tr(&item.name),
-                crate::i18n::tr(&battle.text.item_received)
+                crate::i18n::tr(&battle.text.item_recieved)
             );
             battle.log.push(line);
         }

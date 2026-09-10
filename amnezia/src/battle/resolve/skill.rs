@@ -19,9 +19,10 @@ impl Battle {
             if !self.pay_skill(Source::Party(pi), &skill) {
                 return None;
             }
+            self.log_skill_use(Source::Party(pi), &skill);
             self.push_skill_anim(Source::Party(pi), &skill, target);
         }
-        let mut lines: Vec<String> = Vec::new();
+        let mut lines = Vec::new();
         match skill.scope {
             1 => {
                 let foes = self.living_enemies();
@@ -66,12 +67,18 @@ impl Battle {
                 }
             }
         }
-        let caster = self.members[pi].name.clone();
-        Some(if lines.is_empty() {
-            format!("{caster} varázsol")
-        } else {
-            lines.join("\n")
-        })
+        Some(lines.join("\n"))
+    }
+
+    pub(in crate::battle::resolve) fn log_skill_use(&mut self, source: Source, skill: &SkillDef) {
+        self.log.push(format!(
+            "{}{}",
+            self.battler_name(source),
+            skill.using_message1
+        ));
+        if !skill.using_message2.is_empty() {
+            self.log.push(skill.using_message2.clone());
+        }
     }
 
     /// The screen anchors party member `pi`'s cast of `skill` at `target`

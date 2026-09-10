@@ -7,8 +7,8 @@ impl Battle {
         target: Source,
         skill: &SkillDef,
     ) -> Vec<String> {
-        let caster = self.battler_name(source).to_string();
         let name = self.battler_name(target).to_string();
+        let ally = matches!(target, Source::Party(_));
         let hit = self.skill_hit_chance(source, target, skill);
         let effect = self.skill_magnitude(source, target, skill);
         let mut lines = Vec::new();
@@ -33,7 +33,13 @@ impl Battle {
                 );
             }
             success = !skill.absorb || dealt.min(old_hp) > 0;
-            lines.push(format!("{caster} varázsol: {name} -{dealt}"));
+            if skill.absorb {
+                if dealt > 0 {
+                    lines.push(self.text.absorbed(&name, ally, true, dealt.min(old_hp)));
+                }
+            } else {
+                lines.push(self.text.damaged(&name, ally, dealt));
+            }
         }
         if self.battler_hp(target) <= 0 {
             return lines;
@@ -41,7 +47,14 @@ impl Battle {
         if skill.affect_sp && self.skill_roll(hit) {
             let lost = self.skill_sp_damage(source, target, effect, skill.absorb);
             success |= lost > 0;
-            lines.push(format!("{caster} varázsol: {name} -{lost} SP"));
+            if skill.absorb && lost > 0 {
+                lines.push(self.text.absorbed(&name, ally, false, lost));
+            } else if lost > 0 {
+                lines.push(
+                    self.text
+                        .parameter_changed(&name, &self.text.spirit_points, -lost),
+                );
+            }
         }
         if success || !(skill.affect_hp || skill.affect_sp) {
             let stats = self.skill_stat_effects(target, skill, hit, effect);
@@ -54,7 +67,7 @@ impl Battle {
         if !success {
             self.pending_se.push(BattleSe::Dodge);
             self.report_hit(self.battler_pos(target), "Miss".to_string(), HitKind::Miss);
-            lines.push(format!("{caster} varázsol: {name} elkerülte"));
+            lines.push(self.text.skill_failed(&name, skill.failure_message));
         }
         lines
     }

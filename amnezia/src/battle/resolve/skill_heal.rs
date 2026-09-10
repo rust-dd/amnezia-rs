@@ -7,7 +7,6 @@ impl Battle {
         target: Source,
         skill: &SkillDef,
     ) -> Vec<String> {
-        let caster_name = self.battler_name(source).to_string();
         let target_name = self.battler_name(target).to_string();
         let amount = self.skill_magnitude(source, target, skill);
         let hit = self.skill_hit_chance(source, target, skill);
@@ -47,7 +46,9 @@ impl Battle {
         if effects.revived {
             *hp = (*hp).max(1);
         }
-        let shown = (*hp - old_hp).max(*sp - old_sp);
+        let hp_gained = *hp - old_hp;
+        let sp_gained = *sp - old_sp;
+        let shown = hp_gained.max(sp_gained);
         let success = hp_hit && amount > 0 && !was_dead
             || *sp != old_sp
             || effects.success
@@ -60,11 +61,17 @@ impl Battle {
         if shown > 0 {
             self.report_hit(self.battler_pos(target), shown.to_string(), HitKind::Heal);
         }
-        let mut lines = if success {
-            vec![format!("{caster_name} varázsol: {target_name} +{shown}")]
+        let mut lines = Vec::new();
+        if success {
+            if hp_hit && amount > 0 && !was_dead && !effects.revived {
+                lines.push(self.text.recovered(&target_name, true, hp_gained));
+            }
+            if sp_gained > 0 {
+                lines.push(self.text.recovered(&target_name, false, sp_gained));
+            }
         } else {
-            vec![format!("{caster_name} varázsol: {target_name} hatástalan")]
-        };
+            lines.push(self.text.skill_failed(&target_name, skill.failure_message));
+        }
         lines.extend(stats);
         lines.extend(effects.lines);
         lines

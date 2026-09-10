@@ -1,88 +1,64 @@
-//! The real RM2000 message terms the battle-end log lines are built from —
-//! victory / defeat / escape outcomes and the experience / gold reward lines.
-//! Captured onto the [`super::model::Battle`] at battle start (from the loaded
-//! [`crate::terms::Terms`]) so the resolution code, which has no Bevy resources,
-//! can compose faithful lines. Each field keeps its invented Hungarian default
-//! until a non-blank real term overrides it, so a missing `terms.ron` still reads
-//! naturally and the model's unit tests (which never apply terms) are unchanged.
-//!
-//! The reward lines follow the RM2000 (2000, non-placeholder) concatenation
-//! order from EasyRPG `game_message_terms.cpp`: experience is `<value><exp_received>`
-//! and gold is `<gold_received_a> <value><gold><gold_received_b>`.
+//! A battle-local vocabulary snapshot. Applying database terms preserves blanks.
 
 use amnezia_data::TermsDef;
+use std::ops::{Deref, DerefMut};
 
-/// The battle-end message terms, defaulting to the faithful Hungarian
-/// placeholders the log shipped with.
+mod format;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BattleText {
-    pub victory: String,
-    pub defeat: String,
-    pub escape_success: String,
-    pub escape_failure: String,
-    pub exp_received: String,
-    pub gold_received_a: String,
-    pub gold: String,
-    pub gold_received_b: String,
-    pub item_received: String,
-    // Per-hit lines. RM2000 (non-placeholder) concatenates these as suffixes onto
-    // the target name (see EasyRPG `GetDamagedMessage` / `GetActionFailureMessage`):
-    // a dodge is `<target><dodge>`, a hit `<target> <value><damaged>`, a critical is
-    // the standalone term.
-    pub dodge: String,
-    pub enemy_damaged: String,
-    pub actor_damaged: String,
-    pub enemy_critical: String,
-    pub actor_critical: String,
-}
+pub struct BattleText(TermsDef);
 
 impl Default for BattleText {
     fn default() -> Self {
-        Self {
-            victory: "Győzelem!".to_string(),
-            defeat: "Vereség...".to_string(),
-            escape_success: "Sikeres menekülés!".to_string(),
-            escape_failure: "Menekülés sikertelen!".to_string(),
-            exp_received: " EXP".to_string(),
-            gold_received_a: "+".to_string(),
-            gold: " arany".to_string(),
-            gold_received_b: String::new(),
-            item_received: " megszerezve!".into(),
-            dodge: " kivédi a támadást".to_string(),
-            enemy_damaged: " HP-t sebződik".to_string(),
-            actor_damaged: " HP-t veszít".to_string(),
-            enemy_critical: "Kritikus ütés!".to_string(),
-            actor_critical: "Kritikus csapás!".to_string(),
-        }
+        Self(TermsDef {
+            victory: "Győzelem!".into(),
+            defeat: "Vereség...".into(),
+            escape_success: "Sikeres menekülés!".into(),
+            escape_failure: "Menekülés sikertelen!".into(),
+            exp_received: " EXP".into(),
+            gold_recieved_a: "+".into(),
+            gold: " arany".into(),
+            item_recieved: " megszerezve!".into(),
+            dodge: " kivédi a támadást".into(),
+            enemy_damaged: " HP-t sebződik".into(),
+            actor_damaged: " HP-t veszít".into(),
+            enemy_critical: "Kritikus ütés!".into(),
+            actor_critical: "Kritikus csapás!".into(),
+            enemy_undamaged: " kivédi a támadást".into(),
+            actor_undamaged: " félreugrik".into(),
+            skill_failure_a: " félreugrik".into(),
+            skill_failure_b: " védekezik".into(),
+            skill_failure_c: " kivédi a támadást".into(),
+            health_points: "HP".into(),
+            spirit_points: "SP".into(),
+            hp_recovery: " visszatért".into(),
+            attack: "Támadóerő".into(),
+            defense: "Védőerő".into(),
+            spirit: "Mentál".into(),
+            agility: "Gyorsaság".into(),
+            parameter_increase: " ".into(),
+            ..Default::default()
+        })
+    }
+}
+
+impl Deref for BattleText {
+    type Target = TermsDef;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for BattleText {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }
 
 impl BattleText {
-    /// Override each message with its real RM2000 term when the parsed term is
-    /// non-blank, leaving the Hungarian default in place otherwise.
-    pub fn apply(&mut self, t: &TermsDef) {
-        set(&mut self.victory, &t.victory);
-        set(&mut self.defeat, &t.defeat);
-        set(&mut self.escape_success, &t.escape_success);
-        set(&mut self.escape_failure, &t.escape_failure);
-        set(&mut self.exp_received, &t.exp_received);
-        set(&mut self.gold_received_a, &t.gold_recieved_a);
-        set(&mut self.gold, &t.gold);
-        set(&mut self.gold_received_b, &t.gold_recieved_b);
-        set(&mut self.item_received, &t.item_recieved);
-        set(&mut self.dodge, &t.dodge);
-        set(&mut self.enemy_damaged, &t.enemy_damaged);
-        set(&mut self.actor_damaged, &t.actor_damaged);
-        set(&mut self.enemy_critical, &t.enemy_critical);
-        set(&mut self.actor_critical, &t.actor_critical);
-    }
-}
-
-/// Replace `dst` with `src` only when `src` carries a term (the original database
-/// leaves some terms blank; those keep the Hungarian default).
-fn set(dst: &mut String, src: &str) {
-    if !src.is_empty() {
-        *dst = src.to_string();
+    pub fn apply(&mut self, terms: &TermsDef) {
+        self.0.clone_from(terms);
     }
 }
 
@@ -91,15 +67,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn apply_overrides_only_non_blank_terms() {
+    fn applying_database_terms_preserves_intentionally_blank_messages() {
         let mut text = BattleText::default();
-        // defeat left blank -> keeps the Hungarian default.
         let terms = TermsDef {
             victory: "Megnyerted a harcot!".into(),
+            parameter_increase: " ".into(),
             ..Default::default()
         };
         text.apply(&terms);
-        assert_eq!(text.victory, "Megnyerted a harcot!");
-        assert_eq!(text.defeat, "Vereség...");
+        assert_eq!(*text, terms);
+        assert!(text.defeat.is_empty());
+        assert_eq!(text.parameter_increase, " ");
     }
 }

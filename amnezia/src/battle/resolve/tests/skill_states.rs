@@ -132,7 +132,7 @@ fn an_already_present_state_succeeds_without_restarting_its_duration() {
     battle.enemies[0].states = vec![(2, 7)];
     let lines = battle.skill_hit_enemy(0, 0, &skill);
     assert_eq!(battle.enemies[0].states, [(2, 7)]);
-    assert!(!lines.iter().any(|line| line.contains("elkerülte")));
+    assert!(lines.is_empty());
 }
 
 #[test]

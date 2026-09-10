@@ -89,9 +89,9 @@ impl Battle {
                     // RM2000 (2000): "<received_a> <value><gold><received_b>".
                     self.log.push(format!(
                         "{} {gold}{}{}",
-                        i18n::tr(&self.text.gold_received_a),
+                        i18n::tr(&self.text.gold_recieved_a),
                         i18n::tr(&self.text.gold),
-                        i18n::tr(&self.text.gold_received_b),
+                        i18n::tr(&self.text.gold_recieved_b),
                     ));
                 }
             }

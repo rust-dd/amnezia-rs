@@ -84,7 +84,14 @@ fn an_enemy_skill_cast_wounds_the_targeted_member() {
     let before = battle.members[0].hp;
     let line = battle.enemy_cast(0, 1, 0).unwrap();
     assert!(battle.members[0].hp < before);
-    assert!(line.contains("varázsol"));
+    assert_eq!(
+        line,
+        format!(
+            "{} {} HP-t veszít",
+            battle.members[0].name,
+            before - battle.members[0].hp
+        )
+    );
 }
 
 #[test]

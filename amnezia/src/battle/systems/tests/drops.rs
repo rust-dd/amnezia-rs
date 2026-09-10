@@ -14,7 +14,7 @@ fn victory_grants_each_drop_once_and_waits_until_all_reward_pages_are_confirmed(
         enemy.drop_id = 139;
         enemy.drop_prob = 100;
     }
-    battle.text.item_received = " a tiéd!".into();
+    battle.text.item_recieved = " a tiéd!".into();
     battle.finish(BattleOutcome::Victory);
     app.insert_resource(battle);
     app.insert_resource(GameData {

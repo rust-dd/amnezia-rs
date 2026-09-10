@@ -6,6 +6,7 @@ mod attributes;
 mod criticals;
 mod drops;
 mod equipment;
+mod messages;
 mod skill_requirements;
 mod state_behavior;
 

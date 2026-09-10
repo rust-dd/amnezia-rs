@@ -68,5 +68,5 @@ fn a_skill_can_miss_its_to_hit_roll_and_deal_nothing() {
         battle.enemies[0].hp, before,
         "a missed skill deals no damage"
     );
-    assert!(lines.iter().any(|l| l.contains("elkerülte")));
+    assert_eq!(lines, [format!("{} félreugrik", battle.enemies[0].name)]);
 }

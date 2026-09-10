@@ -24,6 +24,13 @@ impl Battle {
             };
             if present && !heals {
                 effects.success = true;
+                if let Some(state) = self.states.iter().find(|state| state.id == id) {
+                    effects.lines.push(format!(
+                        "{}{}",
+                        self.battler_name(target),
+                        state.message_already
+                    ));
+                }
                 continue;
             }
             if !self.skill_roll(hit) {
@@ -46,12 +53,16 @@ impl Battle {
             }
             effects.success = true;
             if let Some(state) = self.states.iter().find(|state| state.id == id) {
-                let verb = if heals { "gyógyul" } else { "státusz" };
-                effects.lines.push(format!(
-                    "{} {verb}: {}",
-                    self.battler_name(target),
-                    state.name
-                ));
+                let message = if heals {
+                    &state.message_recovery
+                } else if matches!(target, Source::Party(_)) {
+                    &state.message_actor
+                } else {
+                    &state.message_enemy
+                };
+                effects
+                    .lines
+                    .push(format!("{}{message}", self.battler_name(target)));
             }
         }
         effects

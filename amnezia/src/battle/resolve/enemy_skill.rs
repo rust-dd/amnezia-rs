@@ -13,6 +13,7 @@ impl Battle {
             if !self.pay_skill(Source::Enemy(ei), &skill) {
                 return None;
             }
+            self.log_skill_use(Source::Enemy(ei), &skill);
             self.push_skill_anim(Source::Enemy(ei), &skill, target);
         }
         let targets = self.enemy_skill_targets(ei, &skill, target);
@@ -28,11 +29,7 @@ impl Battle {
                 skill_id,
             });
         }
-        Some(if lines.is_empty() {
-            format!("{} varázsol", self.enemies[ei].name)
-        } else {
-            lines.join("\n")
-        })
+        Some(lines.join("\n"))
     }
 
     pub(in crate::battle::resolve) fn enemy_skill_target(

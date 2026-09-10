@@ -1,4 +1,4 @@
-use super::model::{Battle, MenuLevel, Phase};
+use super::model::{Action, Battle, Command, MenuLevel, Phase, Source};
 use bevy::prelude::*;
 
 pub(crate) fn defeat(world: &mut World) {
@@ -74,6 +74,21 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
             .resolution
             .set(640.0, 480.0);
     }
+    if frame == 1235 {
+        let mut battle = world.resource_mut::<Battle>();
+        battle.phase = Phase::Resolve;
+        battle.log.clear();
+        battle.queue = vec![Action {
+            source: Source::Party(0),
+            kind: Command::Skill {
+                skill_id: 1,
+                target: 0,
+            },
+            agility: 1,
+        }];
+        battle.queue_at = 0;
+        assert!(battle.resolve_next_with_items(|_| true));
+    }
     if frame == 300 {
         let skills = world
             .resource::<crate::gamedata::GameData>()
@@ -133,6 +148,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         1061 => Some("battle-hit-restored"),
         1130 => Some("battle-ally-target"),
         1230 => Some("battle-resized"),
+        1250 => Some("battle-skill-usage"),
         _ => super::hud::movement_label(frame),
     };
     if label.is_some() {
@@ -148,6 +164,19 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     }
     if frame == 670 {
         super::hud::verify_arrows(world);
+    }
+    if frame == 1250 {
+        let battle = world.resource::<Battle>();
+        assert_eq!(battle.members[0].sp, 17);
+        assert_eq!(battle.log, ["Ron X-csapást alkalmaz"]);
+        assert!(battle.anim_hold_active());
+        assert!(
+            world
+                .query::<(&crate::font::bitmap::PixelText, &InheritedVisibility)>()
+                .iter(world)
+                .any(|(text, visible)| visible.get()
+                    && text.runs.iter().any(|r| r.text == "Ron X-csapást alkalmaz"))
+        );
     }
     if matches!(frame, 600 | 630) {
         let battle = world.resource::<Battle>();

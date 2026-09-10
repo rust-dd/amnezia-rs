@@ -67,13 +67,13 @@ fn an_original_zero_chance_skill_misses_even_with_an_agility_advantage() {
     for seed in 1..=32 {
         battle.rng = seed;
         let lines = battle.skill_hit_enemy(0, 0, &skill);
-        assert!(lines.iter().any(|line| line.contains("elkerülte")));
+        assert_eq!(lines, [format!("{} félreugrik", battle.enemies[0].name)]);
         assert_eq!(battle.enemies[0].hp, hp);
     }
     battle.members[0].stats.agility = 1;
     battle.enemies[0].stats.agility = 100;
     let hp = battle.members[0].hp;
     let line = battle.enemy_cast(0, 67, 0).unwrap();
-    assert!(line.contains("elkerülte"));
+    assert_eq!(line, format!("{} félreugrik", battle.members[0].name));
     assert_eq!(battle.members[0].hp, hp);
 }

@@ -24,11 +24,16 @@ impl Battle {
             modifiers[index] = (old + delta).clamp(-(base / 2), base);
             let changed = modifiers[index] - old;
             if changed != 0 {
-                lines.push(format!(
-                    "{} {} {changed:+}",
-                    self.battler_name(target),
-                    ["ATK", "DEF", "SPI", "AGI"][index]
-                ));
+                let points = [
+                    &self.text.attack,
+                    &self.text.defense,
+                    &self.text.spirit,
+                    &self.text.agility,
+                ][index];
+                lines.push(
+                    self.text
+                        .parameter_changed(self.battler_name(target), points, changed),
+                );
             }
         }
         lines
