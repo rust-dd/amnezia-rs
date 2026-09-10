@@ -24,6 +24,8 @@ use ron::ser::PrettyConfig;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+const SAVE_FORMAT_VERSION: u32 = 1;
+
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
 /// (Continue) sets it so a resume reuses the same restore path without duplicating
@@ -74,10 +76,11 @@ pub fn save_slot_exists() -> bool {
     slot_exists(&save_path()) || storage::legacy_save_path().is_some_and(|p| slot_exists(&p))
 }
 
-/// A serialisable snapshot of the whole runtime game state. Maps are stored as
-/// sorted-order-independent `Vec`s of pairs so RON stays diffable and stable.
+/// A versioned snapshot of the supported persistent state.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SaveGame {
+    #[serde(default)]
+    format_version: u32,
     #[serde(default)]
     game_frames: crate::timing::GameFrames,
     #[serde(default)]
@@ -299,6 +302,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                format_version: SAVE_FORMAT_VERSION,
                 game_frames: scene.game_frames.as_deref().copied().unwrap_or_default(),
                 transitions: scene.transitions.as_deref().cloned().unwrap_or_default(),
                 map_id: map_data.map_id,
@@ -358,7 +362,7 @@ fn save_or_load(
             };
             if !valid_destination(&game) {
                 error!(
-                    "load failed: invalid map or party in {}",
+                    "load failed: unsupported format or invalid map/party in {}",
                     save_io.location.0.display()
                 );
                 return;
@@ -405,6 +409,7 @@ fn save_or_load(
             if let Some(appearance) = scene.appearance.as_deref_mut() {
                 *appearance = game.appearance;
                 if let Some(actor) = party.snapshot().first()
+                    && game.format_version == 0
                     && appearance.get(*actor).is_none()
                     && !game.charset.is_empty()
                 {
@@ -417,8 +422,7 @@ fn save_or_load(
             if let Some(access) = scene.save_access.as_mut() {
                 access.0 = game.save_access;
             }
-            // Older saves omit these fields, so keep the initial graphic and name.
-            if !game.hero_name.is_empty() {
+            if game.format_version > 0 || !game.hero_name.is_empty() {
                 scene.hero_name.0 = game.hero_name;
             }
             *scene.weather = Weather::from_code(game.weather);
@@ -445,6 +449,9 @@ fn save_or_load(
 }
 
 fn valid_destination(game: &SaveGame) -> bool {
+    if game.format_version > SAVE_FORMAT_VERSION {
+        return false;
+    }
     let path = format!(
         "{}/maps/map_{:04}.ron",
         crate::assets::asset_root(),
