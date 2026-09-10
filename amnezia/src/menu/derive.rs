@@ -88,6 +88,10 @@ mod tests {
 
     fn def() -> ActorDef {
         ActorDef {
+            character_name: String::new(),
+            character_index: 0,
+            rename_skill: false,
+            skill_name: String::new(),
             critical_hit: false,
             critical_hit_chance: 30,
             state_ranks: Vec::new(),

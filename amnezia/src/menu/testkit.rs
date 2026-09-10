@@ -12,6 +12,10 @@ pub(super) const ITEM_HERB: u32 = 5;
 /// starting HP/SP and battle's linear stat formula, no equipment.
 pub(super) fn actor() -> ActorDef {
     ActorDef {
+        character_name: String::new(),
+        character_index: 0,
+        rename_skill: false,
+        skill_name: String::new(),
         critical_hit: false,
         critical_hit_chance: 30,
         state_ranks: Vec::new(),

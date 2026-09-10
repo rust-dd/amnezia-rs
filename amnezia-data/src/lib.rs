@@ -78,6 +78,14 @@ pub struct ActorCurves {
 /// usable in battle) are exactly those learnings at or below its current level.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorDef {
+    #[serde(default)]
+    pub character_name: String,
+    #[serde(default)]
+    pub character_index: u32,
+    #[serde(default)]
+    pub rename_skill: bool,
+    #[serde(default)]
+    pub skill_name: String,
     #[serde(default = "default_true")]
     pub critical_hit: bool,
     #[serde(default = "default_critical_denominator")]
@@ -117,7 +125,7 @@ pub struct ActorDef {
     pub two_weapons: bool,
     #[serde(default)]
     pub fix_equipment: bool,
-    #[serde(default)]
+    #[serde(default = "default_animation_id")]
     pub unarmed_animation: u32,
     #[serde(default)]
     pub face_name: String,

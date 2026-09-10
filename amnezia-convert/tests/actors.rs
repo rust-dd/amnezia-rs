@@ -9,6 +9,18 @@ fn legacy_actor_ron_retains_an_empty_state_rank_tail() {
     assert!(actor.attribute_ranks.is_empty());
     assert!(actor.critical_hit);
     assert_eq!(actor.critical_hit_chance, 30);
+    assert_eq!(actor.unarmed_animation, 1);
+    assert!(actor.character_name.is_empty());
+    assert_eq!(actor.character_index, 0);
+    assert!(!actor.rename_skill);
+    assert!(actor.skill_name.is_empty());
+    let explicit = legacy.replace("hp:10", "unarmed_animation:0,hp:10");
+    assert_eq!(
+        ron::from_str::<ActorDef>(&explicit)
+            .unwrap()
+            .unarmed_animation,
+        0
+    );
 }
 
 fn varint(mut v: u32) -> Vec<u8> {
@@ -92,14 +104,15 @@ fn converts_ldb_to_actors_ron() {
     std::fs::create_dir_all(&input).unwrap();
 
     let params = parameters([[40, 44], [12, 15], [5, 7], [4, 6], [3, 5], [6, 9]]);
-    // initial_equipment (0x33) is five Int16 (LE) item ids: weapon 1, shield 0,
-    // armor 64, helmet 83, accessory 0; 0x15 marks dual wielding; 0x38 the
-    // unarmed attack animation.
     let ron = element(
         1,
         &[
             subchunk(0x01, b"Ron"),
             subchunk(0x02, b"Zsoldos"),
+            subchunk(0x03, b"Chara4"),
+            subchunk(0x04, &[2]),
+            subchunk(0x42, &[1]),
+            subchunk(0x43, b"Penget\xe1nc"),
             subchunk(0x0F, b"Ron"),
             subchunk(0x10, &varint(0)),
             subchunk(0x07, &varint(2)),
@@ -128,6 +141,10 @@ fn converts_ldb_to_actors_ron() {
     assert_eq!(
         actors[0],
         ActorDef {
+            character_name: "Chara4".into(),
+            character_index: 2,
+            rename_skill: true,
+            skill_name: "Pengetánc".into(),
             critical_hit: false,
             critical_hit_chance: 20,
             attribute_ranks: vec![2, 1, 4],

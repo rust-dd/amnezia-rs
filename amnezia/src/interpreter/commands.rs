@@ -358,6 +358,10 @@ mod tests {
 
     fn level_def() -> amnezia_data::ActorDef {
         amnezia_data::ActorDef {
+            character_name: String::new(),
+            character_index: 0,
+            rename_skill: false,
+            skill_name: String::new(),
             critical_hit: false,
             critical_hit_chance: 30,
             state_ranks: Vec::new(),

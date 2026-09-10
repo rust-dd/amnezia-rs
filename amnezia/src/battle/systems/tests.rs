@@ -96,6 +96,10 @@ fn logic_app() -> App {
     app.add_message::<AudioRequest>();
     app.insert_resource(GameData {
         actors: vec![ActorDef {
+            character_name: String::new(),
+            character_index: 0,
+            rename_skill: false,
+            skill_name: String::new(),
             critical_hit: false,
             critical_hit_chance: 30,
             state_ranks: Vec::new(),
@@ -246,6 +250,10 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     app.add_plugins(MinimalPlugins);
     app.init_resource::<crate::battle::BattleFlow>();
     let ron = ActorDef {
+        character_name: String::new(),
+        character_index: 0,
+        rename_skill: false,
+        skill_name: String::new(),
         critical_hit: false,
         critical_hit_chance: 30,
         state_ranks: Vec::new(),
