@@ -116,6 +116,7 @@ fn capture(world: &mut World, label: &str) {
     let transition_snapshot = crate::transitions::smoke::snapshot(world, label);
     let gameover_snapshot = crate::gameover::smoke::snapshot(world, label);
     let font_snapshot = crate::font::bitmap::smoke::snapshot(world, label);
+    let arrow_snapshot = crate::battle::hud::arrow_snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -139,6 +140,9 @@ fn capture(world: &mut World, label: &str) {
                 crate::gameover::smoke::verify_image(snapshot, &capture.image);
             }
             if let Some(snapshot) = &font_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &arrow_snapshot {
                 snapshot.verify(&capture.image);
             }
         },

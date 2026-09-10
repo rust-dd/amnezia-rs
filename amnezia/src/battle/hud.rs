@@ -1,10 +1,14 @@
 //! RM2000 battle windows, using native geometry and the original windowskin.
 
+mod arrows;
+mod clocks;
 mod content;
 mod layout;
 mod status;
 mod view;
 
+pub(crate) use arrows::snapshot as arrow_snapshot;
+pub(super) use arrows::verify as verify_arrows;
 pub(super) use view::verify_bounds;
 
 use super::model::{Battle, MenuLevel, Phase};
@@ -67,10 +71,18 @@ fn scroll(battle: Res<Battle>, mut scroll: ResMut<ListScroll>) {
 
 pub fn register(app: &mut App) {
     app.init_resource::<ListScroll>()
+        .init_resource::<clocks::WindowClocks>()
         .add_systems(Startup, view::spawn.after(super::systems::spawn_hud_camera))
         .add_systems(
             Update,
-            (scroll, view::panels, view::rows, view::cursors)
+            (
+                scroll,
+                clocks::tick,
+                view::panels,
+                view::rows,
+                view::cursors,
+                arrows::update,
+            )
                 .chain()
                 .after(super::input::command_input),
         );

@@ -90,6 +90,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     let label = match frame {
         430 => Some("battle-commands"),
         530 => Some("battle-skills"),
+        670 => Some("battle-scroll-arrows"),
         680 => Some("battle-skills-scrolled"),
         730 => Some("battle-status-colors"),
         830 => Some("battle-items"),
@@ -109,13 +110,18 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
                 .any(|text| text.runs.iter().any(|r| r.text == "Pengetánc"))
         );
     }
+    if frame == 670 {
+        super::hud::verify_arrows(world);
+    }
     label
 }
 
 pub(crate) fn verify_skin(image: &Image, label: &str) {
     let xs: &[u32] = match label {
         "battle-commands" | "battle-status-colors" => &[12, 120, 256],
-        "battle-skills" | "battle-skills-scrolled" | "battle-items" => &[12, 150, 308],
+        "battle-skills" | "battle-skills-scrolled" | "battle-scroll-arrows" | "battle-items" => {
+            &[12, 150, 308]
+        }
         "battle-target" => &[12, 120],
         "battle-ally-target" | "battle-resized" => &[12, 232],
         _ => return,

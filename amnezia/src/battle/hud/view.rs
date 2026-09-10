@@ -142,6 +142,7 @@ pub(super) fn spawn(
                         RowSlot(panel, slot),
                     ));
                 }
+                arrows::spawn(parent, &system, panel);
             });
     }
 }
@@ -230,7 +231,7 @@ pub(super) fn rows(
 }
 
 pub(super) fn cursors(
-    time: Res<Time>,
+    clocks: Res<clocks::WindowClocks>,
     battle: Res<Battle>,
     scroll: Res<ListScroll>,
     mut cursors: Query<(&Cursor, &mut Node, &mut Visibility, &mut ImageNode)>,
@@ -251,11 +252,7 @@ pub(super) fn cursors(
         node.left = Val::Px((4.0 + (index % columns) as f32 * width / columns as f32) * 3.0);
         node.top = Val::Px((8.0 + (index / columns) as f32 * 16.0) * 3.0);
         node.width = Val::Px((width / columns as f32 - 8.0) * 3.0);
-        let x = if ((time.elapsed_secs() * 4.0) as u32).is_multiple_of(2) {
-            64.0
-        } else {
-            96.0
-        };
+        let x = clocks.cursor_x(cursor.0, &battle);
         image.rect = Some(Rect::new(x, 0.0, x + 32.0, 32.0));
     }
 }

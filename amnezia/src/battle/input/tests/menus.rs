@@ -1,6 +1,64 @@
 use super::*;
 
 #[test]
+fn group_skills_commit_without_an_individual_target_window_or_early_sp_cost() {
+    for scope in [1, 4] {
+        let skill = skill_def(1, 20, scope);
+        let data = GameData {
+            actors: vec![],
+            items: vec![],
+            skills: vec![skill.clone()],
+        };
+        let mut battle = build_party2();
+        battle.begin_actor_commands();
+        battle.skills = vec![skill];
+        battle.members[0].known_skills = vec![1];
+        battle.menu = MenuLevel::Skill;
+        let sp = battle.members[0].sp;
+        skill_menu(&press_enter(), &data, &mut battle);
+        assert!(
+            matches!(
+                battle.members[0].command,
+                Some(Command::Skill {
+                    skill_id: 1,
+                    target: 0
+                })
+            ),
+            "scope {scope}"
+        );
+        assert_eq!(battle.members[0].sp, sp);
+        assert_eq!(battle.turn, 1);
+        assert!(battle.menu == MenuLevel::Command);
+    }
+}
+
+#[test]
+fn group_medicine_commits_immediately_and_undo_does_not_consume_it() {
+    let mut item = medicine(50);
+    item.scope = 1;
+    let id = item.id;
+    let data = GameData {
+        actors: vec![],
+        items: vec![item],
+        skills: vec![],
+    };
+    let mut inventory = Inventory::default();
+    inventory.add_item(id, 2);
+    let mut battle = build_party2();
+    battle.begin_actor_commands();
+    battle.menu = MenuLevel::Item;
+    item_menu(&press_enter(), &data, &inventory, &mut battle);
+    assert!(
+        matches!(battle.members[0].command, Some(Command::Item { item_id, target: 0 }) if item_id == id)
+    );
+    assert_eq!(battle.turn, 1);
+    assert!(battle.menu == MenuLevel::Command);
+    battle.undo_choice();
+    assert!(battle.members[0].command.is_none());
+    assert_eq!(inventory.count(id), 2);
+}
+
+#[test]
 fn a_weapon_restricted_skill_remains_listed_but_cannot_open_target_selection() {
     let mut battle = build_party2();
     battle.attributes = crate::gamedata::attribute_definitions().to_vec();

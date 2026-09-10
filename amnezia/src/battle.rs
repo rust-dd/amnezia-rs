@@ -19,7 +19,7 @@
 mod events;
 mod floaters;
 pub(crate) mod flow;
-mod hud;
+pub(crate) mod hud;
 mod input;
 mod log_terms;
 pub(crate) mod logic;

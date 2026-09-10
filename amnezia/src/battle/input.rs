@@ -180,6 +180,10 @@ fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle)
             .find(|s| s.id == skill_id)
             .map(|s| s.scope);
         match scope {
+            Some(1) => {
+                let target = battle.living_enemies().first().copied().unwrap_or(0);
+                battle.commit(Command::Skill { skill_id, target });
+            }
             Some(2 | 4) => {
                 let target = battle.turn;
                 battle.commit(Command::Skill { skill_id, target });
@@ -219,7 +223,14 @@ fn item_menu(
             return;
         }
         battle.pending_se.push(BattleSe::Decision);
-        open_ally_target(battle, None, Some(id));
+        if data.item(id).is_some_and(|item| item.scope == 1) {
+            battle.commit(Command::Item {
+                item_id: id,
+                target: battle.turn,
+            });
+        } else {
+            open_ally_target(battle, None, Some(id));
+        }
     }
 }
 
