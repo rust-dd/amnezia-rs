@@ -220,7 +220,9 @@ impl Plugin for WorldPlugin {
                         update_event_sprites,
                     )
                         .chain(),
-                    route::route_hero,
+                    route::route_hero
+                        .after(crate::appearance::ActorGraphics)
+                        .before(walk::<crate::player::Player>),
                     apply_relocate,
                 ),
             )

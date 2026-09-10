@@ -1,15 +1,13 @@
-//! Actor appearance: the RM2000 `ChangeActorGraphic` opcode (10630) reskins an
-//! actor's CharSet graphic, which the game leans on constantly (Ron alone
-//! changes clothes 444×). Every change is recorded per actor id in the
-//! [`Appearance`] store, and when it targets the party lead — the actor the
-//! on-screen hero portrays — the walking [`Player`] sprite is re-textured too.
+//! Persistent actor graphics and the party leader's map representation.
 
 use crate::player::Player;
 use crate::state::Party;
-use crate::world::Character;
+use crate::world::{Character, MapChanged, RouteStepper};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+pub(crate) mod smoke;
 
 /// Every actor's current CharSet graphic as `(charset, index)`, keyed by actor
 /// id. Actors that were never reskinned simply aren't present.
@@ -22,9 +20,7 @@ impl Appearance {
         self.0.insert(actor_id, (charset, index));
     }
 
-    /// The recorded graphic for `actor_id`, if one was ever set. The read side
-    /// of the store, for consumers that re-render an actor from its saved skin.
-    #[allow(dead_code)]
+    /// The actor's graphic override, if one was set.
     pub fn get(&self, actor_id: u32) -> Option<(&str, u32)> {
         self.0
             .get(&actor_id)
@@ -44,34 +40,64 @@ pub struct SpriteChange {
 
 pub struct AppearancePlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ActorGraphics;
+
 impl Plugin for AppearancePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Appearance>()
             .add_message::<SpriteChange>()
-            .add_systems(Update, apply_sprite_change);
+            .add_message::<MapChanged>()
+            .add_systems(
+                Update,
+                apply_sprite_change
+                    .in_set(ActorGraphics)
+                    .after(crate::interpreter::InterpreterStep)
+                    .before(crate::world::walk::<Player>)
+                    .before(crate::player::update_player_sprite),
+            );
     }
 }
 
-/// Apply each [`SpriteChange`]: record it in [`Appearance`], and when it targets
-/// the party lead (the first roster member, whom the on-screen hero portrays)
-/// re-texture the walking [`Player`] via [`Character::set_graphic`] —
-/// `update_player_sprite` reflects the change on the next frame.
 fn apply_sprite_change(
     mut reader: MessageReader<SpriteChange>,
+    mut transfers: MessageReader<MapChanged>,
+    data: Res<crate::gamedata::GameData>,
     party: Res<Party>,
     mut appearance: ResMut<Appearance>,
-    mut players: Query<&mut Player>,
+    mut players: Query<(&mut Player, Option<&mut RouteStepper>, Option<&mut Sprite>)>,
+    mut last_revision: Local<Option<u64>>,
 ) {
-    if reader.is_empty() {
-        return;
-    }
-    let lead = party.snapshot().first().copied();
+    let mut refresh = transfers.read().count() > 0
+        || *last_revision != Some(party.graphics_revision())
+        || appearance.is_changed();
+    *last_revision = Some(party.graphics_revision());
     for msg in reader.read() {
+        if data.actor(msg.actor_id).is_none() {
+            continue;
+        }
         appearance.set(msg.actor_id, msg.charset.clone(), msg.index);
-        if Some(msg.actor_id) == lead {
-            for mut player in &mut players {
-                player.set_graphic(msg.charset.clone(), msg.index);
-            }
+        refresh = true;
+    }
+    let roster = party.snapshot();
+    let graphic = roster
+        .first()
+        .and_then(|&id| data.actor(id))
+        .map_or(("", 0), |actor| {
+            appearance
+                .get(actor.id)
+                .unwrap_or((&actor.character_name, actor.character_index))
+        });
+    for (mut player, route, sprite) in &mut players {
+        if !refresh && !player.is_added() {
+            continue;
+        }
+        player.set_graphic(graphic.0.to_owned(), graphic.1);
+        if let Some(mut route) = route {
+            route.reset_transparency();
+        }
+        if let Some(mut sprite) = sprite {
+            sprite.color = sprite.color.with_alpha(1.0);
         }
     }
 }
@@ -80,15 +106,17 @@ fn apply_sprite_change(
 mod tests {
     use super::*;
 
+    mod refresh;
+
     #[test]
     fn lead_change_retextures_hero_and_is_recorded() {
         let mut app = App::new();
-        app.add_plugins(MinimalPlugins);
-        // Default roster is `[1]`, so the party lead is actor 1.
+        app.add_plugins((
+            MinimalPlugins,
+            crate::gamedata::GameDataPlugin,
+            AppearancePlugin,
+        ));
         app.insert_resource(Party::default());
-        app.init_resource::<Appearance>();
-        app.add_message::<SpriteChange>();
-        app.add_systems(Update, apply_sprite_change);
         let hero = app
             .world_mut()
             .spawn(Player {

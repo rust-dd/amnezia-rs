@@ -5,6 +5,37 @@ use amnezia_data::{Event, EventCommand, Map};
 use bevy::math::Vec2;
 
 #[test]
+fn an_empty_party_graphic_stays_hidden_until_an_actor_returns() {
+    let mut app = App::new();
+    app.init_resource::<HeroHidden>()
+        .add_systems(Update, update_hero_hidden);
+    let hero = app
+        .world_mut()
+        .spawn((
+            Player {
+                tile_x: 0,
+                tile_y: 0,
+                dir: 0,
+                frame: 1,
+                charset: String::new(),
+                index: 0,
+            },
+            Visibility::Inherited,
+        ))
+        .id();
+    for (charset, scripted, expected) in [
+        ("", false, Visibility::Hidden),
+        ("Chara1", true, Visibility::Hidden),
+        ("Chara1", false, Visibility::Inherited),
+    ] {
+        app.world_mut().get_mut::<Player>(hero).unwrap().charset = charset.into();
+        app.world_mut().resource_mut::<HeroHidden>().0 = scripted;
+        app.update();
+        assert_eq!(*app.world().get::<Visibility>(hero).unwrap(), expected);
+    }
+}
+
+#[test]
 fn parallel_choice_and_number_prompts_block_keyboard_movement() {
     for numeric in [false, true] {
         let mut app = movement_app(vec![]);

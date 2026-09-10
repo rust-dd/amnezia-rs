@@ -66,11 +66,15 @@ impl Variables {
 #[derive(Resource)]
 pub struct Party {
     members: Vec<u32>,
+    graphics_revision: u64,
 }
 
 impl Default for Party {
     fn default() -> Self {
-        Self { members: vec![1] }
+        Self {
+            members: vec![1],
+            graphics_revision: 0,
+        }
     }
 }
 
@@ -81,14 +85,23 @@ impl Party {
     pub fn add(&mut self, actor_id: u32) {
         if !self.members.contains(&actor_id) && self.members.len() < MAX_PARTY {
             self.members.push(actor_id);
+            self.graphics_revision = self.graphics_revision.wrapping_add(1);
         }
     }
     pub fn remove(&mut self, actor_id: u32) {
+        let count = self.members.len();
         self.members.retain(|&id| id != actor_id);
+        if count != self.members.len() {
+            self.graphics_revision = self.graphics_revision.wrapping_add(1);
+        }
     }
 }
 
 impl Party {
+    pub(crate) fn graphics_revision(&self) -> u64 {
+        self.graphics_revision
+    }
+
     pub fn has(&self, actor_id: u32) -> bool {
         self.members.contains(&actor_id)
     }
@@ -99,6 +112,7 @@ impl Party {
     /// Replace the roster with a restored snapshot.
     pub fn restore(&mut self, members: Vec<u32>) {
         self.members = members;
+        self.graphics_revision = self.graphics_revision.wrapping_add(1);
     }
 }
 

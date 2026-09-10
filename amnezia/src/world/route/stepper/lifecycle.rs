@@ -73,6 +73,10 @@ impl RouteStepper {
         crate::tiles::character_alpha(self.transparency)
     }
 
+    pub(crate) fn reset_transparency(&mut self) {
+        self.transparency = 0;
+    }
+
     #[cfg(test)]
     pub fn with_speed(mut self, speed: u32) -> Self {
         self.set_speed(speed);

@@ -280,7 +280,7 @@ fn touch_page_at<'a>(
         })
 }
 
-fn update_player_sprite(
+pub(crate) fn update_player_sprite(
     data: Res<MapData>,
     asset_server: Res<AssetServer>,
     mut players: Query<(&Player, &MoveQueue, &mut Sprite, &mut Transform), Changed<Player>>,
@@ -288,7 +288,7 @@ fn update_player_sprite(
     for (player, queue, mut sprite, mut transform) in &mut players {
         // While a step tweens, `walk` owns the sprite; here we only render the
         // hero at rest (keyboard turns, teleport arrival, settled routes).
-        if queue.busy() {
+        if queue.busy() || player.charset.is_empty() {
             continue;
         }
         sprite.image = asset_server.load(resolve_png("CharSet", &player.charset));
@@ -304,11 +304,11 @@ fn update_player_sprite(
 fn update_hero_hidden(
     hidden: Res<HeroHidden>,
     vehicles: Option<Res<crate::vehicles::Vehicles>>,
-    mut players: Query<&mut Visibility, With<Player>>,
+    mut players: Query<(&Player, &mut Visibility)>,
 ) {
     let invisible = hidden.0 || vehicles.as_ref().is_some_and(|v| v.riding());
-    for mut visibility in &mut players {
-        *visibility = if invisible {
+    for (player, mut visibility) in &mut players {
+        *visibility = if invisible || player.charset.is_empty() {
             Visibility::Hidden
         } else {
             Visibility::Inherited

@@ -1,6 +1,64 @@
 use amnezia_data::{EventCommand, Map};
 use bevy::prelude::*;
 
+pub(super) fn selected() -> &'static str {
+    if std::env::args().any(|arg| arg == "--smoke-actor-graphics") {
+        "actor-graphics"
+    } else if std::env::args().any(|arg| arg == "--smoke-actor-names") {
+        "actor-names"
+    } else if std::env::args().any(|arg| arg == "--smoke-return-title") {
+        "return-title"
+    } else if std::env::args().any(|arg| arg == "--smoke-gameover") {
+        "gameover"
+    } else if std::env::args().any(|arg| arg == "--smoke-battle-defeat") {
+        "battle-defeat"
+    } else if std::env::args().any(|arg| arg == "--smoke-battle-transitions") {
+        "battle-transitions"
+    } else if std::env::args().any(|arg| arg == "--smoke-screen-events") {
+        "screen-events"
+    } else if std::env::args().any(|arg| arg == "--smoke-transitions") {
+        "transitions"
+    } else if std::env::args().any(|arg| arg == "--smoke-font-colors") {
+        "font-colors"
+    } else if std::env::args().any(|arg| arg == "--smoke-water") {
+        "water"
+    } else if std::env::args().any(|arg| arg == "--smoke-animation-colors") {
+        "animation-colors"
+    } else if std::env::args().any(|arg| arg == "--smoke-display") {
+        "display"
+    } else if std::env::args().any(|arg| arg == "--smoke-colors") {
+        "colors"
+    } else if std::env::args().any(|arg| arg == "--smoke-pictures") {
+        "pictures"
+    } else if std::env::args().any(|arg| arg == "--smoke-message-options") {
+        "message-options"
+    } else if std::env::args().any(|arg| arg == "--smoke-camera") {
+        "camera"
+    } else if std::env::args().any(|arg| arg == "--smoke-looping") {
+        "looping"
+    } else if std::env::args().any(|arg| arg == "--smoke-airship") {
+        "airship"
+    } else if std::env::args().any(|arg| arg == "--smoke-battle") {
+        "battle"
+    } else if std::env::args().any(|arg| arg == "--smoke-battle-menus") {
+        "battle-menus"
+    } else if std::env::args().any(|arg| arg == "--smoke-battle-events") {
+        "battle-events"
+    } else if std::env::args().any(|arg| arg == "--smoke-timer") {
+        "timer"
+    } else if std::env::args().any(|arg| arg == "--smoke-panorama") {
+        "panorama"
+    } else if std::env::args().any(|arg| arg == "--smoke-airship-escape") {
+        "escape"
+    } else if std::env::args().any(|arg| arg == "--smoke-font") {
+        "font"
+    } else if std::env::args().any(|arg| arg == "--smoke-menu") {
+        "menu"
+    } else {
+        "intro"
+    }
+}
+
 pub(super) fn escaped_airship_cast(world: &mut World) -> u8 {
     if world.resource::<crate::world::MapData>().map_id != 94 {
         return 0;

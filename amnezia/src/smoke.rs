@@ -24,59 +24,7 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-actor-names") {
-            "actor-names"
-        } else if std::env::args().any(|arg| arg == "--smoke-return-title") {
-            "return-title"
-        } else if std::env::args().any(|arg| arg == "--smoke-gameover") {
-            "gameover"
-        } else if std::env::args().any(|arg| arg == "--smoke-battle-defeat") {
-            "battle-defeat"
-        } else if std::env::args().any(|arg| arg == "--smoke-battle-transitions") {
-            "battle-transitions"
-        } else if std::env::args().any(|arg| arg == "--smoke-screen-events") {
-            "screen-events"
-        } else if std::env::args().any(|arg| arg == "--smoke-transitions") {
-            "transitions"
-        } else if std::env::args().any(|arg| arg == "--smoke-font-colors") {
-            "font-colors"
-        } else if std::env::args().any(|arg| arg == "--smoke-water") {
-            "water"
-        } else if std::env::args().any(|arg| arg == "--smoke-animation-colors") {
-            "animation-colors"
-        } else if std::env::args().any(|arg| arg == "--smoke-display") {
-            "display"
-        } else if std::env::args().any(|arg| arg == "--smoke-colors") {
-            "colors"
-        } else if std::env::args().any(|arg| arg == "--smoke-pictures") {
-            "pictures"
-        } else if std::env::args().any(|arg| arg == "--smoke-message-options") {
-            "message-options"
-        } else if std::env::args().any(|arg| arg == "--smoke-camera") {
-            "camera"
-        } else if std::env::args().any(|arg| arg == "--smoke-looping") {
-            "looping"
-        } else if std::env::args().any(|arg| arg == "--smoke-airship") {
-            "airship"
-        } else if std::env::args().any(|arg| arg == "--smoke-battle") {
-            "battle"
-        } else if std::env::args().any(|arg| arg == "--smoke-battle-menus") {
-            "battle-menus"
-        } else if std::env::args().any(|arg| arg == "--smoke-battle-events") {
-            "battle-events"
-        } else if std::env::args().any(|arg| arg == "--smoke-timer") {
-            "timer"
-        } else if std::env::args().any(|arg| arg == "--smoke-panorama") {
-            "panorama"
-        } else if std::env::args().any(|arg| arg == "--smoke-airship-escape") {
-            "escape"
-        } else if std::env::args().any(|arg| arg == "--smoke-font") {
-            "font"
-        } else if std::env::args().any(|arg| arg == "--smoke-menu") {
-            "menu"
-        } else {
-            "intro"
-        };
+        let scenario = scenarios::selected();
         app.insert_resource(SmokeRun {
             frame: 0,
             scenario,
@@ -124,6 +72,7 @@ fn capture(world: &mut World, label: &str) {
     let arrow_snapshot = crate::battle::hud::arrow_snapshot(world, label);
     let movement_snapshot = crate::battle::hud::movement_snapshot(world, label);
     let battler_snapshot = crate::battle::battler_snapshot(world, label);
+    let actor_snapshot = crate::appearance::smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -156,6 +105,9 @@ fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &battler_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &actor_snapshot {
                 snapshot.verify(&capture.image);
             }
         },
@@ -237,6 +189,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "message-options" {
         message_options::drive(world, frame);
+    }
+    if scenario == "actor-graphics"
+        && let Some(label) = crate::appearance::smoke::drive(world, frame)
+    {
+        capture(world, label);
     }
     if scenario == "actor-names"
         && let Some(label) = crate::menu::name_smoke::drive(world, frame)
@@ -366,6 +323,8 @@ fn drive(world: &mut World) {
         }
         if scenario == "display" {
             crate::display::smoke::verify_finished(world);
+        } else if scenario == "actor-graphics" {
+            crate::appearance::smoke::verify_finished(world);
         } else if scenario == "font-colors" {
             crate::font::bitmap::smoke::verify_finished(world);
         } else if scenario == "animation-colors" {
@@ -442,6 +401,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
     let commands = if matches!(
         scenario,
         "message-options"
+            | "actor-graphics"
             | "actor-names"
             | "pictures"
             | "colors"
