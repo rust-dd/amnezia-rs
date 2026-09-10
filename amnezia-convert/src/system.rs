@@ -19,6 +19,7 @@ pub fn convert_system(input: &Path, output: &Path) -> Result<()> {
     let parsed = lcf::parse_system(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
     let system = SystemDef {
         font_id: parsed.font_id,
+        transitions: parsed.transitions,
         title_music: music(parsed.title_music),
         battle_music: music(parsed.battle_music),
         battle_end_music: music(parsed.battle_end_music),

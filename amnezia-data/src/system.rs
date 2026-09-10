@@ -29,12 +29,15 @@ pub struct SoundDef {
     pub balance: u32,
 }
 
-/// The system font selection and scene audio, converted from `lcf::System`.
+/// The system font, transitions and scene audio, converted from `lcf::System`.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SystemDef {
     /// Western font selection: 0 = RM2000-compatible, 1 = RMG2000-compatible.
     #[serde(default)]
     pub font_id: u32,
+    /// Erase/show pairs for teleport, battle start and battle end.
+    #[serde(default)]
+    pub transitions: [i32; 6],
     pub title_music: MusicDef,
     pub battle_music: MusicDef,
     pub battle_end_music: MusicDef,

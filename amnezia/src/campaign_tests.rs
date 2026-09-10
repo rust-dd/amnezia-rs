@@ -11,6 +11,7 @@ mod message_options;
 mod scrolling;
 mod state_resistance;
 mod terrain;
+mod transitions;
 mod troop_events;
 
 fn maps() -> BTreeMap<u32, Map> {

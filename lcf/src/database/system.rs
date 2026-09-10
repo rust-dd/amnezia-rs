@@ -59,11 +59,13 @@ impl Sound {
     }
 }
 
-/// The system font selection and scene audio. `enemy_defeated_se` corresponds
+/// The system font, transitions and scene audio. `enemy_defeated_se` corresponds
 /// to liblcf's `enemy_death_se` (chunk `0x33`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct System {
     pub font_id: u32,
+    /// Erase/show pairs for teleport, battle start and battle end.
+    pub transitions: [i32; 6],
     pub title_music: Music,
     pub battle_music: Music,
     pub battle_end_music: Music,
@@ -177,14 +179,14 @@ fn parse_sound(data: &[u8]) -> Result<Sound, LcfError> {
 
 /// Parse the system definition (`ChunkData::system` = `0x16`) out of an LDB byte
 /// slice. The section is a single struct — a bare `[id][size][data]` chunk stream
-/// with no `[count]` header — so every music (`0x1F..=0x26`) and sound
-/// (`0x29..=0x34`) field is read directly; all other system fields are skipped by
-/// their length. Missing music/sound fields default to the RM2000 silent entry.
+/// with no `[count]` header. Missing fields keep their RM2000 defaults;
+/// unhandled fields are skipped by their length.
 pub fn parse_system(bytes: &[u8]) -> Result<System, LcfError> {
     let section = find_section(bytes, SYSTEM_SECTION, LcfError::MissingSystem)?;
     let mut reader = Reader::new(section);
     let mut system = System {
         font_id: 0,
+        transitions: [0; 6],
         title_music: Music::off(),
         battle_music: Music::off(),
         battle_end_music: Music::off(),
@@ -215,6 +217,9 @@ pub fn parse_system(bytes: &[u8]) -> Result<System, LcfError> {
         let data = reader.take(size)?;
         match id {
             0x48 => system.font_id = Reader::new(data).varint()?,
+            0x3D..=0x42 => {
+                system.transitions[(id - 0x3D) as usize] = Reader::new(data).varint()? as i32;
+            }
             TITLE_MUSIC => system.title_music = parse_music(data)?,
             BATTLE_MUSIC => system.battle_music = parse_music(data)?,
             BATTLE_END_MUSIC => system.battle_end_music = parse_music(data)?,
@@ -245,6 +250,20 @@ pub fn parse_system(bytes: &[u8]) -> Result<System, LcfError> {
 mod tests {
     use crate::test_util::{make_ldb, subchunk, varint};
     use crate::{LcfError, Music, Sound, parse_system};
+
+    #[test]
+    fn transitions_preserve_six_slots_explicit_zero_and_missing_defaults() {
+        let values = [20, 19, 16, 17, 0, -1];
+        let fields = values
+            .iter()
+            .enumerate()
+            .map(|(slot, value)| subchunk(0x3D + slot as u32, &varint(*value as u32)))
+            .collect::<Vec<_>>();
+        let bytes = make_ldb(&[(0x16, nested(&fields))]);
+        assert_eq!(parse_system(&bytes).unwrap().transitions, values);
+        let empty = make_ldb(&[(0x16, nested(&[]))]);
+        assert_eq!(parse_system(&empty).unwrap().transitions, [0; 6]);
+    }
 
     #[test]
     fn preserves_the_selected_system_font() {
