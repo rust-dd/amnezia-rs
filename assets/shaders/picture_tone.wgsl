@@ -1,15 +1,9 @@
-// RM2000 picture tone: an RGB multiply plus a saturation blend toward
-// luminance (so `saturation = 0` renders the picture grayscale), then the
-// picture's opacity. Mirrors EasyRPG's `Sprite_Picture` tone, applied per
-// pixel so a colour source can be desaturated at runtime (a flat sprite tint
-// cannot). Bound as a `Material2d` on the picture quad.
-
 #import bevy_sprite::mesh2d_vertex_output::VertexOutput
 #import bevy_render::color_operations::{linear_to_srgb, srgb_to_linear}
+#import "shaders/legacy_tone.wgsl" as legacy
 
-// xyz: per-channel RGB multiplier (1.0 = neutral). w: saturation (1.0 = neutral,
-// 0.0 = full grayscale, >1.0 oversaturates).
-@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> rgb_sat: vec4<f32>;
+// Original RGB/saturation channels: 0..255, neutral 128.
+@group(#{MATERIAL_BIND_GROUP}) @binding(0) var<uniform> channels: vec4<f32>;
 // x: opacity, y: use the palette-index-zero alpha mask.
 @group(#{MATERIAL_BIND_GROUP}) @binding(1) var<uniform> extra: vec4<f32>;
 @group(#{MATERIAL_BIND_GROUP}) @binding(2) var picture_texture: texture_2d<f32>;
@@ -38,9 +32,7 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     } else {
         texel = textureSampleLevel(picture_texture, picture_sampler, mesh.uv, 0.0);
     }
-    var rgb = linear_to_srgb(texel.rgb) * rgb_sat.xyz;
-    let luma = dot(rgb, vec3<f32>(0.299, 0.587, 0.114));
-    rgb = mix(vec3<f32>(luma, luma, luma), rgb, rgb_sat.w);
+    var rgb = legacy::apply_tone(linear_to_srgb(texel.rgb), channels);
 #ifndef SRGB_OUTPUT
     rgb = srgb_to_linear(rgb);
 #endif

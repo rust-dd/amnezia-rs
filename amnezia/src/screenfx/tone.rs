@@ -1,8 +1,8 @@
 //! The RM2000 screen tone (`TintScreen` 11030) as a faithful camera post-process.
 //!
 //! RM2000's screen tone is R/G/B/Saturation, each 0..200 with 100 neutral. It
-//! multiplies the whole scene by `channel / 100` (so < 100 darkens, > 100
-//! brightens) and blends toward luminance by the saturation (0 = grayscale). An
+//! quantizes channels around 128, adjusts saturation, then applies the original
+//! hard-light color table (0 = black, 100 = neutral, 200 = white). An
 //! alpha overlay can only darken, so instead [`ScreenTone`] is a fullscreen
 //! post-process on the main camera (Bevy's [`FullscreenMaterial`]) running
 //! `shaders/screen_tone.wgsl`, mirroring `picture/render.rs`'s per-picture tone
@@ -35,18 +35,18 @@ pub const PICTURE_LAYER: usize = 3;
 /// RM2000 neutral tone: every channel 100, i.e. no change.
 const NEUTRAL: [f32; 4] = [100.0, 100.0, 100.0, 100.0];
 
-/// The per-camera tone uniform for `screen_tone.wgsl`. `rgb_sat.xyz` are the RGB
-/// multipliers (1 = neutral) and `rgb_sat.w` the saturation (1 = neutral, 0 =
-/// grayscale). Present on the main camera; absent elsewhere so only the world is
-/// toned.
+/// Quantized RGB/saturation tone channels; 128 is neutral. Present only on the
+/// main camera so the pictures and UI remain untinted.
 #[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
 pub struct ScreenTone {
-    rgb_sat: Vec4,
+    channels: Vec4,
 }
 
 impl Default for ScreenTone {
     fn default() -> Self {
-        Self { rgb_sat: Vec4::ONE }
+        Self {
+            channels: Vec4::splat(128.0),
+        }
     }
 }
 
@@ -149,7 +149,7 @@ fn update_tone(
     step_tint(&mut state, time.delta_secs());
     let uniform = tone_uniform(state.current);
     for mut tone in &mut tinted {
-        tone.rgb_sat = uniform;
+        tone.channels = uniform;
     }
 }
 
@@ -183,97 +183,61 @@ fn sync_front_camera(
     target.translation = source.translation;
 }
 
-/// An RM2000 tone channel (0..200, 100 neutral) as a 0..2 shader multiplier, the
-/// same mapping the picture tone uses.
-fn channel(value: f32) -> f32 {
-    (value / 100.0).clamp(0.0, 2.0)
-}
-
-/// The `rgb_sat` uniform for a tone `[r, g, b, saturation]` in RM2000 units.
+/// The same quantized tone used by on-screen pictures.
 fn tone_uniform(tone: [f32; 4]) -> Vec4 {
-    Vec4::new(
-        channel(tone[0]),
-        channel(tone[1]),
-        channel(tone[2]),
-        channel(tone[3]),
-    )
+    crate::legacy_colors::tone::uniform(tone)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The CPU mirror of `screen_tone.wgsl`: apply an RM2000 tone `[r, g, b, sat]`
-    /// to a linear source colour, for asserting the tone maths the shader runs.
-    fn tone_color(src: [f32; 3], tone: [f32; 4]) -> [f32; 3] {
-        let m = tone_uniform(tone);
-        let rgb = [src[0] * m.x, src[1] * m.y, src[2] * m.z];
-        let luma = 0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2];
-        let s = m.w;
-        [
-            luma + (rgb[0] - luma) * s,
-            luma + (rgb[1] - luma) * s,
-            luma + (rgb[2] - luma) * s,
-        ]
-    }
-
-    fn close(a: [f32; 3], b: [f32; 3]) -> bool {
-        (0..3).all(|i| (a[i] - b[i]).abs() < 1e-6)
-    }
+    use crate::legacy_colors::tone::apply;
 
     #[test]
-    fn channel_maps_neutral_and_clamps_to_0_2() {
-        assert_eq!(channel(100.0), 1.0);
-        assert_eq!(channel(0.0), 0.0);
-        assert_eq!(channel(50.0), 0.5);
-        assert_eq!(channel(200.0), 2.0);
-        assert_eq!(channel(300.0), 2.0);
+    fn channel_maps_neutral_and_clamps_to_original_byte_range() {
+        assert_eq!(
+            tone_uniform([100.0, 0.0, 50.0, 300.0]),
+            Vec4::new(128.0, 0.0, 64.0, 255.0)
+        );
     }
 
     #[test]
     fn neutral_tone_is_the_identity() {
-        let src = [0.8, 0.4, 0.2];
-        assert!(close(tone_color(src, NEUTRAL), src));
-        assert_eq!(tone_uniform(NEUTRAL), Vec4::ONE);
+        let src = [204, 102, 51];
+        assert_eq!(apply(src, NEUTRAL), src);
+        assert_eq!(tone_uniform(NEUTRAL), Vec4::splat(128.0));
     }
 
     #[test]
-    fn below_one_hundred_darkens() {
-        // A uniform 50 tone halves every channel.
-        let out = tone_color([0.6, 0.6, 0.6], [50.0, 50.0, 50.0, 100.0]);
-        assert!(close(out, [0.3, 0.3, 0.3]));
+    fn below_one_hundred_darkens_with_original_integer_rounding() {
+        assert_eq!(apply([153; 3], [50.0, 50.0, 50.0, 100.0]), [76; 3]);
     }
 
     #[test]
-    fn above_one_hundred_brightens() {
-        // A uniform 200 tone doubles every channel (the game's [200,200,200,200]).
-        let out = tone_color([0.4, 0.3, 0.2], [200.0, 200.0, 200.0, 100.0]);
-        assert!(close(out, [0.8, 0.6, 0.4]));
+    fn above_one_hundred_blends_toward_white_instead_of_multiplying() {
+        assert_eq!(
+            apply([32, 156, 0], [150.0, 150.0, 150.0, 100.0]),
+            [145, 207, 129]
+        );
+        assert_eq!(apply([102, 76, 51], [200.0, 200.0, 200.0, 100.0]), [255; 3]);
     }
 
     #[test]
-    fn saturation_zero_is_grayscale() {
-        // Neutral RGB, saturation 0 (the game's [100,100,100,0] flashback): every
-        // channel collapses to the luminance.
-        let src = [0.8, 0.2, 0.1];
-        let out = tone_color(src, [100.0, 100.0, 100.0, 0.0]);
-        let luma = 0.299 * src[0] + 0.587 * src[1] + 0.114 * src[2];
-        assert!(close(out, [luma, luma, luma]));
+    fn saturation_zero_uses_integer_luminance() {
+        assert_eq!(apply([204, 51, 25], [100.0, 100.0, 100.0, 0.0]), [93; 3]);
     }
 
     #[test]
-    fn saturation_above_one_hundred_oversaturates() {
-        // saturation 200 pushes channels away from the luminance (past the source).
-        let src = [0.7, 0.5, 0.2];
-        let out = tone_color(src, [100.0, 100.0, 100.0, 200.0]);
-        let luma = 0.299 * src[0] + 0.587 * src[1] + 0.114 * src[2];
-        assert!(out[0] > src[0] && out[2] < src[2]);
-        assert!((out[0] - luma).abs() > (src[0] - luma).abs());
+    fn saturation_above_one_hundred_uses_the_steeper_original_curve() {
+        assert_eq!(
+            apply([32, 156, 0], [100.0, 100.0, 100.0, 150.0]),
+            [0, 211, 0]
+        );
     }
 
     #[test]
     fn tint_interpolates_over_its_duration() {
-        // From neutral toward a 50 tone over 1 s: partway at half, arrived at end.
         let mut state = TintState {
             current: NEUTRAL,
             target: [50.0, 50.0, 50.0, 50.0],

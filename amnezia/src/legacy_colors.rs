@@ -6,6 +6,7 @@ use bevy::ui_render::ui_texture_slice_pipeline::{
 use bevy::ui_render::{UiPipeline, init_ui_pipeline};
 
 pub(crate) mod smoke;
+pub(crate) mod tone;
 
 pub(crate) struct LegacyColorsPlugin;
 

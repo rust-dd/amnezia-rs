@@ -3,7 +3,7 @@
 //! the 320×240 screen and optionally tweened. The interpreter emits a
 //! [`PictureCommand`]; this plugin spawns/moves/despawns a textured quad per id.
 //!
-//! Each picture carries a colour [`Tone`] (RGB multiply + saturation, so a
+//! Each picture carries a palette-space colour [`Tone`] (saturation + hard light, so a
 //! grayscale or tinted picture renders as one — see [`render`]) and honours the
 //! RM2000 fixed-to-map flag: a screen-pinned picture re-centres on the (shaken)
 //! camera every frame, a map-fixed one holds a world anchor and scrolls with the

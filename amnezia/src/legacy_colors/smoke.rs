@@ -26,6 +26,21 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             25.0,
             &[0, 0, 0, 0, 0, 800, 0, 0, 50, 50, 50, 100, 0, 0],
         ));
+        for (id, x, rgb, saturation) in [
+            (5, 40.0, [50, 100, 150], 0),
+            (6, 80.0, [100, 100, 100], 150),
+            (7, 120.0, [150, 150, 150], 100),
+        ] {
+            world.write_message(PictureCommand::show(
+                id,
+                "Cross",
+                x,
+                100.0,
+                &[
+                    0, 0, 0, 0, 0, 800, 0, 0, rgb[0], rgb[1], rgb[2], saturation, 0, 0,
+                ],
+            ));
+        }
         let camera = world
             .query_filtered::<&Transform, With<crate::world::MainCamera>>()
             .single(world)
@@ -87,6 +102,9 @@ pub(crate) fn verify(image: &Image, label: &str) {
         ("picture grayscale", 230, 15, [101, 101, 101]),
         ("picture tone", 270, 15, [16, 78, 0]),
         ("screen tone", 160, 200, [32, 64, 96]),
+        ("saturation before color tone", 30, 90, [50, 101, 179]),
+        ("original oversaturation", 70, 90, [0, 211, 0]),
+        ("hard-light brightening", 110, 90, [145, 207, 129]),
     ] {
         let actual = image
             .get_color_at(

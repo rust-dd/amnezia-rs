@@ -1,5 +1,5 @@
-//! Rendering for on-screen pictures: the tone [`PictureMaterial`] (an RGB
-//! multiply + saturation desaturate + opacity, per pixel in `picture_tone.wgsl`)
+//! Rendering for on-screen pictures: the tone [`PictureMaterial`] (quantized
+//! saturation, hard-light color and opacity, per pixel in `picture_tone.wgsl`)
 //! drawn on a per-picture textured quad, plus the systems that spawn, size, and
 //! place those quads. Kept apart from the command/state logic in the parent
 //! module so the tone maths and the screen/map placement unit-test in isolation.
@@ -26,14 +26,14 @@ const CENTER_Y: f32 = 120.0;
 /// camera's range.
 const PICTURE_Z_BASE: f32 = 100.0;
 
-/// The tone material for one picture: an RGB multiply, a saturation blend toward
-/// luminance, and an opacity, evaluated per pixel by `picture_tone.wgsl`. The
+/// The tone material for one picture: palette-space saturation, hard-light color,
+/// and opacity, evaluated per pixel by `picture_tone.wgsl`. The
 /// RM2000 screen tint is deliberately absent — pictures are not tinted by it.
 #[derive(Asset, TypePath, AsBindGroup, Clone)]
 pub(super) struct PictureMaterial {
-    /// `xyz` RGB multipliers (1 = neutral), `w` saturation (1 = neutral, 0 = gray).
+    /// Quantized RGB/saturation tone channels; 128 is neutral.
     #[uniform(0)]
-    pub rgb_sat: Vec4,
+    pub channels: Vec4,
     /// `x` opacity (0..1), `y` enables palette-index-zero transparency.
     #[uniform(1)]
     pub extra: Vec4,
@@ -114,7 +114,7 @@ pub(super) fn apply_commands(
                     world
                         .resource_mut::<Assets<PictureMaterial>>()
                         .add(PictureMaterial {
-                            rgb_sat: tone_rgb_sat(tone),
+                            channels: tone_channels(tone),
                             extra: opacity_extra(transparency, use_transparent_color),
                             image,
                             wave: Vec4::ZERO,
@@ -241,7 +241,7 @@ pub(super) fn place_pictures(
             }
         }
         if let Some(mut material) = materials.get_mut(&handle.0) {
-            material.rgb_sat = tone_rgb_sat(pic.tone);
+            material.channels = tone_channels(pic.tone);
             material.extra = opacity_extra(pic.transparency, pic.use_transparent_color);
             material.wave = wave_uniform;
         }
@@ -263,21 +263,9 @@ fn screen_offset(x: f32, y: f32) -> Vec2 {
     Vec2::new(x - CENTER_X, CENTER_Y - y)
 }
 
-/// The tone uniform (RGB multipliers + saturation) for `tone`. Each RM2000
-/// channel is 0..200 with 100 neutral, mapped to a 0..2 multiplier as the
-/// animation tone does; the shader turns the `w` saturation into a desaturate.
-pub(super) fn tone_rgb_sat(tone: Tone) -> Vec4 {
-    Vec4::new(
-        channel(tone.r),
-        channel(tone.g),
-        channel(tone.b),
-        channel(tone.sat),
-    )
-}
-
-/// An RM2000 tone channel (0..200, 100 neutral) as a 0..2 multiplier.
-fn channel(value: f32) -> f32 {
-    (value / 100.0).clamp(0.0, 2.0)
+/// The quantized original tone shared with screen and animation effects.
+pub(super) fn tone_channels(tone: Tone) -> Vec4 {
+    crate::legacy_colors::tone::uniform([tone.r, tone.g, tone.b, tone.sat])
 }
 
 fn opacity_extra(transparency: f32, use_transparent_color: bool) -> Vec4 {
@@ -326,31 +314,30 @@ mod tests {
     }
 
     #[test]
-    fn neutral_tone_is_the_identity_multiplier() {
-        assert_eq!(tone_rgb_sat(Tone::NEUTRAL), Vec4::new(1.0, 1.0, 1.0, 1.0));
+    fn neutral_tone_uses_original_midpoint_channels() {
+        assert_eq!(tone_channels(Tone::NEUTRAL), Vec4::splat(128.0));
     }
 
     #[test]
     fn grayscale_tone_drops_saturation_to_zero() {
-        // The only non-neutral tone the game uses: neutral RGB, saturation 0.
         let gray = Tone {
             r: 100.0,
             g: 100.0,
             b: 100.0,
             sat: 0.0,
         };
-        assert_eq!(tone_rgb_sat(gray), Vec4::new(1.0, 1.0, 1.0, 0.0));
+        assert_eq!(tone_channels(gray), Vec4::new(128.0, 128.0, 128.0, 0.0));
     }
 
     #[test]
-    fn colour_tone_scales_and_clamps_each_channel() {
+    fn colour_tone_quantizes_and_clamps_each_channel() {
         let tone = Tone {
             r: 200.0,
             g: 50.0,
             b: 0.0,
             sat: 300.0,
         };
-        assert_eq!(tone_rgb_sat(tone), Vec4::new(2.0, 0.5, 0.0, 2.0));
+        assert_eq!(tone_channels(tone), Vec4::new(255.0, 64.0, 0.0, 255.0));
     }
 
     #[test]
