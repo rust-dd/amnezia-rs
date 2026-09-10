@@ -95,8 +95,8 @@ fn decode_flag_ids(data: &[u8]) -> Vec<u32> {
 /// affect_sp `0x20`, absorb_damage `0x25`, state_effects `0x2A`,
 /// attribute_effects `0x2C`. Scalar fields are integer chunks; the two effect
 /// lists are `vector<bool>` chunks (one byte per element). Omitted fields
-/// default to 0/false, except `hit` (100), `magical_rate` (3), and
-/// `variance` (RM2000 editor value 4).
+/// default to 0/false, except `animation_id` (1), `hit` (100),
+/// `magical_rate` (3), and `variance` (4).
 pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
     let section = find_section(bytes, SKILL_SECTION, LcfError::MissingSkills)?;
     let mut reader = Reader::new(section);
@@ -116,7 +116,7 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
             failure_message: 0,
             skill_type: 0,
             scope: 0,
-            animation_id: 0,
+            animation_id: 1,
             physical_rate: 0,
             magical_rate: SKILL_DEFAULT_MAGICAL_RATE,
             variance: SKILL_DEFAULT_VARIANCE,
@@ -207,7 +207,7 @@ mod tests {
                 failure_message: 0,
                 skill_type: 0,
                 scope: 0,
-                animation_id: 0,
+                animation_id: 1,
                 physical_rate: 0,
                 magical_rate: 10,
                 variance: 4,
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(s.sp_cost, 4);
         assert_eq!((s.power, s.hit, s.failure_message), (0, 100, 0));
         assert_eq!((s.skill_type, s.scope, s.physical_rate), (0, 0, 0));
-        assert_eq!(s.animation_id, 0, "omitted animation_id defaults to 0");
+        assert_eq!(s.animation_id, 1, "omitted animation_id defaults to 1");
         assert_eq!(s.magical_rate, 3, "omitted magical_rate defaults to 3");
         assert_eq!(s.variance, 4, "omitted variance defaults to 4");
         assert!(!s.affect_hp && !s.affect_sp && !s.absorb);
@@ -284,10 +284,12 @@ mod tests {
 
     #[test]
     fn parses_skill_animation_id() {
-        let flashy = element(6, &[subchunk(0x0E, &varint(12))]);
-        let ldb = make_ldb(&[(0x0C, section(&[flashy]))]);
-        let s = &parse_skills(&ldb).unwrap()[0];
-        assert_eq!(s.animation_id, 12, "explicit animation_id is parsed");
+        for id in [0, 1, 12] {
+            let flashy = element(6, &[subchunk(0x0E, &varint(id))]);
+            let ldb = make_ldb(&[(0x0C, section(&[flashy]))]);
+            let s = &parse_skills(&ldb).unwrap()[0];
+            assert_eq!(s.animation_id, id);
+        }
     }
 
     #[test]

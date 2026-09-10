@@ -35,6 +35,7 @@ pub fn actor(id: u32, level: u32, hp: u32, sp: u32) -> ActorDef {
 
 pub fn monster(id: u32, hp: u32, exp: u32, gold: u32) -> MonsterDef {
     MonsterDef {
+        battler_hue: 0,
         drop_id: 0,
         drop_prob: 100,
         critical_hit: false,

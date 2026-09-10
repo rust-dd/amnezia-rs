@@ -135,6 +135,7 @@ fn converts_ldb_to_monsters_ron() {
         &[
             subchunk(0x01, &[0x53, 0xE1, 0x72, 0x6B, 0xE1, 0x6E, 0x79]),
             subchunk(0x02, b"Dragon1"),
+            subchunk(0x03, &varint(120)),
             subchunk(0x04, &varint(999)),
             subchunk(0x06, &varint(180)),
             subchunk(0x0B, &varint(1500)),
@@ -157,6 +158,7 @@ fn converts_ldb_to_monsters_ron() {
     assert_eq!(
         monsters[0],
         MonsterDef {
+            battler_hue: 120,
             drop_id: 33,
             drop_prob: 0,
             critical_hit: true,
@@ -178,6 +180,14 @@ fn converts_ldb_to_monsters_ron() {
         }
     );
     assert_eq!(monsters[1].name, "Slime");
+    assert_eq!(monsters[1].battler_hue, 0);
+    let legacy = ron::from_str::<MonsterDef>(
+        &ron::to_string(&monsters[0])
+            .unwrap()
+            .replace("battler_hue:120,", ""),
+    )
+    .unwrap();
+    assert_eq!(legacy.battler_hue, 0);
     assert_eq!(monsters[1].max_hp, 30);
     assert_eq!(monsters[1].attack, 0);
     assert!(!monsters[1].critical_hit);

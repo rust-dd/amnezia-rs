@@ -115,6 +115,7 @@ fn converts_ldb_to_skills_ron() {
         }
     );
     assert_eq!(skills[1].name, "Heal");
+    assert_eq!(skills[1].animation_id, 1);
     assert_eq!(skills[1].affect_stats, [false; 4]);
     assert!(!skills[1].ignore_defense);
     assert_eq!(skills[1].sp_cost, 4);
@@ -129,4 +130,36 @@ fn converts_ldb_to_skills_ron() {
         "omitted variance keeps the RM2000 default"
     );
     assert!(skills[1].attributes.is_empty() && skills[1].affected_states.is_empty());
+}
+
+#[test]
+fn skill_animation_default_and_explicit_zero_survive_conversion_and_legacy_ron() {
+    let tmp = Path::new(env!("CARGO_TARGET_TMPDIR")).join("skill_animation_default");
+    let input = tmp.join("in");
+    let output = tmp.join("out");
+    std::fs::create_dir_all(&input).unwrap();
+    std::fs::write(
+        input.join("RPG_RT.ldb"),
+        make_ldb(
+            0x0C,
+            &[element(1, &[]), element(2, &[subchunk(0x0E, &varint(0))])],
+        ),
+    )
+    .unwrap();
+    amnezia_convert::convert_skills(&input, &output).unwrap();
+    let skills = ron::from_str::<Vec<SkillDef>>(
+        &std::fs::read_to_string(output.join("skills.ron")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        skills.iter().map(|s| s.animation_id).collect::<Vec<_>>(),
+        [1, 0]
+    );
+    let legacy = ron::from_str::<SkillDef>(
+        &ron::to_string(&skills[0])
+            .unwrap()
+            .replace("animation_id:1,", ""),
+    )
+    .unwrap();
+    assert_eq!(legacy.animation_id, 1);
 }

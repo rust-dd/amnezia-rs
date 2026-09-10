@@ -106,6 +106,7 @@ fn logic_app() -> App {
     });
     app.insert_resource(BattleData {
         monsters: vec![MonsterDef {
+            battler_hue: 0,
             drop_id: 0,
             drop_prob: 100,
             critical_hit: false,
@@ -277,6 +278,7 @@ fn a_threshold_victory_levels_up_before_the_outcome_and_pays_exactly_once() {
     app.add_message::<AudioRequest>();
     app.init_resource::<ButtonInput<KeyCode>>();
     let monsters = vec![MonsterDef {
+        battler_hue: 0,
         drop_id: 0,
         drop_prob: 100,
         critical_hit: false,

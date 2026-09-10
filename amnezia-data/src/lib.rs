@@ -163,7 +163,7 @@ pub struct SkillDef {
     pub scope: u32,
     /// The battle-animation id this skill plays on each target it resolves
     /// against; `0` shows no animation.
-    #[serde(default)]
+    #[serde(default = "default_animation_id")]
     pub animation_id: u32,
     #[serde(default)]
     pub physical_rate: u32,
@@ -273,6 +273,8 @@ pub struct AttributeDef {
 /// and the `exp`/`gold` reward for defeating it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MonsterDef {
+    #[serde(default)]
+    pub battler_hue: i32,
     #[serde(default)]
     pub drop_id: u32,
     #[serde(default = "default_hundred")]
@@ -389,6 +391,10 @@ pub struct AnimationCellDef {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_animation_id() -> u32 {
+    1
 }
 
 fn default_critical_denominator() -> u32 {

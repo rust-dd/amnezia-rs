@@ -3,6 +3,7 @@ use amnezia_data::{Chipset, CommonEvent, EventCommand, Map, Start, TroopDef};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+mod battle_graphics;
 mod character_animation;
 mod collision;
 mod enemy_actions;

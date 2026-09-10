@@ -60,6 +60,7 @@ impl Default for EnemyAction {
 /// bytes are kept here unpadded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Monster {
+    pub battler_hue: i32,
     pub drop_id: u32,
     pub drop_prob: u32,
     pub critical_hit: bool,
@@ -83,6 +84,7 @@ pub struct Monster {
 const MONSTER_SECTION: u32 = 0x0E;
 const MONSTER_NAME: u32 = 0x01;
 const MONSTER_BATTLER: u32 = 0x02;
+const MONSTER_BATTLER_HUE: u32 = 0x03;
 const MONSTER_MAX_HP: u32 = 0x04;
 const MONSTER_MAX_SP: u32 = 0x05;
 const MONSTER_ATTACK: u32 = 0x06;
@@ -164,6 +166,7 @@ pub fn parse_monsters(bytes: &[u8]) -> Result<Vec<Monster>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut monster = Monster {
+            battler_hue: 0,
             drop_id: 0,
             drop_prob: 100,
             critical_hit: false,
@@ -195,6 +198,7 @@ pub fn parse_monsters(bytes: &[u8]) -> Result<Vec<Monster>, LcfError> {
                 0x15 => monster.critical_hit = Reader::new(sub_data).varint()? != 0,
                 0x16 => monster.critical_hit_chance = Reader::new(sub_data).varint()?,
                 MONSTER_BATTLER => monster.battler = decode_cp1250(sub_data),
+                MONSTER_BATTLER_HUE => monster.battler_hue = Reader::new(sub_data).varint()? as i32,
                 MONSTER_MAX_HP => monster.max_hp = Reader::new(sub_data).varint()?,
                 MONSTER_MAX_SP => monster.max_sp = Reader::new(sub_data).varint()?,
                 MONSTER_ATTACK => monster.attack = Reader::new(sub_data).varint()?,
@@ -246,6 +250,7 @@ mod tests {
         assert_eq!(
             monsters[0],
             Monster {
+                battler_hue: 0,
                 drop_id: 0,
                 drop_prob: 100,
                 critical_hit: false,
@@ -277,11 +282,21 @@ mod tests {
         assert_eq!(m.id, 2);
         assert_eq!(m.name, "Slime");
         assert_eq!(m.max_hp, 30);
+        assert_eq!(m.battler_hue, 0);
         assert_eq!((m.attack, m.defense, m.spirit, m.agility), (0, 0, 0, 0));
         assert_eq!((m.exp, m.gold), (0, 0));
         assert!(m.attribute_ranks.is_empty());
         assert!(m.state_ranks.is_empty());
         assert!(m.actions.is_empty());
+    }
+
+    #[test]
+    fn monster_hue_keeps_signed_degrees() {
+        for hue in [0, 45, 120, 360, -45] {
+            let monster = element(1, &[subchunk(0x03, &varint(hue as u32))]);
+            let ldb = make_ldb(&[(0x0E, section(&[monster]))]);
+            assert_eq!(parse_monsters(&ldb).unwrap()[0].battler_hue, hue);
+        }
     }
 
     #[test]
