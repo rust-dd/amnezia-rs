@@ -26,7 +26,6 @@ struct Verified(Arc<AtomicUsize>);
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 260 {
         world.init_resource::<Verified>();
-        world.insert_resource(ClearColor(Color::BLACK));
         world
             .resource_mut::<crate::screenfx::TintState>()
             .set_tone([100.0; 4]);

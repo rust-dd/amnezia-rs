@@ -5,15 +5,14 @@
 
 use crate::assets::{asset_root, load_ron, resolve_png};
 use crate::player::spawn_player;
-use crate::screenfx::{FrontCamera, PICTURE_LAYER, ScreenTone};
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::tiles::{self, CHAR_Y_OFFSET};
 use amnezia_data::{Chipset, Event, Map, Start};
-use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 
 mod autonomy;
 mod bush;
+mod cameras;
 mod character_animation;
 pub(crate) mod collision;
 mod movement;
@@ -207,7 +206,7 @@ impl Plugin for WorldPlugin {
             .init_resource::<TouchEvents>()
             .add_message::<RelocateEvent>()
             .add_message::<MapChanged>()
-            .add_systems(Startup, setup)
+            .add_systems(Startup, (cameras::setup, setup))
             .add_systems(
                 Update,
                 (
@@ -239,19 +238,6 @@ impl Plugin for WorldPlugin {
     }
 }
 
-/// The fixed 320×240 orthographic projection shared by the world and front
-/// cameras — RM2000's native screen. Maps larger than this scroll; the whole view
-/// is rendered to the native canvas before the display plugin scales it.
-fn fixed_projection() -> Projection {
-    Projection::Orthographic(OrthographicProjection {
-        scaling_mode: bevy::camera::ScalingMode::Fixed {
-            width: 320.0,
-            height: 240.0,
-        },
-        ..OrthographicProjection::default_2d()
-    })
-}
-
 fn setup(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -260,30 +246,6 @@ fn setup(
     party: Res<Party>,
     inventory: Res<Inventory>,
 ) {
-    // The main camera renders the world on layer 0; its ScreenTone post-process
-    // tints only what it draws. Pictures and the UI move to the front camera, so
-    // they stay untinted and above the tone.
-    commands.spawn((
-        Camera2d,
-        MainCamera,
-        fixed_projection(),
-        ScreenTone::default(),
-    ));
-    // The front camera composites pictures (PICTURE_LAYER) and the UI over the
-    // toned world, and owns the default UI camera. `sync_front_camera` keeps its
-    // transform matched to the main camera each frame so pictures stay in place.
-    commands.spawn((
-        Camera2d,
-        Camera {
-            order: 1,
-            clear_color: ClearColorConfig::None,
-            ..default()
-        },
-        fixed_projection(),
-        IsDefaultUiCamera,
-        RenderLayers::layer(PICTURE_LAYER),
-        FrontCamera,
-    ));
     let start: Start = match DEV_START {
         Some(dev) => dev,
         None => load_ron(&format!("{}/start.ron", asset_root())),
