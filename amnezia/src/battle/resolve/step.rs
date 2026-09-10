@@ -298,6 +298,9 @@ impl Battle {
                 };
                 let member = self.members[ti].name.clone();
                 for _ in 0..2 {
+                    if !self.members[ti].alive() {
+                        break;
+                    }
                     let line = match self.enemy_strike_member(ei, ti) {
                         Some(dmg) => self.text.damaged(&member, true, dmg),
                         None => self.text.skill_failed(&member, 3),

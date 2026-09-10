@@ -7,6 +7,7 @@ mod basic_messages;
 mod criticals;
 mod drops;
 mod equipment;
+mod impact_rules;
 mod item_messages;
 mod messages;
 mod skill_requirements;

@@ -74,51 +74,64 @@ impl Battle {
         self.hit_reports.push(HitReport { pos, text, kind });
     }
 
-    /// Register a landed blow of `dmg` on foe `ti`: play the enemy-damaged SE and
-    /// owe it a guaranteed visibility blink (RM2000 blinks a
-    /// struck sprite every hit, animation-flash or not), and start its death-out if
-    /// the blow felled it. The SE fires on any landed blow (even a blocked 0), like
-    /// EasyRPG's damage-message substate; a felled foe then adds the kill SE via
-    /// [`Battle::start_foe_death`].
+    /// Non-absorbing hits sound and blink even at zero damage.
     pub(in crate::battle::resolve) fn after_foe_hit(&mut self, ti: usize, dmg: i32) {
-        let pos = self.foe_anim_pos(ti);
-        self.pending_se.push(BattleSe::EnemyDamaged);
-        let (text, kind) = damage_report(dmg);
-        self.report_hit(pos, text, kind);
-        self.pending_blinks.push(pos);
-        self.start_foe_death(ti, false);
+        self.after_battler_hit(Source::Enemy(ti), dmg, true);
     }
 
     /// Apply KO and damage sound feedback; front view has no party sprites.
     pub(in crate::battle::resolve) fn after_member_hit(&mut self, ti: usize, dmg: i32) {
-        if self.members[ti].hp <= 0 {
-            self.mark_knocked_out(Source::Party(ti));
-        }
-        let pos = (self.party_anim_x(ti), PARTY_ANIM_Y);
-        self.pending_se.push(BattleSe::ActorDamaged);
-        let (text, kind) = damage_report(dmg);
-        self.report_hit(pos, text, kind);
+        self.after_battler_hit(Source::Party(ti), dmg, true);
     }
 
-    /// Apply `base` damage to enemy `ti` with `var` variance (4 for a physical
-    /// blow, the skill's variance for a cast), one draw per hit, then the plain
-    /// defending-foe halving (no floor, like a member Defend). Returns the damage
-    /// dealt.
-    pub(in crate::battle::resolve) fn hit_enemy(
+    fn after_battler_hit(&mut self, target: Source, dmg: i32, normal_impact: bool) {
+        if matches!(target, Source::Party(_)) && self.battler_hp(target) <= 0 {
+            self.mark_knocked_out(target);
+        }
+        let pos = self.battler_pos(target);
+        if normal_impact {
+            self.pending_se.push(match target {
+                Source::Party(_) => BattleSe::ActorDamaged,
+                Source::Enemy(_) => BattleSe::EnemyDamaged,
+            });
+        }
+        let (text, kind) = damage_report(dmg);
+        self.report_hit(pos, text, kind);
+        if let Source::Enemy(ti) = target {
+            if normal_impact {
+                self.pending_blinks.push(pos);
+            }
+            self.start_foe_death(ti, false);
+        }
+    }
+
+    /// Absorption shares damage rules but omits normal hit sound and blinking.
+    pub(in crate::battle::resolve) fn hit_battler(
         &mut self,
-        ti: usize,
+        target: Source,
         base: i32,
         var: i32,
         physical_rate: u32,
+        normal_impact: bool,
     ) -> i32 {
         let roll = rng_next(&mut self.rng);
         let mut dmg = logic::variance_adjust(base, var, roll).max(0);
-        if self.enemies[ti].defending {
+        let (hp, defending) = match target {
+            Source::Party(i) => {
+                let member = &mut self.members[i];
+                (&mut member.hp, member.defending)
+            }
+            Source::Enemy(i) => {
+                let enemy = &mut self.enemies[i];
+                (&mut enemy.hp, enemy.defending)
+            }
+        };
+        if defending {
             dmg = logic::defended(dmg);
         }
-        self.enemies[ti].hp = (self.enemies[ti].hp - dmg).max(0);
-        self.release_states_from_damage(Source::Enemy(ti), physical_rate);
-        self.after_foe_hit(ti, dmg);
+        *hp = (*hp - dmg).max(0);
+        self.release_states_from_damage(target, physical_rate);
+        self.after_battler_hit(target, dmg, normal_impact);
         dmg
     }
 
@@ -132,14 +145,6 @@ impl Battle {
         var: i32,
         physical_rate: u32,
     ) -> i32 {
-        let roll = rng_next(&mut self.rng);
-        let mut dmg = logic::variance_adjust(base, var, roll).max(0);
-        if self.members[ti].defending {
-            dmg = logic::defended(dmg);
-        }
-        self.members[ti].hp = (self.members[ti].hp - dmg).max(0);
-        self.release_states_from_damage(Source::Party(ti), physical_rate);
-        self.after_member_hit(ti, dmg);
-        dmg
+        self.hit_battler(Source::Party(ti), base, var, physical_rate, true)
     }
 }

@@ -20,10 +20,7 @@ impl Battle {
             } else {
                 skill.physical_rate * 10
             };
-            let dealt = match target {
-                Source::Party(i) => self.hit_member(i, effect, 0, release_rate),
-                Source::Enemy(i) => self.hit_enemy(i, effect, 0, release_rate),
-            };
+            let dealt = self.hit_battler(target, effect, 0, release_rate, !skill.absorb);
             if skill.absorb && dealt > 0 {
                 let absorbed = self.restore_skill_hp(source, dealt.min(old_hp));
                 self.report_hit(
@@ -65,7 +62,9 @@ impl Battle {
             lines.extend(states.lines);
         }
         if !success {
-            self.pending_se.push(BattleSe::Dodge);
+            if skill.failure_message == 3 {
+                self.pending_se.push(BattleSe::Dodge);
+            }
             self.report_hit(self.battler_pos(target), "Miss".to_string(), HitKind::Miss);
             lines.push(self.text.skill_failed(&name, skill.failure_message));
         }

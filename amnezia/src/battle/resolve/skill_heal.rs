@@ -70,6 +70,9 @@ impl Battle {
                 lines.push(self.text.recovered(&target_name, false, sp_gained));
             }
         } else {
+            if skill.failure_message == 3 {
+                self.pending_se.push(BattleSe::Dodge);
+            }
             lines.push(self.text.skill_failed(&target_name, skill.failure_message));
         }
         lines.extend(stats);

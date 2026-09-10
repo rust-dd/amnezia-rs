@@ -109,9 +109,8 @@ pub struct Battle {
     pub(in crate::battle) pending_anims: Vec<PendingAnim>,
     /// Per-tick hit reports drained into diagnostic traces, not drawn on screen.
     pub(in crate::battle) hit_reports: Vec<HitReport>,
-    /// Foe screen positions owed a guaranteed per-hit visibility blink, drained by
-    /// `battle::scene` into a blink on each struck sprite. Every landed blow
-    /// enqueues one, independent of the played animation's own flash timings.
+    /// Foe positions owed a visibility blink for non-absorbing HP hits.
+    /// Animation flashes are independent; absorption does not trigger this blink.
     pub(in crate::battle) pending_blinks: Vec<(f32, f32)>,
     /// Battle sound effects owed as the current tick's actions resolve (a hit
     /// landed, a foe felled, an attack evaded), drained each frame by `battle.rs`
