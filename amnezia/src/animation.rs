@@ -8,6 +8,7 @@ mod cells;
 mod map;
 mod playback;
 mod render;
+mod scene;
 pub(crate) mod smoke;
 
 use crate::assets::{asset_root, load_ron};
@@ -144,12 +145,12 @@ pub struct ShowMapAnimation {
 #[derive(Resource)]
 pub struct AnimationLibrary(pub Vec<AnimationDef>);
 
-/// How many effect animations are live this frame. `battle::resolve_tick` reads
-/// it to hold resolution while a strike/cast animation plays out before the
-/// damage lands (during a fight only battle animations play, so any live
-/// animation is the attack animation). Kept in step by [`track_active_animations`].
-#[derive(Resource, Default)]
-pub struct ActiveAnimations(pub usize);
+/// Battle actions wait only for their own slots, never for a surviving map cast.
+#[derive(Resource, Default, PartialEq, Eq)]
+pub struct ActiveAnimations {
+    pub total: usize,
+    pub battle: usize,
+}
 
 pub struct AnimationPlugin;
 
@@ -157,6 +158,7 @@ impl Plugin for AnimationPlugin {
     fn build(&self, app: &mut App) {
         cells::register(app);
         map::flash::register(app);
+        scene::register(app);
         app.add_message::<PlayAnimation>()
             .add_message::<ShowMapAnimation>()
             .add_message::<crate::world::MapChanged>()

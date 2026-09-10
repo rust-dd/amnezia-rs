@@ -124,7 +124,7 @@ pub(super) fn drive(
             return;
         }
         if events.wait_animation {
-            if battle.tick_anim_hold(animation.is_some_and(|a| a.0 > 0)) {
+            if battle.tick_anim_hold(animation.is_some_and(|a| a.battle > 0)) {
                 battle.events = events;
                 return;
             }

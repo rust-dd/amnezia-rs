@@ -195,7 +195,7 @@ pub(super) fn resolve_tick(
     }
     // RPG_RT applies the impact only after its animation completes.
     let advance = if battle.anim_hold_active() {
-        if battle.tick_anim_hold(active_anims.0 > 0) {
+        if battle.tick_anim_hold(active_anims.battle > 0) {
             return;
         }
         battle.timer.reset();

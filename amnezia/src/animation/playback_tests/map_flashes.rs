@@ -1,7 +1,7 @@
 use super::*;
 use crate::legacy_colors::flash::SpriteFlash;
 
-fn fixture(fps: u32) -> (App, Entity, Entity) {
+pub(super) fn fixture(fps: u32) -> (App, Entity, Entity) {
     let (mut app, hero, _) = super::map_targets::map_app(fps);
     app.world_mut().entity_mut(hero).insert(Sprite {
         color: Color::WHITE.with_alpha(0.4),
@@ -36,7 +36,7 @@ fn fixture(fps: u32) -> (App, Entity, Entity) {
     (app, hero, event)
 }
 
-fn play(app: &mut App, target: AnimTarget) -> u32 {
+pub(super) fn play(app: &mut App, target: AnimTarget) -> u32 {
     app.world_mut().write_message(ShowMapAnimation {
         anim_id: 1,
         target,
@@ -46,7 +46,7 @@ fn play(app: &mut App, target: AnimTarget) -> u32 {
     app.world().resource::<GameFrames>().frame
 }
 
-fn color(app: &App, entity: Entity) -> [u8; 4] {
+pub(super) fn color(app: &App, entity: Entity) -> [u8; 4] {
     app.world()
         .get::<SpriteFlash>(entity)
         .map_or([0; 4], |flash| flash.0)

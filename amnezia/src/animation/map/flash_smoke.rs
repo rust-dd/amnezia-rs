@@ -35,6 +35,8 @@ const LABELS: [&str; 18] = [
 struct Fixture {
     tiles: [(i32, i32); 2],
     complete: Arc<AtomicUsize>,
+    menu_hold: Option<(usize, [u8; 4])>,
+    menu_checks: u8,
 }
 
 fn tone(case: usize) -> [f32; 4] {
@@ -80,6 +82,8 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         world.insert_resource(Fixture {
             tiles,
             complete: Arc::new(AtomicUsize::new(0)),
+            menu_hold: None,
+            menu_checks: 0,
         });
         world.spawn((
             EventSprite {
@@ -110,6 +114,57 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             _ => None,
         };
         return phase.map(|phase| LABELS[case * 3 + phase]);
+    }
+    menu_case(world, frame)
+}
+
+fn menu_case(world: &mut World, frame: u32) -> Option<&'static str> {
+    if frame == 1040 {
+        start_case(world, 0);
+    }
+    if frame == 1070 {
+        world.resource_mut::<crate::menu::MenuOpen>().0 = true;
+    }
+    if matches!(frame, 1072 | 1130 | 1180) {
+        let animation = world
+            .query::<&playback::LiveAnimation>()
+            .single(world)
+            .unwrap();
+        let current = animation.frame;
+        assert!(current > 5);
+        let cells = animation.cells.clone();
+        let flash = world
+            .query_filtered::<&crate::legacy_colors::flash::SpriteFlash, With<Player>>()
+            .single(world)
+            .unwrap()
+            .0;
+        let hidden = frame != 1180;
+        for cell in cells {
+            assert_eq!(
+                world.get::<InheritedVisibility>(cell).unwrap().get(),
+                !hidden
+            );
+        }
+        let mut fixture = world.resource_mut::<Fixture>();
+        if frame == 1072 {
+            assert!(flash[3] > 0);
+            fixture.menu_hold = Some((current, flash));
+            fixture.menu_checks |= 1;
+        } else if hidden {
+            assert_eq!(fixture.menu_hold, Some((current, flash)));
+            fixture.menu_checks |= 2;
+        } else {
+            assert!(current > fixture.menu_hold.unwrap().0);
+            fixture.menu_checks |= 4;
+        }
+        return Some(if hidden {
+            "map-animation-menu-held"
+        } else {
+            "map-animation-menu-resumed"
+        });
+    }
+    if frame == 1160 {
+        world.resource_mut::<crate::menu::MenuOpen>().0 = false;
     }
     None
 }
@@ -206,4 +261,7 @@ pub(crate) fn verify_finished(world: &World) {
         world.resource::<Fixture>().complete.load(Ordering::Relaxed),
         LABELS.len()
     );
+    assert_eq!(world.resource::<Fixture>().menu_checks, 7);
+    assert!(!world.resource::<crate::menu::MenuOpen>().0);
+    assert_eq!(world.resource::<ActiveAnimations>().total, 0);
 }

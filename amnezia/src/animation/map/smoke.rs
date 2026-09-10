@@ -72,14 +72,14 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         start_case(world, 0);
     }
     if frame == 1110 {
-        assert_eq!(world.resource::<ActiveAnimations>().0, 1);
+        assert_eq!(world.resource::<ActiveAnimations>().total, 1);
         world
             .resource_mut::<crate::teleport::PendingTeleport>()
             .reload(3, 15, 12);
     }
     if frame == 1200 {
         assert_eq!(world.resource::<MapData>().map_id, 3);
-        assert_eq!(world.resource::<ActiveAnimations>().0, 0);
+        assert_eq!(world.resource::<ActiveAnimations>().total, 0);
         return Some("map-animation-transferred");
     }
     None

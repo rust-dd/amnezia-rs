@@ -40,7 +40,7 @@ use crate::audio::{AudioRequest, BgmTrack};
 use crate::vitals::Vitals;
 use amnezia_data::{AttributeDef, MonsterDef, StateDef, SystemDef, TroopDef};
 use bevy::prelude::*;
-use model::Battle;
+pub(crate) use model::{Battle, Phase};
 
 /// Encounter settings supplied by the map event that starts a fight.
 #[derive(Message, Default)]

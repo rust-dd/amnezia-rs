@@ -35,7 +35,7 @@ fn a_new_map_animation_replaces_the_old_cast_and_all_its_cells() {
     assert_eq!(cells.len(), 1);
     request(&mut app, AnimationSlot::Map, 1, 32.0);
     app.update();
-    assert_eq!(app.world().resource::<ActiveAnimations>().0, 1);
+    assert_eq!(app.world().resource::<ActiveAnimations>().total, 1);
     assert!(app.world().get_entity(old).is_err());
     for cell in cells {
         assert!(app.world().get_entity(cell).is_err());
@@ -81,7 +81,7 @@ fn replacing_one_battle_side_keeps_the_other_side_and_map_cast_alive() {
         .0;
     request(&mut app, AnimationSlot::Enemies, 1, -48.0);
     app.update();
-    assert_eq!(app.world().resource::<ActiveAnimations>().0, 3);
+    assert_eq!(app.world().resource::<ActiveAnimations>().total, 3);
     assert!(app.world().get::<LiveAnimation>(map).is_some());
     assert!(app.world().get::<LiveAnimation>(party).is_some());
     assert!(app.world().get_entity(old_enemy).is_err());
@@ -99,7 +99,7 @@ fn an_empty_valid_animation_replaces_the_slot_without_leaving_old_cells() {
         .push(empty);
     request(&mut app, AnimationSlot::Map, 2, 0.0);
     app.update();
-    assert_eq!(app.world().resource::<ActiveAnimations>().0, 0);
+    assert_eq!(app.world().resource::<ActiveAnimations>().total, 0);
     assert_eq!(
         app.world_mut()
             .query::<&MeshMaterial2d<cells::CellMaterial>>()

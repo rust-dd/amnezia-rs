@@ -75,7 +75,7 @@ pub(super) fn pixels(world: &World, label: &str) -> Option<Vec<[u8; 3]>> {
     let &(frame, _) = SHOTS.iter().find(|(_, name)| *name == label)?;
     if frame <= 1221 {
         assert_eq!(
-            world.resource::<ActiveAnimations>().0,
+            world.resource::<ActiveAnimations>().total,
             usize::from(frame < 1221)
         );
         return Some(vec![[0; 3]; 320 * 240]);

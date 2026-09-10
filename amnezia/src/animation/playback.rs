@@ -21,7 +21,7 @@ pub(super) struct LiveAnimation {
     last: u32,
     duration: u32,
     sound_only: bool,
-    cells: Vec<Entity>,
+    pub(super) cells: Vec<Entity>,
 }
 
 pub(super) fn start_animations(
@@ -81,6 +81,7 @@ pub(super) fn start_animations(
 pub(super) fn step_animations(
     frames: Res<GameFrames>,
     pause: crate::transitions::TransitionPause,
+    scene: super::scene::Scenes,
     mut commands: Commands,
     mut renderer: CellRenderer,
     library: Res<AnimationLibrary>,
@@ -91,7 +92,7 @@ pub(super) fn step_animations(
     for (entity, mut anim) in &mut animations {
         let delta = frames.frame.wrapping_sub(anim.last);
         anim.last = frames.frame;
-        if pause.paused() || delta == 0 {
+        if pause.paused() || scene.paused() || delta == 0 {
             continue;
         }
         let def = &library.0[anim.index];
@@ -237,11 +238,13 @@ pub(super) fn follow_map_animations(
 }
 
 pub(super) fn track_active_animations(
-    animations: Query<(), With<LiveAnimation>>,
+    animations: Query<&LiveAnimation>,
     mut active: ResMut<ActiveAnimations>,
 ) {
-    let count = animations.iter().count();
-    if active.0 != count {
-        active.0 = count;
+    let mut next = ActiveAnimations::default();
+    for animation in &animations {
+        next.total += 1;
+        next.battle += usize::from(animation.slot != AnimationSlot::Map);
     }
+    active.set_if_neq(next);
 }

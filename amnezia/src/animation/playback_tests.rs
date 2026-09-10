@@ -4,6 +4,7 @@ use crate::timing::{GameFrames, TimingPlugin};
 
 mod map_flashes;
 mod map_targets;
+mod scenes;
 mod slots;
 
 fn app(fps: u32) -> App {
@@ -12,7 +13,9 @@ fn app(fps: u32) -> App {
 
 fn fixture(fps: u32, sound_only: bool) -> App {
     let mut app = App::new();
+    app.register_required_components::<Mesh2d, Visibility>();
     map::flash::register(&mut app);
+    scene::register(&mut app);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), TimingPlugin))
         .init_asset::<Image>()
         .init_asset::<Mesh>()
@@ -128,7 +131,7 @@ fn all_data_frames_and_sounds_finish_on_the_same_logical_tick_at_every_fps() {
                 "{fps} FPS at {age}"
             );
             assert_eq!(
-                app.world().resource::<ActiveAnimations>().0,
+                app.world().resource::<ActiveAnimations>().total,
                 usize::from(age < 60)
             );
         }
@@ -219,7 +222,7 @@ fn sound_only_plays_twenty_timings_without_cells_or_flashes_and_stops_at_forty_t
                 .frame
                 .wrapping_sub(start);
             assert_eq!(
-                app.world().resource::<ActiveAnimations>().0,
+                app.world().resource::<ActiveAnimations>().total,
                 usize::from(age < 40)
             );
         }

@@ -131,6 +131,7 @@ fn flash_color(rgb: [u8; 3], alpha: f32) -> Color {
 /// despawning it once the ~11-game-frame window has passed.
 pub(super) fn fade_flashes(
     transition: crate::transitions::TransitionPause,
+    scene: super::scene::Scenes,
     frames: Res<crate::timing::GameFrames>,
     mut commands: Commands,
     mut flashes: Query<(Entity, &mut FlashQuad, &mut Sprite)>,
@@ -138,7 +139,7 @@ pub(super) fn fade_flashes(
     for (entity, mut flash, mut sprite) in &mut flashes {
         let delta = frames.frame.wrapping_sub(flash.last);
         flash.last = frames.frame;
-        if transition.paused() {
+        if transition.paused() || scene.paused() {
             continue;
         }
         flash.elapsed = flash.elapsed.saturating_add(delta);

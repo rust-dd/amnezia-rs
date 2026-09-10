@@ -326,9 +326,10 @@ fn actor_hp_conditions_read_live_hp_and_persistent_absent_actors() {
 }
 
 #[test]
-fn a_waiting_animation_blocks_learning_until_the_effect_has_finished() {
+fn a_waiting_animation_blocks_learning_until_its_battle_slot_finishes() {
     let mut app = app(15, &[1]);
     app.init_resource::<ActiveAnimations>();
+    app.world_mut().resource_mut::<ActiveAnimations>().total = 1;
     for _ in 0..100 {
         app.world_mut().resource_mut::<Dialogue>().active = false;
         app.update();
@@ -337,7 +338,7 @@ fn a_waiting_animation_blocks_learning_until_the_effect_has_finished() {
         }
     }
     assert!(app.world().resource::<Battle>().events.wait_animation);
-    app.world_mut().resource_mut::<ActiveAnimations>().0 = 1;
+    app.world_mut().resource_mut::<ActiveAnimations>().battle = 1;
     for _ in 0..120 {
         app.update();
     }
@@ -346,7 +347,7 @@ fn a_waiting_animation_blocks_learning_until_the_effect_has_finished() {
             .known_skills
             .contains(&2)
     );
-    app.world_mut().resource_mut::<ActiveAnimations>().0 = 0;
+    app.world_mut().resource_mut::<ActiveAnimations>().battle = 0;
     settle(&mut app);
     assert!(
         app.world().resource::<Battle>().members[0]

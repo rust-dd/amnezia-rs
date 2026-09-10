@@ -200,7 +200,7 @@ fn missing_targets_and_map_transfers_remove_map_cells() {
             app.world_mut().despawn(hero);
         }
         app.update();
-        assert_eq!(app.world().resource::<ActiveAnimations>().0, 0);
+        assert_eq!(app.world().resource::<ActiveAnimations>().total, 0);
         assert!(positions(&mut app).is_empty());
     }
 }
@@ -209,7 +209,7 @@ fn missing_targets_and_map_transfers_remove_map_cells() {
 fn requesting_a_missing_character_cancels_the_map_slot() {
     let (mut app, _, _) = map_app(60);
     play(&mut app, AnimTarget::Event(999), false);
-    assert_eq!(app.world().resource::<ActiveAnimations>().0, 0);
+    assert_eq!(app.world().resource::<ActiveAnimations>().total, 0);
 }
 
 #[test]
@@ -228,7 +228,7 @@ fn the_last_valid_id_controls_target_validation_even_in_one_update() {
         });
         app.update();
         assert_eq!(
-            app.world().resource::<ActiveAnimations>().0,
+            app.world().resource::<ActiveAnimations>().total,
             usize::from(id != 1)
         );
     }
@@ -245,7 +245,7 @@ fn reloading_a_session_removes_live_animations_and_pending_target_flashes() {
         age: 0,
     });
     crate::session::clear_transient(app.world_mut());
-    assert_eq!(app.world().resource::<ActiveAnimations>().0, 0);
+    assert_eq!(app.world().resource::<ActiveAnimations>().total, 0);
     assert!(positions(&mut app).is_empty());
     assert_eq!(
         app.world_mut()

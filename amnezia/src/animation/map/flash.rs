@@ -72,12 +72,13 @@ fn expire(
     mut commands: Commands,
     frames: Res<GameFrames>,
     pause: crate::transitions::TransitionPause,
+    scene: crate::animation::scene::Scenes,
     mut changes: MessageReader<crate::world::MapChanged>,
     mut flashes: Query<(Entity, &mut CharacterFlash, &mut SpriteFlash)>,
 ) {
     let changed = changes.read().count() != 0;
     for (entity, mut state, mut flash) in &mut flashes {
-        if changed || (!pause.paused() && state.frame != frames.frame) {
+        if changed || (!pause.paused() && !scene.paused() && state.frame != frames.frame) {
             // Character flashes last one game tick; a live animation refreshes them.
             flash.0 = [0; 4];
             commands.entity(entity).remove::<CharacterFlash>();

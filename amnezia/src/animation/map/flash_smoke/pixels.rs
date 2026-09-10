@@ -75,7 +75,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         assert_eq!(animation.frame, 20);
         assert_eq!(animation.map_target, Some(target(case)));
     } else {
-        assert_eq!(world.resource::<ActiveAnimations>().0, 0);
+        assert_eq!(world.resource::<ActiveAnimations>().total, 0);
     }
     let data = world.resource::<MapData>();
     let bush = data
