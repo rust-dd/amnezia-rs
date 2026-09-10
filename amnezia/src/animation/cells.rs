@@ -15,11 +15,13 @@ pub(super) struct CellMaterial {
     pub channels: Vec4,
     #[uniform(1)]
     pub source: Vec4,
-    /// Drawn width/height, opacity and whether the tone needs a cropped source.
+    /// Drawn width/height, opacity and whether tone or flash needs a cropped source.
     #[uniform(2)]
     pub sampling: Vec4,
     #[texture(3)]
     pub image: Handle<Image>,
+    #[uniform(4)]
+    pub flash: Vec4,
 }
 
 impl Material2d for CellMaterial {
@@ -44,7 +46,35 @@ pub(super) struct CellRenderer<'w> {
 
 pub(super) fn register(app: &mut App) {
     app.add_plugins(Material2dPlugin::<CellMaterial>::default())
-        .add_systems(Startup, setup_mesh);
+        .add_systems(Startup, setup_mesh)
+        .add_systems(
+            PostUpdate,
+            sync_flash.before(bevy::transform::TransformSystems::Propagate),
+        );
+}
+
+pub(super) fn sync_flash(
+    flashes: Query<&Sprite, With<super::render::FlashQuad>>,
+    cells: Query<&MeshMaterial2d<CellMaterial>>,
+    mut materials: ResMut<Assets<CellMaterial>>,
+) {
+    let color = flashes
+        .iter()
+        .next()
+        .map_or([0; 4], |sprite| sprite.color.to_srgba().to_u8_array());
+    let flash = Vec4::from_array(color.map(f32::from));
+    for handle in &cells {
+        let Some(material) = materials.get(&handle.0) else {
+            continue;
+        };
+        if material.flash == flash {
+            continue;
+        }
+        let mut material = materials.get_mut(&handle.0).unwrap();
+        material.flash = flash;
+        material.sampling.w =
+            u8::from(material.channels != Vec4::splat(128.0) || color[3] != 0) as f32;
+    }
 }
 
 pub(super) fn setup_mesh(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
@@ -106,6 +136,7 @@ impl CellRenderer<'_> {
                     u8::from(channels != Vec4::splat(128.0)) as f32,
                 ),
                 image: image.clone(),
+                flash: Vec4::ZERO,
             });
             cells.push(
                 commands

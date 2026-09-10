@@ -18,8 +18,8 @@ pub fn overlay_layer() -> RenderLayers {
 const SCREEN_W: f32 = 320.0;
 const SCREEN_H: f32 = 240.0;
 
-/// World z of a full-screen screen-flash quad: over the backdrop and battlers but
-/// under the cells, so the effect that triggered the flash still paints over it.
+/// The screen plane is below animation cells, which apply the flash to their
+/// own pixels before opacity blending.
 const SCREEN_FLASH_Z: f32 = 300.0;
 
 /// The world translation of an overlay sprite at RM2000 screen offset `pos` from

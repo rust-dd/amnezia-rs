@@ -131,12 +131,17 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     if !LABELS.contains(&label) {
         return None;
     }
-    let fixture = world.resource::<Fixture>();
+    let pixels = reference_pixels(
+        world.resource::<Fixture>(),
+        world.resource::<Assets<Image>>(),
+        [0; 4],
+    );
+    Some(checked_snapshot(world, label, pixels))
+}
+
+fn reference_pixels(fixture: &Fixture, images: &Assets<Image>, flash: [u8; 4]) -> Vec<[u8; 3]> {
     let cell = &fixture.cell;
-    let source = world
-        .resource::<Assets<Image>>()
-        .get(&fixture.image)
-        .expect("animation sheet loaded");
+    let source = images.get(&fixture.image).expect("animation sheet loaded");
     let size = (96.0 * cell.scale as f64 / 100.0).floor();
     let half = (48.0 * cell.scale as f64 / 100.0).floor();
     let left = 160 - half as i32;
@@ -148,7 +153,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         cell.tone_gray,
     ]
     .map(|v| v as f32);
-    let crop = tone != [100.0; 4];
+    let crop = tone != [100.0; 4] || flash[3] != 0;
     let col = cell.cell_id % 5;
     let row = cell.cell_id / 5;
     let inverse = (96.0 / size * 65536.0).trunc() / 65536.0;
@@ -157,13 +162,15 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let origin_x = if crop { col * 96 } else { 0 };
     let origin_y = if crop { row * 96 } else { 0 };
     let opacity = 255 * (100 - cell.transparency.min(100)) / 100;
+    let background = [flash[0], flash[1], flash[2]]
+        .map(|v| ((u32::from(v) * u32::from(flash[3]) + 127) / 255) as u8);
     let mut pixels = Vec::with_capacity(320 * 240);
     for y in 0..240 {
         for x in 0..320 {
             let dx = x - left;
             let dy = y - top;
             if dx < 0 || dy < 0 || dx >= size as i32 || dy >= size as i32 {
-                pixels.push([0; 3]);
+                pixels.push(background);
                 continue;
             }
             let sx = origin_x + ((dx as f64 + offset_x + 0.5) * inverse).ceil() as u32 - 1;
@@ -174,15 +181,22 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
                 .to_srgba()
                 .to_u8_array();
             let color = if color[3] == 0 {
-                [0; 3]
+                background
             } else {
-                crate::legacy_colors::tone::apply([color[0], color[1], color[2]], tone)
-                    .map(|c| ((c as u32 * opacity + 127) / 255) as u8)
+                let rgb = crate::legacy_colors::tone::apply([color[0], color[1], color[2]], tone);
+                std::array::from_fn(|i| {
+                    let original = (u32::from(rgb[i]) * u32::from(255 - flash[3]) + 127) / 255;
+                    let overlay = u32::from(flash[i]) * u32::from(flash[3]) / 256;
+                    (((original + overlay) * opacity
+                        + u32::from(background[i]) * (255 - opacity)
+                        + 127)
+                        / 255) as u8
+                })
             };
             pixels.push(color);
         }
     }
-    Some(checked_snapshot(world, label, pixels))
+    pixels
 }
 
 fn checked_snapshot(world: &mut World, label: &str, pixels: Vec<[u8; 3]>) -> Snapshot {

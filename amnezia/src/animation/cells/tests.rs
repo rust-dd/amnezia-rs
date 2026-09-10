@@ -132,3 +132,56 @@ fn neutral_cells_keep_full_sheet_sampling() {
     assert_eq!(material.channels, Vec4::splat(128.0));
     assert_eq!(material.sampling, Vec4::new(96.0, 96.0, 1.0, 0.0));
 }
+
+#[test]
+fn screen_flashes_repaint_existing_cells_and_restore_their_sampling_after_expiry() {
+    use super::super::render::{FlashQuad, FlashStamp, spawn_screen_flash};
+    use bevy::ecs::system::RunSystemOnce;
+    for toned in [false, true] {
+        let mut cell = cell();
+        cell.transparency = 40;
+        if toned {
+            cell.tone_gray = 0;
+        }
+        let mut app = render_cell(cell);
+        let world = app.world_mut();
+        let handle = world
+            .query::<&MeshMaterial2d<CellMaterial>>()
+            .single(world)
+            .unwrap()
+            .0
+            .clone();
+        for (age, alpha) in [(0, 248.0), (3, 200.0), (10, 80.0)] {
+            world
+                .run_system_once(move |mut commands: Commands| {
+                    spawn_screen_flash(
+                        &mut commands,
+                        [248, 160, 80],
+                        31,
+                        FlashStamp { age, frame: 1 },
+                    );
+                })
+                .unwrap();
+            world.run_system_once(sync_flash).unwrap();
+            let material = world
+                .resource::<Assets<CellMaterial>>()
+                .get(&handle)
+                .unwrap();
+            assert_eq!(material.flash, Vec4::new(248.0, 160.0, 80.0, alpha));
+            assert_eq!(material.sampling.z, 153.0 / 255.0);
+            assert_eq!(material.sampling.w, 1.0);
+        }
+        let flash = world
+            .query_filtered::<Entity, With<FlashQuad>>()
+            .single(world)
+            .unwrap();
+        world.despawn(flash);
+        world.run_system_once(sync_flash).unwrap();
+        let material = world
+            .resource::<Assets<CellMaterial>>()
+            .get(&handle)
+            .unwrap();
+        assert_eq!(material.flash, Vec4::ZERO);
+        assert_eq!(material.sampling.w, u8::from(toned) as f32);
+    }
+}
