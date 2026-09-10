@@ -32,6 +32,7 @@ mod systems;
 
 pub(crate) use flow::BattleFlow;
 pub(crate) use logic::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus_slots};
+pub(crate) use scene::{EffectsSet, smoke::snapshot as battler_snapshot};
 pub(crate) use systems::HudCamera;
 
 use crate::assets::{asset_root, load_ron};

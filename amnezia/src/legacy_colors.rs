@@ -5,6 +5,7 @@ use bevy::ui_render::ui_texture_slice_pipeline::{
 };
 use bevy::ui_render::{UiPipeline, init_ui_pipeline};
 
+pub(crate) mod flash;
 pub(crate) mod hue;
 pub(crate) mod smoke;
 pub(crate) mod tone;

@@ -33,7 +33,8 @@ use bevy::prelude::*;
 use cells::CellRenderer;
 use render::{fade_flashes, next_frame, spawn_screen_flash};
 
-pub use render::{flash_envelope, overlay_layer, overlay_translation};
+pub(crate) use render::flash_power_level;
+pub use render::{overlay_layer, overlay_translation};
 
 /// Seconds each animation *data* frame is shown. RM2000 (and EasyRPG) advances
 /// the animation once per 60 fps game-frame and shows each data frame for two of
@@ -102,7 +103,7 @@ pub struct PlayAnimation {
 /// A request to flash-tint a target battler sprite as an animation's target
 /// flash fires: `pos` is the battler's RM2000 screen offset from centre (the same
 /// point the animation plays on), `rgb` the flash colour (0..1), and `power` the
-/// RM2000 flash strength (`0..=31`) that drives the stepped [`flash_envelope`].
+/// RM2000 flash strength (`0..=31`) that drives the stepped [`render::flash_envelope`].
 /// `battle::scene` finds the battler at `pos` and drives its sprite colour over
 /// the ~11-game-frame envelope. RM2000 front view draws no party sprites, so a
 /// party-area target flash matches no battler and shows nothing.

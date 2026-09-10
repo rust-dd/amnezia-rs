@@ -110,7 +110,7 @@ pub struct Battle {
     /// drained each frame by `battle::floaters` into rising overlay text and
     /// cleared by [`Battle::new_round`] (a fresh [`Battle::build`] starts empty).
     pub(in crate::battle) pending_numbers: Vec<PendingNumber>,
-    /// Foe screen positions owed a guaranteed per-hit whitening blink, drained by
+    /// Foe screen positions owed a guaranteed per-hit visibility blink, drained by
     /// `battle::scene` into a blink on each struck sprite. Every landed blow
     /// enqueues one, independent of the played animation's own flash timings.
     pub(in crate::battle) pending_blinks: Vec<(f32, f32)>,

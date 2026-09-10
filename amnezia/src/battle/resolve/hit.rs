@@ -46,7 +46,7 @@ impl Battle {
     }
 
     /// Register a landed blow of `dmg` on foe `ti`: play the enemy-damaged SE, pop
-    /// its damage number, owe it a guaranteed whitening blink (RM2000 blinks a
+    /// its damage number, owe it a guaranteed visibility blink (RM2000 blinks a
     /// struck sprite every hit, animation-flash or not), and start its death-out if
     /// the blow felled it. The SE fires on any landed blow (even a blocked 0), like
     /// EasyRPG's damage-message substate; a felled foe then adds the kill SE via

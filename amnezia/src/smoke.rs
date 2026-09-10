@@ -92,7 +92,10 @@ impl Plugin for SmokePlugin {
         )
         .add_systems(
             PostUpdate,
-            drive.after(bevy::transform::TransformSystems::Propagate),
+            drive
+                .after(bevy::transform::TransformSystems::Propagate)
+                .after(crate::battle::EffectsSet)
+                .after(crate::legacy_colors::hue::HueSet),
         );
     }
 }
@@ -117,6 +120,7 @@ fn capture(world: &mut World, label: &str) {
     let gameover_snapshot = crate::gameover::smoke::snapshot(world, label);
     let font_snapshot = crate::font::bitmap::smoke::snapshot(world, label);
     let arrow_snapshot = crate::battle::hud::arrow_snapshot(world, label);
+    let battler_snapshot = crate::battle::battler_snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -143,6 +147,9 @@ fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &arrow_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &battler_snapshot {
                 snapshot.verify(&capture.image);
             }
         },

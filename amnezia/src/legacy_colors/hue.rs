@@ -10,24 +10,29 @@ pub(crate) struct HueShift {
 #[derive(Resource, Default)]
 struct Cache(HashMap<(AssetId<Image>, i32), Handle<Image>>);
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct HueSet;
+
 pub(super) fn register(app: &mut App) {
-    app.init_resource::<Cache>().add_systems(PostUpdate, apply);
+    app.init_resource::<Cache>()
+        .add_systems(PostUpdate, apply.in_set(HueSet));
 }
 
+#[allow(clippy::type_complexity)]
 fn apply(
     mut images: ResMut<Assets<Image>>,
     mut cache: ResMut<Cache>,
-    mut sprites: Query<(&HueShift, &mut Sprite)>,
+    mut sprites: Query<(
+        &HueShift,
+        &mut Sprite,
+        Option<(&super::flash::SpriteFlash, &mut super::flash::Rasterized)>,
+    )>,
 ) {
-    for (shift, mut sprite) in &mut sprites {
-        if shift.degrees == 0 {
-            if sprite.image != shift.original {
-                sprite.image = shift.original.clone();
-            }
-            continue;
-        }
+    for (shift, mut sprite, flash) in &mut sprites {
         let key = (shift.original.id(), shift.degrees);
-        let image = if let Some(image) = cache.0.get(&key) {
+        let image = if shift.degrees == 0 {
+            shift.original.clone()
+        } else if let Some(image) = cache.0.get(&key) {
             image.clone()
         } else {
             let Some(source) = images.get(&shift.original) else {
@@ -44,6 +49,11 @@ fn apply(
             }
             let image = images.add(image);
             cache.0.insert(key, image.clone());
+            image
+        };
+        let image = if let Some((flash, mut rasterized)) = flash {
+            super::flash::render(&image, flash, &mut rasterized, &mut images)
+        } else {
             image
         };
         if sprite.image != image {

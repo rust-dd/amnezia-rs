@@ -51,7 +51,7 @@ pub(super) const FLASH_LAST_FRAME: u32 = 10;
 /// ~3 frames (`level` pinned at 31 for a full-strength flash) then steps down
 /// every two frames. Integer arithmetic throughout, matching the measured RM2000
 /// values.
-pub(super) fn flash_power_level(frames: u32, power: u32) -> u32 {
+pub(crate) fn flash_power_level(frames: u32, power: u32) -> u32 {
     let f = 7 - (frames as i32 + 1) / 2;
     (f * power as i32 / 6).clamp(0, 31) as u32
 }

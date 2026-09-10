@@ -50,6 +50,12 @@ pub(crate) fn prepare(world: &mut World) {
 
 pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     status_colors(world, frame);
+    if frame == 1040 {
+        let mut battle = world.resource_mut::<Battle>();
+        let foe = &battle.enemies[0];
+        let pos = (foe.x as f32 - 160.0, foe.y as f32 - 120.0);
+        battle.pending_blinks.push(pos);
+    }
     if frame == 1150 {
         world
             .query_filtered::<&mut Window, With<bevy::window::PrimaryWindow>>()
@@ -95,6 +101,12 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         730 => Some("battle-status-colors"),
         830 => Some("battle-items"),
         980 => Some("battle-target"),
+        1010 => Some("battle-target-flash"),
+        1018 => Some("battle-target-fade"),
+        1026 => Some("battle-target-clear"),
+        1041 => Some("battle-hit-visible"),
+        1042 => Some("battle-hit-hidden"),
+        1061 => Some("battle-hit-restored"),
         1130 => Some("battle-ally-target"),
         1230 => Some("battle-resized"),
         _ => None,

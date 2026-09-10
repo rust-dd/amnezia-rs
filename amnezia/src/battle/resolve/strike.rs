@@ -64,7 +64,7 @@ impl Battle {
     }
 
     /// Land a planned strike of `dmg` on enemy `ti`: subtract the HP, roll its
-    /// states' damage wear-off, and pop the damage number, whitening blink, and
+    /// states' damage wear-off, and pop the damage number, visibility blink, and
     /// death-out (see [`Battle::after_foe_hit`]).
     pub(in crate::battle::resolve) fn land_strike(&mut self, pi: usize, ti: usize, dmg: i32) {
         self.enemies[ti].hp = (self.enemies[ti].hp - dmg).max(0);
