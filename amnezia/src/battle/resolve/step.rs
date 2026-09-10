@@ -27,7 +27,10 @@ impl Battle {
             return false;
         };
         if self.source_alive(action.source) {
-            self.recover_before_action(action.source);
+            let state_message = self.recover_before_action(action.source);
+            if state_message {
+                self.pending_action_flashes.push(action.source);
+            }
             self.tick_state_hp(action.source);
             let action = self.queue[self.queue_at];
             self.queue_at += 1;
@@ -54,6 +57,9 @@ impl Battle {
                     return true;
                 }
                 self.action_source = Some(action.source);
+                if !state_message && !matches!(action.kind, Command::Nothing) {
+                    self.pending_action_flashes.push(action.source);
+                }
                 self.apply(action);
                 self.finish_action();
             }

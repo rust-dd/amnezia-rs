@@ -13,6 +13,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             | "battle-hit-visible"
             | "battle-hit-hidden"
             | "battle-hit-restored"
+            | "battle-action-flash"
+            | "battle-action-fade"
     ) {
         return None;
     }
@@ -34,6 +36,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let expected_flash = match label {
         "battle-target-flash" => 192,
         "battle-target-fade" => 96,
+        "battle-action-flash" => 80,
+        "battle-action-fade" => 64,
         _ => 0,
     };
     assert_eq!(enemies[0].4[3], expected_flash, "{label}");

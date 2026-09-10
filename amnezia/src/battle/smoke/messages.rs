@@ -10,6 +10,24 @@ struct SkillImpact {
 }
 
 pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if frame == 1231 {
+        let mut battle = world.resource_mut::<Battle>();
+        battle.phase = Phase::Resolve;
+        battle.log.clear();
+        battle.queue = vec![Action {
+            source: Source::Enemy(0),
+            kind: Command::DoNothing,
+            agility: 1,
+        }];
+        battle.queue_at = 0;
+        assert!(battle.resolve_next_with_items(|_| true));
+    }
+    if frame == 1232 {
+        return Some("battle-action-flash");
+    }
+    if frame == 1234 {
+        return Some("battle-action-fade");
+    }
     if frame == 1235 {
         let mut battle = world.resource_mut::<Battle>();
         battle.phase = Phase::Resolve;

@@ -37,7 +37,7 @@ impl Battle {
         }
     }
 
-    pub(in crate::battle::resolve) fn recover_before_action(&mut self, target: Source) {
+    pub(in crate::battle::resolve) fn recover_before_action(&mut self, target: Source) -> bool {
         let before = self.state_restriction(target);
         let active = match target {
             Source::Party(i) => &mut self.members[i].states,
@@ -46,11 +46,12 @@ impl Battle {
         let lifted = logic::tick_recovery(active, &self.states, || {
             (rng_next(&mut self.rng) % 100) as u32
         });
-        self.log_action_state(target, &lifted);
+        let shown = self.log_action_state(target, &lifted);
         self.states_changed(target, before, false);
+        shown
     }
 
-    fn log_action_state(&mut self, target: Source, lifted: &[u32]) {
+    fn log_action_state(&mut self, target: Source, lifted: &[u32]) -> bool {
         let Some(state) = self
             .states
             .iter()
@@ -60,7 +61,7 @@ impl Battle {
             })
             .max_by_key(|state| (state.priority, state.id))
         else {
-            return;
+            return false;
         };
         let healed = lifted.contains(&state.id);
         let message = if healed {
@@ -71,6 +72,9 @@ impl Battle {
         if healed || !message.is_empty() {
             self.log
                 .push(format!("{}{message}", self.battler_name(target)));
+            true
+        } else {
+            false
         }
     }
 

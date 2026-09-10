@@ -140,7 +140,16 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         1250 => Some("battle-skill-usage"),
         _ => super::hud::movement_label(frame).or(impact),
     };
-    if label.is_some() {
+    if matches!(label, Some("battle-action-flash" | "battle-action-fade")) {
+        assert!(world.resource::<Battle>().log.is_empty());
+        assert!(
+            world
+                .query::<(&crate::font::bitmap::PixelText, &InheritedVisibility)>()
+                .iter(world)
+                .filter(|(_, visible)| visible.get())
+                .all(|(text, _)| text.runs.iter().all(|run| run.text.is_empty()))
+        );
+    } else if label.is_some() {
         super::hud::verify_bounds(world);
     }
     if frame == 430 {

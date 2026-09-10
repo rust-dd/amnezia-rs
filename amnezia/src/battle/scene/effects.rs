@@ -1,19 +1,22 @@
 use super::*;
 use crate::animation::{BattlerFlash, flash_power_level};
-use crate::battle::model::MenuLevel;
+use crate::battle::model::{MenuLevel, Source};
 use crate::legacy_colors::flash::SpriteFlash;
 use crate::timing::GameFrames;
 
 #[derive(Clone, Copy)]
 enum Flash {
     Selection { remaining: u32 },
+    Action { remaining: u32 },
     Animation { rgb: [u8; 3], power: u32, age: u32 },
 }
 
 impl Flash {
     fn advance(&mut self, delta: u32) {
         match self {
-            Self::Selection { remaining } => *remaining = remaining.saturating_sub(delta),
+            Self::Selection { remaining } | Self::Action { remaining } => {
+                *remaining = remaining.saturating_sub(delta);
+            }
             Self::Animation { age, .. } => *age = age.saturating_add(delta),
         }
     }
@@ -21,6 +24,7 @@ impl Flash {
     fn color(self) -> [u8; 4] {
         match self {
             Self::Selection { remaining } => [248, 248, 248, (remaining * 12) as u8],
+            Self::Action { remaining } => [248, 248, 248, (remaining * 8) as u8],
             Self::Animation { rgb, power, age } if age <= 10 => [
                 rgb[0],
                 rgb[1],
@@ -110,6 +114,13 @@ fn step(
     }
     for (_, mut effects) in &mut battlers {
         effects.advance(delta);
+    }
+    for source in std::mem::take(&mut battle.pending_action_flashes) {
+        if let Source::Enemy(index) = source
+            && let Some((_, mut effects)) = battlers.iter_mut().find(|(b, _)| b.index == index)
+        {
+            effects.flash = Some(Flash::Action { remaining: 10 });
+        }
     }
     for message in messages.read() {
         if let Some((_, mut effects)) = battlers

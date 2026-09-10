@@ -174,3 +174,105 @@ fn animation_flashes_reach_only_the_matching_enemy_with_original_eight_bit_stren
     frame(&mut app, 13);
     assert_eq!(alpha(&app, enemies[0]), 0);
 }
+
+#[test]
+fn action_start_flashes_only_the_acting_enemy_for_ten_logical_frames() {
+    use crate::battle::model::{Action, Command, Source};
+    for fps in [15, 30, 60, 144] {
+        let (mut app, enemies) = fixture();
+        let mut battle = app.world_mut().resource_mut::<Battle>();
+        battle.phase = Phase::Resolve;
+        battle.queue = vec![Action {
+            source: Source::Enemy(0),
+            kind: Command::Defend,
+            agility: 1,
+        }];
+        battle.resolve_next();
+        frame(&mut app, 1);
+        assert_eq!(
+            app.world().get::<SpriteFlash>(enemies[0]).unwrap().0,
+            [248, 248, 248, 80]
+        );
+        for _ in 0..fps {
+            app.world_mut()
+                .resource_mut::<GameFrames>()
+                .advance(1.0 / fps as f64);
+            app.update();
+            let age = app.world().resource::<GameFrames>().frame - 1;
+            assert_eq!(
+                u32::from(alpha(&app, enemies[0])),
+                10_u32.saturating_sub(age) * 8
+            );
+            assert_eq!(alpha(&app, enemies[1]), 0);
+        }
+    }
+}
+
+#[test]
+fn silent_cancelled_actions_do_not_flash_but_deliberate_ai_noops_do() {
+    use crate::battle::model::{Action, Command, Source};
+    for (kind, expected) in [
+        (Command::Nothing, 0),
+        (Command::DoNothing, 80),
+        (Command::Observe, 80),
+        (
+            Command::Skill {
+                skill_id: 999,
+                target: 0,
+            },
+            0,
+        ),
+        (
+            Command::Item {
+                item_id: 999,
+                target: 0,
+            },
+            0,
+        ),
+    ] {
+        let (mut app, enemies) = fixture();
+        let mut battle = app.world_mut().resource_mut::<Battle>();
+        battle.phase = Phase::Resolve;
+        battle.queue = vec![Action {
+            source: Source::Enemy(0),
+            kind,
+            agility: 1,
+        }];
+        battle.resolve_next_with_items(|_| false);
+        frame(&mut app, 1);
+        assert_eq!(alpha(&app, enemies[0]), expected);
+        assert_eq!(alpha(&app, enemies[1]), 0);
+    }
+}
+
+#[test]
+fn an_incapacitated_battler_only_flashes_for_a_visible_starting_state_message() {
+    use crate::battle::model::{Action, Command, Source};
+    for message in ["", " vár az ébredésre"] {
+        let (mut app, enemies) = fixture();
+        let mut battle = app.world_mut().resource_mut::<Battle>();
+        battle.phase = Phase::Resolve;
+        battle.states =
+            crate::assets::load_ron(&format!("{}/states.ron", crate::assets::asset_root()));
+        let state = battle
+            .states
+            .iter_mut()
+            .find(|state| state.id == 7)
+            .unwrap();
+        state.hold_turn = 99;
+        state.auto_release_prob = 0;
+        state.message_affected = message.into();
+        battle.enemies[0].states = vec![(7, 0)];
+        battle.queue = vec![Action {
+            source: Source::Enemy(0),
+            kind: Command::Nothing,
+            agility: 1,
+        }];
+        battle.resolve_next();
+        frame(&mut app, 1);
+        assert_eq!(
+            alpha(&app, enemies[0]),
+            if message.is_empty() { 0 } else { 80 }
+        );
+    }
+}
