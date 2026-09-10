@@ -2,6 +2,7 @@ use super::playback::LiveAnimation;
 use super::*;
 use crate::timing::{GameFrames, TimingPlugin};
 
+mod map_targets;
 mod slots;
 
 fn app(fps: u32) -> App {
@@ -58,6 +59,7 @@ fn fixture(fps: u32, sound_only: bool) -> App {
         );
     app.update();
     app.world_mut().write_message(PlayAnimation {
+        map_target: None,
         slot: if sound_only {
             AnimationSlot::Party
         } else {

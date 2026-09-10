@@ -94,6 +94,7 @@ pub(crate) fn clear_transient(world: &mut World) {
     clear_messages::<crate::world::RelocateEvent>(world);
     clear_messages::<crate::animation::ShowMapAnimation>(world);
     clear_messages::<crate::animation::PlayAnimation>(world);
+    crate::animation::reset_transient(world);
     crate::screenfx::reset_transient(world);
     if let Some(mut transition) = world.get_resource_mut::<crate::transitions::Transition>() {
         transition.clear();

@@ -316,6 +316,7 @@ pub(super) fn drain_pending_anims(
             })
             .collect();
         plays.write(PlayAnimation {
+            map_target: None,
             slot: if anim.sound_only {
                 crate::animation::AnimationSlot::Party
             } else {

@@ -43,13 +43,18 @@ impl Fade {
 
 pub struct TeleportPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct MapTransfer;
+
 impl Plugin for TeleportPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PendingTeleport>()
             .init_resource::<Fade>()
             .add_systems(
                 Update,
-                drive_fade.before(crate::interpreter::InterpreterStep),
+                drive_fade
+                    .in_set(MapTransfer)
+                    .before(crate::interpreter::InterpreterStep),
             );
     }
 }

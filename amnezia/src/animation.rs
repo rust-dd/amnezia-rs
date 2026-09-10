@@ -1,21 +1,11 @@
-//! The battle effect-animation player: it plays a converted RM2000 animation
-//! (from `animations.ron`) as on-screen sprites. A [`PlayAnimation`] message
-//! names an animation id and a screen position; this plugin spawns a
-//! [`playback::LiveAnimation`] that steps its frames at a fixed rate, drawing each frame's
-//! cells (see [`render`]) and firing that frame's sound-effect and flash
-//! timings. It owns the renderer plus the fixed overlay camera (render order 2)
-//! the effects draw on, which the battle backdrop and battlers ([`crate::battle`])
-//! share, so effects composite over the map and land on the battlers by
-//! construction; `battle` emits a [`PlayAnimation`] per physical hit, and the
-//! interpreter's [`ShowMapAnimation`] (opcode 11210) projects a target character
-//! to its screen position and plays one on the map.
-//!
-//! Positions are RM2000 screen coordinates measured from the screen centre
-//! (`0,0` = centre), y growing downward, matching the source data. `scope`
-//! (single vs screen) and `position` (head/centre/feet anchor) are the caller's
-//! concern: it resolves them into the `(x, y)` it passes here.
+//! RM2000 effect cells, sounds and flashes on the shared logical animation clock.
+//! Each map/battle slot owns one cast. Map casts retain their character target
+//! and refresh their placement after movement and camera shake, without restarting.
+//! Overlay positions are measured from screen centre with y growing downward;
+//! the animation definition supplies screen scope and head/centre/feet offsets.
 
 mod cells;
+mod map;
 mod playback;
 mod render;
 pub(crate) mod smoke;
@@ -31,10 +21,13 @@ use crate::world::{EventSprite, MainCamera};
 use amnezia_data::{AnimationDef, AnimationTimingDef};
 use bevy::camera::ScalingMode;
 use bevy::prelude::*;
+use map::resolve_map_animation;
 use playback::{start_animations, step_animations, track_active_animations};
 use render::{FlashStamp, fade_flashes, spawn_screen_flash};
 
+pub(crate) use map::smoke as map_smoke;
 pub(crate) use playback::AnimationSet;
+pub(crate) use playback::reset_transient;
 pub(crate) use render::flash_power_level;
 pub use render::{overlay_layer, overlay_translation};
 
@@ -90,6 +83,8 @@ pub struct AnimAnchor {
 #[derive(Message)]
 pub struct PlayAnimation {
     pub slot: AnimationSlot,
+    /// Keep map effects attached after their initial screen projection.
+    pub map_target: Option<AnimTarget>,
     pub anim_id: u32,
     pub targets: Vec<AnimAnchor>,
     pub screen_center: Vec2,
@@ -162,6 +157,7 @@ impl Plugin for AnimationPlugin {
         cells::register(app);
         app.add_message::<PlayAnimation>()
             .add_message::<ShowMapAnimation>()
+            .add_message::<crate::world::MapChanged>()
             .add_message::<BattlerFlash>()
             .insert_resource(AnimationLibrary(load_ron(&format!(
                 "{}/animations.ron",
@@ -172,9 +168,15 @@ impl Plugin for AnimationPlugin {
             .add_systems(
                 Update,
                 (
-                    (fade_flashes, step_animations, track_active_animations)
+                    (
+                        playback::clear_map_animations,
+                        fade_flashes,
+                        step_animations,
+                        track_active_animations,
+                    )
                         .chain()
-                        .in_set(AnimationSet::Advance),
+                        .in_set(AnimationSet::Advance)
+                        .after(crate::teleport::MapTransfer),
                     (
                         resolve_map_animation,
                         debug_preview,
@@ -183,8 +185,16 @@ impl Plugin for AnimationPlugin {
                     )
                         .chain()
                         .in_set(AnimationSet::Start)
+                        .after(crate::interpreter::InterpreterStep)
                         .after(AnimationSet::Advance),
                 ),
+            )
+            .add_systems(
+                PostUpdate,
+                (playback::follow_map_animations, track_active_animations)
+                    .chain()
+                    .after(crate::screenfx::ScreenShakeSet)
+                    .before(bevy::transform::TransformSystems::Propagate),
             );
     }
 }
@@ -344,6 +354,7 @@ fn debug_preview(
     if keys.just_pressed(KeyCode::F4) {
         plays.write(PlayAnimation {
             slot: AnimationSlot::Map,
+            map_target: None,
             anim_id: 1,
             targets: vec![AnimAnchor {
                 pos: Vec2::ZERO,
@@ -351,50 +362,6 @@ fn debug_preview(
             }],
             screen_center: MAP_SCREEN_CENTER,
             global: false,
-            sound_only: false,
-        });
-    }
-}
-
-/// Resolve each interpreter [`ShowMapAnimation`] to a screen-space
-/// [`PlayAnimation`]: find the target character's world position (the hero, or a
-/// map event by id) and the main camera's, project the target onto the fixed
-/// overlay with [`target_screen_offset`], and emit the play request. A target with
-/// no live entity on the current map (e.g. an event id not on this map) is
-/// dropped. This is where the camera/transform lookup lives, keeping the
-/// interpreter's own system params clear of it.
-fn resolve_map_animation(
-    mut requests: MessageReader<ShowMapAnimation>,
-    mut plays: MessageWriter<PlayAnimation>,
-    camera: Query<&Transform, With<MainCamera>>,
-    hero: Query<&Transform, With<Player>>,
-    events: Query<(&EventSprite, &Transform)>,
-) {
-    let Ok(camera) = camera.single() else {
-        return;
-    };
-    let camera_pos = camera.translation.truncate();
-    for request in requests.read() {
-        let target_pos = match request.target {
-            AnimTarget::Hero => hero.single().ok().map(|t| t.translation.truncate()),
-            AnimTarget::Event(id) => events
-                .iter()
-                .find(|(sprite, _)| sprite.id == id)
-                .map(|(_, transform)| transform.translation.truncate()),
-        };
-        let Some(target_pos) = target_pos else {
-            continue;
-        };
-        let offset = target_screen_offset(target_pos, camera_pos);
-        plays.write(PlayAnimation {
-            slot: AnimationSlot::Map,
-            anim_id: request.anim_id,
-            targets: vec![AnimAnchor {
-                pos: offset,
-                height: MAP_CHARACTER_HEIGHT,
-            }],
-            screen_center: MAP_SCREEN_CENTER,
-            global: request.global,
             sound_only: false,
         });
     }

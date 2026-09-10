@@ -2,6 +2,7 @@ use super::*;
 
 fn request(app: &mut App, slot: AnimationSlot, anim_id: u32, x: f32) {
     app.world_mut().write_message(PlayAnimation {
+        map_target: None,
         slot,
         anim_id,
         targets: vec![AnimAnchor {

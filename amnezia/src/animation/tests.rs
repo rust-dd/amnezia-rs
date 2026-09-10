@@ -151,10 +151,12 @@ fn resolver_projects_hero_and_event_onto_screen() {
     app.add_plugins(MinimalPlugins);
     app.add_message::<ShowMapAnimation>();
     app.add_message::<PlayAnimation>();
+    app.insert_resource(AnimationLibrary(vec![
+        anim_def(62, 0, 1, vec![]),
+        anim_def(63, 0, 1, vec![]),
+    ]));
     app.add_systems(Update, resolve_map_animation);
 
-    // Main camera at world (100, 50). The hero sits 32 right / 16 up from it;
-    // event 7 sits 10 left / 20 down.
     app.world_mut()
         .spawn((MainCamera, Transform::from_xyz(100.0, 50.0, 0.0)));
     app.world_mut().spawn((
@@ -187,6 +189,7 @@ fn resolver_projects_hero_and_event_onto_screen() {
         target: AnimTarget::Hero,
         global: false,
     });
+    app.update();
     app.world_mut().write_message(ShowMapAnimation {
         anim_id: 63,
         target: AnimTarget::Event(7),
@@ -196,16 +199,14 @@ fn resolver_projects_hero_and_event_onto_screen() {
 
     let messages = app.world().resource::<Messages<PlayAnimation>>();
     let mut cursor = messages.get_cursor();
-    let plays: Vec<(u32, f32, f32)> = cursor
+    let plays = cursor
         .read(messages)
         .map(|p| {
             let a = p.targets[0];
             (p.anim_id, a.pos.x, a.pos.y)
         })
-        .collect();
-    // Hero: (132-100, 50-66) = (32, -16). Event 7: (90-100, 50-30) = (-10, 20).
-    // Each map animation plays on a single target at map character height.
-    assert_eq!(plays, vec![(62, 32.0, -16.0), (63, -10.0, 20.0)]);
+        .collect::<Vec<_>>();
+    assert_eq!(plays, vec![(62, 32.0, -12.0), (63, -10.0, 16.0)]);
 }
 
 fn anim_def(id: u32, scope: u32, position: u32, timings: Vec<AnimationTimingDef>) -> AnimationDef {

@@ -73,6 +73,7 @@ fn capture(world: &mut World, label: &str) {
     let movement_snapshot = crate::battle::hud::movement_snapshot(world, label);
     let battler_snapshot = crate::battle::battler_snapshot(world, label);
     let actor_snapshot = crate::appearance::smoke::snapshot(world, label);
+    let map_animation_snapshot = crate::animation::map_smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -108,6 +109,9 @@ fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &actor_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &map_animation_snapshot {
                 snapshot.verify(&capture.image);
             }
         },
@@ -186,6 +190,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "camera" {
         camera::drive(world, frame);
+    }
+    if scenario == "map-animations"
+        && let Some(label) = crate::animation::map_smoke::drive(world, frame)
+    {
+        capture(world, label);
     }
     if scenario == "message-options" {
         message_options::drive(world, frame);
@@ -323,6 +332,8 @@ fn drive(world: &mut World) {
         }
         if scenario == "display" {
             crate::display::smoke::verify_finished(world);
+        } else if scenario == "map-animations" {
+            crate::animation::map_smoke::verify_finished(world);
         } else if scenario == "actor-graphics" {
             crate::appearance::smoke::verify_finished(world);
         } else if scenario == "font-colors" {
@@ -419,7 +430,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
         crate::battle::flow::smoke::entry()
     } else if matches!(scenario, "gameover" | "battle-defeat") {
         crate::gameover::smoke::entry(scenario == "battle-defeat")
-    } else if scenario == "camera" {
+    } else if matches!(scenario, "camera" | "map-animations") {
         camera::entry()
     } else if scenario == "looping" {
         looping::entry()
