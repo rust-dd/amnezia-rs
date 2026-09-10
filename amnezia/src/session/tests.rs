@@ -29,6 +29,9 @@ fn new_game_clears_progress_and_rebuilds_even_the_same_start_map() {
     app.insert_resource(map);
     app.world_mut().resource_mut::<Switches>().set(8, true);
     app.world_mut().resource_mut::<Inventory>().add_gold(999);
+    let mut frames = crate::timing::GameFrames::default();
+    frames.advance(100.0);
+    app.insert_resource(frames);
     let old_scene = app.world_mut().spawn(MapScene).id();
     let hero = app
         .world_mut()
@@ -52,6 +55,7 @@ fn new_game_clears_progress_and_rebuilds_even_the_same_start_map() {
     }
     assert!(!app.world().resource::<Switches>().get(8));
     assert_eq!(app.world().resource::<Inventory>().gold(), 0);
+    assert_eq!(app.world().resource::<crate::timing::GameFrames>().frame, 0);
     assert!(!app.world().resource::<RunningEvent>().active());
     assert!(app.world().get_entity(old_scene).is_err());
     assert!(!app.world().resource::<MapEvents>().events.is_empty());

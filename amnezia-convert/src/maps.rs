@@ -191,6 +191,8 @@ pub fn convert_chipsets(input: &Path, output: &Path) -> Result<usize> {
     let chipsets: Vec<Chipset> = parsed
         .into_iter()
         .map(|c| Chipset {
+            animation_type: c.animation_type,
+            animation_speed: c.animation_speed,
             id: c.id,
             graphic: c.name,
             terrain_data: c.terrain_data,

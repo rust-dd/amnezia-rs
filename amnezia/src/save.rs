@@ -78,6 +78,8 @@ pub fn save_slot_exists() -> bool {
 /// sorted-order-independent `Vec`s of pairs so RON stays diffable and stable.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 struct SaveGame {
+    #[serde(default)]
+    game_frames: crate::timing::GameFrames,
     map_id: u32,
     x: u32,
     y: u32,
@@ -193,6 +195,7 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    game_frames: Option<ResMut<'w, crate::timing::GameFrames>>,
     appearance: Option<ResMut<'w, crate::appearance::Appearance>>,
     menu_access: Option<ResMut<'w, crate::menu::MenuAccess>>,
     save_access: Option<ResMut<'w, SaveAccess>>,
@@ -292,6 +295,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                game_frames: scene.game_frames.as_deref().copied().unwrap_or_default(),
                 map_id: map_data.map_id,
                 x: player.tile_x.max(0) as u32,
                 y: player.tile_y.max(0) as u32,
@@ -369,6 +373,10 @@ fn save_or_load(
             }
             save_io.equipment.load(game.equipment);
             scene.playtime.seconds = game.playtime;
+            if let Some(frames) = scene.game_frames.as_deref_mut() {
+                *frames = game.game_frames;
+                frames.sanitize();
+            }
             scene.game_clock.remaining = game.timer_remaining;
             scene.game_clock.running = game.timer_running;
             scene.game_clock.visible = game.timer_visible;

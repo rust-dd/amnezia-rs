@@ -67,6 +67,8 @@ pub(crate) fn find_section(
 /// bitfields; lower is 162 bytes, upper is 144, padded with `0x0F`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Chipset {
+    pub animation_type: u32,
+    pub animation_speed: u32,
     pub id: u32,
     pub name: String,
     pub terrain_data: Vec<u16>,
@@ -93,6 +95,8 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
         let id = reader.varint()?;
         let mut name = String::new();
         let mut terrain_data = Vec::new();
+        let mut animation_type = 0;
+        let mut animation_speed = 0;
         let mut passages_down: Vec<u8> = Vec::new();
         let mut passages_up: Vec<u8> = Vec::new();
         loop {
@@ -104,6 +108,8 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
             let sub_data = reader.take(sub_size)?;
             match sub_id {
                 CHIPSET_NAME => name = String::from_utf8_lossy(sub_data).into_owned(),
+                0x0B => animation_type = Reader::new(sub_data).varint()?,
+                0x0C => animation_speed = Reader::new(sub_data).varint()?,
                 0x03 => {
                     if sub_data.len() % 2 != 0 {
                         return Err(LcfError::UnexpectedEof);
@@ -121,6 +127,8 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
         passages_down.resize(PASSAGES_DOWN_LEN, PASSAGE_DEFAULT);
         passages_up.resize(PASSAGES_UP_LEN, PASSAGE_DEFAULT);
         chipsets.push(Chipset {
+            animation_type,
+            animation_speed,
             id,
             name,
             terrain_data,
@@ -135,6 +143,26 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
 mod tests {
     use crate::test_util::{element, make_ldb, section, subchunk};
     use crate::{LcfError, parse_chipsets};
+
+    #[test]
+    fn chipset_animation_fields_preserve_explicit_values_and_defaults() {
+        let ldb = make_ldb(&[(
+            0x14,
+            section(&[
+                element(1, &[subchunk(11, &[1]), subchunk(12, &[1])]),
+                element(2, &[subchunk(11, &[0]), subchunk(12, &[0])]),
+                element(3, &[]),
+            ]),
+        )]);
+        let chipsets = parse_chipsets(&ldb).unwrap();
+        assert_eq!(
+            chipsets
+                .iter()
+                .map(|c| (c.animation_type, c.animation_speed))
+                .collect::<Vec<_>>(),
+            [(1, 1), (0, 0), (0, 0)]
+        );
+    }
 
     #[test]
     fn terrain_tags_are_little_endian_and_omitted_lists_remain_empty() {

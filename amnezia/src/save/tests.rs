@@ -1,8 +1,11 @@
 use super::*;
 
+mod frame_clock;
+
 #[test]
 fn save_game_ron_round_trip() {
     let game = SaveGame {
+        game_frames: default(),
         map_id: 5,
         x: 12,
         y: 7,
@@ -73,7 +76,8 @@ fn save_app(location: PathBuf) -> App {
         .init_resource::<WeatherStrength>()
         .init_resource::<TintState>()
         .init_resource::<PlayTime>()
-        .init_resource::<GameClock>();
+        .init_resource::<GameClock>()
+        .init_resource::<crate::timing::GameFrames>();
     app.insert_resource(SaveLocation(location));
     app.insert_resource(HeroName("Ron".into()));
     app.add_systems(Update, save_or_load);
@@ -185,6 +189,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     // restore is observable.
     let path = temp_slot("continue");
     let game = SaveGame {
+        game_frames: default(),
         map_id: 2,
         x: 16,
         y: 6,
@@ -270,6 +275,7 @@ fn load_restores_name_charset_and_screen_state() {
     // resources so the resumed scene looks exactly as it was saved.
     let path = temp_slot("scene");
     let game = SaveGame {
+        game_frames: default(),
         map_id: 2,
         x: 16,
         y: 6,
@@ -444,6 +450,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
     let path = temp_slot("roundtrip");
     let _ = std::fs::remove_file(&path);
     let game = SaveGame {
+        game_frames: default(),
         map_id: 2,
         x: 16,
         y: 6,

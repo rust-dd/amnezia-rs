@@ -137,6 +137,10 @@ pub struct CommonEvent {
 /// base name of its graphic under `graphics/ChipSet/`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Chipset {
+    #[serde(default)]
+    pub animation_type: u32,
+    #[serde(default)]
+    pub animation_speed: u32,
     pub id: u32,
     pub graphic: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

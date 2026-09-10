@@ -44,6 +44,7 @@ fn start_new_game(world: &mut World) {
     reset::<crate::screenfx::WeatherStrength>(world);
     reset::<crate::timer::PlayTime>(world);
     reset::<crate::timer::GameClock>(world);
+    reset::<crate::timing::GameFrames>(world);
     reset::<crate::menu::MenuAccess>(world);
     reset::<SaveAccess>(world);
     reset::<LoadRequest>(world);

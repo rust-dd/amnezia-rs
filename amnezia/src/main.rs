@@ -43,6 +43,7 @@ mod terms;
 mod text;
 mod tiles;
 mod timer;
+mod timing;
 mod title;
 mod vehicles;
 mod vitals;
@@ -86,6 +87,7 @@ fn main() -> AppExit {
         .add_plugins(plugins)
         .add_plugins(legacy_colors::LegacyColorsPlugin)
         .add_plugins(display::DisplayPlugin)
+        .add_plugins(timing::TimingPlugin)
         .insert_resource(text::HeroName(hero.name))
         .init_resource::<state::Switches>()
         .init_resource::<state::Variables>()

@@ -26,6 +26,7 @@ mod terrain;
 mod topology;
 mod touch;
 mod water;
+pub(crate) use water::smoke as water_smoke;
 
 pub use autonomy::AutoMove;
 pub(crate) use autonomy::MoveGuards;
@@ -201,7 +202,8 @@ pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<water::WaterAnim>()
+        app.init_resource::<water::WaterStyle>()
+            .init_resource::<crate::timing::GameFrames>()
             .init_resource::<TouchEvents>()
             .add_message::<RelocateEvent>()
             .add_message::<MapChanged>()
@@ -219,7 +221,6 @@ impl Plugin for WorldPlugin {
                     )
                         .chain(),
                     route::route_hero,
-                    water::animate_water,
                     apply_relocate,
                 ),
             )
@@ -232,6 +233,7 @@ impl Plugin for WorldPlugin {
                     .before(bevy::camera::visibility::VisibilitySystems::CalculateBounds)
                     .before(bevy::transform::TransformSystems::Propagate),
             );
+        app.add_systems(PostUpdate, water::animate_water);
     }
 }
 
@@ -321,6 +323,12 @@ pub fn load_map(
     let map: Map = load_ron(&format!("{}/maps/map_{map_id:04}.ron", asset_root()));
     let chipsets: Vec<Chipset> = load_ron(&format!("{}/chipsets.ron", asset_root()));
     let entry = chipsets.into_iter().find(|c| c.id == map.chipset_id);
+    commands.insert_resource(
+        entry
+            .as_ref()
+            .map(water::WaterStyle::from_chipset)
+            .unwrap_or_default(),
+    );
     let (graphic, passages_down, passages_up, terrain_data) = match entry {
         Some(c) => (c.graphic, c.passages_down, c.passages_up, c.terrain_data),
         None => (String::new(), vec![0x0F; 162], vec![0x0F; 144], Vec::new()),
