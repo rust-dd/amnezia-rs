@@ -39,11 +39,14 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-airship-escape
 cargo run -p amnezia --locked -- --smoke-test --smoke-timer
 cargo run -p amnezia --locked -- --smoke-test --smoke-pictures
 cargo run -p amnezia --locked -- --smoke-test --smoke-colors
+cargo run -p amnezia --locked -- --smoke-test --smoke-display
 ```
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
 
 Add `--smoke-offscreen` to render all camera layers into a GPU texture without a native window, including on a locked desktop. This still requires a working graphics adapter. Captures use the separate `amnezia-smoke-offscreen-*.png` prefix; empty images fail the check. Offscreen runs test rendering and scripted input, not native window/input integration.
+
+The game renders its world, text and menus together at 320×240, then scales the result in whole physical pixels with black letterboxing. Windows smaller than the native canvas are downscaled proportionally. The display scenario checks normal, wide, portrait, odd-sized and small outputs against direct GPU readbacks of the native canvas.
 
 ### Packaging (macOS)
 

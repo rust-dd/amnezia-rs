@@ -19,7 +19,7 @@ pub(super) fn configure(app: &mut App) {
     app.add_plugins(bevy::app::ScheduleRunnerPlugin::run_loop(
         std::time::Duration::from_secs_f64(1.0 / 60.0),
     ))
-    .add_systems(PostStartup, setup)
+    .add_systems(PostStartup, setup.after(crate::display::DisplaySetup))
     .add_systems(PreUpdate, resize);
 }
 
@@ -33,7 +33,7 @@ fn setup(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
     windows: Query<&Window, With<PrimaryWindow>>,
-    cameras: Query<Entity, With<Camera>>,
+    cameras: Query<Entity, With<crate::display::PresentationCamera>>,
 ) {
     let size = windows.single().unwrap().resolution.physical_size();
     let target = images.add(texture(size));
@@ -63,7 +63,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn all_camera_layers_share_one_resizable_capture_target() {
+    fn capture_target_resizes_without_redirecting_the_game_canvas() {
         let mut app = App::new();
         app.init_resource::<Assets<Image>>()
             .add_systems(Startup, setup)
@@ -78,15 +78,31 @@ mod tests {
                 PrimaryWindow,
             ))
             .id();
-        for order in 0..4 {
-            app.world_mut().spawn(Camera { order, ..default() });
-        }
+        let game_target = app
+            .world_mut()
+            .resource_mut::<Assets<Image>>()
+            .add(texture(UVec2::new(320, 240)));
+        let game = app
+            .world_mut()
+            .spawn((
+                Camera::default(),
+                RenderTarget::Image(game_target.clone().into()),
+            ))
+            .id();
+        app.world_mut()
+            .spawn((Camera::default(), crate::display::PresentationCamera));
         app.update();
         let handle = app.world().resource::<Target>().0.clone();
         let world = app.world_mut();
-        for target in world.query::<&RenderTarget>().iter(world) {
+        for target in world
+            .query_filtered::<&RenderTarget, With<crate::display::PresentationCamera>>()
+            .iter(world)
+        {
             assert!(matches!(target, RenderTarget::Image(image) if image.handle == handle));
         }
+        assert!(
+            matches!(world.get::<RenderTarget>(game), Some(RenderTarget::Image(image)) if image.handle == game_target)
+        );
         let image = world.resource::<Assets<Image>>().get(&handle).unwrap();
         assert_eq!(image.size(), UVec2::new(960, 720));
         assert!(

@@ -11,7 +11,6 @@ use crate::tiles::{self, CHAR_Y_OFFSET};
 use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 
 mod autonomy;
 mod bush;
@@ -222,7 +221,6 @@ impl Plugin for WorldPlugin {
                     route::route_hero,
                     water::animate_water,
                     apply_relocate,
-                    fit_ui_scale,
                 ),
             )
             .add_systems(
@@ -237,29 +235,9 @@ impl Plugin for WorldPlugin {
     }
 }
 
-/// Scale the UI to the window each frame so the fixed 960×720 design (×3 of
-/// RM2000's 320×240) fits whatever size — and display density — the window has. The
-/// world already fills the window via the camera's Fixed 320×240 scaling, so only
-/// the UI, laid out in logical pixels, needs to track it; this keeps the two
-/// aligned and the game consistent across HiDPI and resized windows.
-fn fit_ui_scale(windows: Query<&Window, With<PrimaryWindow>>, mut ui_scale: ResMut<UiScale>) {
-    let Ok(window) = windows.single() else {
-        return;
-    };
-    let (w, h) = (window.width(), window.height());
-    if w <= 0.0 || h <= 0.0 {
-        return;
-    }
-    let scale = (w / 960.0).min(h / 720.0);
-    if scale > 0.0 && (ui_scale.0 - scale).abs() > 1e-3 {
-        ui_scale.0 = scale;
-    }
-}
-
 /// The fixed 320×240 orthographic projection shared by the world and front
 /// cameras — RM2000's native screen. Maps larger than this scroll; the whole view
-/// scales to fill the (4:3) window, so tiles are pixel-perfect with no gray margin
-/// around a small map.
+/// is rendered to the native canvas before the display plugin scales it.
 fn fixed_projection() -> Projection {
     Projection::Orthographic(OrthographicProjection {
         scaling_mode: bevy::camera::ScalingMode::Fixed {

@@ -15,6 +15,7 @@ mod choice;
 mod conditions;
 mod debug;
 mod dialogue;
+mod display;
 mod equipment;
 mod events;
 mod font;
@@ -84,6 +85,7 @@ fn main() -> AppExit {
     App::new()
         .add_plugins(plugins)
         .add_plugins(legacy_colors::LegacyColorsPlugin)
+        .add_plugins(display::DisplayPlugin)
         .insert_resource(text::HeroName(hero.name))
         .init_resource::<state::Switches>()
         .init_resource::<state::Variables>()

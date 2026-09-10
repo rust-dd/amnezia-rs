@@ -24,7 +24,9 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-colors") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-display") {
+            "display"
+        } else if std::env::args().any(|arg| arg == "--smoke-colors") {
             "colors"
         } else if std::env::args().any(|arg| arg == "--smoke-pictures") {
             "pictures"
@@ -90,6 +92,7 @@ fn capture(world: &mut World, label: &str) {
     let path = std::env::temp_dir().join(format!("{prefix}-{label}.png"));
     info!("smoke screenshot: {}", path.display());
     let picture_pixels = crate::picture::smoke::expected_pixels(world, label);
+    let display_snapshot = crate::display::smoke::capture_native(world, label, prefix);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -97,6 +100,9 @@ fn capture(world: &mut World, label: &str) {
             crate::battle::smoke::verify_skin(&capture.image, &label);
             crate::picture::smoke::verify_image(&capture.image, &label, &picture_pixels);
             crate::legacy_colors::smoke::verify(&capture.image, &label);
+            if let Some(snapshot) = &display_snapshot {
+                snapshot.submit(&capture.image, false);
+            }
         },
     );
 }
@@ -108,7 +114,7 @@ fn input(world: &mut World) {
         && world.resource::<SmokeRun>().finish_at.is_none()
         && !matches!(
             world.resource::<SmokeRun>().scenario,
-            "font" | "panorama" | "timer" | "battle-menus" | "message-options"
+            "font" | "panorama" | "timer" | "battle-menus" | "message-options" | "display"
         )
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active
@@ -158,6 +164,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "colors"
         && let Some(label) = crate::legacy_colors::smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "display"
+        && let Some(label) = crate::display::smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -222,7 +233,9 @@ fn drive(world: &mut World) {
                 "airship escape never reached the next dream scene"
             );
         }
-        if scenario == "intro" {
+        if scenario == "display" {
+            crate::display::smoke::verify_finished(world);
+        } else if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(
                 !world
@@ -275,7 +288,10 @@ fn start_scenario(world: &mut World, scenario: &str) {
     if scenario == "battle-menus" {
         crate::battle::smoke::prepare(world);
     }
-    let commands = if matches!(scenario, "message-options" | "pictures" | "colors") {
+    let commands = if matches!(
+        scenario,
+        "message-options" | "pictures" | "colors" | "display"
+    ) {
         message_options::entry()
     } else if scenario == "camera" {
         camera::entry()
