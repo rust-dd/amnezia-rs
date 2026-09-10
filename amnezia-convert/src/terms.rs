@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 /// Convert the Terms section in `input/RPG_RT.ldb` into `output/terms.ron` (the
-/// chrome-facing subset of the RM2000 vocabulary). The menu, battle, and shop
+/// complete imported RM2000 vocabulary). The menu, battle, and shop
 /// screens read it back and route each term through `i18n::tr()`.
 pub fn convert_terms(input: &Path, output: &Path) -> Result<()> {
     if !input.is_dir() {
@@ -18,6 +18,46 @@ pub fn convert_terms(input: &Path, output: &Path) -> Result<()> {
     let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
     let t = lcf::parse_terms(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
     let terms = TermsDef {
+        encounter: t.encounter,
+        special_combat: t.special_combat,
+        observing: t.observing,
+        focus: t.focus,
+        autodestruction: t.autodestruction,
+        enemy_escape: t.enemy_escape,
+        enemy_transform: t.enemy_transform,
+        enemy_undamaged: t.enemy_undamaged,
+        actor_undamaged: t.actor_undamaged,
+        skill_failure_a: t.skill_failure_a,
+        skill_failure_b: t.skill_failure_b,
+        skill_failure_c: t.skill_failure_c,
+        use_item: t.use_item,
+        hp_recovery: t.hp_recovery,
+        parameter_increase: t.parameter_increase,
+        parameter_decrease: t.parameter_decrease,
+        enemy_hp_absorbed: t.enemy_hp_absorbed,
+        actor_hp_absorbed: t.actor_hp_absorbed,
+        resistance_increase: t.resistance_increase,
+        resistance_decrease: t.resistance_decrease,
+        skill_learned: t.skill_learned,
+        battle_start: t.battle_start,
+        shop_sell_number1: t.shop_sell_number1,
+        shop_sell_number2: t.shop_sell_number2,
+        shop_sell_number3: t.shop_sell_number3,
+        possessed_items: t.possessed_items,
+        equipped_items: t.equipped_items,
+        new_game: t.new_game,
+        load_game: t.load_game,
+        exit_game: t.exit_game,
+        order: t.order,
+        wait_on: t.wait_on,
+        wait_off: t.wait_off,
+        sp_cost: t.sp_cost,
+        save_game_message: t.save_game_message,
+        load_game_message: t.load_game_message,
+        file: t.file,
+        exit_game_message: t.exit_game_message,
+        yes: t.yes,
+        no: t.no,
         command_attack: t.command_attack,
         command_defend: t.command_defend,
         command_item: t.command_item,
@@ -112,3 +152,6 @@ pub fn convert_terms(input: &Path, output: &Path) -> Result<()> {
         .with_context(|| format!("writing {}", output.join("terms.ron").display()))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

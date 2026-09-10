@@ -12,12 +12,90 @@
 
 use serde::{Deserialize, Serialize};
 
-/// The chrome-facing subset of the RM2000 term vocabulary. Every field is
-/// `#[serde(default)]` so a `terms.ron` written before a field existed still
-/// loads (the missing term reads as an empty string, and the chrome falls back to
-/// its own default when a term is blank). Field names mirror liblcf's `rpg::Terms`.
+/// The complete imported RM2000 vocabulary. Missing fields in older RON files
+/// remain empty; intentional empty strings are preserved, including whitespace.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TermsDef {
+    #[serde(default)]
+    pub encounter: String,
+    #[serde(default)]
+    pub special_combat: String,
+    #[serde(default)]
+    pub observing: String,
+    #[serde(default)]
+    pub focus: String,
+    #[serde(default)]
+    pub autodestruction: String,
+    #[serde(default)]
+    pub enemy_escape: String,
+    #[serde(default)]
+    pub enemy_transform: String,
+    #[serde(default)]
+    pub enemy_undamaged: String,
+    #[serde(default)]
+    pub actor_undamaged: String,
+    #[serde(default)]
+    pub skill_failure_a: String,
+    #[serde(default)]
+    pub skill_failure_b: String,
+    #[serde(default)]
+    pub skill_failure_c: String,
+    #[serde(default)]
+    pub use_item: String,
+    #[serde(default)]
+    pub hp_recovery: String,
+    #[serde(default)]
+    pub parameter_increase: String,
+    #[serde(default)]
+    pub parameter_decrease: String,
+    #[serde(default)]
+    pub enemy_hp_absorbed: String,
+    #[serde(default)]
+    pub actor_hp_absorbed: String,
+    #[serde(default)]
+    pub resistance_increase: String,
+    #[serde(default)]
+    pub resistance_decrease: String,
+    #[serde(default)]
+    pub skill_learned: String,
+    #[serde(default)]
+    pub battle_start: String,
+    #[serde(default)]
+    pub shop_sell_number1: String,
+    #[serde(default)]
+    pub shop_sell_number2: String,
+    #[serde(default)]
+    pub shop_sell_number3: String,
+    #[serde(default)]
+    pub possessed_items: String,
+    #[serde(default)]
+    pub equipped_items: String,
+    #[serde(default)]
+    pub new_game: String,
+    #[serde(default)]
+    pub load_game: String,
+    #[serde(default)]
+    pub exit_game: String,
+    #[serde(default)]
+    pub order: String,
+    #[serde(default)]
+    pub wait_on: String,
+    #[serde(default)]
+    pub wait_off: String,
+    #[serde(default)]
+    pub sp_cost: String,
+    #[serde(default)]
+    pub save_game_message: String,
+    #[serde(default)]
+    pub load_game_message: String,
+    #[serde(default)]
+    pub file: String,
+    #[serde(default)]
+    pub exit_game_message: String,
+    #[serde(default)]
+    pub yes: String,
+    #[serde(default)]
+    pub no: String,
     #[serde(default)]
     pub command_attack: String,
     #[serde(default)]
