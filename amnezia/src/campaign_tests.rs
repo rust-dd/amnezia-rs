@@ -5,6 +5,7 @@ use std::path::Path;
 
 mod actors;
 mod battle_graphics;
+mod battle_text;
 mod character_animation;
 mod collision;
 mod enemy_actions;

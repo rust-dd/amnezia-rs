@@ -4,6 +4,8 @@ use super::*;
 
 fn skill(id: u32, name: &str, sp_cost: u32, power: u32) -> SkillDef {
     SkillDef {
+        using_message1: String::new(),
+        using_message2: String::new(),
         affect_stats: [false; 4],
         ignore_defense: false,
         id,
@@ -304,6 +306,12 @@ fn state_infliction_chance_maps_ranks_a_through_e() {
 
 fn state(id: u32, restriction: u32, hold_turn: u32, auto: u32, by_damage: u32) -> StateDef {
     StateDef {
+        color: 6,
+        message_actor: String::new(),
+        message_enemy: String::new(),
+        message_already: String::new(),
+        message_affected: String::new(),
+        message_recovery: String::new(),
         affect_type: 0,
         affect_stats: [false; 4],
         reduce_hit_ratio: 100,
@@ -393,6 +401,12 @@ fn release_on_damage_lifts_by_chance_and_spares_the_death_state() {
 
 fn state_hp(id: u32, hp_change_type: u32, hp_change_max: u32, hp_change_val: u32) -> StateDef {
     StateDef {
+        color: 6,
+        message_actor: String::new(),
+        message_enemy: String::new(),
+        message_already: String::new(),
+        message_affected: String::new(),
+        message_recovery: String::new(),
         affect_type: 0,
         affect_stats: [false; 4],
         reduce_hit_ratio: 100,

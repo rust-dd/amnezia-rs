@@ -23,6 +23,12 @@ pub fn convert_states(input: &Path, output: &Path) -> Result<usize> {
     let states: Vec<StateDef> = parsed
         .into_iter()
         .map(|s| StateDef {
+            color: s.color,
+            message_actor: s.message_actor,
+            message_enemy: s.message_enemy,
+            message_already: s.message_already,
+            message_affected: s.message_affected,
+            message_recovery: s.message_recovery,
             affect_type: s.affect_type,
             affect_stats: s.affect_stats,
             reduce_hit_ratio: s.reduce_hit_ratio,

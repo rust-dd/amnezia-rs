@@ -214,6 +214,8 @@ pub fn convert_skills(input: &Path, output: &Path) -> Result<usize> {
     let skills: Vec<SkillDef> = parsed
         .into_iter()
         .map(|s| SkillDef {
+            using_message1: s.using_message1,
+            using_message2: s.using_message2,
             affect_stats: s.affect_stats,
             ignore_defense: s.ignore_defense,
             id: s.id,

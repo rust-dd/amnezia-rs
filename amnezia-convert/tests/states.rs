@@ -12,6 +12,14 @@ fn legacy_state_ron_uses_editor_rates_without_overwriting_explicit_zero() {
     assert_eq!(ron::from_str::<StateDef>(&explicit).unwrap().rates, [0; 5]);
     let state = ron::from_str::<StateDef>(legacy).unwrap();
     assert_eq!(state.reduce_hit_ratio, 100);
+    assert_eq!(state.color, 6);
+    assert!(state.message_actor.is_empty());
+    assert!(state.message_enemy.is_empty());
+    assert!(state.message_already.is_empty());
+    assert!(state.message_affected.is_empty());
+    assert!(state.message_recovery.is_empty());
+    let zero_color = legacy.replacen('(', "(color:0,", 1);
+    assert_eq!(ron::from_str::<StateDef>(&zero_color).unwrap().color, 0);
     assert_eq!(state.affect_stats, [false; 4]);
     assert!(!state.restrict_magic && !state.restrict_skill);
     let zero = legacy.replacen('(', "(reduce_hit_ratio:0,", 1);
@@ -82,6 +90,12 @@ fn converts_ldb_to_states_ron() {
         1,
         &[
             subchunk(0x01, b"Alvas"),
+            subchunk(0x03, &[0]),
+            subchunk(0x33, b" alszik"),
+            subchunk(0x34, b" elalszik"),
+            subchunk(0x35, b" m\xe1r alszik"),
+            subchunk(0x36, b" pihen"),
+            subchunk(0x37, b" fel\xe9bred"),
             subchunk(0x04, &varint(55)),
             subchunk(0x05, &varint(1)),
             subchunk(0x15, &varint(1)),
@@ -127,6 +141,12 @@ fn converts_ldb_to_states_ron() {
     assert_eq!(
         states[0],
         StateDef {
+            color: 0,
+            message_actor: " alszik".into(),
+            message_enemy: " elalszik".into(),
+            message_already: " már alszik".into(),
+            message_affected: " pihen".into(),
+            message_recovery: " felébred".into(),
             affect_type: 1,
             affect_stats: [true, true, false, true],
             reduce_hit_ratio: 20,
@@ -154,6 +174,8 @@ fn converts_ldb_to_states_ron() {
         }
     );
     assert_eq!(states[1].name, "Mereg");
+    assert_eq!(states[1].color, 6);
+    assert!(states[1].message_actor.is_empty());
     assert_eq!(states[1].rates, [100, 80, 60, 30, 0]);
     assert_eq!(states[1].restriction, 0);
     assert_eq!(states[1].priority, 50, "omitted priority defaults to 50");

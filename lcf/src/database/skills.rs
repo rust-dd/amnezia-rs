@@ -27,6 +27,8 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// 1-based state ids it inflicts on opponents or cures from allies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Skill {
+    pub using_message1: String,
+    pub using_message2: String,
     pub affect_stats: [bool; 4],
     pub ignore_defense: bool,
     pub id: u32,
@@ -105,6 +107,8 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut skill = Skill {
+            using_message1: String::new(),
+            using_message2: String::new(),
             affect_stats: [false; 4],
             ignore_defense: false,
             id,
@@ -136,6 +140,8 @@ pub fn parse_skills(bytes: &[u8]) -> Result<Vec<Skill>, LcfError> {
             match sub_id {
                 SKILL_NAME => skill.name = decode_cp1250(sub_data),
                 SKILL_DESCRIPTION => skill.description = decode_cp1250(sub_data),
+                0x03 => skill.using_message1 = decode_cp1250(sub_data),
+                0x04 => skill.using_message2 = decode_cp1250(sub_data),
                 SKILL_FAILURE_MESSAGE => {
                     skill.failure_message = Reader::new(sub_data).varint()?;
                 }
@@ -172,6 +178,25 @@ mod tests {
     use crate::{LcfError, Skill, parse_skills};
 
     #[test]
+    fn skill_messages_keep_leading_spaces_accents_and_empty_second_lines() {
+        let ldb = make_ldb(&[(
+            0x0C,
+            section(&[
+                element(
+                    1,
+                    &[subchunk(3, b" gy\xf3gy\xedt"), subchunk(4, b"M\xe1sodik")],
+                ),
+                element(2, &[]),
+            ]),
+        )]);
+        let skills = parse_skills(&ldb).unwrap();
+        assert_eq!(skills[0].using_message1, " gyógyít");
+        assert_eq!(skills[0].using_message2, "Második");
+        assert!(skills[1].using_message1.is_empty());
+        assert!(skills[1].using_message2.is_empty());
+    }
+
+    #[test]
     fn parses_skill_battle_fields() {
         let fireball = element(
             1,
@@ -196,6 +221,8 @@ mod tests {
         assert_eq!(
             skills[0],
             Skill {
+                using_message1: String::new(),
+                using_message2: String::new(),
                 affect_stats: [false; 4],
                 ignore_defense: false,
                 id: 1,

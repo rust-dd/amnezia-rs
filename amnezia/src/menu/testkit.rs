@@ -101,6 +101,8 @@ pub(super) fn blank_item(id: u32, item_type: u32) -> ItemDef {
 /// field-usable, so the skill tests can assert the greyed/inert branch.
 pub(super) fn skill(id: u32, name: &str, sp_cost: u32) -> SkillDef {
     SkillDef {
+        using_message1: String::new(),
+        using_message2: String::new(),
         affect_stats: [false; 4],
         ignore_defense: false,
         id,

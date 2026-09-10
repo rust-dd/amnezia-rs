@@ -29,6 +29,12 @@ use crate::{LcfError, Reader, decode_cp1250};
 /// default to `0` (a zero-amount no-op); Poison sets them to bleed HP each turn.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
+    pub color: u32,
+    pub message_actor: String,
+    pub message_enemy: String,
+    pub message_already: String,
+    pub message_affected: String,
+    pub message_recovery: String,
     pub affect_type: u32,
     pub affect_stats: [bool; 4],
     pub reduce_hit_ratio: u32,
@@ -68,9 +74,7 @@ const STATE_HP_CHANGE_VAL: u32 = 0x3E;
 const STATE_HP_CHANGE_MAP_STEPS: u32 = 0x3F;
 const STATE_HP_CHANGE_MAP_VAL: u32 = 0x40;
 
-// RM2000 omits a state's priority when it equals the editor default of 50; the
-// death state (id 1) leaves its name to the System vocabulary and so stores no
-// name chunk, which decodes to an empty string here.
+// RM2000 omits the priority chunk when it equals the editor default.
 const STATE_DEFAULT_PRIORITY: u32 = 50;
 
 /// Parse the state table (`ChunkData::states` = `0x12`) out of an LDB byte
@@ -88,6 +92,12 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
     for _ in 0..count {
         let id = reader.varint()?;
         let mut state = State {
+            color: 6,
+            message_actor: String::new(),
+            message_enemy: String::new(),
+            message_already: String::new(),
+            message_affected: String::new(),
+            message_recovery: String::new(),
             affect_type: 0,
             affect_stats: [false; 4],
             reduce_hit_ratio: 100,
@@ -138,6 +148,12 @@ pub fn parse_states(bytes: &[u8]) -> Result<Vec<State>, LcfError> {
                     state.rates[(sub_id - 0x0B) as usize] = Reader::new(sub_data).varint()?
                 }
                 STATE_NAME => state.name = decode_cp1250(sub_data),
+                0x03 => state.color = Reader::new(sub_data).varint()?,
+                0x33 => state.message_actor = decode_cp1250(sub_data),
+                0x34 => state.message_enemy = decode_cp1250(sub_data),
+                0x35 => state.message_already = decode_cp1250(sub_data),
+                0x36 => state.message_affected = decode_cp1250(sub_data),
+                0x37 => state.message_recovery = decode_cp1250(sub_data),
                 0x02 => state.persistence = Reader::new(sub_data).varint()?,
                 STATE_PRIORITY => state.priority = Reader::new(sub_data).varint()?,
                 STATE_RESTRICTION => state.restriction = Reader::new(sub_data).varint()?,
@@ -171,6 +187,40 @@ mod tests {
     use crate::{LcfError, State, parse_states};
 
     #[test]
+    fn state_color_and_five_messages_keep_original_defaults_and_whitespace() {
+        let ldb = make_ldb(&[(
+            0x12,
+            section(&[
+                element(
+                    1,
+                    &[
+                        subchunk(3, &[0]),
+                        subchunk(0x33, b" alszik"),
+                        subchunk(0x34, b" elalszik"),
+                        subchunk(0x35, b" m\xe1r alszik"),
+                        subchunk(0x36, b" pihen"),
+                        subchunk(0x37, b" fel\xe9bred"),
+                    ],
+                ),
+                element(2, &[]),
+            ]),
+        )]);
+        let states = parse_states(&ldb).unwrap();
+        assert_eq!(states[0].color, 0);
+        assert_eq!(states[0].message_actor, " alszik");
+        assert_eq!(states[0].message_enemy, " elalszik");
+        assert_eq!(states[0].message_already, " már alszik");
+        assert_eq!(states[0].message_affected, " pihen");
+        assert_eq!(states[0].message_recovery, " felébred");
+        assert_eq!(states[1].color, 6);
+        assert!(states[1].message_actor.is_empty());
+        assert!(states[1].message_enemy.is_empty());
+        assert!(states[1].message_already.is_empty());
+        assert!(states[1].message_affected.is_empty());
+        assert!(states[1].message_recovery.is_empty());
+    }
+
+    #[test]
     fn parses_state_restriction_and_recovery() {
         // Sleep: held 1 turn, 25% per-turn wake-up, 50% wake-up when hit.
         let sleep = element(
@@ -190,6 +240,12 @@ mod tests {
         assert_eq!(
             states[0],
             State {
+                color: 6,
+                message_actor: String::new(),
+                message_enemy: String::new(),
+                message_already: String::new(),
+                message_affected: String::new(),
+                message_recovery: String::new(),
                 affect_type: 0,
                 affect_stats: [false; 4],
                 reduce_hit_ratio: 100,

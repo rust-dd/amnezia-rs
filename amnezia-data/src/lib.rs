@@ -151,6 +151,10 @@ pub struct ActorDef {
 /// `affected_states` the 1-based state ids the skill inflicts.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillDef {
+    #[serde(default)]
+    pub using_message1: String,
+    #[serde(default)]
+    pub using_message2: String,
     /// ATK, DEF, SPI, AGI effect flags, in database order.
     #[serde(default)]
     pub affect_stats: [bool; 4],
@@ -208,6 +212,18 @@ pub struct SkillDef {
 /// 0 (a zero-amount no-op); Poison sets them to bleed HP each battle turn.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateDef {
+    #[serde(default = "default_state_color")]
+    pub color: u32,
+    #[serde(default)]
+    pub message_actor: String,
+    #[serde(default)]
+    pub message_enemy: String,
+    #[serde(default)]
+    pub message_already: String,
+    #[serde(default)]
+    pub message_affected: String,
+    #[serde(default)]
+    pub message_recovery: String,
     #[serde(default)]
     pub affect_type: u32,
     #[serde(default)]
@@ -253,6 +269,10 @@ pub struct StateDef {
 
 fn default_state_rates() -> [u32; 5] {
     [100, 80, 60, 30, 0]
+}
+
+fn default_state_color() -> u32 {
+    6
 }
 
 fn default_hundred() -> u32 {

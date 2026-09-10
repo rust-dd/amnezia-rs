@@ -52,6 +52,8 @@ fn medicine(id: u32) -> ItemDef {
 
 fn skill_def(id: u32, power: u32, scope: u32) -> SkillDef {
     SkillDef {
+        using_message1: String::new(),
+        using_message2: String::new(),
         affect_stats: [false; 4],
         ignore_defense: false,
         id,

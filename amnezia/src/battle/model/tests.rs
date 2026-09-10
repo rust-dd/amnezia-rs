@@ -194,6 +194,12 @@ fn foe_attribute_rank_reads_the_vector_then_defaults_to_neutral_c() {
 
 fn state_def(id: u32, restriction: u32, auto_release_prob: u32) -> StateDef {
     StateDef {
+        color: 6,
+        message_actor: String::new(),
+        message_enemy: String::new(),
+        message_already: String::new(),
+        message_affected: String::new(),
+        message_recovery: String::new(),
         affect_type: 0,
         affect_stats: [false; 4],
         reduce_hit_ratio: 100,

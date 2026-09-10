@@ -25,6 +25,8 @@ fn fire_attr() -> amnezia_data::AttributeDef {
 /// `states` (statuses it may inflict). Its `hit` is 100 for deterministic damage.
 fn damage_skill(id: u32, power: u32, attributes: Vec<u32>, states: Vec<u32>) -> SkillDef {
     SkillDef {
+        using_message1: String::new(),
+        using_message2: String::new(),
         affect_stats: [false; 4],
         ignore_defense: false,
         id,
@@ -57,6 +59,12 @@ fn heal_skill(id: u32, power: u32) -> SkillDef {
 
 fn poison_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        color: 6,
+        message_actor: String::new(),
+        message_enemy: String::new(),
+        message_already: String::new(),
+        message_affected: String::new(),
+        message_recovery: String::new(),
         affect_type: 0,
         affect_stats: [false; 4],
         reduce_hit_ratio: 100,
@@ -91,6 +99,12 @@ fn hp_change_state(
     hp_change_val: u32,
 ) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        color: 6,
+        message_actor: String::new(),
+        message_enemy: String::new(),
+        message_already: String::new(),
+        message_affected: String::new(),
+        message_recovery: String::new(),
         affect_type: 0,
         affect_stats: [false; 4],
         reduce_hit_ratio: 100,
@@ -150,6 +164,12 @@ fn build_weapon_anim(weapon_animation: u32) -> Battle {
 
 fn damage_release_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        color: 6,
+        message_actor: String::new(),
+        message_enemy: String::new(),
+        message_already: String::new(),
+        message_affected: String::new(),
+        message_recovery: String::new(),
         affect_type: 0,
         affect_stats: [false; 4],
         reduce_hit_ratio: 100,
@@ -179,6 +199,12 @@ fn damage_release_state(id: u32) -> amnezia_data::StateDef {
 
 fn confusion_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        color: 6,
+        message_actor: String::new(),
+        message_enemy: String::new(),
+        message_already: String::new(),
+        message_affected: String::new(),
+        message_recovery: String::new(),
         affect_type: 0,
         affect_stats: [false; 4],
         reduce_hit_ratio: 100,
@@ -278,6 +304,12 @@ fn wind_enemy_hits(battle: &mut Battle, offsets: &[usize]) {
 /// A can't-act (restriction 1) state — asleep or paralyzed.
 fn sleep_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
+        color: 6,
+        message_actor: String::new(),
+        message_enemy: String::new(),
+        message_already: String::new(),
+        message_affected: String::new(),
+        message_recovery: String::new(),
         affect_type: 0,
         affect_stats: [false; 4],
         reduce_hit_ratio: 100,

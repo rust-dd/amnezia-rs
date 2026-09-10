@@ -61,6 +61,8 @@ fn converts_ldb_to_skills_ron() {
         &[
             subchunk(0x01, &[0x54, 0xFB, 0x7A, 0x67, 0x6F, 0x6C, 0x79, 0xF3]),
             subchunk(0x02, &[0xC9, 0x67, 0x65, 0x74, 0x69]),
+            subchunk(0x03, b" t\xfczet id\xe9z"),
+            subchunk(0x04, b"\xc9get"),
             subchunk(0x07, &varint(3)),
             subchunk(0x08, &varint(0)),
             subchunk(0x0B, &varint(8)),
@@ -92,6 +94,8 @@ fn converts_ldb_to_skills_ron() {
     assert_eq!(
         skills[0],
         SkillDef {
+            using_message1: " tüzet idéz".into(),
+            using_message2: "Éget".into(),
             affect_stats: [true, false, true, false],
             ignore_defense: true,
             id: 1,
@@ -115,6 +119,8 @@ fn converts_ldb_to_skills_ron() {
         }
     );
     assert_eq!(skills[1].name, "Heal");
+    assert!(skills[1].using_message1.is_empty());
+    assert!(skills[1].using_message2.is_empty());
     assert_eq!(skills[1].animation_id, 1);
     assert_eq!(skills[1].affect_stats, [false; 4]);
     assert!(!skills[1].ignore_defense);
@@ -158,8 +164,12 @@ fn skill_animation_default_and_explicit_zero_survive_conversion_and_legacy_ron()
     let legacy = ron::from_str::<SkillDef>(
         &ron::to_string(&skills[0])
             .unwrap()
-            .replace("animation_id:1,", ""),
+            .replace("animation_id:1,", "")
+            .replace("using_message1:\"\",", "")
+            .replace("using_message2:\"\",", ""),
     )
     .unwrap();
     assert_eq!(legacy.animation_id, 1);
+    assert!(legacy.using_message1.is_empty());
+    assert!(legacy.using_message2.is_empty());
 }
