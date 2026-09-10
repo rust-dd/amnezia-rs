@@ -19,6 +19,7 @@ pub(in crate::battle) struct Dying {
 pub struct Foe {
     pub name: String,
     pub battler: String,
+    pub battler_hue: i32,
     pub hp: i32,
     /// This foe's starting (maximum) HP, kept so HP-percent AI conditions resolve.
     pub max_hp: i32,

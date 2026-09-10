@@ -5,6 +5,7 @@ use bevy::ui_render::ui_texture_slice_pipeline::{
 };
 use bevy::ui_render::{UiPipeline, init_ui_pipeline};
 
+pub(crate) mod hue;
 pub(crate) mod smoke;
 pub(crate) mod tone;
 
@@ -13,6 +14,7 @@ pub(crate) struct LegacyColorsPlugin;
 impl Plugin for LegacyColorsPlugin {
     fn build(&self, app: &mut App) {
         app.register_required_components::<Camera2d, CompositingSpace>();
+        hue::register(app);
         if let Some(render) = app.get_sub_app_mut(RenderApp) {
             render.add_systems(
                 RenderStartup,

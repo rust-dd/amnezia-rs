@@ -31,6 +31,7 @@ impl Battle {
                 monsters.iter().find(|d| d.id == m.enemy_id).map(|d| Foe {
                     name: d.name.clone(),
                     battler: d.battler.clone(),
+                    battler_hue: d.battler_hue,
                     hp: d.max_hp as i32,
                     max_hp: d.max_hp as i32,
                     sp: d.max_sp as i32,

@@ -49,6 +49,30 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         let cross = world
             .resource::<AssetServer>()
             .load(crate::assets::resolve_png("Picture", "Cross"));
+        let source = Image::new_fill(
+            bevy::render::render_resource::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            bevy::render::render_resource::TextureDimension::D2,
+            &[32, 156, 0, 255],
+            bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+            bevy::asset::RenderAssetUsages::default(),
+        );
+        let source = world.resource_mut::<Assets<Image>>().add(source);
+        for (x, degrees) in [(200.0, 120), (240.0, 330)] {
+            world.spawn((
+                Sprite::from_image(source.clone()),
+                super::hue::HueShift {
+                    original: source.clone(),
+                    degrees,
+                },
+                Transform::from_xyz(camera.x + x - 160.0, camera.y + 20.0, 106.0)
+                    .with_scale(Vec3::splat(20.0)),
+                RenderLayers::layer(crate::screenfx::PICTURE_LAYER),
+            ));
+        }
         world.spawn((
             Sprite {
                 image: cross,
@@ -105,6 +129,8 @@ pub(crate) fn verify(image: &Image, label: &str) {
         ("saturation before color tone", 30, 90, [50, 101, 179]),
         ("original oversaturation", 70, 90, [0, 211, 0]),
         ("hard-light brightening", 110, 90, [145, 207, 129]),
+        ("120 degree hue", 200, 100, [0, 30, 155]),
+        ("330 degree hue", 240, 100, [108, 155, 0]),
     ] {
         let actual = image
             .get_color_at(

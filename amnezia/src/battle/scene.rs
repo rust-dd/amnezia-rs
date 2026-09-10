@@ -113,15 +113,20 @@ fn sync_scene(
     ));
     for (index, foe) in battle.enemies.iter().enumerate() {
         let base = battler_base(foe.x, foe.y);
+        let image = asset_server.load(resolve_png("Monster", &foe.battler));
         commands.spawn((
             Sprite {
-                image: asset_server.load(resolve_png("Monster", &foe.battler)),
+                image: image.clone(),
                 color: battler_look(foe.alive(), None, false).0,
                 ..default()
             },
             Transform::from_translation(overlay_translation(base, BATTLER_Z + index as f32 * 0.1)),
             overlay_layer(),
             SceneEntity,
+            crate::legacy_colors::hue::HueShift {
+                original: image,
+                degrees: foe.battler_hue,
+            },
             Battler {
                 index,
                 base,
@@ -348,6 +353,50 @@ pub fn register(app: &mut App) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn original_monster_hues_reach_each_live_battler_sprite() {
+        use super::super::model::{Progression, Vitals, testkit};
+        let monsters = crate::assets::load_ron::<Vec<amnezia_data::MonsterDef>>(&format!(
+            "{}/monsters.ron",
+            crate::assets::asset_root(),
+        ));
+        let ids = [2, 12, 14, 15, 18, 30, 37];
+        let troop = testkit::troop(&ids.map(|id| (id, 160, 120)));
+        let hero = testkit::actor(1, 2, 63, 37);
+        let mut battle = Battle::build(
+            &troop,
+            &monsters,
+            &[&hero],
+            &[testkit::slots(&hero)],
+            &[],
+            &[],
+            &[],
+            &[],
+            &Vitals::default(),
+            &Progression::default(),
+            "Cave1".into(),
+            1,
+        );
+        battle.generation = 1;
+        let mut app = App::new();
+        app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+            .init_asset::<Image>()
+            .insert_resource(battle)
+            .add_systems(Update, sync_scene);
+        app.update();
+        let world = app.world_mut();
+        let mut query = world.query::<(&Battler, &Sprite, &crate::legacy_colors::hue::HueShift)>();
+        assert_eq!(query.iter(world).count(), 7);
+        for (battler, sprite, hue) in query.iter(world) {
+            let expected = monsters
+                .iter()
+                .find(|m| m.id == ids[battler.index])
+                .unwrap();
+            assert_eq!(hue.degrees, expected.battler_hue);
+            assert_eq!(sprite.image, hue.original);
+        }
+    }
 
     #[test]
     fn battler_base_and_translation_map_a_centre_to_the_overlay() {
