@@ -1,8 +1,166 @@
+use super::{camera, looping, message_options};
 use amnezia_data::{EventCommand, Map};
 use bevy::prelude::*;
 
+pub(super) fn start(world: &mut World, scenario: &str) {
+    crate::session::clear_transient(world);
+    world.insert_resource(crate::teleport::Fade::default());
+    world.insert_resource(crate::teleport::PendingTeleport::default());
+    world.insert_resource(crate::player::HeroHidden::default());
+    if scenario == "battle-menus" {
+        crate::battle::smoke::prepare(world);
+    }
+    let commands = if matches!(
+        scenario,
+        "message-options"
+            | "world-tones"
+            | "ui-layers"
+            | "actor-graphics"
+            | "actor-names"
+            | "pictures"
+            | "colors"
+            | "font-colors"
+            | "display"
+            | "animation-colors"
+            | "water"
+            | "transitions"
+            | "return-title"
+    ) {
+        message_options::entry()
+    } else if scenario == "screen-events" {
+        crate::transitions::event_smoke::entry()
+    } else if scenario == "battle-transitions" {
+        crate::battle::flow::smoke::entry()
+    } else if matches!(scenario, "gameover" | "battle-defeat") {
+        crate::gameover::smoke::entry(scenario == "battle-defeat")
+    } else if matches!(scenario, "camera" | "map-animations" | "map-flashes") {
+        camera::entry()
+    } else if scenario == "looping" {
+        looping::entry()
+    } else if scenario == "airship" {
+        let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(
+            "{}/maps/map_0125.ron",
+            crate::assets::asset_root()
+        ));
+        let commands = &map
+            .events
+            .iter()
+            .flat_map(|e| &e.pages)
+            .find(|page| {
+                page.commands
+                    .iter()
+                    .any(|c| c.code == 10850 && c.params == [2, 0, 13, 55, 100])
+            })
+            .expect("original fortress flight")
+            .commands;
+        let vehicle = commands.iter().position(|c| c.code == 10850).unwrap();
+        let start = commands[..vehicle]
+            .iter()
+            .rposition(|c| c.code == 10810)
+            .unwrap();
+        let end = commands[vehicle..]
+            .iter()
+            .position(|c| c.code == 10810)
+            .map_or(commands.len(), |i| vehicle + i);
+        commands[start..end].to_vec()
+    } else if matches!(
+        scenario,
+        "battle" | "timer" | "battle-menus" | "battle-events"
+    ) {
+        let mut commands = if scenario == "timer" {
+            let mut commands = vec![EventCommand {
+                code: 10810,
+                indent: 0,
+                string: String::new(),
+                params: vec![3, 15, 6],
+            }];
+            commands.extend(mission_timer_start());
+            commands
+        } else {
+            Vec::new()
+        };
+        commands.push(EventCommand {
+            code: 10710,
+            indent: 0,
+            string: "Cave1".into(),
+            params: vec![
+                0,
+                if scenario == "battle-events" { 15 } else { 2 },
+                1,
+                0,
+                0,
+                0,
+            ],
+        });
+        if scenario == "battle-events" {
+            commands.push(EventCommand {
+                code: 10210,
+                indent: 0,
+                string: String::new(),
+                params: vec![0, 9999, 9999, 0],
+            });
+        }
+        commands
+    } else if scenario == "font" {
+        vec![
+            EventCommand {
+                code: 10810,
+                indent: 0,
+                string: String::new(),
+                params: vec![3, 15, 6],
+            },
+            EventCommand {
+                code: 10130,
+                indent: 0,
+                string: "Ron".into(),
+                params: vec![0, 0, 0],
+            },
+            EventCommand {
+                code: 10110,
+                indent: 0,
+                string: "Hát... hol vagyok?".into(),
+                params: vec![],
+            },
+            EventCommand {
+                code: 20110,
+                indent: 0,
+                string: "Árvíztűrő tükörfúrógép.".into(),
+                params: vec![],
+            },
+            EventCommand {
+                code: 20110,
+                indent: 0,
+                string: "Őrült éjszaka volt!".into(),
+                params: vec![],
+            },
+            EventCommand {
+                code: 20110,
+                indent: 0,
+                string: "0123456789 ÁÉÍÓÖŐÚÜŰ".into(),
+                params: vec![],
+            },
+        ]
+    } else if scenario == "menu" {
+        vec![EventCommand {
+            code: 10810,
+            indent: 0,
+            string: String::new(),
+            params: vec![3, 15, 6],
+        }]
+    } else if matches!(scenario, "panorama" | "escape") {
+        airship_interior_entry()
+    } else {
+        unreachable!("unknown smoke scenario: {scenario}")
+    };
+    world
+        .resource_mut::<crate::interpreter::RunningEvent>()
+        .start(1, commands);
+}
+
 pub(super) fn selected() -> &'static str {
-    if std::env::args().any(|arg| arg == "--smoke-map-flashes") {
+    if std::env::args().any(|arg| arg == "--smoke-ui-layers") {
+        "ui-layers"
+    } else if std::env::args().any(|arg| arg == "--smoke-map-flashes") {
         "map-flashes"
     } else if std::env::args().any(|arg| arg == "--smoke-world-tones") {
         "world-tones"

@@ -1,4 +1,4 @@
-//! Screen-tone interpolation and the picture/UI camera's world alignment.
+//! Screen-tone interpolation and the picture camera's world alignment.
 
 use super::{ScreenEffect, ScreenShakeSet};
 use crate::world::MainCamera;
@@ -11,7 +11,7 @@ pub const PICTURE_LAYER: usize = 3;
 /// RM2000 neutral tone: every channel 100, i.e. no change.
 const NEUTRAL: [f32; 4] = [100.0, 100.0, 100.0, 100.0];
 
-/// The picture/UI camera stays untinted above the world.
+/// The picture camera stays untinted above the world.
 #[derive(Component)]
 pub struct FrontCamera;
 
@@ -102,7 +102,7 @@ fn step_tint(state: &mut TintState, dt: f32) {
     state.secs_left -= dt;
 }
 
-/// Keep the picture/UI camera aligned with the followed, shaken main camera, so
+/// Keep the picture camera aligned with the followed, shaken main camera, so
 /// pictures placed relative to it stay in the right screen position. Runs after
 /// the shake offset lands and before transform propagation.
 fn sync_front_camera(

@@ -1,6 +1,6 @@
 //! The Bevy systems that drive a fight: starting an encounter on request, the
 //! debug trigger, stepping resolution, paying victory rewards, the confirm/teardown
-//! at the outcome, draining the per-tick sound/animation queues, and the HUD camera.
+//! at the outcome, and draining the per-tick sound/animation queues.
 
 use super::model::{Battle, BattleSe, Phase};
 use super::scene;
@@ -14,7 +14,6 @@ use crate::state::{Inventory, Party};
 use crate::terms::Terms;
 use crate::vitals::Vitals;
 use amnezia_data::SystemDef;
-use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 
 /// The troop the debug key spawns: troop 2 "Rablo2x", two bandits.
@@ -33,29 +32,6 @@ const BATTLE_SCREEN_CENTER: Vec2 = Vec2::new(0.0, -40.0);
 /// party sprites, so there is no battler to measure, and this matches the
 /// fallback EasyRPG uses when a battler bitmap is not yet ready.
 const PARTY_TARGET_HEIGHT: f32 = 48.0;
-
-/// The order-3 HUD camera the battle windows render on. It sits above the order-2
-/// effect overlay (backdrop, battlers, animations) and the order-0 world. Its
-/// [`RenderLayers`] points at the otherwise-unused layer 2 so its 2D pass draws no
-/// world sprites — only the HUD, which `bevy_ui` composites by target camera, not
-/// by render layer.
-#[derive(Component)]
-pub(crate) struct HudCamera;
-
-/// Spawn the HUD camera at startup (order 3, no clear), so [`crate::battle::hud`]'s
-/// windows can target it and paint over the effect overlay the battle scene draws on.
-pub(super) fn spawn_hud_camera(mut commands: Commands) {
-    commands.spawn((
-        Camera2d,
-        Camera {
-            order: 3,
-            clear_color: ClearColorConfig::None,
-            ..default()
-        },
-        RenderLayers::layer(2),
-        HudCamera,
-    ));
-}
 
 /// Prepare the troop and current party roster before the scene controller
 /// transitions from the map. Requests during another encounter are ignored.

@@ -115,7 +115,7 @@ pub fn register(app: &mut App) {
     motion::register(app);
     app.init_resource::<ListScroll>()
         .init_resource::<clocks::WindowClocks>()
-        .add_systems(Startup, view::spawn.after(super::systems::spawn_hud_camera))
+        .add_systems(Startup, view::spawn.after(crate::world::setup_cameras))
         .add_systems(
             Update,
             (

@@ -1,4 +1,86 @@
+use super::{offscreen, ui_layers};
 use bevy::prelude::*;
+use bevy::render::view::screenshot::{Screenshot, save_to_disk};
+
+pub(super) fn capture(world: &mut World, label: &str) {
+    let target = world.get_resource::<offscreen::Target>();
+    let prefix = if target.is_some() {
+        "amnezia-smoke-offscreen"
+    } else {
+        "amnezia-smoke"
+    };
+    let screenshot = target.map_or_else(Screenshot::primary_window, |target| {
+        Screenshot::image(target.0.clone())
+    });
+    let path = std::env::temp_dir().join(format!("{prefix}-{label}.png"));
+    info!("smoke screenshot: {}", path.display());
+    let picture_pixels = crate::picture::smoke::expected_pixels(world, label);
+    let display_snapshot = crate::display::smoke::capture_native(world, label, prefix);
+    let animation_snapshot = crate::animation::smoke::snapshot(world, label);
+    let water_snapshot = crate::world::water_smoke::snapshot(world, label);
+    let transition_snapshot = crate::transitions::smoke::snapshot(world, label);
+    let gameover_snapshot = crate::gameover::smoke::snapshot(world, label);
+    let font_snapshot = crate::font::bitmap::smoke::snapshot(world, label);
+    let arrow_snapshot = crate::battle::hud::arrow_snapshot(world, label);
+    let movement_snapshot = crate::battle::hud::movement_snapshot(world, label);
+    let battler_snapshot = crate::battle::battler_snapshot(world, label);
+    let actor_snapshot = crate::appearance::smoke::snapshot(world, label);
+    let map_animation_snapshot = crate::animation::map_smoke::snapshot(world, label);
+    let world_tone_snapshot = crate::legacy_colors::world_smoke::snapshot(world, label);
+    let map_flash_snapshot = crate::animation::map_flash_smoke::snapshot(world, label);
+    let ui_layer_snapshot = ui_layers::snapshot(world, label);
+    let label = label.to_owned();
+    world.spawn(screenshot).observe(save_to_disk(path)).observe(
+        move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
+            verify_content(&capture.image, &label);
+            crate::battle::smoke::verify_skin(&capture.image, &label);
+            crate::picture::smoke::verify_image(&capture.image, &label, &picture_pixels);
+            crate::legacy_colors::smoke::verify(&capture.image, &label);
+            if let Some(snapshot) = &display_snapshot {
+                snapshot.submit(&capture.image, false);
+            }
+            if let Some(snapshot) = &animation_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &water_snapshot {
+                snapshot.verify(&capture.image, &label);
+            }
+            if let Some(snapshot) = &transition_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &gameover_snapshot {
+                crate::gameover::smoke::verify_image(snapshot, &capture.image);
+            }
+            if let Some(snapshot) = &font_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &arrow_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &movement_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &battler_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &actor_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &map_animation_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &world_tone_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &map_flash_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &ui_layer_snapshot {
+                snapshot.verify(&capture.image);
+            }
+        },
+    );
+}
 
 pub(super) fn verify_content(image: &Image, label: &str) {
     if !matches!(label, "title" | "message-auto-top" | "message-fixed-bottom") {

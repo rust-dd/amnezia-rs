@@ -119,7 +119,7 @@ impl Plugin for ScreenFxPlugin {
             .init_resource::<Fx>()
             .add_plugins(tone::ScreenTonePlugin)
             .add_plugins(weather::WeatherPlugin)
-            .add_systems(Startup, spawn_overlays)
+            .add_systems(Startup, spawn_overlays.after(crate::world::setup_cameras))
             .add_systems(Update, step_effects)
             .add_systems(
                 PostUpdate,
@@ -130,11 +130,15 @@ impl Plugin for ScreenFxPlugin {
     }
 }
 
-fn spawn_overlays(mut commands: Commands) {
+fn spawn_overlays(mut commands: Commands, cameras: Query<Entity, With<FrontCamera>>) {
+    let Ok(camera) = cameras.single() else {
+        return;
+    };
     commands.spawn((
         full_screen(),
         transparent(),
         GlobalZIndex(-10),
+        UiTargetCamera(camera),
         FlashOverlay,
     ));
 }
@@ -221,6 +225,25 @@ fn apply_camera_shake(fx: Res<Fx>, mut cameras: Query<&mut Transform, With<MainC
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn map_flash_overlay_keeps_its_picture_camera_target_below_windows() {
+        let mut app = App::new();
+        app.add_plugins(MinimalPlugins).add_systems(
+            Startup,
+            (crate::world::setup_cameras, spawn_overlays).chain(),
+        );
+        app.update();
+        let target = app
+            .world_mut()
+            .query_filtered::<&UiTargetCamera, With<FlashOverlay>>()
+            .single(app.world())
+            .unwrap()
+            .0;
+        assert!(app.world().get::<FrontCamera>(target).is_some());
+        assert!(app.world().get::<IsDefaultUiCamera>(target).is_none());
+        assert_eq!(app.world().get::<Camera>(target).unwrap().order, 1);
+    }
 
     #[test]
     fn scene_transition_holds_a_flash_until_scene_updates_resume() {

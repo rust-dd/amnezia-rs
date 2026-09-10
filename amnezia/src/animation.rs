@@ -207,8 +207,8 @@ impl Plugin for AnimationPlugin {
 /// fixed 320×240 scaling as the main camera, render `order` 2, and no clear. It
 /// draws only [`render::OVERLAY_LAYER`], so it paints the effect sprites (and the
 /// battle backdrop/battlers, which share the layer) over everything below it — the
-/// toned world and the front camera's pictures and UI — while the order-3 HUD
-/// camera composites the battle windows above it. It deliberately does not follow
+/// toned world and the front camera's pictures — while the order-3 UI camera
+/// composites every game window above it. It deliberately does not follow
 /// the hero, which is what makes [`PlayAnimation`]'s `(x, y)` pure screen-space.
 fn spawn_overlay_camera(mut commands: Commands) {
     commands.spawn((

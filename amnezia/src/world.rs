@@ -30,6 +30,7 @@ pub(crate) use water::smoke as water_smoke;
 pub use autonomy::AutoMove;
 pub(crate) use autonomy::MoveGuards;
 pub(crate) use bush::BushBottom;
+pub(crate) use cameras::{HudCamera, setup as setup_cameras};
 pub use movement::{Character, MoveQueue, RouteAction, walk};
 pub(crate) use movement::{dir_delta, step_secs_for_speed};
 pub use route::RouteStepper;
@@ -50,7 +51,7 @@ const DEV_START: Option<Start> = None;
 pub struct MapScene;
 
 /// The followed, shaken layer-0 camera. World bitmaps carry their own tone;
-/// pictures and UI stay untinted on [`crate::screenfx::FrontCamera`].
+/// pictures and UI stay untinted on their separate cameras.
 #[derive(Component)]
 pub struct MainCamera;
 
