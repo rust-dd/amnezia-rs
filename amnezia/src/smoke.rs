@@ -75,6 +75,7 @@ fn capture(world: &mut World, label: &str) {
     let actor_snapshot = crate::appearance::smoke::snapshot(world, label);
     let map_animation_snapshot = crate::animation::map_smoke::snapshot(world, label);
     let world_tone_snapshot = crate::legacy_colors::world_smoke::snapshot(world, label);
+    let map_flash_snapshot = crate::animation::map_flash_smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -116,6 +117,9 @@ fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &world_tone_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &map_flash_snapshot {
                 snapshot.verify(&capture.image);
             }
         },
@@ -202,6 +206,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "world-tones"
         && let Some(label) = crate::legacy_colors::world_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "map-flashes"
+        && let Some(label) = crate::animation::map_flash_smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -345,6 +354,8 @@ fn drive(world: &mut World) {
             crate::animation::map_smoke::verify_finished(world);
         } else if scenario == "world-tones" {
             crate::legacy_colors::world_smoke::verify_finished(world);
+        } else if scenario == "map-flashes" {
+            crate::animation::map_flash_smoke::verify_finished(world);
         } else if scenario == "actor-graphics" {
             crate::appearance::smoke::verify_finished(world);
         } else if scenario == "font-colors" {
@@ -442,7 +453,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
         crate::battle::flow::smoke::entry()
     } else if matches!(scenario, "gameover" | "battle-defeat") {
         crate::gameover::smoke::entry(scenario == "battle-defeat")
-    } else if matches!(scenario, "camera" | "map-animations") {
+    } else if matches!(scenario, "camera" | "map-animations" | "map-flashes") {
         camera::entry()
     } else if scenario == "looping" {
         looping::entry()

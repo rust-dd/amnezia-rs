@@ -25,6 +25,7 @@ use map::resolve_map_animation;
 use playback::{start_animations, step_animations, track_active_animations};
 use render::{FlashStamp, fade_flashes, spawn_screen_flash};
 
+pub(crate) use map::flash_smoke as map_flash_smoke;
 pub(crate) use map::smoke as map_smoke;
 pub(crate) use playback::AnimationSet;
 pub(crate) use playback::reset_transient;
@@ -155,6 +156,7 @@ pub struct AnimationPlugin;
 impl Plugin for AnimationPlugin {
     fn build(&self, app: &mut App) {
         cells::register(app);
+        map::flash::register(app);
         app.add_message::<PlayAnimation>()
             .add_message::<ShowMapAnimation>()
             .add_message::<crate::world::MapChanged>()

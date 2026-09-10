@@ -2,6 +2,7 @@ use super::playback::LiveAnimation;
 use super::*;
 use crate::timing::{GameFrames, TimingPlugin};
 
+mod map_flashes;
 mod map_targets;
 mod slots;
 
@@ -11,6 +12,7 @@ fn app(fps: u32) -> App {
 
 fn fixture(fps: u32, sound_only: bool) -> App {
     let mut app = App::new();
+    map::flash::register(&mut app);
     app.add_plugins((MinimalPlugins, AssetPlugin::default(), TimingPlugin))
         .init_asset::<Image>()
         .init_asset::<Mesh>()

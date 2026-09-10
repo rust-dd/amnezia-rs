@@ -2,6 +2,8 @@ use super::*;
 use crate::world::{Character, MapData, MoveQueue};
 use bevy::ecs::system::SystemParam;
 
+pub(super) mod flash;
+pub(crate) mod flash_smoke;
 pub(crate) mod smoke;
 
 #[derive(SystemParam)]

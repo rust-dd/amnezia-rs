@@ -1,7 +1,7 @@
 use super::*;
 use crate::world::{Character, MapChanged, MapData, MoveQueue, RouteAction};
 
-fn map_app(fps: u32) -> (App, Entity, Entity) {
+pub(super) fn map_app(fps: u32) -> (App, Entity, Entity) {
     let mut app = app(fps);
     app.add_message::<ShowMapAnimation>()
         .add_message::<MapChanged>()

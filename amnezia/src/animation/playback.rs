@@ -105,13 +105,22 @@ pub(super) fn step_animations(
                     &mut battler_flash,
                     def,
                     tick as usize / 2,
-                    &anim.flash_anchors,
+                    if anim.map_target.is_some() {
+                        &[]
+                    } else {
+                        &anim.flash_anchors
+                    },
                     (!anim.sound_only).then_some(FlashStamp {
                         age: anim.elapsed.saturating_add(delta) - tick - 1,
                         frame: frames.frame,
                     }),
                 );
             }
+        }
+        if let Some(target) = anim.map_target {
+            let tick = anim.elapsed.saturating_add(delta) - 1;
+            let color = map::flash::color(def, tick, anim.duration);
+            map::flash::write(&mut commands, target, color, frames.frame);
         }
         anim.elapsed = end;
         let frame = end as usize / 2;
@@ -168,6 +177,7 @@ pub(super) fn clear_map_animations(
 }
 
 pub(crate) fn reset_transient(world: &mut World) {
+    map::flash::reset(world);
     let entities = world
         .query::<(Entity, &LiveAnimation)>()
         .iter(world)
