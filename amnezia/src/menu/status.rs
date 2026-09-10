@@ -25,6 +25,7 @@ const SLOT_FALLBACKS: [&str; 5] = ["Fegyver", "Pajzs", "Vért", "Sisak", "Kiegé
 /// from the real RM2000 Terms, each falling back to its Hungarian placeholder.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn compose_status(
+    hero_name: &crate::text::HeroName,
     member: usize,
     data: &GameData,
     party: &Party,
@@ -56,7 +57,11 @@ pub(super) fn compose_status(
         None => format!("{exp_label} {total} (max)"),
     };
 
-    let mut out = format!("{} — {}\n", i18n::tr(&def.name), i18n::tr(&def.title));
+    let mut out = format!(
+        "{} — {}\n",
+        i18n::tr(hero_name.actor(def)),
+        i18n::tr(&def.title)
+    );
     let conditions = crate::conditions::names(vitals, id);
     if !conditions.is_empty() {
         out.push_str(&format!("{conditions}\n"));
@@ -123,6 +128,7 @@ mod tests {
         vitals.set(1, 20, 5);
 
         let text = compose_status(
+            &crate::text::HeroName("Ron".into()),
             0,
             &d,
             &Party::default(),
@@ -146,6 +152,7 @@ mod tests {
     #[test]
     fn full_health_member_without_stored_vitals_shows_max() {
         let text = compose_status(
+            &crate::text::HeroName("Ron".into()),
             0,
             &testkit::data(),
             &Party::default(),
@@ -168,6 +175,7 @@ mod tests {
         eq.set_slot(d.actor(1).unwrap(), 0, 12);
 
         let text = compose_status(
+            &crate::text::HeroName("Ron".into()),
             0,
             &d,
             &Party::default(),

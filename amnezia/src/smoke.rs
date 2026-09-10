@@ -24,7 +24,9 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-return-title") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-actor-names") {
+            "actor-names"
+        } else if std::env::args().any(|arg| arg == "--smoke-return-title") {
             "return-title"
         } else if std::env::args().any(|arg| arg == "--smoke-gameover") {
             "gameover"
@@ -187,6 +189,7 @@ fn input(world: &mut World) {
                 | "battle-transitions"
                 | "message-options"
                 | "display"
+                | "actor-names"
         )
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active
@@ -234,6 +237,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "message-options" {
         message_options::drive(world, frame);
+    }
+    if scenario == "actor-names"
+        && let Some(label) = crate::menu::name_smoke::drive(world, frame)
+    {
+        capture(world, label);
     }
     if scenario == "pictures"
         && let Some(label) = crate::picture::smoke::drive(world, frame)
@@ -415,6 +423,8 @@ fn drive(world: &mut World) {
             crate::battle::smoke::verify_events(world);
         } else if scenario == "battle-menus" {
             crate::battle::smoke::verify_finished(world);
+        } else if scenario == "actor-names" {
+            crate::battle::smoke::verify_actor_names(world);
         }
         world.write_message(AppExit::Success);
     }
@@ -432,6 +442,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
     let commands = if matches!(
         scenario,
         "message-options"
+            | "actor-names"
             | "pictures"
             | "colors"
             | "font-colors"

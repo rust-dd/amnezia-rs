@@ -20,6 +20,9 @@ use bevy::text::{FontSource, Justify, LineHeight, TextLayout};
 
 use super::{MenuOpen, MenuScreen, MenuState, command, render};
 
+#[cfg(test)]
+mod tests;
+
 /// One RM2000 FaceSet cell is 48×48 in a 4×4 grid; drawn at native size in the
 /// 144×144 (48×3) portrait box the status layout reserves.
 const FACE_CELL: f32 = 48.0;
@@ -377,6 +380,7 @@ pub(super) fn update_ui(
     vitals: Res<Vitals>,
     equipment: Res<Equipment>,
     terms: Res<Terms>,
+    hero_name: Res<crate::text::HeroName>,
     asset_server: Res<AssetServer>,
     mut windows: Query<
         (&MenuWindow, &mut Visibility),
@@ -400,6 +404,9 @@ pub(super) fn update_ui(
         && !inventory.is_changed()
         && !vitals.is_changed()
         && !equipment.is_changed()
+        && !hero_name.is_changed()
+        && !party.is_changed()
+        && !progression.is_changed()
     {
         return;
     }
@@ -416,9 +423,10 @@ pub(super) fn update_ui(
         *visibility = vis(shown);
     }
 
-    let members = render::members(&data, &party, &progression, &vitals);
+    let members = render::members(&hero_name, &data, &party, &progression, &vitals);
     let gold = render::gold(&inventory, &terms);
     let content = render::content(
+        &hero_name,
         state.screen,
         &data,
         &party,

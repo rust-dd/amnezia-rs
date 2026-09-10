@@ -26,6 +26,7 @@ mod derive;
 mod equip;
 mod input;
 mod items;
+pub(crate) mod name_smoke;
 mod nav;
 mod render;
 mod skills;
@@ -33,6 +34,8 @@ mod status;
 mod use_item;
 mod view;
 
+#[cfg(test)]
+mod name_tests;
 #[cfg(test)]
 mod testkit;
 

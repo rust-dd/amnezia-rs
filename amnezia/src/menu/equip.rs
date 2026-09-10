@@ -107,6 +107,7 @@ fn item_name(id: u32, data: &GameData) -> String {
 /// sits on the hovered candidate, and the stats read `current → new`.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn compose(
+    hero_name: &crate::text::HeroName,
     member: usize,
     slot: usize,
     picking: Option<usize>,
@@ -129,7 +130,7 @@ pub(super) fn compose(
     let current = derive::stats_with_slots(def, level, &data.items, slots);
 
     let mut lines = vec![
-        format!("- Felszerelés -  {}", i18n::tr(&def.name)),
+        format!("- Felszerelés -  {}", i18n::tr(hero_name.actor(def))),
         String::new(),
     ];
     let mut cursor_line = None;
@@ -206,6 +207,7 @@ mod tests {
     fn slot_view_lists_gear_and_current_stats() {
         let d = armed_data();
         let (text, cursor_line) = compose(
+            &crate::text::HeroName("Ron".into()),
             0,
             0,
             None,
@@ -230,6 +232,7 @@ mod tests {
         inv.add_item(12, 1); // the long-sword is in the bag
         // Picking the weapon slot, cursor on the long-sword (row 1: 0 = unequip).
         let (text, cursor_line) = compose(
+            &crate::text::HeroName("Ron".into()),
             0,
             0,
             Some(1),
@@ -310,6 +313,7 @@ mod tests {
         assert!(!can_change(0, &d, &Party::default()));
         // Its slot view flags the locked gear.
         let (text, _) = compose(
+            &crate::text::HeroName("Ron".into()),
             0,
             0,
             None,

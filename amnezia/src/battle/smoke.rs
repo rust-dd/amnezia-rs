@@ -226,6 +226,28 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     label
 }
 
+pub(crate) fn verify_actor_names(world: &mut World) {
+    let battle = world.resource::<Battle>();
+    assert_eq!(battle.phase, super::model::Phase::PartyCommand);
+    assert_eq!(
+        battle
+            .members
+            .iter()
+            .map(|m| (m.actor_id, m.name.as_str()))
+            .collect::<Vec<_>>(),
+        [(2, "Tiffany"), (1, "Áron"), (3, "Daren"), (4, "Alen")]
+    );
+    let visible = world
+        .query::<(&crate::font::bitmap::PixelText, &InheritedVisibility)>()
+        .iter(world)
+        .filter(|(_, visibility)| visibility.get())
+        .flat_map(|(text, _)| &text.runs)
+        .map(|run| run.text.as_str())
+        .collect::<Vec<_>>();
+    assert!(visible.contains(&"Áron"), "{visible:?}");
+    assert!(!visible.contains(&"Ron"), "{visible:?}");
+}
+
 pub(crate) fn verify_skin(image: &Image, label: &str) {
     let xs: &[u32] = match label {
         "battle-commands" | "battle-status-colors" => &[12, 120, 256],

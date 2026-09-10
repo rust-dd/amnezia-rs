@@ -69,6 +69,7 @@ pub(super) fn start_on_request(
     progression: Res<Progression>,
     equipment: Res<Equipment>,
     terms: Res<Terms>,
+    hero_name: Res<crate::text::HeroName>,
     current_bgm: Res<CurrentBgm>,
     mut map_bgm: ResMut<MapBgm>,
     mut audio: MessageWriter<AudioRequest>,
@@ -124,6 +125,9 @@ pub(super) fn start_on_request(
         },
         seed,
     );
+    for (fighter, actor) in battle.members.iter_mut().zip(&actors) {
+        fighter.name = hero_name.actor(actor).to_owned();
+    }
     battle.allow_escape = request.allow_escape;
     battle.first_strike = request.first_strike;
     battle.text.apply(&terms.0);

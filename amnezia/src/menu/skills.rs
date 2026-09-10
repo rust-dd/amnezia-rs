@@ -71,6 +71,7 @@ pub(super) fn skill_at<'a>(
 /// tagged "(harc)" to read as inert; the list scrolls within a viewport and the
 /// line indexes into the returned text so [`super::view`] can place the cursor.
 pub(super) fn compose_list(
+    hero_name: &crate::text::HeroName,
     member: usize,
     cursor: usize,
     data: &GameData,
@@ -88,7 +89,7 @@ pub(super) fn compose_list(
         .snapshot()
         .get(member)
         .and_then(|&id| data.actor(id))
-        .map(|def| i18n::tr(&def.name))
+        .map(|def| i18n::tr(hero_name.actor(def)))
         .unwrap_or_default();
     let known = known_skills(member, data, party, progression);
     let mut lines = vec![format!("- Képességek -  {caster}"), String::new()];
@@ -118,7 +119,9 @@ pub(super) fn compose_list(
 
 /// Compose the ally-target picker for a field skill: the skill being cast plus the
 /// party roster with the selection cursor and each member's current/maximum HP.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn compose_target(
+    hero_name: &crate::text::HeroName,
     member: usize,
     skill_id: u32,
     cursor: usize,
@@ -137,7 +140,7 @@ pub(super) fn compose_target(
         .snapshot()
         .get(member)
         .and_then(|&id| data.actor(id))
-        .map(|def| i18n::tr(&def.name))
+        .map(|def| i18n::tr(hero_name.actor(def)))
         .unwrap_or_default();
     let mut out = format!("{caster}: {name}          [Esc] vissza\n\n");
     for (row, &id) in party.snapshot().iter().enumerate() {
@@ -149,7 +152,7 @@ pub(super) fn compose_target(
                 let (hp, sp) = vitals.get_stored(id).unwrap_or((max_hp, max_sp));
                 out.push_str(&format!(
                     "{marker}{} — HP {hp}/{max_hp}   SP {sp}/{max_sp}\n",
-                    i18n::tr(&def.name)
+                    i18n::tr(hero_name.actor(def))
                 ));
             }
             None => out.push_str(&format!("{marker}#{id}\n")),
@@ -178,7 +181,15 @@ mod tests {
         equipment.set_slot(&data.actors[0], 2, 157);
         let party = Party::default();
         let progression = Progression::default();
-        let (text, _) = compose_list(0, 0, &data, &party, &progression, &equipment);
+        let (text, _) = compose_list(
+            &crate::text::HeroName("Ron".into()),
+            0,
+            0,
+            &data,
+            &party,
+            &progression,
+            &equipment,
+        );
         assert!(text.contains("SP 5"), "{text}");
         let mut vitals = Vitals::default();
         vitals.set(1, 20, 4);
@@ -235,6 +246,7 @@ mod tests {
             },
         ];
         let (text, cursor_line) = compose_list(
+            &crate::text::HeroName("Ron".into()),
             0,
             0,
             &d,
@@ -271,6 +283,7 @@ mod tests {
             },
         ];
         let (text, _) = compose_list(
+            &crate::text::HeroName("Ron".into()),
             0,
             0,
             &d,

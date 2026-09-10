@@ -44,6 +44,7 @@ pub(super) struct MemberView {
 /// member-select cursor). Every figure is derived exactly as the battle system
 /// derives it (see [`super::derive`]).
 pub(super) fn members(
+    hero_name: &crate::text::HeroName,
     data: &GameData,
     party: &Party,
     progression: &Progression,
@@ -65,7 +66,7 @@ pub(super) fn members(
                 MemberView {
                     face_name: def.face_name.clone(),
                     face_index: def.face_index,
-                    name: i18n::tr(&def.name),
+                    name: i18n::tr(hero_name.actor(def)),
                     title: i18n::tr(&def.title),
                     level,
                     condition: match crate::conditions::names(vitals, id) {
@@ -120,6 +121,7 @@ pub(super) struct ContentView {
 /// empty view here (the content window is hidden for them).
 #[allow(clippy::too_many_arguments)]
 pub(super) fn content(
+    hero_name: &crate::text::HeroName,
     screen: MenuScreen,
     data: &GameData,
     party: &Party,
@@ -139,12 +141,27 @@ pub(super) fn content(
             ContentView { text, cursor_line }
         }
         MenuScreen::ItemTarget { item_id, cursor } => ContentView {
-            text: use_item::compose_target(item_id, cursor, data, party, progression, vitals),
+            text: use_item::compose_target(
+                hero_name,
+                item_id,
+                cursor,
+                data,
+                party,
+                progression,
+                vitals,
+            ),
             cursor_line: None,
         },
         MenuScreen::SkillList { member, cursor } => {
-            let (text, cursor_line) =
-                skills::compose_list(member, cursor, data, party, progression, equipment);
+            let (text, cursor_line) = skills::compose_list(
+                hero_name,
+                member,
+                cursor,
+                data,
+                party,
+                progression,
+                equipment,
+            );
             ContentView { text, cursor_line }
         }
         MenuScreen::SkillTarget {
@@ -153,6 +170,7 @@ pub(super) fn content(
             cursor,
         } => ContentView {
             text: skills::compose_target(
+                hero_name,
                 member,
                 skill_id,
                 cursor,
@@ -169,6 +187,7 @@ pub(super) fn content(
             picking,
         } => {
             let (text, cursor_line) = equip::compose(
+                hero_name,
                 member,
                 slot,
                 picking,
@@ -182,6 +201,7 @@ pub(super) fn content(
         }
         MenuScreen::Status { member } => ContentView {
             text: status::compose_status(
+                hero_name,
                 member,
                 data,
                 party,
@@ -229,6 +249,7 @@ mod tests {
         let mut vitals = Vitals::default();
         vitals.set(1, 20, 5);
         let views = members(
+            &crate::text::HeroName("Ron".into()),
             &testkit::data(),
             &Party::default(),
             &Progression::default(),
@@ -261,6 +282,7 @@ mod tests {
         let mut inv = Inventory::default();
         inv.add_item(testkit::ITEM_HERB, 3);
         let view = content(
+            &crate::text::HeroName("Ron".into()),
             MenuScreen::ItemList { cursor: 0 },
             &testkit::data(),
             &Party::default(),
@@ -277,6 +299,7 @@ mod tests {
     #[test]
     fn content_end_game_lists_igen_then_nem_with_an_esc_hint() {
         let view = content(
+            &crate::text::HeroName("Ron".into()),
             MenuScreen::EndGame { cursor: 1 },
             &testkit::data(),
             &Party::default(),
@@ -302,6 +325,7 @@ mod tests {
     #[test]
     fn content_saved_screen_carries_both_dismissal_hints() {
         let view = content(
+            &crate::text::HeroName("Ron".into()),
             MenuScreen::Saved,
             &testkit::data(),
             &Party::default(),

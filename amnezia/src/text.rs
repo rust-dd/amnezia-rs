@@ -8,10 +8,15 @@
 use crate::state::Variables;
 use bevy::prelude::Resource;
 
-/// The hero's name, loaded from `hero.ron` at startup and inserted into the
-/// `\N[k]` control code by [`parse_segments`].
+/// Actor 1's runtime name, shared by messages, menus, battles and saves.
 #[derive(Resource)]
 pub struct HeroName(pub String);
+
+impl HeroName {
+    pub(crate) fn actor<'a>(&'a self, actor: &'a amnezia_data::ActorDef) -> &'a str {
+        if actor.id == 1 { &self.0 } else { &actor.name }
+    }
+}
 
 /// One unit of a parsed message: a printable character, or a control marker the
 /// [`Typewriter`](crate::dialogue) acts on while revealing the page. `\N`/`\V`

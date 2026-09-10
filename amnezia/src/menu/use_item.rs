@@ -121,6 +121,7 @@ pub(super) fn apply_field_item(
 /// the selection cursor and each member's current/maximum HP and SP at their
 /// level.
 pub(super) fn compose_target(
+    hero_name: &crate::text::HeroName,
     item_id: u32,
     cursor: usize,
     data: &GameData,
@@ -142,7 +143,7 @@ pub(super) fn compose_target(
                 let (hp, sp) = vitals.get_stored(id).unwrap_or((max_hp, max_sp));
                 out.push_str(&format!(
                     "{marker}{} — HP {hp}/{max_hp}   SP {sp}/{max_sp}\n",
-                    i18n::tr(&def.name)
+                    i18n::tr(hero_name.actor(def))
                 ));
             }
             None => out.push_str(&format!("{marker}#{id}\n")),
@@ -277,6 +278,7 @@ mod tests {
         let mut vitals = Vitals::default();
         vitals.set(1, 20, 5);
         let text = compose_target(
+            &crate::text::HeroName("Ron".into()),
             ITEM_HERB,
             0,
             &testkit::data(),

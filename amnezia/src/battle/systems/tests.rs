@@ -10,6 +10,23 @@ mod timer;
 mod transitions;
 
 #[test]
+fn renamed_hero_keeps_the_runtime_name_when_a_battle_starts() {
+    let mut app = logic_app();
+    app.insert_resource(crate::text::HeroName("Áron".into()));
+    app.world_mut().write_message(BattleRequest {
+        troop_id: DEBUG_TROOP,
+        ..default()
+    });
+    app.update();
+    finish_transition(&mut app);
+    assert_eq!(app.world().resource::<Battle>().members[0].name, "Áron");
+    assert_eq!(
+        app.world().resource::<GameData>().actor(1).unwrap().name,
+        "Ron"
+    );
+}
+
+#[test]
 fn draining_an_animation_acknowledges_even_an_effect_shorter_than_a_render_update() {
     use bevy::ecs::system::RunSystemOnce;
     let mut world = World::new();
@@ -195,6 +212,7 @@ fn logic_app() -> App {
     app.init_resource::<MapBgm>();
     app.init_resource::<CurrentBgm>();
     app.init_resource::<Terms>();
+    app.insert_resource(crate::text::HeroName("Ron".into()));
     app.init_resource::<ButtonInput<KeyCode>>();
     app.init_resource::<AudioLog>();
     crate::battle::flow::register(&mut app);
