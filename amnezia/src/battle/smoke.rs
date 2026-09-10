@@ -98,6 +98,14 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     if label.is_some() {
         super::hud::verify_bounds(world);
     }
+    if frame == 430 {
+        assert!(
+            world
+                .query::<&Text>()
+                .iter(world)
+                .any(|text| text.0 == "Pengetánc")
+        );
+    }
     label
 }
 

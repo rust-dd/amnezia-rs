@@ -21,15 +21,18 @@ const MEDICINE: u32 = 6;
 pub const COMMAND_COUNT: usize = 4;
 pub const PARTY_COUNT: usize = 3;
 
-/// The per-actor command labels in cursor order, from the real RM2000 terms
-/// (`command_attack` / `command_skill` / `command_defend` / `command_item` —
-/// EasyRPG `Scene_Battle_Rpg2k`), each falling back to its Hungarian placeholder.
-/// Defend precedes Item and there is no per-actor flee (escape is a party option).
-pub fn command_labels(terms: &Terms) -> [String; COMMAND_COUNT] {
+/// An enabled actor override keeps even an empty skill label, as Tray requires.
+pub fn command_labels(
+    terms: &Terms,
+    actor: Option<&amnezia_data::ActorDef>,
+) -> [String; COMMAND_COUNT] {
     let t = &terms.0;
     [
         terms.label(&t.command_attack, "Támadás"),
-        terms.label(&t.command_skill, "Képesség"),
+        actor.filter(|actor| actor.rename_skill).map_or_else(
+            || terms.label(&t.command_skill, "Képesség"),
+            |actor| i18n::tr(&actor.skill_name),
+        ),
         terms.label(&t.command_defend, "Védekezés"),
         terms.label(&t.command_item, "Tárgy"),
     ]

@@ -89,7 +89,10 @@ fn commands(battle: &Battle, data: &GameData, inventory: &Inventory, terms: &Ter
         return Vec::new();
     };
     match battle.menu {
-        MenuLevel::Command => command_labels(terms).into_iter().map(Row::plain).collect(),
+        MenuLevel::Command => command_labels(terms, data.actor(actor.actor_id))
+            .into_iter()
+            .map(Row::plain)
+            .collect(),
         MenuLevel::Skill => skill_choices(data, &actor.known_skills, actor.equipment_effects)
             .into_iter()
             .map(|(id, cost, _)| {
@@ -150,6 +153,40 @@ fn clip(text: &str, cells: usize) -> String {
 mod tests {
     use super::*;
     use crate::battle::model::testkit::build_party2;
+
+    #[test]
+    fn command_window_tracks_the_active_original_actor_including_trays_blank_row() {
+        let data = GameData {
+            actors: crate::assets::load_ron(&format!("{}/actors.ron", crate::assets::asset_root())),
+            items: vec![],
+            skills: vec![],
+        };
+        let mut battle = build_party2();
+        battle.menu = MenuLevel::Command;
+        let terms = Terms::default();
+        for (id, expected) in [
+            (1, "Pengetánc"),
+            (2, "Varázsdal"),
+            (3, "Tigrisharc"),
+            (4, "Kombó"),
+            (5, ""),
+            (6, "Shin-Ra-Ta"),
+            (7, "Gyógyítás"),
+            (8, "Draco"),
+            (9, "Pusztítás"),
+            (10, "Tigrisharc"),
+        ] {
+            battle.turn = id as usize % 2;
+            battle.members[battle.turn].actor_id = id;
+            let rows = commands(&battle, &data, &Inventory::default(), &terms);
+            assert_eq!(rows.len(), 4);
+            assert_eq!(rows[1].text, expected, "actor {id}");
+            assert!(rows[1].enabled);
+        }
+        let mut actor = data.actors[0].clone();
+        actor.rename_skill = false;
+        assert_eq!(command_labels(&terms, Some(&actor))[1], "Képesség");
+    }
 
     #[test]
     fn four_digit_status_values_fit_the_native_window_without_sp_maximum() {

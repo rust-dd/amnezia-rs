@@ -184,10 +184,10 @@ fn the_actor_command_list_resolves_to_the_parsed_terms_without_flee() {
     terms.0.battle_auto = "Auto".into();
     terms.0.battle_escape = "Escape".into();
     assert_eq!(
-        command_labels(&terms),
+        command_labels(&terms, None),
         ["Attack", "Skill", "Defend", "Item"]
     );
-    assert!(!command_labels(&terms).contains(&"Escape".to_string()));
+    assert!(!command_labels(&terms, None).contains(&"Escape".to_string()));
     assert_eq!(party_labels(&terms), ["Fight", "Auto", "Escape"]);
 }
 
@@ -195,7 +195,7 @@ fn the_actor_command_list_resolves_to_the_parsed_terms_without_flee() {
 fn command_labels_fall_back_to_the_hungarian_placeholders() {
     let terms = Terms::default();
     assert_eq!(
-        command_labels(&terms),
+        command_labels(&terms, None),
         ["Támadás", "Képesség", "Védekezés", "Tárgy"]
     );
     assert_eq!(party_labels(&terms), ["Harc", "Auto", "Menekülés"]);
