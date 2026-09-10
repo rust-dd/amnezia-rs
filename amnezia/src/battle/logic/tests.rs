@@ -509,7 +509,7 @@ fn enemy_command_maps_the_monster_only_basics() {
     ));
     assert!(matches!(
         enemy_command(Some(&action(0, 7, 0, 0, 0, 0, 0)), 0),
-        Command::Nothing
+        Command::DoNothing
     ));
     assert!(matches!(
         enemy_command(Some(&action(0, 9, 0, 0, 0, 0, 0)), 4),

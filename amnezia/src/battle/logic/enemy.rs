@@ -119,7 +119,7 @@ pub fn enemy_command(action: Option<&EnemyActionDef>, target: usize) -> Command 
             1 => Command::DoubleAttack { target },
             2 => Command::Defend,
             3 => Command::Observe,
-            7 => Command::Nothing,
+            7 => Command::DoNothing,
             4 => Command::Charge,
             5 => Command::SelfDestruct,
             6 => Command::Escape,

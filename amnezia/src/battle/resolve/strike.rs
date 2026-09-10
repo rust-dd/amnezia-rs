@@ -118,19 +118,24 @@ impl Battle {
     }
 
     /// One enemy `ei` physical strike on member `ti`: an agility-adjusted to-hit
-    /// roll off the RM2000 90% bare-hands base that returns `None` on a miss, else
-    /// the dealt damage via `hit_member` (its variance and the member's own defend
-    /// halving). A pending charge-up doubles the blow; it is spent on the swing
-    /// whether or not the blow lands, so the foe's next strike is normal again. An
-    /// rpg2k enemy normal attack plays no animation, so none is queued here (a
-    /// weapon/unarmed animation on a party strike is a member-side concern).
+    /// roll off the RM2000 90% bare-hands base, consuming any pending charge.
+    /// Front-view enemy attacks have no animation.
     pub(in crate::battle::resolve) fn enemy_strike_member(
         &mut self,
         ei: usize,
         ti: usize,
     ) -> Option<i32> {
-        let charged = self.enemies[ei].charging;
-        self.enemies[ei].charging = false;
+        let charged = std::mem::take(&mut self.enemies[ei].charging);
+        self.enemy_strike_with_charge(ei, ti, charged)
+    }
+
+    /// Repeat hits share the charge captured for their action, even after a miss.
+    pub(in crate::battle::resolve) fn enemy_strike_with_charge(
+        &mut self,
+        ei: usize,
+        ti: usize,
+        charged: bool,
+    ) -> Option<i32> {
         // A member that cannot act is struck with certainty (EasyRPG
         // `CalcNormalAttackToHit` returns 100 vs a do-nothing target).
         let can_act = logic::worst_restriction(&self.members[ti].states, &self.states) != 1;

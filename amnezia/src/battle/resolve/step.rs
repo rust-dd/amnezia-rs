@@ -181,6 +181,14 @@ impl Battle {
     }
 
     pub(in crate::battle::resolve) fn apply(&mut self, action: Action) {
+        if let Source::Enemy(i) = action.source
+            && !matches!(
+                action.kind,
+                Command::Attack { .. } | Command::DoubleAttack { .. } | Command::Nothing
+            )
+        {
+            self.enemies[i].charging = false;
+        }
         self.log_basic_use(action);
         let line = match (action.source, action.kind) {
             (Source::Party(pi), Command::Attack { target }) => {
@@ -297,11 +305,12 @@ impl Battle {
                     return;
                 };
                 let member = self.members[ti].name.clone();
+                let charged = std::mem::take(&mut self.enemies[ei].charging);
                 for _ in 0..2 {
                     if !self.members[ti].alive() {
                         break;
                     }
-                    let line = match self.enemy_strike_member(ei, ti) {
+                    let line = match self.enemy_strike_with_charge(ei, ti, charged) {
                         Some(dmg) => self.text.damaged(&member, true, dmg),
                         None => self.text.skill_failed(&member, 3),
                     };
