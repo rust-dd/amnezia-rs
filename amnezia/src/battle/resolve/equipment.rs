@@ -27,6 +27,10 @@ impl Battle {
                 && !logic::has_state(self.battler_states(target), id)
                 && self.inflict_battler_state(target, id)
             {
+                if id == 1 {
+                    // The damage result owns the single collapse message.
+                    continue;
+                }
                 let state = self.states.iter().find(|state| state.id == id).unwrap();
                 let message = match target {
                     Source::Party(_) => &state.message_actor,

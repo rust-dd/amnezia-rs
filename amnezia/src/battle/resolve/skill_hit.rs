@@ -39,6 +39,7 @@ impl Battle {
             }
         }
         if self.battler_hp(target) <= 0 {
+            lines.extend(self.death_message(target));
             return lines;
         }
         if skill.affect_sp && self.skill_roll(hit) {

@@ -22,6 +22,7 @@ mod enemy_skill;
 mod equipment;
 mod hit;
 mod item;
+mod messages;
 mod skill;
 mod skill_heal;
 mod skill_hit;

@@ -71,7 +71,6 @@ impl Battle {
         target: Source,
         damage: Option<i32>,
     ) {
-        let target_name = self.battler_name(target).to_string();
         if let Some(damage) = damage {
             match target {
                 Source::Party(i) => self.members[i].hp = (self.members[i].hp - damage).max(0),
@@ -83,15 +82,10 @@ impl Battle {
                 Source::Party(i) => self.after_member_hit(i, damage),
                 Source::Enemy(i) => self.after_foe_hit(i, damage),
             }
-            self.log.push(self.text.damaged(
-                &target_name,
-                matches!(target, Source::Party(_)),
-                damage,
-            ));
         } else {
             self.pending_se.push(BattleSe::Dodge);
             self.report_hit(self.battler_pos(target), "Miss".into(), HitKind::Miss);
-            self.log.push(self.text.skill_failed(&target_name, 3));
         }
+        self.log_damage_result(target, damage);
     }
 }

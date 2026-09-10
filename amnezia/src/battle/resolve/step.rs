@@ -129,8 +129,7 @@ impl Battle {
             }
             Step::CritDamage { pi, ti, dmg } => {
                 self.land_strike(pi, ti, dmg);
-                let line = self.text.damaged(&self.enemies[ti].name, false, dmg);
-                self.log.push(line);
+                self.log_damage_result(Source::Enemy(ti), Some(dmg));
             }
             Step::StrikeImpact {
                 pi,
@@ -266,11 +265,9 @@ impl Battle {
                     let Some(ti) = self.retarget_member(target) else {
                         return;
                     };
-                    let member = self.members[ti].name.clone();
-                    match self.enemy_strike_member(ei, ti) {
-                        Some(dmg) => self.text.damaged(&member, true, dmg),
-                        None => self.text.skill_failed(&member, 3),
-                    }
+                    let damage = self.enemy_strike_member(ei, ti);
+                    self.log_damage_result(Source::Party(ti), damage);
+                    return;
                 }
             }
             (Source::Enemy(ei), Command::Skill { skill_id, target }) => {
@@ -304,17 +301,13 @@ impl Battle {
                 let Some(ti) = self.retarget_member(target) else {
                     return;
                 };
-                let member = self.members[ti].name.clone();
                 let charged = std::mem::take(&mut self.enemies[ei].charging);
                 for _ in 0..2 {
                     if !self.members[ti].alive() {
                         break;
                     }
-                    let line = match self.enemy_strike_with_charge(ei, ti, charged) {
-                        Some(dmg) => self.text.damaged(&member, true, dmg),
-                        None => self.text.skill_failed(&member, 3),
-                    };
-                    self.log.push(line);
+                    let damage = self.enemy_strike_with_charge(ei, ti, charged);
+                    self.log_damage_result(Source::Party(ti), damage);
                 }
                 return;
             }
@@ -328,8 +321,7 @@ impl Battle {
                     let base =
                         (atk - self.battler_stats(Source::Party(ti)).defense as i32 / 2).max(0);
                     let damage = self.hit_member(ti, base, 4, 100);
-                    self.log
-                        .push(self.text.damaged(&self.members[ti].name, true, damage));
+                    self.log_damage_result(Source::Party(ti), Some(damage));
                 }
                 self.enemies[ei].hp = 0;
                 self.start_foe_death(ei, true);
@@ -348,19 +340,5 @@ impl Battle {
         if !line.is_empty() {
             self.log.push(line);
         }
-    }
-
-    fn log_basic_use(&mut self, action: Action) {
-        let term = match action.kind {
-            Command::Attack { .. } | Command::DoubleAttack { .. } => &self.text.attacking,
-            Command::Defend => &self.text.defending,
-            Command::Observe => &self.text.observing,
-            Command::Charge => &self.text.focus,
-            Command::SelfDestruct => &self.text.autodestruction,
-            Command::Escape => &self.text.enemy_escape,
-            _ => return,
-        };
-        self.log
-            .push(format!("{}{term}", self.battler_name(action.source)));
     }
 }

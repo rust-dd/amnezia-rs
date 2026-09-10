@@ -95,7 +95,7 @@ impl Battle {
             }
             Strike::Hit { dmg, crit: false } => {
                 self.land_strike(pi, ti, dmg);
-                self.log.push(self.text.damaged(&enemy, false, dmg));
+                self.log_damage_result(Source::Enemy(ti), Some(dmg));
             }
             Strike::Hit { dmg, crit: true } => {
                 // RM2000 `ProcessBattleActionCritical`: announce the critical on

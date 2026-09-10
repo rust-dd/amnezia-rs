@@ -6,6 +6,7 @@ mod attributes;
 mod basic_messages;
 mod charge;
 mod criticals;
+mod death_messages;
 mod drops;
 mod equipment;
 mod impact_rules;

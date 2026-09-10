@@ -219,6 +219,9 @@ fn drive(world: &mut World) {
         && let Some(label) = crate::battle::smoke::show(world, frame)
     {
         capture(world, label);
+        if label == "battle-skill-impact" {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 45);
+        }
     }
     if frame == 150 && scenario != "intro" {
         start_scenario(world, scenario);
@@ -339,10 +342,13 @@ fn drive(world: &mut World) {
     if frame == 360 && !matches!(scenario, "intro" | "gameover" | "battle-defeat") {
         capture(world, &format!("{scenario}-early"));
     }
-    let finish = world
-        .resource::<SmokeRun>()
-        .finish_at
-        .unwrap_or(if scenario == "escape" { 2400 } else { 1260 });
+    let finish = world.resource::<SmokeRun>().finish_at.unwrap_or(
+        if matches!(scenario, "escape" | "battle-menus") {
+            2400
+        } else {
+            1260
+        },
+    );
     if frame >= finish {
         if scenario == "escape" {
             assert!(
@@ -407,6 +413,8 @@ fn drive(world: &mut World) {
             );
         } else if scenario == "battle-events" {
             crate::battle::smoke::verify_events(world);
+        } else if scenario == "battle-menus" {
+            crate::battle::smoke::verify_finished(world);
         }
         world.write_message(AppExit::Success);
     }

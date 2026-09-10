@@ -1,5 +1,8 @@
-use super::model::{Action, Battle, Command, MenuLevel, Phase, Source};
+use super::model::{Battle, MenuLevel, Phase};
 use bevy::prelude::*;
+
+mod messages;
+pub(crate) use messages::verify_finished;
 
 pub(crate) fn defeat(world: &mut World) {
     let mut battle = world.resource_mut::<Battle>();
@@ -59,6 +62,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
 }
 
 pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
+    let impact = messages::drive(world, frame);
     status_colors(world, frame);
     if frame == 1040 {
         let mut battle = world.resource_mut::<Battle>();
@@ -73,21 +77,6 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
             .unwrap()
             .resolution
             .set(640.0, 480.0);
-    }
-    if frame == 1235 {
-        let mut battle = world.resource_mut::<Battle>();
-        battle.phase = Phase::Resolve;
-        battle.log.clear();
-        battle.queue = vec![Action {
-            source: Source::Party(0),
-            kind: Command::Skill {
-                skill_id: 1,
-                target: 0,
-            },
-            agility: 1,
-        }];
-        battle.queue_at = 0;
-        assert!(battle.resolve_next_with_items(|_| true));
     }
     if frame == 300 {
         let skills = world
@@ -149,7 +138,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         1130 => Some("battle-ally-target"),
         1230 => Some("battle-resized"),
         1250 => Some("battle-skill-usage"),
-        _ => super::hud::movement_label(frame),
+        _ => super::hud::movement_label(frame).or(impact),
     };
     if label.is_some() {
         super::hud::verify_bounds(world);
