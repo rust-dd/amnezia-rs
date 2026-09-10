@@ -1,5 +1,5 @@
 use super::MainCamera;
-use crate::screenfx::{FrontCamera, PICTURE_LAYER, ScreenTone};
+use crate::screenfx::{FrontCamera, PICTURE_LAYER};
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 
@@ -25,7 +25,6 @@ pub(super) fn setup(mut commands: Commands) {
         },
         MainCamera,
         fixed_projection(),
-        ScreenTone::default(),
     ));
     commands.spawn((
         Camera2d,

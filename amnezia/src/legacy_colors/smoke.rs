@@ -102,8 +102,24 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
                 GlobalZIndex(999),
             ));
         }
+        let swatch = Image::new_fill(
+            bevy::render::render_resource::Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            bevy::render::render_resource::TextureDimension::D2,
+            &[64, 128, 192, 255],
+            bevy::render::render_resource::TextureFormat::Rgba8UnormSrgb,
+            bevy::asset::RenderAssetUsages::default(),
+        );
+        let swatch = world.resource_mut::<Assets<Image>>().add(swatch);
         world.spawn((
-            Sprite::from_color(Color::srgb_u8(64, 128, 192), Vec2::splat(20.0)),
+            Sprite {
+                image: swatch,
+                custom_size: Some(Vec2::splat(20.0)),
+                ..default()
+            },
             Transform::from_xyz(camera.x, camera.y - 80.0, 10.0),
         ));
         world

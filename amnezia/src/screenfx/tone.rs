@@ -1,78 +1,17 @@
-//! The RM2000 screen tone (`TintScreen` 11030) as a faithful camera post-process.
-//!
-//! RM2000's screen tone is R/G/B/Saturation, each 0..200 with 100 neutral. It
-//! quantizes channels around 128, adjusts saturation, then applies the original
-//! hard-light color table (0 = black, 100 = neutral, 200 = white). An
-//! alpha overlay can only darken, so instead [`ScreenTone`] is a fullscreen
-//! post-process on the main camera (Bevy's [`FullscreenMaterial`]) running
-//! `shaders/screen_tone.wgsl`, mirroring `picture/render.rs`'s per-picture tone
-//! but over the entire rendered scene.
-//!
-//! Pictures must stay untinted (RM2000 `affected_by_tint` defaults off), so they
-//! render on [`PICTURE_LAYER`] via the separate [`FrontCamera`] that composites
-//! above this post-process; that camera also owns the UI, keeping message and
-//! menu windows untinted and above the pictures. [`sync_front_camera`] keeps it
-//! aligned with the (followed, shaken) main camera so pictures stay in place.
+//! Screen-tone interpolation and the picture/UI camera's world alignment.
 
 use super::{ScreenEffect, ScreenShakeSet};
 use crate::world::MainCamera;
-use bevy::core_pipeline::fullscreen_material::{FullscreenMaterial, FullscreenMaterialPlugin};
-use bevy::core_pipeline::tonemapping::tonemapping;
-use bevy::core_pipeline::{Core2d, Core2dSystems};
-use bevy::ecs::schedule::{IntoScheduleConfigs, ScheduleConfigs, ScheduleLabel};
-use bevy::ecs::system::BoxedSystem;
 use bevy::prelude::*;
-use bevy::render::extract_component::ExtractComponent;
-use bevy::render::render_resource::ShaderType;
-use bevy::shader::ShaderRef;
 use bevy::transform::TransformSystems;
 
-/// The render layer pictures (and the front camera that draws them) live on, kept
-/// clear of the layer-0 world the tone post-process covers so pictures render
-/// untinted above it.
+/// Pictures and UI remain above the world and do not inherit its tone.
 pub const PICTURE_LAYER: usize = 3;
 
 /// RM2000 neutral tone: every channel 100, i.e. no change.
 const NEUTRAL: [f32; 4] = [100.0, 100.0, 100.0, 100.0];
 
-/// Quantized RGB/saturation tone channels; 128 is neutral. Present only on the
-/// main camera so the pictures and UI remain untinted.
-#[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
-pub struct ScreenTone {
-    channels: Vec4,
-}
-
-impl Default for ScreenTone {
-    fn default() -> Self {
-        Self {
-            channels: Vec4::splat(128.0),
-        }
-    }
-}
-
-impl FullscreenMaterial for ScreenTone {
-    fn fragment_shader() -> ShaderRef {
-        "shaders/screen_tone.wgsl".into()
-    }
-
-    /// This is a 2D game, so the pass runs in the 2D core pipeline rather than the
-    /// 3D default.
-    fn schedule() -> impl ScheduleLabel + Clone {
-        Core2d
-    }
-
-    /// Run in the 2D `PostProcess` set (after the world main pass, before the 2D
-    /// tonemapping step). The trait default targets `Core3dSystems`, which is not
-    /// chained after the main pass in the 2D schedule.
-    fn schedule_configs(system: ScheduleConfigs<BoxedSystem>) -> ScheduleConfigs<BoxedSystem> {
-        system
-            .in_set(Core2dSystems::PostProcess)
-            .before(tonemapping)
-    }
-}
-
-/// The camera that renders pictures and UI above the toned world. It carries no
-/// [`ScreenTone`], so its contents stay untinted.
+/// The picture/UI camera stays untinted above the world.
 #[derive(Component)]
 pub struct FrontCamera;
 
@@ -105,7 +44,6 @@ impl TintState {
 
     /// Restore a settled tone: snap both the displayed value and the target to
     /// `tone` with no interpolation left, so a loaded tint holds at once.
-    /// `update_tone` repaints the camera's [`ScreenTone`] from it next frame.
     pub fn set_tone(&mut self, tone: [f32; 4]) {
         self.current = tone;
         self.target = tone;
@@ -117,8 +55,8 @@ pub struct ScreenTonePlugin;
 
 impl Plugin for ScreenTonePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(FullscreenMaterialPlugin::<ScreenTone>::default())
-            .init_resource::<TintState>()
+        crate::legacy_colors::world::register(app);
+        app.init_resource::<TintState>()
             .add_systems(Update, update_tone)
             .add_systems(
                 PostUpdate,
@@ -129,14 +67,12 @@ impl Plugin for ScreenTonePlugin {
     }
 }
 
-/// Ingest a `TintScreen`, interpolate the current tone toward its target over the
-/// command's duration, and push the result into the main camera's [`ScreenTone`].
+/// Update the shared tone while scene transitions hold its interpolation.
 fn update_tone(
     transition: crate::transitions::TransitionPause,
     time: Res<Time>,
     mut effects: MessageReader<ScreenEffect>,
     mut state: ResMut<TintState>,
-    mut tinted: Query<&mut ScreenTone>,
 ) {
     for effect in effects.read() {
         if let ScreenEffect::Tint { r, g, b, sat, secs } = *effect {
@@ -149,10 +85,6 @@ fn update_tone(
     }
     if !transition.paused() {
         step_tint(&mut state, time.delta_secs());
-    }
-    let uniform = tone_uniform(state.current);
-    for mut tone in &mut tinted {
-        tone.channels = uniform;
     }
 }
 
@@ -186,16 +118,11 @@ fn sync_front_camera(
     target.translation = source.translation;
 }
 
-/// The same quantized tone used by on-screen pictures.
-fn tone_uniform(tone: [f32; 4]) -> Vec4 {
-    crate::legacy_colors::tone::uniform(tone)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    use crate::legacy_colors::tone::apply;
+    use crate::legacy_colors::tone::{apply, uniform as tone_uniform};
 
     #[test]
     fn transitions_hold_tint_tweens_but_accept_immediate_command_changes() {

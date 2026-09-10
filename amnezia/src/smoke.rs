@@ -74,6 +74,7 @@ fn capture(world: &mut World, label: &str) {
     let battler_snapshot = crate::battle::battler_snapshot(world, label);
     let actor_snapshot = crate::appearance::smoke::snapshot(world, label);
     let map_animation_snapshot = crate::animation::map_smoke::snapshot(world, label);
+    let world_tone_snapshot = crate::legacy_colors::world_smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -112,6 +113,9 @@ fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &map_animation_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &world_tone_snapshot {
                 snapshot.verify(&capture.image);
             }
         },
@@ -193,6 +197,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "map-animations"
         && let Some(label) = crate::animation::map_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "world-tones"
+        && let Some(label) = crate::legacy_colors::world_smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -334,6 +343,8 @@ fn drive(world: &mut World) {
             crate::display::smoke::verify_finished(world);
         } else if scenario == "map-animations" {
             crate::animation::map_smoke::verify_finished(world);
+        } else if scenario == "world-tones" {
+            crate::legacy_colors::world_smoke::verify_finished(world);
         } else if scenario == "actor-graphics" {
             crate::appearance::smoke::verify_finished(world);
         } else if scenario == "font-colors" {
@@ -412,6 +423,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
     let commands = if matches!(
         scenario,
         "message-options"
+            | "world-tones"
             | "actor-graphics"
             | "actor-names"
             | "pictures"

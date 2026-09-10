@@ -10,6 +10,8 @@ pub(crate) mod hue;
 mod raster;
 pub(crate) mod smoke;
 pub(crate) mod tone;
+pub(crate) mod world;
+pub(crate) mod world_smoke;
 
 pub(crate) struct LegacyColorsPlugin;
 

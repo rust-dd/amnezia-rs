@@ -13,8 +13,8 @@
 //!   it, and no map in this game sets it. See the crate report.
 //!
 //! The particles/overlays are plain layer-0 sprites screen-pinned to the
-//! [`MainCamera`] each frame, so the camera's [`crate::screenfx::ScreenTone`]
-//! post-process tints them (as RPG_RT tones weather) and they draw above the map
+//! [`MainCamera`] each frame. Their bitmaps receive the world tone before opacity,
+//! as RPG_RT tones weather, and they draw above the map
 //! yet below the front camera's pictures and the message/menu UI. Motion pauses
 //! while a map-suspending scene is up (battle/menu/shop/title/game-over), matching
 //! how RPG_RT freezes the map's screen update, and clears on a map change.

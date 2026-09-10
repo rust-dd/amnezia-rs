@@ -9,7 +9,7 @@ use bevy::sprite::Anchor;
 pub(super) struct BushChild(Entity);
 
 #[derive(Component)]
-pub(super) struct BushBottom;
+pub(crate) struct BushBottom;
 
 struct Visual {
     source: Rect,

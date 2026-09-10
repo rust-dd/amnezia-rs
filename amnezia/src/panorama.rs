@@ -24,11 +24,15 @@ struct PanoramaTile(i32, i32);
 
 pub struct PanoramaPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct PanoramaDraw;
+
 impl Plugin for PanoramaPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Panorama>().add_systems(
             PostUpdate,
-            draw.after(crate::screenfx::ScreenShakeSet)
+            draw.in_set(PanoramaDraw)
+                .after(crate::screenfx::ScreenShakeSet)
                 .before(bevy::transform::TransformSystems::Propagate),
         );
     }

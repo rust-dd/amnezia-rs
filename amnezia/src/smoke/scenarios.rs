@@ -2,7 +2,9 @@ use amnezia_data::{EventCommand, Map};
 use bevy::prelude::*;
 
 pub(super) fn selected() -> &'static str {
-    if std::env::args().any(|arg| arg == "--smoke-map-animations") {
+    if std::env::args().any(|arg| arg == "--smoke-world-tones") {
+        "world-tones"
+    } else if std::env::args().any(|arg| arg == "--smoke-map-animations") {
         "map-animations"
     } else if std::env::args().any(|arg| arg == "--smoke-actor-graphics") {
         "actor-graphics"

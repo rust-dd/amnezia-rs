@@ -29,6 +29,7 @@ pub(crate) use water::smoke as water_smoke;
 
 pub use autonomy::AutoMove;
 pub(crate) use autonomy::MoveGuards;
+pub(crate) use bush::BushBottom;
 pub use movement::{Character, MoveQueue, RouteAction, walk};
 pub(crate) use movement::{dir_delta, step_secs_for_speed};
 pub use route::RouteStepper;
@@ -48,13 +49,8 @@ const DEV_START: Option<Start> = None;
 #[derive(Component)]
 pub struct MapScene;
 
-/// The main world camera: it follows the hero (`player::camera_follow`), takes
-/// the screen shake, and draws the map on the default render layer 0, where its
-/// [`crate::screenfx::ScreenTone`] post-process tints it. Pictures and the UI
-/// render untinted on the [`crate::screenfx::FrontCamera`] above it. The overlay
-/// camera in [`crate::animation`] and the front camera both lack this marker, so
-/// the follow, shake, and picture-pinning systems keep matching exactly one
-/// camera.
+/// The followed, shaken layer-0 camera. World bitmaps carry their own tone;
+/// pictures and UI stay untinted on [`crate::screenfx::FrontCamera`].
 #[derive(Component)]
 pub struct MainCamera;
 
@@ -229,6 +225,7 @@ impl Plugin for WorldPlugin {
                 PostUpdate,
                 (topology::wrap_scene, bush::update)
                     .chain()
+                    .after(crate::legacy_colors::world::WorldColors)
                     .after(crate::vehicles::VehicleDisplay)
                     .after(crate::screenfx::ScreenShakeSet)
                     .before(bevy::camera::visibility::VisibilitySystems::CalculateBounds)

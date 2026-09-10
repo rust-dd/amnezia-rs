@@ -1,5 +1,5 @@
 //! Event-driven tint, flash and camera shake. Erase/show is handled by the shared
-//! scene-transition controller. Tint is a world-camera post-process; flash uses
+//! scene-transition controller. Tint is applied to world bitmaps; flash uses
 //! a fullscreen overlay below message/menu windows.
 //!
 //! The shake avoids touching `player.rs`: [`apply_camera_shake`] runs in
@@ -18,7 +18,7 @@ mod shake;
 mod tone;
 mod weather;
 
-pub use tone::{FrontCamera, PICTURE_LAYER, ScreenTone, TintState};
+pub use tone::{FrontCamera, PICTURE_LAYER, TintState};
 pub use weather::{Weather, WeatherStrength};
 
 /// A screen effect the interpreter emits; consumed by [`step_effects`] (and, for
