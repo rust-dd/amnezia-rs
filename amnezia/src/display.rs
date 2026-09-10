@@ -26,6 +26,7 @@ pub(crate) struct DisplaySetup;
 
 impl Plugin for DisplayPlugin {
     fn build(&self, app: &mut App) {
+        crate::transitions::render::register(app);
         app.insert_resource(UiScale(1.0 / 3.0))
             .add_systems(PostStartup, setup.in_set(DisplaySetup))
             .add_systems(PreUpdate, (attach_new_cameras, resize));
@@ -35,6 +36,8 @@ impl Plugin for DisplayPlugin {
 fn setup(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<crate::transitions::render::TransitionMaterial>>,
     cameras: Query<Entity, With<Camera2d>>,
     windows: Query<&Window, With<PrimaryWindow>>,
 ) {
@@ -54,8 +57,15 @@ fn setup(
         ));
     }
     let size = windows.single().unwrap().resolution.physical_size();
+    let material = crate::transitions::render::setup(
+        &mut commands,
+        &mut images,
+        &mut materials,
+        canvas.clone(),
+    );
     commands.spawn((
-        Sprite::from_image(canvas.clone()),
+        Mesh2d(meshes.add(Rectangle::new(320.0, 240.0))),
+        MeshMaterial2d(material),
         Transform::from_translation(center_offset(size).extend(0.0)),
         RenderLayers::layer(PRESENTATION_LAYER),
         PresentationSprite,

@@ -30,7 +30,9 @@ fn output_preserves_native_pixels_aspect_ratio_and_small_windows() {
 #[test]
 fn every_game_layer_shares_a_fixed_canvas_while_output_size_changes() {
     let mut app = App::new();
-    app.init_resource::<Assets<Image>>()
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+        .init_resource::<Assets<Image>>()
+        .init_resource::<Assets<Mesh>>()
         .add_plugins(DisplayPlugin);
     let window = app
         .world_mut()

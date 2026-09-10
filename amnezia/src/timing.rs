@@ -30,10 +30,15 @@ impl GameFrames {
 
 pub(crate) struct TimingPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct FrameClockSet;
+
 impl Plugin for TimingPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<GameFrames>()
-            .add_systems(PreUpdate, tick.after(crate::save::SaveSet));
+        app.init_resource::<GameFrames>().add_systems(
+            PreUpdate,
+            tick.in_set(FrameClockSet).after(crate::save::SaveSet),
+        );
     }
 }
 

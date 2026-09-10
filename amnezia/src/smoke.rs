@@ -24,7 +24,9 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-water") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-transitions") {
+            "transitions"
+        } else if std::env::args().any(|arg| arg == "--smoke-water") {
             "water"
         } else if std::env::args().any(|arg| arg == "--smoke-animation-colors") {
             "animation-colors"
@@ -99,6 +101,7 @@ fn capture(world: &mut World, label: &str) {
     let display_snapshot = crate::display::smoke::capture_native(world, label, prefix);
     let animation_snapshot = crate::animation::smoke::snapshot(world, label);
     let water_snapshot = crate::world::water_smoke::snapshot(world, label);
+    let transition_snapshot = crate::transitions::smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -114,6 +117,9 @@ fn capture(world: &mut World, label: &str) {
             }
             if let Some(snapshot) = &water_snapshot {
                 snapshot.verify(&capture.image, &label);
+            }
+            if let Some(snapshot) = &transition_snapshot {
+                snapshot.verify(&capture.image);
             }
         },
     );
@@ -188,6 +194,11 @@ fn drive(world: &mut World) {
         crate::dialogue::verify_battle_layer(world);
         capture(world, "battle-events-message");
     }
+    if scenario == "transitions"
+        && let Some(label) = crate::transitions::smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "water"
         && let Some(label) = crate::world::water_smoke::drive(world, frame)
     {
@@ -261,6 +272,8 @@ fn drive(world: &mut World) {
             crate::animation::smoke::verify_finished(world);
         } else if scenario == "water" {
             crate::world::water_smoke::verify_finished(world);
+        } else if scenario == "transitions" {
+            crate::transitions::smoke::verify_finished(world);
         } else if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(
@@ -316,7 +329,13 @@ fn start_scenario(world: &mut World, scenario: &str) {
     }
     let commands = if matches!(
         scenario,
-        "message-options" | "pictures" | "colors" | "display" | "animation-colors" | "water"
+        "message-options"
+            | "pictures"
+            | "colors"
+            | "display"
+            | "animation-colors"
+            | "water"
+            | "transitions"
     ) {
         message_options::entry()
     } else if scenario == "camera" {

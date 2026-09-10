@@ -45,6 +45,7 @@ mod tiles;
 mod timer;
 mod timing;
 mod title;
+mod transitions;
 mod vehicles;
 mod vitals;
 mod world;
@@ -88,6 +89,7 @@ fn main() -> AppExit {
         .add_plugins(legacy_colors::LegacyColorsPlugin)
         .add_plugins(display::DisplayPlugin)
         .add_plugins(timing::TimingPlugin)
+        .add_plugins(transitions::TransitionPlugin)
         .insert_resource(text::HeroName(hero.name))
         .init_resource::<state::Switches>()
         .init_resource::<state::Variables>()
