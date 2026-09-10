@@ -274,6 +274,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                 background: command.string.clone(),
                 allow_escape: command.params.get(3).copied().unwrap_or(0) != 0,
                 first_strike: command.params.get(5).copied().unwrap_or(0) != 0,
+                defeat_ends_game: command.params.get(4).copied().unwrap_or(0) == 0,
             });
             frame.battle_outcome = None;
             frame.battle_pending = true;

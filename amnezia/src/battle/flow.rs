@@ -6,6 +6,9 @@ use bevy::prelude::*;
 
 pub(crate) mod smoke;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct BattleFlowSet;
+
 #[derive(Default, PartialEq, Eq, Debug)]
 enum Stage {
     #[default]
@@ -24,12 +27,14 @@ pub(crate) struct BattleFlow {
     stage: Stage,
     prepared: Option<Battle>,
     outcome: Option<BattleOutcome>,
+    defeat_ends_game: bool,
 }
 
 impl BattleFlow {
-    pub(super) fn enter(&mut self, battle: Battle) {
+    pub(super) fn enter(&mut self, battle: Battle, defeat_ends_game: bool) {
         self.prepared = Some(battle);
         self.outcome = None;
+        self.defeat_ends_game = defeat_ends_game;
         self.stage = Stage::Enter;
     }
 
@@ -61,6 +66,8 @@ pub(super) fn drive(
     map: Option<Res<crate::world::MapData>>,
     screen: crate::world::MapScreen,
     vehicles: Option<Res<crate::vehicles::Vehicles>>,
+    mut gameover: ResMut<crate::gameover::GameOverActive>,
+    mut gameover_flow: ResMut<crate::gameover::GameOverFlow>,
 ) {
     if transition.state.busy() {
         return;
@@ -102,6 +109,14 @@ pub(super) fn drive(
         }
         Stage::BattleErase => {
             *battle = Battle::default();
+            if flow.defeat_ends_game && flow.outcome == Some(BattleOutcome::Defeat) {
+                gameover.0 = true;
+                gameover_flow.prepare_from_battle();
+                result.0 = flow.outcome.take();
+                active.0 = false;
+                flow.stage = Stage::Map;
+                return;
+            }
             audio.write(map_bgm.restore());
             if !transition.state.event_erased {
                 let kind = transition.kind(5);
@@ -119,6 +134,8 @@ pub(super) fn drive(
 
 pub(super) fn register(app: &mut App) {
     app.init_resource::<BattleFlow>()
+        .init_resource::<crate::gameover::GameOverActive>()
+        .init_resource::<crate::gameover::GameOverFlow>()
         .init_resource::<crate::transitions::Transition>()
         .init_resource::<crate::transitions::Settings>()
         .init_resource::<crate::transitions::Defaults>()
@@ -126,6 +143,7 @@ pub(super) fn register(app: &mut App) {
         .add_systems(
             Update,
             drive
+                .in_set(BattleFlowSet)
                 .after(super::systems::start_on_request)
                 .before(super::events::drive)
                 .before(super::input::command_input)

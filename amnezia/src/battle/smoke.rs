@@ -1,6 +1,14 @@
 use super::model::{Battle, MenuLevel, Phase};
 use bevy::prelude::*;
 
+pub(crate) fn defeat(world: &mut World) {
+    let mut battle = world.resource_mut::<Battle>();
+    for actor in &mut battle.members {
+        actor.hp = 0;
+    }
+    battle.finish(super::BattleOutcome::Defeat);
+}
+
 pub(crate) fn verify_events(world: &World) {
     assert!(!world.resource::<super::BattleActive>().0);
     assert!(

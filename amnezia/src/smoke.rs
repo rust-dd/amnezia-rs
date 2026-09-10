@@ -24,7 +24,13 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
-        let scenario = if std::env::args().any(|arg| arg == "--smoke-battle-transitions") {
+        let scenario = if std::env::args().any(|arg| arg == "--smoke-return-title") {
+            "return-title"
+        } else if std::env::args().any(|arg| arg == "--smoke-gameover") {
+            "gameover"
+        } else if std::env::args().any(|arg| arg == "--smoke-battle-defeat") {
+            "battle-defeat"
+        } else if std::env::args().any(|arg| arg == "--smoke-battle-transitions") {
             "battle-transitions"
         } else if std::env::args().any(|arg| arg == "--smoke-screen-events") {
             "screen-events"
@@ -106,6 +112,7 @@ fn capture(world: &mut World, label: &str) {
     let animation_snapshot = crate::animation::smoke::snapshot(world, label);
     let water_snapshot = crate::world::water_smoke::snapshot(world, label);
     let transition_snapshot = crate::transitions::smoke::snapshot(world, label);
+    let gameover_snapshot = crate::gameover::smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -125,18 +132,32 @@ fn capture(world: &mut World, label: &str) {
             if let Some(snapshot) = &transition_snapshot {
                 snapshot.verify(&capture.image);
             }
+            if let Some(snapshot) = &gameover_snapshot {
+                crate::gameover::smoke::verify_image(snapshot, &capture.image);
+            }
         },
     );
 }
 
 fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
+    let scenario = world.resource::<SmokeRun>().scenario;
+    let requested = if matches!(scenario, "gameover" | "battle-defeat") {
+        crate::gameover::smoke::input(world, frame, scenario == "battle-defeat")
+    } else if scenario == "return-title" {
+        crate::title::smoke::return_input(frame)
+    } else {
+        None
+    };
     let advance = frame > 90
         && (world.resource::<SmokeRun>().scenario != "battle-events" || frame > 360)
         && world.resource::<SmokeRun>().finish_at.is_none()
         && !matches!(
             world.resource::<SmokeRun>().scenario,
-            "font"
+            "return-title"
+                | "gameover"
+                | "battle-defeat"
+                | "font"
                 | "panorama"
                 | "timer"
                 | "battle-menus"
@@ -151,6 +172,9 @@ fn input(world: &mut World) {
     *keys = ButtonInput::default();
     if advance {
         keys.press(KeyCode::Enter);
+    }
+    if let Some(key) = requested {
+        keys.press(key);
     }
 }
 
@@ -219,6 +243,17 @@ fn drive(world: &mut World) {
     {
         capture(world, label);
     }
+    if matches!(scenario, "gameover" | "battle-defeat")
+        && let Some(label) =
+            crate::gameover::smoke::drive(world, frame, scenario == "battle-defeat")
+    {
+        capture(world, label);
+    }
+    if scenario == "return-title"
+        && let Some(label) = crate::title::smoke::return_scene(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "water"
         && let Some(label) = crate::world::water_smoke::drive(world, frame)
     {
@@ -273,7 +308,7 @@ fn drive(world: &mut World) {
     if frame == 1200 && scenario != "escape" {
         capture(world, scenario);
     }
-    if frame == 360 && scenario != "intro" {
+    if frame == 360 && !matches!(scenario, "intro" | "gameover" | "battle-defeat") {
         capture(world, &format!("{scenario}-early"));
     }
     let finish = world
@@ -299,6 +334,10 @@ fn drive(world: &mut World) {
             crate::transitions::event_smoke::verify_finished(world);
         } else if scenario == "battle-transitions" {
             crate::battle::flow::smoke::verify_finished(world);
+        } else if matches!(scenario, "gameover" | "battle-defeat") {
+            crate::gameover::smoke::verify_finished(world, scenario == "battle-defeat");
+        } else if scenario == "return-title" {
+            assert!(crate::title::smoke::ready(world));
         } else if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(
@@ -361,12 +400,15 @@ fn start_scenario(world: &mut World, scenario: &str) {
             | "animation-colors"
             | "water"
             | "transitions"
+            | "return-title"
     ) {
         message_options::entry()
     } else if scenario == "screen-events" {
         crate::transitions::event_smoke::entry()
     } else if scenario == "battle-transitions" {
         crate::battle::flow::smoke::entry()
+    } else if matches!(scenario, "gameover" | "battle-defeat") {
+        crate::gameover::smoke::entry(scenario == "battle-defeat")
     } else if scenario == "camera" {
         camera::entry()
     } else if scenario == "looping" {

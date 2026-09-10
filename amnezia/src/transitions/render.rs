@@ -81,6 +81,7 @@ fn sync(
             return;
         }
         capture.erase = effect.erase;
+        capture.previous_scene = effect.previous_scene;
         if let Some(alpha) = effect.flash_alpha(transition.frame) {
             material.control = Vec4::new(22.0, 1.0, 0.0, alpha as f32 / 255.0);
             return;

@@ -45,6 +45,9 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-water
 cargo run -p amnezia --locked -- --smoke-test --smoke-transitions
 cargo run -p amnezia --locked -- --smoke-test --smoke-screen-events
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle-transitions
+cargo run -p amnezia --locked -- --smoke-test --smoke-gameover
+cargo run -p amnezia --locked -- --smoke-test --smoke-battle-defeat
+cargo run -p amnezia --locked -- --smoke-test --smoke-return-title
 ```
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.

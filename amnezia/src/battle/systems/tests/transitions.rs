@@ -1,6 +1,56 @@
 use super::*;
 use crate::transitions::{Defaults, Kind, Transition};
 
+#[test]
+fn unhandled_defeat_hands_directly_to_game_over_without_revealing_or_replaying_the_map() {
+    for unhandled in [true, false] {
+        let mut app = logic_app();
+        app.insert_resource(Defaults([0, 0, 19, 19, 19, 16]));
+        app.insert_resource(CurrentBgm::with_track("Field", 0.7, 1.0));
+        app.world_mut().write_message(BattleRequest {
+            troop_id: DEBUG_TROOP,
+            defeat_ends_game: unhandled,
+            ..default()
+        });
+        frame(&mut app, 0);
+        frame(&mut app, 21);
+        frame(&mut app, 22);
+        app.world_mut()
+            .resource_mut::<Battle>()
+            .finish(BattleOutcome::Defeat);
+        app.world_mut()
+            .resource_mut::<ButtonInput<KeyCode>>()
+            .press(KeyCode::Enter);
+        frame(&mut app, 23);
+        frame(&mut app, 24);
+        frame(&mut app, 25);
+        assert_eq!(
+            app.world().resource::<crate::gameover::GameOverActive>().0,
+            unhandled
+        );
+        assert_eq!(app.world().resource::<BattleActive>().0, !unhandled);
+        assert_eq!(app.world().resource::<Transition>().erased(), unhandled);
+        assert_eq!(
+            app.world().resource::<BattleResult>().0,
+            unhandled.then_some(BattleOutcome::Defeat)
+        );
+        let audio = &app.world().resource::<AudioLog>().0;
+        assert_eq!(
+            audio.iter().any(
+                |request| matches!(request, AudioRequest::Bgm { name, .. } if name == "Field")
+            ),
+            !unhandled
+        );
+        if !unhandled {
+            frame(&mut app, 66);
+            assert_eq!(
+                app.world().resource::<BattleResult>().0,
+                Some(BattleOutcome::Defeat)
+            );
+        }
+    }
+}
+
 fn frame(app: &mut App, value: u32) {
     app.world_mut()
         .resource_mut::<crate::timing::GameFrames>()

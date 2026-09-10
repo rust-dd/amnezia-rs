@@ -5,6 +5,28 @@ use bevy::time::TimeUpdateStrategy;
 use std::time::Duration;
 
 #[test]
+fn new_game_reset_keeps_the_title_erased_until_the_start_map_is_ready() {
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        crate::transitions::TransitionPlugin,
+        SessionPlugin,
+    ))
+    .init_resource::<PendingTeleport>();
+    app.world_mut()
+        .resource_mut::<crate::transitions::Transition>()
+        .hold_black();
+    app.world_mut().resource_mut::<NewGameRequest>().0 = true;
+    app.update();
+    assert!(
+        app.world()
+            .resource::<crate::transitions::Transition>()
+            .erased()
+    );
+    assert_eq!(app.world().resource::<PendingTeleport>().0, Some((5, 0, 0)));
+}
+
+#[test]
 fn new_game_clears_progress_and_rebuilds_even_the_same_start_map() {
     let mut app = App::new();
     app.add_plugins((

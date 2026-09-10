@@ -119,12 +119,21 @@ struct MenuState {
 
 pub struct MenuPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct MenuInput;
+
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<MenuOpen>()
             .init_resource::<MenuAccess>()
             .init_resource::<MenuState>()
             .add_systems(Startup, view::spawn_ui)
-            .add_systems(Update, (input::menu_input, view::update_ui));
+            .add_systems(
+                Update,
+                (
+                    input::menu_input.in_set(MenuInput),
+                    view::update_ui.after(MenuInput),
+                ),
+            );
     }
 }

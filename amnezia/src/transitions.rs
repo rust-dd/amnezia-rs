@@ -88,6 +88,20 @@ impl Transition {
         self.event_erased = false;
     }
 
+    pub(crate) fn hold_black(&mut self) {
+        self.clear();
+        self.erased = true;
+    }
+
+    /// A scene's visibility may already have changed; capture its last full image.
+    pub(crate) fn erase_previous(&mut self, now: u32, duration: u32) -> bool {
+        let accepted = self.start_for(Kind::Fade, true, now, IVec2::new(160, 120), duration);
+        if accepted && let Some(effect) = &mut self.effect {
+            effect.previous_scene = true;
+        }
+        accepted
+    }
+
     pub(crate) fn prepend_battle_flashes(&mut self) {
         if let Some(effect) = &mut self.effect {
             effect.flash_frames = 20;

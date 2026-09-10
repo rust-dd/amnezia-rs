@@ -363,7 +363,7 @@ fn save_or_load(
                 );
                 return;
             }
-            save_io.commands.queue(crate::session::clear_transient);
+            save_io.commands.queue(crate::session::clear_for_reload);
             switches.load(game.switches);
             variables.load(game.variables);
             party.restore(game.party);

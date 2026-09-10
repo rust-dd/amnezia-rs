@@ -40,6 +40,7 @@ pub(super) struct Effect {
     pub from_erased: bool,
     pub duration: u32,
     pub flash_frames: u32,
+    pub previous_scene: bool,
     pub center: IVec2,
     pub offsets: Vec<u32>,
 }
@@ -53,6 +54,7 @@ impl Effect {
             from_erased,
             duration: kind.frames(),
             flash_frames: 0,
+            previous_scene: false,
             center: center.clamp(IVec2::ZERO, IVec2::new(320, 240)),
             offsets: if kind == Kind::Mosaic {
                 (0..kind.frames())

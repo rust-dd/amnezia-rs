@@ -22,6 +22,7 @@ pub(super) struct Capture {
     pub serial: u64,
     pub active: bool,
     pub erase: bool,
+    pub previous_scene: bool,
     completed: Arc<AtomicU64>,
 }
 
@@ -34,6 +35,7 @@ impl Capture {
             serial: 0,
             active: false,
             erase: false,
+            previous_scene: false,
             completed: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -62,7 +64,10 @@ fn copy_scene(
         return;
     };
     let camera = view.into_inner();
-    let destination = if camera.order == 0 && !capture.erase && *before_serial != capture.serial {
+    let early = camera.order == 0
+        && *before_serial != capture.serial
+        && (!capture.erase || capture.previous_scene);
+    let destination = if early {
         &capture.before
     } else if camera.order == 100 && *after_serial != capture.serial {
         if capture.erase {
@@ -98,6 +103,10 @@ fn copy_scene(
     );
     if camera.order == 0 {
         *before_serial = capture.serial;
+        if capture.erase {
+            *after_serial = capture.serial;
+            capture.completed.store(capture.serial, Ordering::SeqCst);
+        }
     } else {
         *after_serial = capture.serial;
         capture.completed.store(capture.serial, Ordering::SeqCst);

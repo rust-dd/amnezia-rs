@@ -24,7 +24,7 @@ fn start_new_game(world: &mut World) {
     if !std::mem::take(&mut world.resource_mut::<NewGameRequest>().0) {
         return;
     }
-    clear_transient(world);
+    clear_for_reload(world);
     reset::<Switches>(world);
     reset::<Variables>(world);
     reset::<Party>(world);
@@ -81,6 +81,7 @@ pub(crate) fn clear_transient(world: &mut World) {
     reset::<crate::battle::BattleResult>(world);
     crate::battle::reset_session(world);
     reset::<crate::gameover::GameOverActive>(world);
+    reset::<crate::gameover::GameOverFlow>(world);
     reset::<CameraPan>(world);
     reset::<EventSaveRequest>(world);
     reset::<SaveRequest>(world);
@@ -106,6 +107,18 @@ pub(crate) fn clear_transient(world: &mut World) {
     {
         *queue = MoveQueue::default();
         *route = RouteStepper::default();
+    }
+}
+
+pub(crate) fn clear_for_reload(world: &mut World) {
+    let erased = world
+        .get_resource::<crate::transitions::Transition>()
+        .is_some_and(|t| t.erased());
+    clear_transient(world);
+    if erased
+        && let Some(mut transition) = world.get_resource_mut::<crate::transitions::Transition>()
+    {
+        transition.hold_black();
     }
 }
 

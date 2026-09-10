@@ -10,16 +10,18 @@ struct Case {
     label: &'static str,
     kind: Kind,
     flashes: bool,
+    previous: bool,
     erase: bool,
     from_erased: bool,
     frame: u32,
     center: IVec2,
 }
 
-const CASES: [Case; 12] = [
+const CASES: [Case; 13] = [
     Case {
         label: "transition-fade-out",
         flashes: false,
+        previous: false,
         kind: Kind::Fade,
         erase: true,
         from_erased: false,
@@ -29,6 +31,7 @@ const CASES: [Case; 12] = [
     Case {
         label: "transition-fade-in",
         flashes: false,
+        previous: false,
         kind: Kind::Fade,
         erase: false,
         from_erased: true,
@@ -38,6 +41,7 @@ const CASES: [Case; 12] = [
     Case {
         label: "transition-crossfade",
         flashes: false,
+        previous: false,
         kind: Kind::Fade,
         erase: false,
         from_erased: false,
@@ -47,6 +51,7 @@ const CASES: [Case; 12] = [
     Case {
         label: "transition-mosaic-out",
         flashes: false,
+        previous: false,
         kind: Kind::Mosaic,
         erase: true,
         from_erased: false,
@@ -56,6 +61,7 @@ const CASES: [Case; 12] = [
     Case {
         label: "transition-mosaic-in",
         flashes: false,
+        previous: false,
         kind: Kind::Mosaic,
         erase: false,
         from_erased: true,
@@ -65,6 +71,7 @@ const CASES: [Case; 12] = [
     Case {
         label: "transition-zoom-out",
         flashes: false,
+        previous: false,
         kind: Kind::Zoom,
         erase: true,
         from_erased: false,
@@ -74,6 +81,7 @@ const CASES: [Case; 12] = [
     Case {
         label: "transition-zoom-in",
         flashes: false,
+        previous: false,
         kind: Kind::Zoom,
         erase: false,
         from_erased: true,
@@ -83,6 +91,7 @@ const CASES: [Case; 12] = [
     Case {
         label: "transition-cut-out",
         flashes: false,
+        previous: false,
         kind: Kind::Cut,
         erase: true,
         from_erased: false,
@@ -92,6 +101,7 @@ const CASES: [Case; 12] = [
     Case {
         label: "transition-cut-in",
         flashes: false,
+        previous: false,
         kind: Kind::Cut,
         erase: false,
         from_erased: true,
@@ -102,6 +112,7 @@ const CASES: [Case; 12] = [
         label: "transition-battle-flash-peak",
         kind: Kind::Zoom,
         flashes: true,
+        previous: false,
         erase: true,
         from_erased: false,
         frame: 0,
@@ -111,6 +122,7 @@ const CASES: [Case; 12] = [
         label: "transition-battle-flash-decay",
         kind: Kind::Zoom,
         flashes: true,
+        previous: false,
         erase: true,
         from_erased: false,
         frame: 15,
@@ -120,10 +132,21 @@ const CASES: [Case; 12] = [
         label: "transition-battle-zoom",
         kind: Kind::Zoom,
         flashes: true,
+        previous: false,
         erase: true,
         from_erased: false,
         frame: 40,
         center: IVec2::new(16, 200),
+    },
+    Case {
+        label: "transition-previous-scene",
+        kind: Kind::Fade,
+        flashes: false,
+        previous: true,
+        erase: true,
+        from_erased: false,
+        frame: 16,
+        center: IVec2::ZERO,
     },
 ];
 
@@ -228,12 +251,16 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             let fixture = world.resource::<Fixture>();
             let (sprite, image) = (
                 fixture.sprite,
-                fixture.images[usize::from(!case.erase)].clone(),
+                fixture.images[usize::from(!case.erase || case.previous)].clone(),
             );
             world.get_mut::<Sprite>(sprite).unwrap().image = image;
             let mut state = world.resource_mut::<Transition>();
             state.erased = case.from_erased;
-            assert!(state.start(case.kind, case.erase, 0, case.center));
+            if case.previous {
+                assert!(state.erase_previous(0, 35));
+            } else {
+                assert!(state.start(case.kind, case.erase, 0, case.center));
+            }
             if case.flashes {
                 state.prepend_battle_flashes();
             }

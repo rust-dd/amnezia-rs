@@ -48,6 +48,7 @@ pub struct BattleRequest {
     pub background: String,
     pub allow_escape: bool,
     pub first_strike: bool,
+    pub defeat_ends_game: bool,
 }
 
 pub(crate) fn reset_session(world: &mut World) {

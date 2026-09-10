@@ -127,7 +127,7 @@ pub(super) fn start_on_request(
     battle.allow_escape = request.allow_escape;
     battle.first_strike = request.first_strike;
     battle.text.apply(&terms.0);
-    flow.enter(battle);
+    flow.enter(battle, request.defeat_ends_game);
     active.0 = true;
     result.0 = None;
     if let Some(dialogue) = dialogue.as_deref_mut() {

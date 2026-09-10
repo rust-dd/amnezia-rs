@@ -6,6 +6,7 @@ fn save_load_keeps_global_animation_phase_and_transition_overrides() {
     let path = temp_slot("frame_clock");
     let mut app = save_app(path.clone());
     app.init_resource::<RunningEvent>();
+    app.init_resource::<crate::transitions::Transition>();
     app.init_resource::<crate::transitions::Settings>();
     let defaults = crate::transitions::Defaults([0, 0, 16, 17, 17, 16]);
     app.world_mut()
@@ -31,8 +32,16 @@ fn save_load_keeps_global_animation_phase_and_transition_overrides() {
         .resource_mut::<crate::transitions::Settings>()
         .change(&[0, 0], &defaults);
     app.world_mut().resource_mut::<LoadRequest>().0 = true;
+    app.world_mut()
+        .resource_mut::<crate::transitions::Transition>()
+        .hold_black();
     app.update();
     assert_eq!(app.world().resource::<LoadOutcome>().0, Some(true));
+    assert!(
+        app.world()
+            .resource::<crate::transitions::Transition>()
+            .erased()
+    );
     assert_eq!(*app.world().resource::<GameFrames>(), before);
     assert_eq!(
         app.world()
