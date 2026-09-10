@@ -38,30 +38,7 @@ pub(super) fn rows(
             })
             .collect(),
         Panel::Command => commands(battle, data, inventory, terms),
-        Panel::Status => battle
-            .members
-            .iter()
-            .map(|f| {
-                let state = if !f.alive() {
-                    "kiütve"
-                } else {
-                    battle
-                        .states
-                        .iter()
-                        .filter(|s| f.states.iter().any(|(id, _)| *id == s.id))
-                        .max_by_key(|s| s.priority)
-                        .map_or("Jó", |s| &s.name)
-                };
-                Row::plain(format!(
-                    "{:<12}{:<6}HP{:>4}/{:>4} SP{:>4}",
-                    clip(&i18n::tr(&f.name), 12),
-                    clip(&i18n::tr(state), 6),
-                    f.hp.max(0),
-                    f.max_hp,
-                    f.sp
-                ))
-            })
-            .collect(),
+        Panel::Status => Vec::new(),
         Panel::Message => {
             if battle.phase == Phase::Outcome {
                 let mut lines = outcome_text::page(battle);
@@ -186,31 +163,5 @@ mod tests {
         let mut actor = data.actors[0].clone();
         actor.rename_skill = false;
         assert_eq!(command_labels(&terms, Some(&actor))[1], "Képesség");
-    }
-
-    #[test]
-    fn four_digit_status_values_fit_the_native_window_without_sp_maximum() {
-        let mut battle = build_party2();
-        for member in &mut battle.members {
-            member.hp = 9999;
-            member.max_hp = 9999;
-            member.sp = 9999;
-        }
-        let data = GameData {
-            actors: vec![],
-            items: vec![],
-            skills: vec![],
-        };
-        let rows = rows(
-            Panel::Status,
-            &battle,
-            &data,
-            &Inventory::default(),
-            &Terms::default(),
-        );
-        for row in rows {
-            assert!(row.text.chars().count() <= 38, "{}", row.text);
-            assert!(row.text.ends_with("SP9999"));
-        }
     }
 }

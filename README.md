@@ -39,6 +39,7 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-airship-escape
 cargo run -p amnezia --locked -- --smoke-test --smoke-timer
 cargo run -p amnezia --locked -- --smoke-test --smoke-pictures
 cargo run -p amnezia --locked -- --smoke-test --smoke-colors
+cargo run -p amnezia --locked -- --smoke-test --smoke-font-colors
 cargo run -p amnezia --locked -- --smoke-test --smoke-display
 cargo run -p amnezia --locked -- --smoke-test --smoke-animation-colors
 cargo run -p amnezia --locked -- --smoke-test --smoke-water

@@ -2,6 +2,7 @@
 
 mod content;
 mod layout;
+mod status;
 mod view;
 
 pub(super) use view::verify_bounds;

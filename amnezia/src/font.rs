@@ -4,6 +4,8 @@
 use bevy::prelude::*;
 use bevy::text::FontSmoothing;
 
+pub(crate) mod bitmap;
+
 const RM2000: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/rm2000.ttf"));
 const RMG2000: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/rmg2000.ttf"));
 
@@ -18,6 +20,7 @@ pub struct FontPlugin;
 
 impl Plugin for FontPlugin {
     fn build(&self, app: &mut App) {
+        bitmap::register(app);
         app.add_systems(PreStartup, load_font)
             .add_systems(Update, (keep_text_crisp, add_text_shadows));
     }

@@ -1,5 +1,5 @@
 //! Convert EasyRPG's Western RM2000-compatible (ttyp0) and RMG2000-compatible
-//! bitmap faces into TrueType outlines without changing their pixel grids.
+//! bitmap faces into TrueType outlines and native glyph tables without changing their grids.
 //!
 //! Run `cargo run -p amnezia-convert --bin build_font` from the workspace root.
 //! The generated fonts are committed; normal builds need no reference checkout.
@@ -64,8 +64,10 @@ fn main() -> Result<()> {
         let bytes = build_font(&glyphs, family)?;
         let path = format!("amnezia/fonts/{file}.ttf");
         std::fs::write(&path, &bytes).context("write ttf")?;
+        let bitmap_path = format!("amnezia/fonts/{file}.ron");
+        std::fs::write(&bitmap_path, ron::to_string(&glyphs)?).context("write bitmap glyphs")?;
         println!(
-            "wrote {path} ({} glyphs, {} bytes)",
+            "wrote {path} and {bitmap_path} ({} glyphs, {} outline bytes)",
             glyphs.len(),
             bytes.len()
         );

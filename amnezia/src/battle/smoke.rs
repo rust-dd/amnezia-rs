@@ -49,6 +49,7 @@ pub(crate) fn prepare(world: &mut World) {
 }
 
 pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
+    status_colors(world, frame);
     if frame == 1150 {
         world
             .query_filtered::<&mut Window, With<bevy::window::PrimaryWindow>>()
@@ -74,6 +75,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         400 => Some((MenuLevel::Command, 0)),
         500 => Some((MenuLevel::Skill, 0)),
         650 => Some((MenuLevel::Skill, 11)),
+        700 => Some((MenuLevel::Command, 1)),
         800 => Some((MenuLevel::Item, 0)),
         950 => Some((MenuLevel::Target, 0)),
         1100 => Some((MenuLevel::AllyTarget, 3)),
@@ -89,6 +91,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         430 => Some("battle-commands"),
         530 => Some("battle-skills"),
         680 => Some("battle-skills-scrolled"),
+        730 => Some("battle-status-colors"),
         830 => Some("battle-items"),
         980 => Some("battle-target"),
         1130 => Some("battle-ally-target"),
@@ -101,9 +104,9 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 430 {
         assert!(
             world
-                .query::<&Text>()
+                .query::<&crate::font::bitmap::PixelText>()
                 .iter(world)
-                .any(|text| text.0 == "Pengetánc")
+                .any(|text| text.runs.iter().any(|r| r.text == "Pengetánc"))
         );
     }
     label
@@ -111,7 +114,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
 
 pub(crate) fn verify_skin(image: &Image, label: &str) {
     let xs: &[u32] = match label {
-        "battle-commands" => &[12, 120, 256],
+        "battle-commands" | "battle-status-colors" => &[12, 120, 256],
         "battle-skills" | "battle-skills-scrolled" | "battle-items" => &[12, 150, 308],
         "battle-target" => &[12, 120],
         "battle-ally-target" | "battle-resized" => &[12, 232],
@@ -126,5 +129,49 @@ pub(crate) fn verify_skin(image: &Image, label: &str) {
             pixel.red < 0.1 && pixel.blue > pixel.red + 0.05,
             "{label}: windowskin background is not blue at native x={x}: {pixel:?}"
         );
+    }
+}
+
+#[derive(Resource)]
+struct SavedStatus(Vec<StatusValues>);
+
+struct StatusValues {
+    hp: i32,
+    sp: i32,
+    states: Vec<(u32, u32)>,
+}
+
+fn status_colors(world: &mut World, frame: u32) {
+    if frame == 700 {
+        let mut battle = world.resource_mut::<Battle>();
+        let saved = SavedStatus(
+            battle
+                .members
+                .iter()
+                .map(|m| StatusValues {
+                    hp: m.hp,
+                    sp: m.sp,
+                    states: m.states.clone(),
+                })
+                .collect(),
+        );
+        battle.members[0].hp = battle.members[0].max_hp / 4;
+        battle.members[1].hp = 0;
+        battle.members[2].states = vec![(2, 0)];
+        battle.members[3].sp = 0;
+        world.insert_resource(saved);
+    }
+    if frame == 760 {
+        let saved = world.remove_resource::<SavedStatus>().unwrap();
+        for (member, values) in world
+            .resource_mut::<Battle>()
+            .members
+            .iter_mut()
+            .zip(saved.0)
+        {
+            member.hp = values.hp;
+            member.sp = values.sp;
+            member.states = values.states;
+        }
     }
 }

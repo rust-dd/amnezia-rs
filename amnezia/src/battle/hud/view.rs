@@ -1,9 +1,8 @@
 use super::*;
-use crate::font::GameFont;
+use crate::font::bitmap::{BitmapFont, DEFAULT, DISABLED, PixelText, Run};
 use crate::gamedata::GameData;
 use crate::state::Inventory;
 use crate::terms::Terms;
-use bevy::text::FontSource;
 
 #[derive(Component)]
 pub(super) struct RowSlot(Panel, usize);
@@ -102,7 +101,6 @@ fn image(system: &Handle<Image>, x: f32) -> ImageNode {
 
 pub(super) fn spawn(
     mut commands: Commands,
-    font: Res<GameFont>,
     assets: Res<AssetServer>,
     camera: Query<Entity, With<crate::battle::HudCamera>>,
 ) {
@@ -134,14 +132,7 @@ pub(super) fn spawn(
                 ));
                 for slot in 0..8 {
                     parent.spawn((
-                        Text::new(""),
-                        TextFont {
-                            font: FontSource::Handle(font.0.clone()),
-                            font_size: FontSize::Px(crate::font::UI_FONT_PX),
-                            ..default()
-                        },
-                        TextLayout::no_wrap(),
-                        TextColor(Color::WHITE),
+                        PixelText::default(),
                         Node {
                             position_type: PositionType::Absolute,
                             height: Val::Px(48.0),
@@ -178,13 +169,8 @@ pub(super) fn rows(
     data: Res<GameData>,
     inventory: Res<Inventory>,
     terms: Res<Terms>,
-    mut rows: Query<(
-        &RowSlot,
-        &mut Text,
-        &mut TextColor,
-        &mut Node,
-        &mut Visibility,
-    )>,
+    font: Res<BitmapFont>,
+    mut rows: Query<(&RowSlot, &mut PixelText, &mut Node, &mut Visibility)>,
 ) {
     if !battle.is_changed() && !inventory.is_changed() {
         return;
@@ -202,27 +188,42 @@ pub(super) fn rows(
             0
         };
         let width = layout::rectangle(panel, &battle).map_or(320.0, |r| r.2);
-        for (slot, mut text, mut color, mut node, mut visibility) in &mut rows {
+        for (slot, mut text, mut node, mut visibility) in &mut rows {
             if slot.0 != panel {
                 continue;
             }
             let row = content.get(first + slot.1).filter(|_| slot.1 < columns * 4);
-            *visibility = if row.is_some() {
+            let member = (panel == Panel::Status)
+                .then(|| battle.members.get(slot.1))
+                .flatten()
+                .filter(|_| slot.1 < 4);
+            *visibility = if row.is_some() || member.is_some() {
                 Visibility::Inherited
             } else {
                 Visibility::Hidden
             };
-            if let Some(row) = row {
-                **text = row.text.clone();
-                color.0 = if row.enabled {
-                    Color::WHITE
+            if row.is_some() || member.is_some() {
+                let margin = if panel == Panel::Status { 4.0 } else { 8.0 };
+                let text_width = width / columns as f32 - margin * 2.0;
+                let runs = if let Some(member) = member {
+                    status::runs(member, &battle.states, &terms, &font)
                 } else {
-                    Color::srgb(0.5, 0.5, 0.5)
+                    let row = row.unwrap();
+                    vec![Run::new(
+                        row.text.clone(),
+                        0,
+                        0,
+                        if row.enabled { DEFAULT } else { DISABLED },
+                    )]
                 };
+                text.set_if_neq(PixelText {
+                    size: UVec2::new(text_width as u32, 16),
+                    runs,
+                });
                 node.left =
-                    Val::Px((8.0 + (slot.1 % columns) as f32 * width / columns as f32) * 3.0);
+                    Val::Px((margin + (slot.1 % columns) as f32 * width / columns as f32) * 3.0);
                 node.top = Val::Px((10.0 + (slot.1 / columns) as f32 * 16.0) * 3.0);
-                node.width = Val::Px((width / columns as f32 - 16.0) * 3.0);
+                node.width = Val::Px(text_width * 3.0);
             }
         }
     }
@@ -261,27 +262,22 @@ pub(super) fn cursors(
 
 pub(in crate::battle) fn verify_bounds(world: &mut World) {
     let mut count = 0;
-    for (slot, text, node, layout, visibility) in world
-        .query::<(
-            &RowSlot,
-            &Text,
-            &ComputedNode,
-            &bevy::text::TextLayoutInfo,
-            &InheritedVisibility,
-        )>()
+    for (slot, text, visibility) in world
+        .query::<(&RowSlot, &PixelText, &InheritedVisibility)>()
         .iter(world)
     {
-        if !visibility.get() || slot.0 == Panel::Help || text.is_empty() {
+        if !visibility.get() || slot.0 == Panel::Help || text.runs.iter().all(|r| r.text.is_empty())
+        {
             continue;
         }
         count += 1;
-        let size = layout.size * layout.scale_factor;
-        assert!(
-            size.x <= node.size.x + 1.0 && size.y <= node.size.y + 1.0,
-            "battle row is clipped: {text:?}, text={:?}, cell={:?}",
-            size,
-            node.size
-        );
+        let font = world.resource::<BitmapFont>();
+        for run in &text.runs {
+            assert!(
+                run.position.x + font.width(&run.text) <= text.size.x as i32,
+                "battle row is clipped: {text:?}"
+            );
+        }
     }
     assert!(count > 0, "battle menu has no visible text");
 }

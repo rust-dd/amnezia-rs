@@ -36,6 +36,8 @@ impl Plugin for SmokePlugin {
             "screen-events"
         } else if std::env::args().any(|arg| arg == "--smoke-transitions") {
             "transitions"
+        } else if std::env::args().any(|arg| arg == "--smoke-font-colors") {
+            "font-colors"
         } else if std::env::args().any(|arg| arg == "--smoke-water") {
             "water"
         } else if std::env::args().any(|arg| arg == "--smoke-animation-colors") {
@@ -113,6 +115,7 @@ fn capture(world: &mut World, label: &str) {
     let water_snapshot = crate::world::water_smoke::snapshot(world, label);
     let transition_snapshot = crate::transitions::smoke::snapshot(world, label);
     let gameover_snapshot = crate::gameover::smoke::snapshot(world, label);
+    let font_snapshot = crate::font::bitmap::smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -134,6 +137,9 @@ fn capture(world: &mut World, label: &str) {
             }
             if let Some(snapshot) = &gameover_snapshot {
                 crate::gameover::smoke::verify_image(snapshot, &capture.image);
+            }
+            if let Some(snapshot) = &font_snapshot {
+                snapshot.verify(&capture.image);
             }
         },
     );
@@ -216,6 +222,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "colors"
         && let Some(label) = crate::legacy_colors::smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "font-colors"
+        && let Some(label) = crate::font::bitmap::smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -324,6 +335,8 @@ fn drive(world: &mut World) {
         }
         if scenario == "display" {
             crate::display::smoke::verify_finished(world);
+        } else if scenario == "font-colors" {
+            crate::font::bitmap::smoke::verify_finished(world);
         } else if scenario == "animation-colors" {
             crate::animation::smoke::verify_finished(world);
         } else if scenario == "water" {
@@ -396,6 +409,7 @@ fn start_scenario(world: &mut World, scenario: &str) {
         "message-options"
             | "pictures"
             | "colors"
+            | "font-colors"
             | "display"
             | "animation-colors"
             | "water"
