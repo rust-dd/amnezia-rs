@@ -125,14 +125,7 @@ pub(crate) fn snapshot(world: &World, label: &str) -> Option<Snapshot> {
 impl Snapshot {
     pub(crate) fn verify(&self, image: &Image, label: &str) {
         for &(x, y, expected) in &self.pixels {
-            let actual = image
-                .get_color_at(
-                    (2 * x + 1) * image.width() / 640,
-                    (2 * y + 1) * image.height() / 480,
-                )
-                .unwrap()
-                .to_srgba()
-                .to_u8_array();
+            let actual = crate::display::smoke::pixel_at(image, x, y);
             assert!(
                 actual[..3]
                     .iter()

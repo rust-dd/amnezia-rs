@@ -130,6 +130,19 @@ fn pixel(image: &Image, x: u32, y: u32) -> [u8; 4] {
     image.get_color_at(x, y).unwrap().to_srgba().to_u8_array()
 }
 
+pub(crate) fn pixel_at(image: &Image, x: u32, y: u32) -> [u8; 4] {
+    let point = sample_position(image.size(), UVec2::new(x, y));
+    pixel(image, point.x, point.y)
+}
+
+fn sample_position(size: UVec2, native: UVec2) -> UVec2 {
+    let scale = output_scale(size);
+    let padding = ((size.as_vec2() - NATIVE_SIZE.as_vec2() * scale) / 2.0).floor();
+    (padding + (native.as_vec2() + Vec2::splat(0.5)) * scale)
+        .floor()
+        .as_uvec2()
+}
+
 fn verify_pair(native: &Image, output: &Image, label: &str) {
     assert_eq!(native.size(), NATIVE_SIZE);
     let size = output.size();
@@ -180,6 +193,37 @@ pub(crate) fn verify_finished(world: &World) {
             check.0.lock().unwrap().complete,
             "{} capture did not finish",
             check.1
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visual_checks_sample_native_pixels_inside_retina_and_odd_sized_letterboxes() {
+        for (size, first, last) in [
+            ((320, 240), (0, 0), (319, 239)),
+            ((960, 720), (1, 1), (958, 718)),
+            ((1001, 751), (21, 16), (978, 733)),
+            ((1920, 1080), (322, 62), (1598, 1018)),
+            ((720, 1080), (41, 301), (679, 779)),
+            ((160, 120), (0, 0), (159, 119)),
+            ((2880, 2088), (164, 88), (2716, 2000)),
+        ] {
+            assert_eq!(
+                sample_position(size.into(), UVec2::ZERO),
+                UVec2::from(first)
+            );
+            assert_eq!(
+                sample_position(size.into(), UVec2::new(319, 239)),
+                UVec2::from(last)
+            );
+        }
+        assert_eq!(
+            sample_position(UVec2::new(2880, 2088), UVec2::new(0, 160)),
+            UVec2::new(164, 1368)
         );
     }
 }

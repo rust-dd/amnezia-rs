@@ -347,14 +347,7 @@ impl Snapshot {
                 } else {
                     color(sx, sy, usize::from(!case.erase))
                 };
-                let actual = image
-                    .get_color_at(
-                        (2 * x + 1) * image.width() / 640,
-                        (2 * y + 1) * image.height() / 480,
-                    )
-                    .unwrap()
-                    .to_srgba()
-                    .to_u8_array();
+                let actual = crate::display::smoke::pixel_at(image, x, y);
                 assert!(
                     actual[..3]
                         .iter()

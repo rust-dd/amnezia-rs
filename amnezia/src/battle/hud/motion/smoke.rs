@@ -82,11 +82,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
 impl Snapshot {
     pub(crate) fn verify(&self, image: &Image) {
         for &(x, y, expected) in &self.0 {
-            let actual = image
-                .get_color_at(x * image.width() / 320, y * image.height() / 240)
-                .unwrap()
-                .to_srgba()
-                .to_u8_array();
+            let actual = crate::display::smoke::pixel_at(image, x, y);
             assert!(
                 actual.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 1),
                 "moving window ({x},{y}): expected {expected:?}, got {actual:?}"

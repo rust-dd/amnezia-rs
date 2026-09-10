@@ -99,11 +99,7 @@ impl Snapshot {
                 } else {
                     [pixel[0], pixel[1], pixel[2]]
                 };
-                let got = actual
-                    .get_color_at(x * actual.width() / 320, y * actual.height() / 240)
-                    .unwrap()
-                    .to_srgba()
-                    .to_u8_array();
+                let got = crate::display::smoke::pixel_at(actual, x, y);
                 for channel in 0..3 {
                     assert!(
                         got[channel].abs_diff(expected[channel]) <= 1,

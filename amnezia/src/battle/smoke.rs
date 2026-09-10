@@ -242,12 +242,9 @@ pub(crate) fn verify_skin(image: &Image, label: &str) {
         _ => return,
     };
     for &x in xs {
-        let pixel = image
-            .get_color_at(x * image.width() / 320, 185 * image.height() / 240)
-            .unwrap()
-            .to_srgba();
+        let pixel = crate::display::smoke::pixel_at(image, x, 185).map(|v| v as f32 / 255.0);
         assert!(
-            pixel.red < 0.1 && pixel.blue > pixel.red + 0.05,
+            pixel[0] < 0.1 && pixel[2] > pixel[0] + 0.05,
             "{label}: windowskin background is not blue at native x={x}: {pixel:?}"
         );
     }

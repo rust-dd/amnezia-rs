@@ -132,14 +132,7 @@ pub(crate) fn verify(image: &Image, label: &str) {
         ("120 degree hue", 200, 100, [0, 30, 155]),
         ("330 degree hue", 240, 100, [108, 155, 0]),
     ] {
-        let actual = image
-            .get_color_at(
-                (2 * x + 1) * image.width() / 640,
-                (2 * y + 1) * image.height() / 480,
-            )
-            .unwrap()
-            .to_srgba()
-            .to_u8_array();
+        let actual = crate::display::smoke::pixel_at(image, x, y);
         assert!(
             actual[..3]
                 .iter()

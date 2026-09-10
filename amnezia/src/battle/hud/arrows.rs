@@ -60,13 +60,14 @@ pub(super) fn update(
 }
 
 pub(in crate::battle) fn verify(world: &mut World) {
-    let visible = world
+    let mut visible = world
         .query::<(&Arrow, &InheritedVisibility)>()
         .iter(world)
         .filter(|(_, v)| v.get())
         .map(|(a, _)| a.up)
         .collect::<Vec<_>>();
-    assert_eq!(visible, [true, false]);
+    visible.sort_unstable();
+    assert_eq!(visible, [false, true]);
 }
 
 pub(crate) struct Snapshot(Vec<(u32, u32, [u8; 4])>);
@@ -104,11 +105,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
 impl Snapshot {
     pub(crate) fn verify(&self, image: &Image) {
         for &(x, y, expected) in &self.0 {
-            let actual = image
-                .get_color_at(x * image.width() / 320, y * image.height() / 240)
-                .unwrap()
-                .to_srgba()
-                .to_u8_array();
+            let actual = crate::display::smoke::pixel_at(image, x, y);
             assert!(
                 actual.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 1),
                 "scroll arrow ({x},{y}): expected {expected:?}, got {actual:?}"
@@ -118,5 +115,27 @@ impl Snapshot {
             "scroll arrows: {} source-asset GPU pixels verified",
             self.0.len()
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arrow_smoke_checks_ignore_ecs_iteration_order() {
+        for order in [[false, true], [true, false]] {
+            let mut world = World::new();
+            for up in order {
+                world.spawn((
+                    Arrow {
+                        panel: Panel::Skill,
+                        up,
+                    },
+                    InheritedVisibility::VISIBLE,
+                ));
+            }
+            verify(&mut world);
+        }
     }
 }

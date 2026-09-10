@@ -175,16 +175,7 @@ pub(crate) fn expected_pixels(world: &mut World, label: &str) -> Vec<PixelCheck>
 }
 
 pub(crate) fn verify_image(image: &Image, label: &str, expected: &[PixelCheck]) {
-    let at = |x, y| {
-        image
-            .get_color_at(
-                (2 * x + 1) * image.width() / 640,
-                (2 * y + 1) * image.height() / 480,
-            )
-            .unwrap()
-            .to_srgba()
-            .to_u8_array()
-    };
+    let at = |x, y| crate::display::smoke::pixel_at(image, x, y);
     if !expected.is_empty() {
         let mismatches = expected
             .iter()

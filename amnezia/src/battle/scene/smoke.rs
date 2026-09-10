@@ -129,7 +129,7 @@ fn rgba(image: &Image, x: u32, y: u32) -> [u8; 4] {
 impl Snapshot {
     pub(crate) fn verify(&self, image: &Image) {
         for &(x, y, expected) in &self.0 {
-            let actual = rgba(image, x * image.width() / 320, y * image.height() / 240);
+            let actual = crate::display::smoke::pixel_at(image, x, y);
             assert!(
                 actual.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 1),
                 "battler ({x},{y}): expected {expected:?}, got {actual:?}"

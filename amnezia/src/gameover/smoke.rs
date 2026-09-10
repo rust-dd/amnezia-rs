@@ -149,14 +149,7 @@ pub(crate) fn verify_image(source: &Image, output: &Image) {
     for y in 0..240 {
         for x in 0..320 {
             let expected = source.get_color_at(x, y).unwrap().to_srgba().to_u8_array();
-            let actual = output
-                .get_color_at(
-                    (2 * x + 1) * output.width() / 640,
-                    (2 * y + 1) * output.height() / 480,
-                )
-                .unwrap()
-                .to_srgba()
-                .to_u8_array();
+            let actual = crate::display::smoke::pixel_at(output, x, y);
             assert!(
                 actual[..3]
                     .iter()
