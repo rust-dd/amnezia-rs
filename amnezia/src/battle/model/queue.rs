@@ -5,7 +5,7 @@
 /// A chosen action, from either side, awaiting resolution. Party members choose
 /// `Attack`, `Skill`, `Item`, `Defend`, or `Nothing`; the enemy AI reuses `Attack`,
 /// `Skill`, `Defend`, and `Nothing`, and adds the RM2000 monster-only basics
-/// `DoubleAttack`, `SelfDestruct`, `Escape`, and `Charge`.
+/// `DoubleAttack`, `SelfDestruct`, `Escape`, `Charge`, and `Observe`.
 #[derive(Clone, Copy)]
 pub enum Command {
     Attack {
@@ -21,6 +21,7 @@ pub enum Command {
     },
     Defend,
     Nothing,
+    Observe,
     /// Enemy-only: strike the target twice (two independent hit/damage rolls).
     DoubleAttack {
         target: usize,

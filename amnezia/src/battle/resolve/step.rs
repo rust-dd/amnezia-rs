@@ -129,11 +129,7 @@ impl Battle {
             }
             Step::CritDamage { pi, ti, dmg } => {
                 self.land_strike(pi, ti, dmg);
-                let line = format!(
-                    "{} {dmg}{}",
-                    self.enemies[ti].name,
-                    crate::i18n::tr(&self.text.enemy_damaged)
-                );
+                let line = self.text.damaged(&self.enemies[ti].name, false, dmg);
                 self.log.push(line);
             }
             Step::StrikeImpact {
@@ -185,6 +181,7 @@ impl Battle {
     }
 
     pub(in crate::battle::resolve) fn apply(&mut self, action: Action) {
+        self.log_basic_use(action);
         let line = match (action.source, action.kind) {
             (Source::Party(pi), Command::Attack { target }) => {
                 if logic::worst_restriction(&self.members[pi].states, &self.states) == 3 {
@@ -248,10 +245,7 @@ impl Battle {
             }
             (Source::Party(pi), Command::Defend) => {
                 self.members[pi].defending = true;
-                format!("{} védekezik", self.members[pi].name)
-            }
-            (Source::Party(pi), Command::Nothing) => {
-                format!("{} tétovázik", self.members[pi].name)
+                return;
             }
             (Source::Enemy(ei), Command::Attack { target }) => {
                 if logic::worst_restriction(&self.enemies[ei].states, &self.states) == 3 {
@@ -264,11 +258,10 @@ impl Battle {
                     let Some(ti) = self.retarget_member(target) else {
                         return;
                     };
-                    let enemy = self.enemies[ei].name.clone();
                     let member = self.members[ti].name.clone();
                     match self.enemy_strike_member(ei, ti) {
-                        Some(dmg) => format!("{enemy} támad: {member} -{dmg}"),
-                        None => format!("{enemy} támad: {member} elkerülte"),
+                        Some(dmg) => self.text.damaged(&member, true, dmg),
+                        None => self.text.skill_failed(&member, 3),
                     }
                 }
             }
@@ -303,43 +296,59 @@ impl Battle {
                 let Some(ti) = self.retarget_member(target) else {
                     return;
                 };
-                let d1 = self.enemy_strike_member(ei, ti);
-                let d2 = self.enemy_strike_member(ei, ti);
-                let enemy = self.enemies[ei].name.clone();
                 let member = self.members[ti].name.clone();
-                let show =
-                    |d: Option<i32>| d.map_or_else(|| "elkerülte".to_string(), |v| format!("-{v}"));
-                format!("{enemy} kétszer támad: {member} {}, {}", show(d1), show(d2))
+                for _ in 0..2 {
+                    let line = match self.enemy_strike_member(ei, ti) {
+                        Some(dmg) => self.text.damaged(&member, true, dmg),
+                        None => self.text.skill_failed(&member, 3),
+                    };
+                    self.log.push(line);
+                }
+                return;
             }
             (Source::Enemy(ei), Command::Defend) => {
                 self.enemies[ei].defending = true;
-                format!("{} védekezik", self.enemies[ei].name)
+                return;
             }
             (Source::Enemy(ei), Command::SelfDestruct) => {
                 let atk = self.battler_stats(Source::Enemy(ei)).attack as i32;
-                let name = self.enemies[ei].name.clone();
                 for ti in self.living_members() {
                     let base =
                         (atk - self.battler_stats(Source::Party(ti)).defense as i32 / 2).max(0);
-                    self.hit_member(ti, base, 4, 100);
+                    let damage = self.hit_member(ti, base, 4, 100);
+                    self.log
+                        .push(self.text.damaged(&self.members[ti].name, true, damage));
                 }
                 self.enemies[ei].hp = 0;
                 self.start_foe_death(ei, true);
-                format!("{name} felrobban!")
+                return;
             }
             (Source::Enemy(ei), Command::Escape) => {
                 self.enemies[ei].fled = true;
-                format!("{} elmenekül", self.enemies[ei].name)
+                return;
             }
             (Source::Enemy(ei), Command::Charge) => {
                 self.enemies[ei].charging = true;
-                format!("{} erőt gyűjt", self.enemies[ei].name)
-            }
-            (Source::Enemy(ei), Command::Nothing) => {
-                format!("{} tétovázik", self.enemies[ei].name)
+                return;
             }
             _ => return,
         };
-        self.log.push(line);
+        if !line.is_empty() {
+            self.log.push(line);
+        }
+    }
+
+    fn log_basic_use(&mut self, action: Action) {
+        let term = match action.kind {
+            Command::Attack { .. } | Command::DoubleAttack { .. } => &self.text.attacking,
+            Command::Defend => &self.text.defending,
+            Command::Observe => &self.text.observing,
+            Command::Charge => &self.text.focus,
+            Command::SelfDestruct => &self.text.autodestruction,
+            Command::Escape => &self.text.enemy_escape,
+            _ => return,
+        };
+        self.log
+            .push(format!("{}{term}", self.battler_name(action.source)));
     }
 }

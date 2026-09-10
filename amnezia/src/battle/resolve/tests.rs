@@ -3,6 +3,7 @@ use crate::battle::model::testkit::{build_1v2, build_party2};
 
 mod animation_mode;
 mod attributes;
+mod basic_messages;
 mod criticals;
 mod drops;
 mod equipment;

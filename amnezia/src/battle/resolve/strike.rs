@@ -87,22 +87,15 @@ impl Battle {
     ) {
         let enemy = self.enemies[ti].name.clone();
         match outcome {
-            // RM2000 concatenates the target name with the term: a dodge reads
-            // "<foe> <dodge>", a hit "<foe> <value><enemy_damaged>", and a critical
-            // announces the standalone term on its own beat.
             Strike::Miss => {
                 let pos = self.foe_anim_pos(ti);
                 self.pending_se.push(BattleSe::Dodge);
                 self.report_hit(pos, "Miss".to_string(), HitKind::Miss);
-                self.log
-                    .push(format!("{enemy}{}", crate::i18n::tr(&self.text.dodge)));
+                self.log.push(self.text.skill_failed(&enemy, 3));
             }
             Strike::Hit { dmg, crit: false } => {
                 self.land_strike(pi, ti, dmg);
-                self.log.push(format!(
-                    "{enemy} {dmg}{}",
-                    crate::i18n::tr(&self.text.enemy_damaged)
-                ));
+                self.log.push(self.text.damaged(&enemy, false, dmg));
             }
             Strike::Hit { dmg, crit: true } => {
                 // RM2000 `ProcessBattleActionCritical`: announce the critical on

@@ -480,7 +480,7 @@ fn enemy_command_maps_each_action_family() {
     ));
     assert!(matches!(
         enemy_command(Some(&action(0, 3, 0, 0, 0, 0, 0)), 0),
-        Command::Nothing
+        Command::Observe
     ));
     assert!(matches!(
         enemy_command(Some(&action(0, 0, 0, 0, 0, 0, 0)), 1),

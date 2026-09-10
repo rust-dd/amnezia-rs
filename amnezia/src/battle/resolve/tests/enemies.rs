@@ -182,7 +182,7 @@ fn self_destruct_hits_every_member_then_kills_the_foe() {
     assert!(battle.members[1].hp < hp[1]);
     assert_eq!(battle.enemies[0].hp, 0);
     assert!(!battle.enemies[0].alive());
-    assert!(battle.log.iter().any(|l| l.contains("felrobban")));
+    assert!(battle.log.iter().any(|l| l.contains("előretör")));
 }
 
 #[test]

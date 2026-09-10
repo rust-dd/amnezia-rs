@@ -118,7 +118,8 @@ pub fn enemy_command(action: Option<&EnemyActionDef>, target: usize) -> Command 
         Some(a) => match a.basic {
             1 => Command::DoubleAttack { target },
             2 => Command::Defend,
-            3 | 7 => Command::Nothing,
+            3 => Command::Observe,
+            7 => Command::Nothing,
             4 => Command::Charge,
             5 => Command::SelfDestruct,
             6 => Command::Escape,
