@@ -12,6 +12,35 @@ fn scaffold() -> App {
 }
 
 #[test]
+fn end_game_does_not_use_the_legacy_full_screen_text_panel() {
+    let mut app = scaffold();
+    app.insert_resource(MenuOpen(true))
+        .insert_resource(MenuState {
+            cursor: 4,
+            screen: MenuScreen::EndGame { cursor: 1 },
+        })
+        .insert_resource(super::super::testkit::data())
+        .init_resource::<Party>()
+        .init_resource::<Progression>()
+        .init_resource::<Inventory>()
+        .init_resource::<Vitals>()
+        .init_resource::<Equipment>()
+        .init_resource::<Terms>()
+        .insert_resource(crate::font::bitmap::BitmapFont::from_id(0))
+        .init_resource::<crate::save::SaveAccess>()
+        .insert_resource(HeroName("Ron".into()))
+        .add_systems(Update, update_ui);
+    app.update();
+    let world = app.world_mut();
+    let (_, visibility) = world
+        .query::<(&MenuWindow, &Visibility)>()
+        .iter(world)
+        .find(|(window, _)| window.0 == WindowId::Content)
+        .unwrap();
+    assert_eq!(*visibility, Visibility::Hidden);
+}
+
+#[test]
 fn field_scene_background_uses_the_original_system_color_pixel() {
     let mut app = scaffold();
     let world = app.world_mut();

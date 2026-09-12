@@ -142,7 +142,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     })
 }
 
-fn border(
+pub(super) fn border(
     pixels: &mut Vec<(u32, u32, [u8; 4])>,
     skin: &Image,
     rect: (u32, u32, u32, u32),
@@ -178,7 +178,7 @@ fn border(
     }
 }
 
-fn sample(
+pub(super) fn sample(
     pixels: &mut Vec<(u32, u32, [u8; 4])>,
     image: &Image,
     target: (u32, u32),

@@ -311,6 +311,7 @@ fn drive(world: &mut World) {
             crate::gameover::smoke::verify_finished(world, scenario == "battle-defeat");
         } else if scenario == "return-title" {
             assert!(crate::title::smoke::ready(world));
+            crate::menu::end_smoke::verify_finished(world);
         } else if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(

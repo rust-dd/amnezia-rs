@@ -1,5 +1,5 @@
 //! Field-menu windows use native coordinates scaled threefold for Bevy UI.
-//! Subscreens still share a content panel; their state and input live in the parent.
+//! Item, skill and equipment subscreens still share a legacy content panel.
 
 use crate::assets::resolve_png;
 use crate::equipment::Equipment;
@@ -16,6 +16,7 @@ use bevy::text::{FontSource, LineHeight, TextLayout};
 
 use super::{MenuOpen, MenuScreen, MenuState, command, render};
 
+pub(super) mod end_game;
 mod main_text;
 pub(crate) mod smoke;
 #[cfg(test)]
@@ -96,7 +97,7 @@ pub(super) struct MenuText(TextSlot);
 #[derive(Component)]
 pub(super) struct MenuFace(usize);
 
-/// Spawn the initially hidden overlay and its four windows.
+/// Spawn the initially hidden field-menu overlay and its scene windows.
 pub(super) fn spawn_ui(
     mut commands: Commands,
     font: Res<GameFont>,
@@ -128,6 +129,7 @@ pub(super) fn spawn_ui(
             spawn_gold_window(panel, &system);
             spawn_status_window(panel, &system);
             spawn_content_window(panel, &system, &font);
+            end_game::spawn(panel, &system);
         });
 }
 
@@ -357,7 +359,7 @@ pub(super) fn update_ui(
         let shown = match window.0 {
             WindowId::Panel => open.0,
             WindowId::Command | WindowId::Gold | WindowId::Status => main,
-            WindowId::Content => !main,
+            WindowId::Content => !main && !matches!(state.screen, MenuScreen::EndGame { .. }),
         };
         *visibility = vis(shown);
     }

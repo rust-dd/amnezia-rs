@@ -28,8 +28,8 @@ use super::nav::{
     confirm_pressed, end_game_transition, escape_transition, item_target, skill_target, step,
 };
 use super::{
-    MemberAction, MenuAccess, MenuOpen, MenuScreen, MenuState, command, equip, items, render,
-    skills, use_item,
+    MemberAction, MenuAccess, MenuOpen, MenuScreen, MenuState, command, equip, items, skills,
+    use_item,
 };
 
 /// The transient overlays and flows that must not be interrupted by *opening* the
@@ -324,7 +324,7 @@ pub(super) fn menu_input(
             }
         }
         MenuScreen::EndGame { cursor } => {
-            let cursor = step(cursor, up, down, render::END_GAME_ROWS.len() - 1);
+            let cursor = step(cursor, up, down, 1);
             state.screen = MenuScreen::EndGame { cursor };
             if confirm {
                 let (next_open, next_title) = end_game_transition(cursor, title.0);

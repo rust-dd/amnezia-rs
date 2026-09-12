@@ -34,6 +34,7 @@ mod status;
 mod use_item;
 mod view;
 
+pub(crate) use view::end_game::smoke as end_smoke;
 pub(crate) use view::smoke as layout_smoke;
 pub(crate) use view::text_smoke as font_smoke;
 
@@ -133,12 +134,14 @@ impl Plugin for MenuPlugin {
         app.init_resource::<MenuOpen>()
             .init_resource::<MenuAccess>()
             .init_resource::<MenuState>()
+            .init_resource::<view::end_game::Clock>()
             .add_systems(Startup, view::spawn_ui)
             .add_systems(
                 Update,
                 (
                     input::menu_input.in_set(MenuInput),
                     view::update_ui.after(MenuInput),
+                    view::end_game::update.after(MenuInput),
                 ),
             );
     }

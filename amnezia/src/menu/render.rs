@@ -10,9 +10,6 @@ use crate::vitals::Vitals;
 
 use super::{MenuScreen, derive, equip, items, skills, status, use_item};
 
-/// The End Game confirmation rows, in cursor order (Igen = yes returns to title).
-pub(super) const END_GAME_ROWS: [&str; 2] = ["Igen", "Nem"];
-
 /// One party member's status-window figures: the FaceSet portrait, identity, and
 /// the numbers the status window prints beside the face. HP/SP are kept as raw
 /// current/maximum values so [`super::view`] can tint the low ones the RM2000 way.
@@ -99,9 +96,7 @@ pub(super) struct ContentView {
     pub cursor_line: Option<usize>,
 }
 
-/// Compose the content window for a non-main screen. The Command and MemberSelect
-/// screens are drawn as the three-window main menu instead, so they return an
-/// empty view here (the content window is hidden for them).
+/// Compose legacy subscreen text; the main and End Game windows render separately.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn content(
     hero_name: &crate::text::HeroName,
@@ -115,10 +110,12 @@ pub(super) fn content(
     terms: &Terms,
 ) -> ContentView {
     match screen {
-        MenuScreen::Command | MenuScreen::MemberSelect { .. } => ContentView {
-            text: String::new(),
-            cursor_line: None,
-        },
+        MenuScreen::Command | MenuScreen::MemberSelect { .. } | MenuScreen::EndGame { .. } => {
+            ContentView {
+                text: String::new(),
+                cursor_line: None,
+            }
+        }
         MenuScreen::ItemList { cursor } => {
             let (text, cursor_line) = items::compose_list(cursor, data, inventory);
             ContentView { text, cursor_line }
@@ -199,27 +196,12 @@ pub(super) fn content(
             text: compose_saved(),
             cursor_line: None,
         },
-        MenuScreen::EndGame { cursor } => ContentView {
-            text: compose_end_game(cursor),
-            cursor_line: None,
-        },
     }
 }
 
 /// The Save confirmation shown after the single-slot save is requested.
 fn compose_saved() -> String {
     String::from("Mentés kész.\n\n[Enter] vissza   [Esc] vissza")
-}
-
-/// The End Game (return-to-title) confirmation, marking the cursor row.
-fn compose_end_game(cursor: usize) -> String {
-    let mut out = String::from("Visszatérsz a címképernyőre?\n\n");
-    for (i, label) in END_GAME_ROWS.iter().enumerate() {
-        let marker = if i == cursor { "▶ " } else { "  " };
-        out.push_str(&format!("{marker}{label}\n"));
-    }
-    out.push_str("\n[Esc] vissza");
-    out
 }
 
 #[cfg(test)]
@@ -326,7 +308,7 @@ mod tests {
     }
 
     #[test]
-    fn content_end_game_lists_igen_then_nem_with_an_esc_hint() {
+    fn end_game_does_not_compose_invented_full_screen_text() {
         let view = content(
             &crate::text::HeroName("Ron".into()),
             MenuScreen::EndGame { cursor: 1 },
@@ -338,17 +320,8 @@ mod tests {
             &Equipment::default(),
             &Terms::default(),
         );
-        assert!(
-            view.text.contains("▶ Nem"),
-            "cursor defaults to Nem: {}",
-            view.text
-        );
-        assert!(view.text.contains("Igen"), "Igen present: {}", view.text);
-        assert!(
-            view.text.contains("[Esc] vissza"),
-            "esc hint: {}",
-            view.text
-        );
+        assert!(view.text.is_empty());
+        assert_eq!(view.cursor_line, None);
     }
 
     #[test]
