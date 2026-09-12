@@ -33,6 +33,7 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let menu_snapshot = crate::menu::layout_smoke::snapshot(world, label);
     let menu_font_snapshot = crate::menu::font_smoke::snapshot(world, label);
     let end_game_snapshot = crate::menu::end_smoke::snapshot(world, label);
+    let title_snapshot = crate::title::smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -92,6 +93,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &end_game_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &title_snapshot {
                 snapshot.verify(&capture.image);
             }
         },

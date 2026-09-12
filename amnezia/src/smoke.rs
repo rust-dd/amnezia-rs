@@ -317,6 +317,7 @@ fn drive(world: &mut World) {
         } else if scenario == "return-title" {
             assert!(crate::title::smoke::ready(world));
             crate::menu::end_smoke::verify_finished(world);
+            crate::title::smoke::verify_finished(world);
         } else if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(

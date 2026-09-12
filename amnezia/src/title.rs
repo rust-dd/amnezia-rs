@@ -59,6 +59,7 @@ pub(crate) struct TitleFlow;
 
 impl Plugin for TitlePlugin {
     fn build(&self, app: &mut App) {
+        view::register(app);
         app.init_resource::<TitleActive>()
             .init_resource::<TitleState>()
             .add_systems(Startup, view::spawn)
@@ -67,9 +68,9 @@ impl Plugin for TitlePlugin {
                 (
                     flow::entered,
                     flow::loaded,
+                    view::clock::tick,
                     flow::input,
                     flow::drive,
-                    view::update,
                 )
                     .chain()
                     .in_set(TitleFlow)
@@ -87,11 +88,6 @@ fn play_se(
     if let Some(sounds) = sounds {
         play_system_se(audio, pick(sounds));
     }
-}
-
-fn row_text(label: &str, selected: bool) -> String {
-    let marker = if selected { "▶ " } else { "  " };
-    format!("{marker}{label}")
 }
 
 fn wrap_cursor(cursor: usize, delta: i32, len: usize) -> usize {

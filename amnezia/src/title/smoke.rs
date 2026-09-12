@@ -1,3 +1,4 @@
+pub(crate) use super::view::smoke::{snapshot, verify_finished};
 use super::*;
 
 pub(crate) fn ready(world: &World) -> bool {
@@ -18,7 +19,10 @@ pub(crate) fn return_input(frame: u32) -> Option<KeyCode> {
     }
 }
 
-pub(crate) fn return_scene(world: &World, frame: u32) -> Option<&'static str> {
+pub(crate) fn return_scene(world: &mut World, frame: u32) -> Option<&'static str> {
+    if let Some(label) = super::view::smoke::opening_label(world, frame) {
+        return Some(label);
+    }
     match frame {
         365 => {
             assert!(world.resource::<crate::menu::MenuOpen>().0);

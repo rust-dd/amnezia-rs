@@ -164,12 +164,6 @@ fn cursor_wraps_around_all_three_rows() {
 }
 
 #[test]
-fn row_text_marks_only_the_selected_row() {
-    assert_eq!(row_text("Új játék", true), "▶ Új játék");
-    assert_eq!(row_text("Betöltés", false), "  Betöltés");
-}
-
-#[test]
 fn selecting_shutdown_requests_app_exit_after_thirty_five_frames() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
