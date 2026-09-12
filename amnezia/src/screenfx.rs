@@ -30,6 +30,8 @@ mod weather;
 
 pub(crate) use flash::smoke as flash_smoke;
 pub use tone::{FrontCamera, PICTURE_LAYER, TintState};
+pub(crate) use weather::rain::Canvas as WeatherCanvas;
+pub(crate) use weather::rain::smoke as weather_smoke;
 pub use weather::{Weather, WeatherStrength};
 
 /// A screen effect the interpreter emits; consumed by [`step_effects`] (and, for
@@ -149,6 +151,7 @@ struct Fx {
 
 pub(crate) fn reset_transient(world: &mut World) {
     world.insert_resource(Fx::default());
+    weather::rain::reset(world);
 }
 
 pub struct ScreenFxPlugin;

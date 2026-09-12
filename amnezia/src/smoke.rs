@@ -56,6 +56,7 @@ impl Plugin for SmokePlugin {
             PostUpdate,
             drive
                 .after(bevy::transform::TransformSystems::Propagate)
+                .after(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate)
                 .after(crate::battle::EffectsSet)
                 .after(crate::legacy_colors::hue::HueSet),
         );
@@ -75,6 +76,8 @@ fn input(world: &mut World) {
         crate::menu::layout_smoke::input(frame)
     } else if scenario == "save-screen" {
         crate::save::screen_smoke::input(frame)
+    } else if scenario == "weather" {
+        crate::screenfx::weather_smoke::input(frame)
     } else {
         None
     };
@@ -88,6 +91,7 @@ fn input(world: &mut World) {
                 | "save-camera"
                 | "save-pictures"
                 | "save-screen"
+                | "weather"
                 | "gameover"
                 | "battle-defeat"
                 | "font"
@@ -154,6 +158,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "world-tones"
         && let Some(label) = crate::legacy_colors::world_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "weather"
+        && let Some(label) = crate::screenfx::weather_smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -326,6 +335,8 @@ fn drive(world: &mut World) {
             crate::animation::map_smoke::verify_finished(world);
         } else if scenario == "world-tones" {
             crate::legacy_colors::world_smoke::verify_finished(world);
+        } else if scenario == "weather" {
+            crate::screenfx::weather_smoke::verify_finished(world);
         } else if scenario == "map-flashes" {
             crate::animation::map_flash_smoke::verify_finished(world);
         } else if scenario == "ui-layers" {

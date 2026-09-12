@@ -1,5 +1,7 @@
 use super::*;
 
+mod rain_lifecycle;
+
 #[test]
 fn weather_code_round_trips() {
     for (code, kind) in [
@@ -62,7 +64,7 @@ fn particle_recycles_off_the_bottom() {
 }
 
 #[test]
-fn rain_spawns_scaled_particles_and_none_clears_them() {
+fn compatibility_snow_spawns_scaled_particles_and_none_clears_them() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     app.add_message::<MapChanged>();
@@ -75,10 +77,14 @@ fn rain_spawns_scaled_particles_and_none_clears_them() {
     app.add_systems(Update, rebuild_weather);
     app.world_mut().spawn((MainCamera, Transform::default()));
 
-    *app.world_mut().resource_mut::<Weather>() = Weather::Rain;
+    *app.world_mut().resource_mut::<Weather>() = Weather::Snow;
     app.world_mut().resource_mut::<WeatherStrength>().0 = 1;
     app.update();
-    assert_eq!(count_particles(&mut app), 60, "medium rain spawns 60 drops");
+    assert_eq!(
+        count_particles(&mut app),
+        60,
+        "medium snow spawns 60 flakes"
+    );
 
     *app.world_mut().resource_mut::<Weather>() = Weather::None;
     app.update();

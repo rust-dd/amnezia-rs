@@ -160,13 +160,26 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     };
     if matches!(label, Some("battle-action-flash" | "battle-action-fade")) {
         assert!(world.resource::<Battle>().log.is_empty());
-        assert!(
-            world
-                .query::<(&crate::font::bitmap::PixelText, &InheritedVisibility)>()
-                .iter(world)
-                .filter(|(_, visible)| visible.get())
-                .all(|(text, _)| text.runs.iter().all(|run| run.text.is_empty()))
-        );
+        let visible = world
+            .query::<(
+                Entity,
+                &crate::font::bitmap::PixelText,
+                &InheritedVisibility,
+                Option<&ChildOf>,
+            )>()
+            .iter(world)
+            .filter(|(_, text, visible, _)| {
+                visible.get() && text.runs.iter().any(|run| !run.text.is_empty())
+            })
+            .map(|(entity, text, _, parent)| {
+                format!(
+                    "{entity}: {:?}, parent {:?}",
+                    text.runs,
+                    parent.and_then(|parent| world.get::<Visibility>(parent.parent()))
+                )
+            })
+            .collect::<Vec<_>>();
+        assert!(visible.is_empty(), "unexpected action text: {visible:?}");
     } else if label.is_some() {
         super::hud::verify_bounds(world);
     }

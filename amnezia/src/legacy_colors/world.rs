@@ -53,6 +53,7 @@ fn apply(
         (
             Without<crate::world::BushBottom>,
             Without<super::hue::HueShift>,
+            Without<crate::screenfx::WeatherCanvas>,
         ),
     >,
 ) {

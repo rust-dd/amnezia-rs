@@ -52,6 +52,7 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-ui-layers
 cargo run -p amnezia --locked -- --smoke-test --smoke-water
 cargo run -p amnezia --locked -- --smoke-test --smoke-transitions
 cargo run -p amnezia --locked -- --smoke-test --smoke-screen-events
+cargo run -p amnezia --locked -- --smoke-test --smoke-weather
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle-transitions
 cargo run -p amnezia --locked -- --smoke-test --smoke-gameover
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle-defeat
@@ -77,6 +78,8 @@ The `save-pictures` scenario saves moving, tinted and waving pictures alongside 
 The `screen-events` scenario also checks strong and weak FlashScreen commands against byte-level reference blends on black, colored and white backgrounds. Seven captures verify the decay and unchanged UI above the flash. Additional transfers verify that local teleports freeze and retain the flash, while a different map clears it permanently.
 
 The `map-animations` scenario checks moving character targets against original animation pixels. A local teleport keeps the same visible cells frozen throughout both fades; playback resumes afterward. Rebuilding a different map clears the animation and its remaining flashes.
+
+The `weather` scenario executes original rain commands from Map0028/0038. Eight captures check the 6×24 streak, all three strengths, lifetime alpha, 320×160 wrapping, tone, camera pan/shake and unchanged UI against reference pixels. It also checks real menu pauses and map transfers, then shows the original forest and a live battle. The snow/fog compatibility renderers are separate; original game events only use rain.
 
 The `save-screen` scenario uses an isolated slot to restore an unfinished tone change, flash and camera shake. It opens and closes the actual menu to check that effects pause and resume, samples toned world and untinted foreground pixels, and loads legacy screen defaults.
 
