@@ -17,6 +17,7 @@ use bevy::audio::{AudioSink, AudioSinkPlayback, Volume};
 use bevy::prelude::*;
 
 mod request;
+pub(crate) mod saved;
 
 use request::BgmFade;
 pub use request::{AudioRequest, BgmTrack};
@@ -33,6 +34,8 @@ pub(crate) struct CurrentBgm {
     name: String,
     volume: f32,
     speed: f32,
+    /// The requested envelope survives a completed ramp for memorize/save replay.
+    fade_in: f32,
     fade: Option<BgmFade>,
 }
 
@@ -49,6 +52,7 @@ impl CurrentBgm {
             name: self.name.clone(),
             volume: self.volume,
             speed: self.speed,
+            fade_in: self.fade_in,
         })
     }
 
@@ -99,6 +103,7 @@ impl CurrentBgm {
             name: name.to_string(),
             volume,
             speed,
+            fade_in: 0.0,
             fade: None,
         }
     }
@@ -231,7 +236,7 @@ fn play_requests(
                     &track.name,
                     track.volume,
                     track.speed,
-                    0.0,
+                    track.fade_in,
                 ),
                 None => stop_bgm(&mut commands, &mut current),
             },
@@ -267,6 +272,7 @@ fn start_bgm(
     speed: f32,
     fade_in: f32,
 ) {
+    current.fade_in = fade_in;
     match current.action_for(name, volume, speed) {
         // A plain replay is a no-op, so any in-progress fade-in keeps running.
         BgmAction::Ignore => {}
@@ -345,6 +351,7 @@ fn stop_bgm(commands: &mut Commands, current: &mut CurrentBgm) {
         commands.entity(entity).despawn();
     }
     current.name.clear();
+    current.fade_in = 0.0;
     current.fade = None;
 }
 
@@ -398,6 +405,7 @@ mod tests {
             name: "Elven".into(),
             volume: 0.8,
             speed: 1.0,
+            fade_in: 0.0,
             fade: None,
         };
         current.start_fade_out(3.0);
@@ -421,6 +429,7 @@ mod tests {
             name: "Elven".into(),
             volume: 0.8,
             speed: 1.0,
+            fade_in: 0.0,
             fade: None,
         };
         current.start_fade_out(3.0);
@@ -442,7 +451,8 @@ mod tests {
             Some(BgmTrack {
                 name: "Elven".into(),
                 volume: 0.66,
-                speed: 1.0
+                speed: 1.0,
+                fade_in: 0.0,
             })
         );
         assert_eq!(

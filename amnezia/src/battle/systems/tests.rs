@@ -465,6 +465,7 @@ fn memorize_and_restore_round_trips_the_map_bgm() {
         name: "Field".into(),
         volume: 0.8,
         speed: 1.0,
+        fade_in: 0.0,
     }));
     assert_eq!(
         memory.restore(),
@@ -501,7 +502,8 @@ fn battle_start_plays_battle_music_and_stores_the_prior_bgm() {
         Some(BgmTrack {
             name: "Field".into(),
             volume: 0.7,
-            speed: 1.0
+            speed: 1.0,
+            fade_in: 0.0,
         })
     );
     let played = &app.world().resource::<AudioLog>().0;

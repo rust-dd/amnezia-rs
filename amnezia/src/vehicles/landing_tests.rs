@@ -73,6 +73,7 @@ fn landing_keyboard_blocks_every_active_event_layer_and_releases_after_page_remo
             name: "Field".into(),
             volume: 0.7,
             speed: 1.0,
+            fade_in: 0.0,
         });
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()

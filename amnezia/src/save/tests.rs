@@ -2,10 +2,12 @@ use super::*;
 
 mod actor_state;
 mod frame_clock;
+mod music;
 
 #[test]
 fn save_game_ron_round_trip() {
     let game = SaveGame {
+        music: None,
         format_version: SAVE_FORMAT_VERSION,
         game_frames: default(),
         transitions: default(),
@@ -193,6 +195,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     let path = temp_slot("continue");
     let game = SaveGame {
         format_version: 0,
+        music: None,
         game_frames: default(),
         transitions: default(),
         map_id: 2,
@@ -281,6 +284,7 @@ fn load_restores_name_charset_and_screen_state() {
     let path = temp_slot("scene");
     let game = SaveGame {
         format_version: 0,
+        music: None,
         game_frames: default(),
         transitions: default(),
         map_id: 2,
@@ -458,6 +462,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
     let _ = std::fs::remove_file(&path);
     let game = SaveGame {
         format_version: 0,
+        music: None,
         game_frames: default(),
         transitions: default(),
         map_id: 2,

@@ -123,7 +123,7 @@ impl AudioRequest {
 }
 
 /// A snapshot of a looping BGM — its track `name` and already-mapped linear
-/// `volume` and playback `speed` — enough to replay it. The battle system
+/// `volume`, playback `speed` and fade-in duration. The battle system
 /// memorizes the map BGM when a fight starts and restores it when the fight ends;
 /// the inn and `MemorizeBGM` (11530) memorize it the same way.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -131,17 +131,19 @@ pub struct BgmTrack {
     pub name: String,
     pub volume: f32,
     pub speed: f32,
+    #[serde(default)]
+    pub fade_in: f32,
 }
 
 impl BgmTrack {
-    /// The request that replays this exact track from the top, with no fade-in.
+    /// Replay from the beginning with the original fade-in setting.
     /// Restores a memorized BGM (battle teardown, inn checkout, `PlayMemorizedBGM`).
     pub fn replay(&self) -> AudioRequest {
         AudioRequest::Bgm {
             name: self.name.clone(),
             volume: self.volume,
             speed: self.speed,
-            fade_in: 0.0,
+            fade_in: self.fade_in,
         }
     }
 }
@@ -434,6 +436,7 @@ mod tests {
             name: "Elven".into(),
             volume: 0.66,
             speed: 1.0,
+            fade_in: 0.0,
         };
         assert_eq!(
             track.replay(),

@@ -25,6 +25,7 @@ pub(super) fn start(world: &mut World, scenario: &str) {
             | "water"
             | "transitions"
             | "return-title"
+            | "save-music"
     ) {
         message_options::entry()
     } else if scenario == "screen-events" {
@@ -158,7 +159,9 @@ pub(super) fn start(world: &mut World, scenario: &str) {
 }
 
 pub(super) fn selected() -> &'static str {
-    if std::env::args().any(|arg| arg == "--smoke-ui-layers") {
+    if std::env::args().any(|arg| arg == "--smoke-save-music") {
+        "save-music"
+    } else if std::env::args().any(|arg| arg == "--smoke-ui-layers") {
         "ui-layers"
     } else if std::env::args().any(|arg| arg == "--smoke-map-flashes") {
         "map-flashes"

@@ -27,6 +27,9 @@ impl MapInfoData {
 
 pub struct MapBgmPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct MapMusic;
+
 impl Plugin for MapBgmPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(MapInfoData(load_ron(&format!(
@@ -35,7 +38,10 @@ impl Plugin for MapBgmPlugin {
         ))))
         .add_systems(
             Update,
-            play_map_bgm.before(crate::interpreter::InterpreterStep),
+            play_map_bgm
+                .in_set(MapMusic)
+                .after(crate::teleport::MapTransfer)
+                .before(crate::interpreter::InterpreterStep),
         );
     }
 }
@@ -53,11 +59,16 @@ fn play_map_bgm(
     map_data: Res<MapData>,
     map_info: Res<MapInfoData>,
     title: Res<TitleActive>,
+    restore: Option<Res<crate::audio::saved::Pending>>,
     mut audio: MessageWriter<AudioRequest>,
     mut pending: Local<bool>,
 ) {
     if title.0 {
         *pending = true;
+        return;
+    }
+    if restore.is_some() {
+        *pending = false;
         return;
     }
     if !map_data.is_changed() && !*pending {

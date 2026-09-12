@@ -1,6 +1,9 @@
 //! Save crystals and title-screen loading share a persistent, single-slot snapshot.
 
+pub(crate) mod music_smoke;
+mod snapshot;
 mod storage;
+use snapshot::SaveGame;
 #[cfg(test)]
 use storage::save_dir;
 use storage::{read_save, save_path, slot_exists, write_save};
@@ -21,10 +24,9 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 #[cfg(test)]
 use ron::ser::PrettyConfig;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-const SAVE_FORMAT_VERSION: u32 = 1;
+const SAVE_FORMAT_VERSION: u32 = 2;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -76,74 +78,6 @@ pub fn save_slot_exists() -> bool {
     slot_exists(&save_path()) || storage::legacy_save_path().is_some_and(|p| slot_exists(&p))
 }
 
-/// A versioned snapshot of the supported persistent state.
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-struct SaveGame {
-    #[serde(default)]
-    format_version: u32,
-    #[serde(default)]
-    game_frames: crate::timing::GameFrames,
-    #[serde(default)]
-    transitions: crate::transitions::Settings,
-    map_id: u32,
-    x: u32,
-    y: u32,
-    dir: u32,
-    switches: Vec<(u32, bool)>,
-    variables: Vec<(u32, i32)>,
-    party: Vec<u32>,
-    items: Vec<(u32, u32)>,
-    gold: i32,
-    #[serde(default)]
-    progression: Vec<(u32, u32)>,
-    #[serde(default)]
-    learned_skills: Vec<(u32, Vec<u32>)>,
-    #[serde(default)]
-    vitals: Vec<(u32, (i32, i32))>,
-    #[serde(default)]
-    conditions: Vec<(u32, Vec<u32>)>,
-    #[serde(default)]
-    field_steps: u64,
-    #[serde(default)]
-    hero_name: String,
-    #[serde(default)]
-    charset: String,
-    #[serde(default)]
-    charset_index: u32,
-    #[serde(default)]
-    hero_hidden: bool,
-    #[serde(default = "neutral_tone")]
-    tone: (i32, i32, i32, i32),
-    #[serde(default)]
-    weather: i32,
-    #[serde(default)]
-    weather_strength: i32,
-    #[serde(default)]
-    equipment: Vec<(u32, [u32; 5])>,
-    #[serde(default)]
-    playtime: u64,
-    #[serde(default)]
-    timer_remaining: f32,
-    #[serde(default)]
-    timer_running: bool,
-    #[serde(default)]
-    timer_visible: bool,
-    #[serde(default)]
-    timer_in_battle: bool,
-    #[serde(default)]
-    vehicles: crate::vehicles::VehicleSave,
-    #[serde(default)]
-    system_bgm: crate::system_bgm::SystemBgm,
-    #[serde(default)]
-    panorama: Option<crate::panorama::Panorama>,
-    #[serde(default)]
-    appearance: crate::appearance::Appearance,
-    #[serde(default)]
-    menu_access: Option<bool>,
-    #[serde(default)]
-    save_access: bool,
-}
-
 /// The RM2000 neutral screen tone (every channel 100), the [`SaveGame::tone`]
 /// default so a slot saved before the tone was persisted loads without tinting
 /// the screen — a plain `(0, 0, 0, 0)` default would black it out.
@@ -158,6 +92,7 @@ pub struct SaveSet;
 
 impl Plugin for SavePlugin {
     fn build(&self, app: &mut App) {
+        crate::audio::saved::register(app);
         app.init_resource::<LoadRequest>()
             .init_resource::<LoadOutcome>()
             .init_resource::<SaveRequest>()
@@ -201,6 +136,7 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    music: crate::audio::saved::Capture<'w>,
     transitions: Option<ResMut<'w, crate::transitions::Settings>>,
     game_frames: Option<ResMut<'w, crate::timing::GameFrames>>,
     appearance: Option<ResMut<'w, crate::appearance::Appearance>>,
@@ -302,6 +238,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                music: scene.music.snapshot(),
                 format_version: SAVE_FORMAT_VERSION,
                 game_frames: scene.game_frames.as_deref().copied().unwrap_or_default(),
                 transitions: scene.transitions.as_deref().cloned().unwrap_or_default(),
@@ -368,6 +305,10 @@ fn save_or_load(
                 return;
             }
             save_io.commands.queue(crate::session::clear_for_reload);
+            let map_id = game.map_id;
+            save_io.commands.queue(move |world: &mut World| {
+                crate::audio::saved::prepare(world, map_id, game.music);
+            });
             switches.load(game.switches);
             variables.load(game.variables);
             party.restore(game.party);
@@ -461,6 +402,10 @@ fn valid_destination(game: &SaveGame) -> bool {
         .ok()
         .and_then(|text| ron::from_str::<amnezia_data::Map>(&text).ok());
     !game.party.is_empty()
+        && game
+            .music
+            .as_ref()
+            .is_none_or(crate::audio::saved::MusicState::valid)
         && game.timer_remaining.is_finite()
         && map.is_some_and(|map| game.x < map.width && game.y < map.height)
 }
