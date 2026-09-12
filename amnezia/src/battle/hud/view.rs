@@ -9,21 +9,7 @@ use crate::windowskin::frame;
 pub(super) struct RowSlot(Panel, usize);
 
 #[derive(Component)]
-pub(super) struct Cursor(Panel);
-
-fn image(system: &Handle<Image>, x: f32) -> ImageNode {
-    ImageNode {
-        image: system.clone(),
-        rect: Some(Rect::new(x, 0.0, x + 32.0, 32.0)),
-        image_mode: NodeImageMode::Sliced(TextureSlicer {
-            border: BorderRect::all(8.0),
-            center_scale_mode: SliceScaleMode::Stretch,
-            sides_scale_mode: SliceScaleMode::Stretch,
-            max_corner_scale: 3.0,
-        }),
-        ..default()
-    }
-}
+pub(super) struct Cursor(pub(super) Panel);
 
 pub(super) fn spawn(
     mut commands: Commands,
@@ -47,16 +33,17 @@ pub(super) fn spawn(
             ))
             .with_children(|parent| {
                 frame(parent, &system);
-                parent.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        height: Val::Px(48.0),
-                        ..default()
-                    },
-                    image(&system, 64.0),
-                    Cursor(panel),
-                    Visibility::Hidden,
-                ));
+                parent
+                    .spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            height: Val::Px(48.0),
+                            ..default()
+                        },
+                        Cursor(panel),
+                        Visibility::Hidden,
+                    ))
+                    .with_children(|parent| crate::windowskin::cursor(parent, &system));
                 for slot in 0..8 {
                     parent.spawn((
                         PixelText::default(),
@@ -159,9 +146,10 @@ pub(super) fn cursors(
     windows: Res<motion::CommandWindows>,
     battle: Res<Battle>,
     scroll: Res<ListScroll>,
-    mut cursors: Query<(&Cursor, &mut Node, &mut Visibility, &mut ImageNode)>,
+    mut cursors: Query<(&Cursor, &mut Node, &mut Visibility, &Children)>,
+    mut images: Query<&mut ImageNode>,
 ) {
-    for (cursor, mut node, mut visible, mut image) in &mut cursors {
+    for (cursor, mut node, mut visible, children) in &mut cursors {
         let selection = if cursor.0 == Panel::Status {
             layout::rectangle(Panel::Status, &battle)
                 .and_then(|_| windows.status_cursor().map(|index| (index, 1)))
@@ -180,7 +168,11 @@ pub(super) fn cursors(
         node.top = Val::Px((8.0 + (index / columns) as f32 * 16.0) * 3.0);
         node.width = Val::Px((width / columns as f32 - 8.0) * 3.0);
         let x = clocks.cursor_x(cursor.0);
-        image.rect = Some(Rect::new(x, 0.0, x + 32.0, 32.0));
+        for child in children {
+            if let Ok(mut image) = images.get_mut(*child) {
+                crate::windowskin::cursor_phase(&mut image, x);
+            }
+        }
     }
 }
 

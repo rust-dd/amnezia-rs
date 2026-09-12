@@ -34,6 +34,7 @@ Native smoke scenarios require a graphical desktop. Each supplies its own input,
 ```sh
 cargo run -p amnezia --locked -- --smoke-test
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle-menus
+cargo run -p amnezia --locked -- --smoke-test --smoke-menu
 cargo run -p amnezia --locked -- --smoke-test --smoke-actor-names
 cargo run -p amnezia --locked -- --smoke-test --smoke-actor-graphics
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle

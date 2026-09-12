@@ -351,6 +351,7 @@ fn drive(world: &mut World) {
             crate::battle::smoke::verify_events(world);
         } else if scenario == "battle-menus" {
             crate::battle::smoke::verify_finished(world);
+            crate::battle::hud::verify_cursors(world);
         } else if scenario == "actor-names" {
             crate::battle::smoke::verify_actor_names(world);
         }

@@ -3,6 +3,7 @@
 mod arrows;
 mod clocks;
 mod content;
+mod cursor_smoke;
 mod layout;
 mod motion;
 mod status;
@@ -10,6 +11,7 @@ mod view;
 
 pub(crate) use arrows::snapshot as arrow_snapshot;
 pub(super) use arrows::verify as verify_arrows;
+pub(crate) use cursor_smoke::{snapshot as cursor_snapshot, verify_finished as verify_cursors};
 pub(super) use motion::ready as commands_ready;
 pub(super) use motion::smoke::label as movement_label;
 pub(crate) use motion::smoke::snapshot as movement_snapshot;
