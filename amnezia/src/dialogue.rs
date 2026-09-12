@@ -22,6 +22,7 @@ pub(crate) use input_prompts::InputPrompts;
 pub use options::MessageOptions;
 use typewriter::Typewriter;
 pub(crate) use typewriter::smoke as timing_smoke;
+pub(crate) use view::smoke as font_smoke;
 
 /// The active dialogue: the sequence of boxes, which one is showing, and the
 /// current page's letter-by-letter reveal (rebuilt when the box changes).

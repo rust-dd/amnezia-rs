@@ -1,38 +1,27 @@
-//! The message-box UI: spawning the windowskin box and, each frame, syncing its
-//! visibility, face, revealed text, transparency, and the blinking continue
-//! arrow to the [`Dialogue`](super::Dialogue) state.
-//!
-//! Every dimension is RM2000's own, scaled ×3 (our 960×720 window is exactly three
-//! times RM2000's 320×240). The box is `Window_Message`'s full-width bottom strip
-//! (`MESSAGE_BOX_WIDTH`×`MESSAGE_BOX_HEIGHT` = 320×80 → 960×240); the frame is the
-//! 8px `System.png` windowskin border (→ 24px); the face is a 48×48 FaceSet cell
-//! (→ 144) drawn at (`LeftMargin`,`TopMargin`) inside the border, i.e. window
-//! (16,16) → (48,48); text starts at `LeftMargin+FaceSize+RightFaceMargin` = 72
-//! past the border → window 80 → 240 with a face, or at the border (8 → 24)
-//! without one; the font is RM2000's 12px on a 16px line pitch (→ 36 / 48).
+//! Original bitmap message contents, portrait and windowskin layers in native
+//! coordinates scaled threefold for Bevy UI.
 
 use super::{Dialogue, MessagePosition, MessageTransparent};
 use crate::assets::resolve_png;
-use crate::font::GameFont;
+use crate::font::bitmap::{DEFAULT, PixelText, Run};
 use bevy::prelude::*;
-use bevy::text::{FontSource, LineHeight};
+
+pub(crate) mod smoke;
+#[cfg(test)]
+mod tests;
 
 /// A FaceSet cell is 48×48 in the source sheet; the box renders it at ×3.
 const FACE_CELL: f32 = 48.0;
 const FACE_BOX: f32 = 144.0;
 /// The `System.png` windowskin frame is an 8px border in 320×240 → 24px at ×3.
 const BORDER: f32 = 24.0;
-/// The native 12px bitmap cell and 16px line pitch, scaled threefold.
-const FONT_PX: f32 = crate::font::UI_FONT_PX;
-const LINE_PX: f32 = 48.0;
 /// `MESSAGE_BOX_HEIGHT` (80) at ×3: the fixed full-width bottom strip.
 const BOX_H: f32 = 240.0;
-/// Face origin (window (16,16) at ×3) and the text's left with / without a face.
+/// Face origin inside the window contents, including its eight-pixel border.
 const FACE_X: f32 = 48.0;
 const FACE_Y: f32 = 48.0;
-const TEXT_X: f32 = 24.0;
-const TEXT_X_FACE: f32 = 240.0;
-const TEXT_Y: f32 = 24.0;
+const CONTENTS_WIDTH: u32 = 304;
+const CONTENTS_HEIGHT: u32 = 64;
 
 /// Frames the continue arrow stays visible, then hidden, per blink half-cycle
 /// (EasyRPG's `arrow_animation_frames`).
@@ -57,16 +46,9 @@ pub(super) struct DialogueFrame;
 #[derive(Component)]
 pub(super) struct DialogueArrow;
 
-/// Spawn the initially hidden dialogue box: RM2000's full-width bottom strip
-/// (`Window_Message`) styled with the `System.png` windowskin — a 9-sliced frame
-/// over the stretched background fill, the face and text on top, and the continue
-/// arrow at the bottom edge.
-pub(super) fn spawn_ui(
-    mut commands: Commands,
-    font: Res<GameFont>,
-    asset_server: Res<AssetServer>,
-) {
-    let system: Handle<Image> = asset_server.load("graphics/System/System.png");
+/// Spawn the hidden window, clipped bitmap contents, face and continue arrow.
+pub(super) fn spawn_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
+    let system = asset_server.load::<Image>("graphics/System/System.png");
     commands
         .spawn((
             Node {
@@ -82,50 +64,9 @@ pub(super) fn spawn_ui(
             DialoguePanel,
         ))
         .with_children(|panel| {
-            // Three windowskin layers so the border shows with neither the 9-slice's
-            // stretched-centre smear nor a dark gap at its inner edge:
-            //   1. the full background fill — the frame's semi-transparent inner
-            //      border then reveals the fill, not the dark map behind (no gap);
-            //   2. the frame, whose 9-slice also smears the windowskin's centre
-            //      pixels across the middle (EasyRPG only blits the border strips);
-            //   3. the background again, inset by the 24px border, hiding that smear.
-            // Face and text (spawned after) draw on top of the interior fill.
-            panel.spawn((
-                fill_node(),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
-                    image_mode: NodeImageMode::Stretch,
-                    ..default()
-                },
-                DialogueFrame,
-            ));
-            panel.spawn((
-                fill_node(),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(32.0, 0.0, 64.0, 32.0)),
-                    image_mode: NodeImageMode::Sliced(TextureSlicer {
-                        border: BorderRect::all(8.0),
-                        center_scale_mode: SliceScaleMode::Stretch,
-                        sides_scale_mode: SliceScaleMode::Stretch,
-                        // 8px source border × the ×3 scale = RM2000's 24px frame.
-                        max_corner_scale: 3.0,
-                    }),
-                    ..default()
-                },
-                DialogueFrame,
-            ));
-            panel.spawn((
-                inset_node(BORDER),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
-                    image_mode: NodeImageMode::Stretch,
-                    ..default()
-                },
-                DialogueFrame,
-            ));
+            panel
+                .spawn((fill_node(), DialogueFrame))
+                .with_children(|frame| crate::windowskin::frame(frame, &system));
             panel.spawn((
                 Node {
                     position_type: PositionType::Absolute,
@@ -140,19 +81,16 @@ pub(super) fn spawn_ui(
                 DialogueFace,
             ));
             panel.spawn((
-                Text::new(String::new()),
-                TextFont {
-                    font: FontSource::Handle(font.0.clone()),
-                    font_size: FontSize::Px(FONT_PX),
-                    ..default()
+                PixelText {
+                    size: UVec2::new(CONTENTS_WIDTH, CONTENTS_HEIGHT),
+                    runs: Vec::new(),
                 },
-                TextColor(Color::WHITE),
-                LineHeight::Px(LINE_PX),
                 Node {
                     position_type: PositionType::Absolute,
-                    left: Val::Px(TEXT_X),
-                    top: Val::Px(TEXT_Y),
-                    right: Val::Px(BORDER),
+                    left: Val::Px(BORDER),
+                    top: Val::Px(BORDER),
+                    width: Val::Px(CONTENTS_WIDTH as f32 * 3.0),
+                    height: Val::Px(CONTENTS_HEIGHT as f32 * 3.0),
                     ..default()
                 },
                 DialogueText,
@@ -216,10 +154,7 @@ fn inset_node(px: f32) -> Node {
     }
 }
 
-/// Sync the box's per-page presentation when the shown box, its face, or the
-/// transparent-box flag changes: panel visibility, the face graphic, the text's
-/// face-offset left edge, and whether the windowskin frame is drawn. Guarded by a
-/// remembered snapshot so it does no work while a page reveals letter by letter.
+/// Update visibility and portrait only when the page presentation changes.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub(super) fn render_box(
     dialogue: Res<Dialogue>,
@@ -250,7 +185,6 @@ pub(super) fn render_box(
             Without<DialogueFrame>,
         ),
     >,
-    mut texts: Query<&mut Node, With<DialogueText>>,
 ) {
     let showing = dialogue.active && dialogue.index < dialogue.boxes.len();
     let snapshot = (showing, dialogue.generation, dialogue.index, transparent.0);
@@ -287,9 +221,6 @@ pub(super) fn render_box(
             None => *visibility = Visibility::Hidden,
         }
     }
-    if let Ok(mut node) = texts.single_mut() {
-        node.left = Val::Px(if face.is_some() { TEXT_X_FACE } else { TEXT_X });
-    }
 }
 
 /// Each frame, show the glyphs the reveal has uncovered and blink the continue
@@ -298,7 +229,7 @@ pub(super) fn render_box(
 pub(super) fn render_reveal(
     dialogue: Res<Dialogue>,
     mut frame: Local<u32>,
-    mut texts: Query<&mut Text, With<DialogueText>>,
+    mut texts: Query<&mut PixelText, With<DialogueText>>,
     mut arrows: Query<
         &mut Visibility,
         (
@@ -314,9 +245,23 @@ pub(super) fn render_reveal(
         .then_some(dialogue.reveal.as_ref())
         .flatten();
     if let Ok(mut text) = texts.single_mut() {
-        let shown = reveal.map(|r| r.text()).unwrap_or("");
-        if text.as_str() != shown {
-            **text = shown.to_string();
+        let face = dialogue
+            .boxes
+            .get(dialogue.index)
+            .is_some_and(|page| page.face.is_some());
+        let next = PixelText {
+            size: UVec2::new(CONTENTS_WIDTH, CONTENTS_HEIGHT),
+            runs: reveal.map_or_else(Vec::new, |reveal| {
+                vec![Run::new(
+                    reveal.text(),
+                    if face { 72 } else { 0 },
+                    2,
+                    DEFAULT,
+                )]
+            }),
+        };
+        if *text != next {
+            *text = next;
         }
     }
 

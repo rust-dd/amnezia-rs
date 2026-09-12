@@ -193,6 +193,11 @@ fn drive(world: &mut World) {
     if scenario == "message-options" {
         message_options::drive(world, frame);
     }
+    if scenario == "font"
+        && let Some(label) = crate::dialogue::font_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "dialogue-timing"
         && let Some(label) = crate::dialogue::timing_smoke::drive(world, frame)
     {
@@ -355,6 +360,8 @@ fn drive(world: &mut World) {
         }
         if scenario == "display" {
             crate::display::smoke::verify_finished(world);
+        } else if scenario == "font" {
+            crate::dialogue::font_smoke::verify_finished(world);
         } else if scenario == "dialogue-timing" {
             crate::dialogue::timing_smoke::verify_finished(world);
         } else if scenario == "map-animations" {

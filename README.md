@@ -70,6 +70,8 @@ Run them one at a time. These are focused regression scenarios, not a full campa
 
 The `dialogue-timing` scenario checks the original Tiffany/Ron slow headers at 60/144 FPS, rendered text visibility, a long pause and automatic page closure. It verifies that the event following a message waits for closure. These checks do not establish font, window-animation or original-executable visual parity.
 
+The `font` scenario checks dialogue bitmap glyphs, palette/shadow colors, portrait placement, four-line spacing, window background/frame composition, transparency and long-line clipping against the source graphics. It covers top, middle and bottom placement; message opening/closing and pause-arrow timing are separate checks.
+
 A successful run logs `completed all final checks` and returns exit code 0. Closing the test window before verification finishes returns a nonzero status. The diagnostic `--smoke-test --smoke-close-early` deliberately closes its own window early and must return exit code 1; it is a failure-path check, not a gameplay scenario.
 
 Add `--smoke-offscreen` to render all camera layers into a GPU texture without a native window, including on a locked desktop. This still requires a working graphics adapter. Captures use the separate `amnezia-smoke-offscreen-*.png` prefix; empty images fail the check. Offscreen runs test rendering and scripted input, not native window/input integration.

@@ -135,10 +135,14 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 
 fn verify_view(world: &mut World, expected: &str) {
     let (text, visible) = world
-        .query_filtered::<(&Text, &InheritedVisibility), With<view::DialogueText>>()
+        .query_filtered::<
+            (&crate::font::bitmap::PixelText, &InheritedVisibility),
+            With<view::DialogueText>,
+        >()
         .single(world)
         .unwrap();
-    assert_eq!(text.0, expected);
+    assert_eq!(text.runs.len(), 1);
+    assert_eq!(text.runs[0].text, expected);
     assert!(visible.get());
     assert_eq!(
         *world
