@@ -2,13 +2,16 @@ use super::*;
 
 mod actor_state;
 mod camera;
+mod fixture;
 mod frame_clock;
+pub(crate) use fixture::save_resources;
 mod message;
 mod music;
 
 #[test]
 fn save_game_ron_round_trip() {
     let game = SaveGame {
+        pictures: Vec::new(),
         camera: None,
         message: default(),
         music: None,
@@ -66,35 +69,6 @@ pub(super) fn temp_slot(tag: &str) -> PathBuf {
 fn save_app(location: PathBuf) -> App {
     let mut app = save_resources(location);
     app.add_systems(Update, save_or_load);
-    app
-}
-
-fn save_resources(location: PathBuf) -> App {
-    let mut app = App::new();
-    app.add_plugins(MinimalPlugins);
-    app.init_resource::<ButtonInput<KeyCode>>()
-        .init_resource::<Dialogue>()
-        .init_resource::<Fade>()
-        .init_resource::<PendingTeleport>()
-        .init_resource::<Switches>()
-        .init_resource::<Variables>()
-        .init_resource::<Party>()
-        .init_resource::<Inventory>()
-        .init_resource::<LoadRequest>()
-        .init_resource::<LoadOutcome>()
-        .init_resource::<SaveRequest>()
-        .init_resource::<EventSaveRequest>()
-        .init_resource::<Vitals>()
-        .init_resource::<Progression>()
-        .init_resource::<Equipment>()
-        .init_resource::<Weather>()
-        .init_resource::<WeatherStrength>()
-        .init_resource::<TintState>()
-        .init_resource::<PlayTime>()
-        .init_resource::<GameClock>()
-        .init_resource::<crate::timing::GameFrames>();
-    app.insert_resource(SaveLocation(location));
-    app.insert_resource(HeroName("Ron".into()));
     app
 }
 
@@ -203,6 +177,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     // restore is observable.
     let path = temp_slot("continue");
     let game = SaveGame {
+        pictures: Vec::new(),
         camera: None,
         message: default(),
         format_version: 0,
@@ -294,6 +269,7 @@ fn load_restores_name_charset_and_screen_state() {
     // resources so the resumed scene looks exactly as it was saved.
     let path = temp_slot("scene");
     let game = SaveGame {
+        pictures: Vec::new(),
         camera: None,
         message: default(),
         format_version: 0,
@@ -474,6 +450,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
     let path = temp_slot("roundtrip");
     let _ = std::fs::remove_file(&path);
     let game = SaveGame {
+        pictures: Vec::new(),
         camera: None,
         message: default(),
         format_version: 0,

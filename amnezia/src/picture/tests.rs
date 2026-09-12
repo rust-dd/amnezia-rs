@@ -1,5 +1,6 @@
 use super::*;
 
+mod save;
 mod transfers;
 
 #[test]
@@ -76,6 +77,7 @@ fn lerp_interpolates_endpoints_and_midpoint() {
 fn tween_interpolates_the_tone_toward_grayscale() {
     let mut pic = Picture {
         id: 1,
+        name: "Cross".into(),
         x: 0.0,
         y: 0.0,
         transparency: 0.0,
@@ -130,6 +132,7 @@ fn a_map_rebuild_despawns_every_picture() {
 fn test_picture(id: u32) -> Picture {
     Picture {
         id,
+        name: "Cross".into(),
         x: 0.0,
         y: 0.0,
         transparency: 0.0,

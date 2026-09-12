@@ -2,6 +2,7 @@
 
 pub(crate) mod camera_smoke;
 pub(crate) mod music_smoke;
+pub(crate) mod picture_smoke;
 mod smoke_slot;
 mod snapshot;
 mod storage;
@@ -28,7 +29,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-const SAVE_FORMAT_VERSION: u32 = 4;
+const SAVE_FORMAT_VERSION: u32 = 5;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -138,7 +139,8 @@ struct SaveIo<'w, 's> {
 /// [`WeatherStrength`]), and the screen tone ([`TintState`]). Bundled into one
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
-struct SceneState<'w> {
+struct SceneState<'w, 's> {
+    pictures: crate::picture::saved::Capture<'w, 's>,
     camera: Option<Res<'w, crate::player::CameraPan>>,
     message: crate::dialogue::saved::Capture<'w>,
     music: crate::audio::saved::Capture<'w>,
@@ -243,6 +245,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                pictures: scene.pictures.snapshot(),
                 camera: scene.camera.as_ref().map(|camera| camera.snapshot()),
                 message: scene.message.snapshot(&dialogue),
                 music: scene.music.snapshot(),
@@ -314,6 +317,7 @@ fn save_or_load(
             save_io.commands.queue(crate::session::clear_for_reload);
             let map_id = game.map_id;
             save_io.commands.queue(move |world: &mut World| {
+                crate::picture::saved::prepare(world, map_id, game.pictures);
                 game.message.restore(world);
                 crate::player::saved_camera::prepare(world, map_id, game.camera);
                 crate::audio::saved::prepare(world, map_id, game.music);
@@ -411,6 +415,7 @@ fn valid_destination(game: &SaveGame) -> bool {
         .ok()
         .and_then(|text| ron::from_str::<amnezia_data::Map>(&text).ok());
     !game.party.is_empty()
+        && crate::picture::saved::valid(&game.pictures)
         && game
             .camera
             .as_ref()
@@ -424,4 +429,4 @@ fn valid_destination(game: &SaveGame) -> bool {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

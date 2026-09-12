@@ -20,8 +20,8 @@ impl Effect {
     }
 }
 
-#[derive(Default)]
-pub(super) struct EffectState {
+#[derive(Default, Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct EffectState {
     mode: i32,
     strength: f64,
     target: f64,
@@ -30,6 +30,13 @@ pub(super) struct EffectState {
 }
 
 impl EffectState {
+    pub(super) fn valid(&self) -> bool {
+        (0..=2).contains(&self.mode)
+            && self.strength.is_finite()
+            && self.target.is_finite()
+            && self.rotation.is_finite()
+    }
+
     pub(super) fn show(effect: Effect) -> Self {
         Self {
             mode: effect.mode,

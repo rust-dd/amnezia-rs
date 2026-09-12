@@ -4,6 +4,7 @@ use crate::picture::{Anim, Picture, PictureCommand, Tone};
 fn picture(effect: Effect) -> Picture {
     Picture {
         id: 1,
+        name: "Fog".into(),
         x: 0.0,
         y: 0.0,
         transparency: 0.0,

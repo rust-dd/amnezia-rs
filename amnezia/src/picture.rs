@@ -19,6 +19,7 @@ use bevy::transform::TransformSystems;
 
 mod effects;
 mod render;
+pub(crate) mod saved;
 pub(crate) mod smoke;
 pub use effects::Effect;
 #[cfg(test)]
@@ -27,7 +28,7 @@ mod tests;
 /// An RM2000 picture colour tone: per-channel RGB and a saturation, each a
 /// percent with 100 neutral (`saturation = 0` is full grayscale). Interpolated
 /// by [`PictureCommand::Move`] over its duration.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Tone {
     pub r: f32,
     pub g: f32,
@@ -151,6 +152,7 @@ fn tone_param(params: &[i32]) -> Tone {
 #[derive(Component)]
 struct Picture {
     id: u32,
+    name: String,
     x: f32,
     y: f32,
     transparency: f32,
@@ -228,13 +230,13 @@ impl Picture {
 }
 
 /// A picture's interpolated visual state.
-#[derive(Clone, Copy)]
-struct Anim {
-    x: f32,
-    y: f32,
-    transparency: f32,
-    zoom: f32,
-    tone: Tone,
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Anim {
+    pub x: f32,
+    pub y: f32,
+    pub transparency: f32,
+    pub zoom: f32,
+    pub tone: Tone,
 }
 
 impl Anim {
@@ -256,8 +258,8 @@ impl Anim {
 }
 
 /// A `MovePicture` in progress, interpolating the whole visual state.
-#[derive(Clone, Copy)]
-struct Tween {
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Tween {
     from: Anim,
     to: Anim,
     elapsed: u32,
@@ -276,6 +278,7 @@ impl Plugin for PicturePlugin {
                 Update,
                 (
                     clear_on_map_change.after(crate::teleport::MapTransfer),
+                    saved::restore,
                     render::apply_commands,
                     render::size_pictures,
                     drive_tweens,

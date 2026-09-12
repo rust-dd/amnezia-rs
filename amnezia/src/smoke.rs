@@ -31,6 +31,8 @@ impl Plugin for SmokePlugin {
             crate::save::music_smoke::configure(app);
         } else if scenario == "save-camera" {
             crate::save::camera_smoke::configure(app);
+        } else if scenario == "save-pictures" {
+            crate::save::picture_smoke::configure(app);
         }
         app.insert_resource(completion::Completion::new(scenario));
         app.insert_resource(SmokeRun {
@@ -80,6 +82,7 @@ fn input(world: &mut World) {
             "return-title"
                 | "save-music"
                 | "save-camera"
+                | "save-pictures"
                 | "gameover"
                 | "battle-defeat"
                 | "font"
@@ -232,6 +235,11 @@ fn drive(world: &mut World) {
     {
         capture(world, label);
     }
+    if scenario == "save-pictures"
+        && let Some(label) = crate::save::picture_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "water"
         && let Some(label) = crate::world::water_smoke::drive(world, frame)
     {
@@ -341,6 +349,8 @@ fn drive(world: &mut World) {
             crate::save::music_smoke::verify_finished(world);
         } else if scenario == "save-camera" {
             crate::save::camera_smoke::verify_finished(world);
+        } else if scenario == "save-pictures" {
+            crate::save::picture_smoke::verify_finished(world);
         } else if scenario == "intro" {
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 3);
             assert!(

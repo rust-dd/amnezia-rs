@@ -73,12 +73,9 @@ pub(super) fn apply_commands(
     world: &mut World,
     mut cursor: Local<bevy::ecs::message::MessageCursor<PictureCommand>>,
 ) {
-    let Some(mesh) = world
-        .get_resource::<PictureMesh>()
-        .map(|mesh| mesh.0.clone())
-    else {
+    if !world.contains_resource::<PictureMesh>() {
         return;
-    };
+    }
     let camera_base = world
         .query_filtered::<&Transform, With<MainCamera>>()
         .single(world)
@@ -107,21 +104,11 @@ pub(super) fn apply_commands(
                 }
                 let anchor =
                     fixed_to_map.then(|| camera_base.unwrap_or_default() + screen_offset(x, y));
-                let image = world
-                    .resource::<AssetServer>()
-                    .load(resolve_png("Picture", &name));
-                let material =
-                    world
-                        .resource_mut::<Assets<PictureMaterial>>()
-                        .add(PictureMaterial {
-                            channels: tone_channels(tone),
-                            extra: opacity_extra(transparency, use_transparent_color),
-                            image: image.clone(),
-                            wave: Vec4::ZERO,
-                        });
-                world.spawn((
+                spawn_picture(
+                    world,
                     Picture {
                         id,
+                        name,
                         x,
                         y,
                         transparency,
@@ -135,13 +122,7 @@ pub(super) fn apply_commands(
                         effect: super::effects::EffectState::show(effect),
                         frame_fraction: 0.0,
                     },
-                    Mesh2d(mesh.clone()),
-                    MeshMaterial2d(material),
-                    crate::transitions::SnapshotImage(image),
-                    Transform::from_translation(screen_offset(x, y).extend(picture_z(id)))
-                        .with_scale(Vec3::ZERO),
-                    RenderLayers::layer(PICTURE_LAYER),
-                ));
+                );
             }
             PictureCommand::Move {
                 id,
@@ -181,6 +162,33 @@ pub(super) fn apply_commands(
             }
         }
     }
+}
+
+pub(super) fn spawn_picture(world: &mut World, picture: Picture) {
+    let mesh = world.resource::<PictureMesh>().0.clone();
+    let image = world
+        .resource::<AssetServer>()
+        .load(resolve_png("Picture", &picture.name));
+    let material = world
+        .resource_mut::<Assets<PictureMaterial>>()
+        .add(PictureMaterial {
+            channels: tone_channels(picture.tone),
+            extra: opacity_extra(picture.transparency, picture.use_transparent_color),
+            image: image.clone(),
+            wave: Vec4::ZERO,
+        });
+    let transform = Transform::from_translation(
+        screen_offset(picture.x, picture.y).extend(picture_z(picture.id)),
+    )
+    .with_scale(Vec3::ZERO);
+    world.spawn((
+        picture,
+        Mesh2d(mesh),
+        MeshMaterial2d(material),
+        crate::transitions::SnapshotImage(image),
+        transform,
+        RenderLayers::layer(PICTURE_LAYER),
+    ));
 }
 
 fn picture_entities(world: &mut World, id: u32) -> Vec<Entity> {
