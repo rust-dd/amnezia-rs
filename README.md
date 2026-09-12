@@ -57,6 +57,7 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-gameover
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle-defeat
 cargo run -p amnezia --locked -- --smoke-test --smoke-return-title
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-music
+cargo run -p amnezia --locked -- --smoke-test --smoke-save-camera
 ```
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
@@ -66,6 +67,8 @@ A successful run logs `completed all final checks` and returns exit code 0. Clos
 Add `--smoke-offscreen` to render all camera layers into a GPU texture without a native window, including on a locked desktop. This still requires a working graphics adapter. Captures use the separate `amnezia-smoke-offscreen-*.png` prefix; empty images fail the check. Offscreen runs test rendering and scripted input, not native window/input integration.
 
 The `save-music` scenario uses its own temporary save directory, never the player's slot. It checks actual map reloads and decoded audio playback for current music, memorized music, saved silence and legacy saves. It also reopens messages after loading to check portrait pixels, a cleared face, placement, transparency and legacy message defaults. It removes its own fixture files on success.
+
+The `save-camera` scenario also uses an isolated temporary slot. It saves a locked camera during a pan, verifies restoration after rebuilding the map, continues the pan, unlocks following and checks legacy centering without camera data.
 
 The game renders its world, text and menus together at 320×240, then scales the result in whole physical pixels with black letterboxing. Windows smaller than the native canvas are downscaled proportionally. The display scenario checks normal, wide, portrait, odd-sized and small outputs against direct GPU readbacks of the native canvas.
 

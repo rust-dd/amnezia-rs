@@ -34,7 +34,10 @@ pub(super) fn start(world: &mut World, scenario: &str) {
         crate::battle::flow::smoke::entry()
     } else if matches!(scenario, "gameover" | "battle-defeat") {
         crate::gameover::smoke::entry(scenario == "battle-defeat")
-    } else if matches!(scenario, "camera" | "map-animations" | "map-flashes") {
+    } else if matches!(
+        scenario,
+        "camera" | "save-camera" | "map-animations" | "map-flashes"
+    ) {
         camera::entry()
     } else if scenario == "looping" {
         looping::entry()
@@ -161,6 +164,8 @@ pub(super) fn start(world: &mut World, scenario: &str) {
 pub(super) fn selected() -> &'static str {
     if std::env::args().any(|arg| arg == "--smoke-save-music") {
         "save-music"
+    } else if std::env::args().any(|arg| arg == "--smoke-save-camera") {
+        "save-camera"
     } else if std::env::args().any(|arg| arg == "--smoke-ui-layers") {
         "ui-layers"
     } else if std::env::args().any(|arg| arg == "--smoke-map-flashes") {

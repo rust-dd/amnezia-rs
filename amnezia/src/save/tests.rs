@@ -1,6 +1,7 @@
 use super::*;
 
 mod actor_state;
+mod camera;
 mod frame_clock;
 mod message;
 mod music;
@@ -8,6 +9,7 @@ mod music;
 #[test]
 fn save_game_ron_round_trip() {
     let game = SaveGame {
+        camera: None,
         message: default(),
         music: None,
         format_version: SAVE_FORMAT_VERSION,
@@ -62,6 +64,12 @@ pub(super) fn temp_slot(tag: &str) -> PathBuf {
 /// with the save slot pointed at `location` so the real developer save is never
 /// read or written.
 fn save_app(location: PathBuf) -> App {
+    let mut app = save_resources(location);
+    app.add_systems(Update, save_or_load);
+    app
+}
+
+fn save_resources(location: PathBuf) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     app.init_resource::<ButtonInput<KeyCode>>()
@@ -87,7 +95,6 @@ fn save_app(location: PathBuf) -> App {
         .init_resource::<crate::timing::GameFrames>();
     app.insert_resource(SaveLocation(location));
     app.insert_resource(HeroName("Ron".into()));
-    app.add_systems(Update, save_or_load);
     app
 }
 
@@ -196,6 +203,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     // restore is observable.
     let path = temp_slot("continue");
     let game = SaveGame {
+        camera: None,
         message: default(),
         format_version: 0,
         music: None,
@@ -286,6 +294,7 @@ fn load_restores_name_charset_and_screen_state() {
     // resources so the resumed scene looks exactly as it was saved.
     let path = temp_slot("scene");
     let game = SaveGame {
+        camera: None,
         message: default(),
         format_version: 0,
         music: None,
@@ -465,6 +474,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
     let path = temp_slot("roundtrip");
     let _ = std::fs::remove_file(&path);
     let game = SaveGame {
+        camera: None,
         message: default(),
         format_version: 0,
         music: None,

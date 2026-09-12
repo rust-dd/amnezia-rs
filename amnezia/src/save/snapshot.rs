@@ -71,4 +71,6 @@ pub(super) struct SaveGame {
     pub(super) music: Option<crate::audio::saved::MusicState>,
     #[serde(default)]
     pub(super) message: crate::dialogue::saved::MessageState,
+    #[serde(default)]
+    pub(super) camera: Option<crate::player::saved_camera::CameraState>,
 }

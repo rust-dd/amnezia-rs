@@ -66,6 +66,7 @@ fn start_new_game(world: &mut World) {
 
 /// Discard commands and overlays belonging to the previous play session.
 pub(crate) fn clear_transient(world: &mut World) {
+    world.remove_resource::<crate::player::saved_camera::Pending>();
     world.remove_resource::<crate::audio::saved::Pending>();
     reset::<RunningEvent>(world);
     reset::<ParallelPool>(world);

@@ -1,6 +1,8 @@
 //! Save crystals and title-screen loading share a persistent, single-slot snapshot.
 
+pub(crate) mod camera_smoke;
 pub(crate) mod music_smoke;
+mod smoke_slot;
 mod snapshot;
 mod storage;
 use snapshot::SaveGame;
@@ -26,7 +28,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-const SAVE_FORMAT_VERSION: u32 = 3;
+const SAVE_FORMAT_VERSION: u32 = 4;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -93,6 +95,7 @@ pub struct SaveSet;
 impl Plugin for SavePlugin {
     fn build(&self, app: &mut App) {
         crate::audio::saved::register(app);
+        crate::player::saved_camera::register(app);
         app.init_resource::<LoadRequest>()
             .init_resource::<LoadOutcome>()
             .init_resource::<SaveRequest>()
@@ -136,6 +139,7 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    camera: Option<Res<'w, crate::player::CameraPan>>,
     message: crate::dialogue::saved::Capture<'w>,
     music: crate::audio::saved::Capture<'w>,
     transitions: Option<ResMut<'w, crate::transitions::Settings>>,
@@ -239,6 +243,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                camera: scene.camera.as_ref().map(|camera| camera.snapshot()),
                 message: scene.message.snapshot(&dialogue),
                 music: scene.music.snapshot(),
                 format_version: SAVE_FORMAT_VERSION,
@@ -310,6 +315,7 @@ fn save_or_load(
             let map_id = game.map_id;
             save_io.commands.queue(move |world: &mut World| {
                 game.message.restore(world);
+                crate::player::saved_camera::prepare(world, map_id, game.camera);
                 crate::audio::saved::prepare(world, map_id, game.music);
             });
             switches.load(game.switches);
@@ -405,6 +411,10 @@ fn valid_destination(game: &SaveGame) -> bool {
         .ok()
         .and_then(|text| ron::from_str::<amnezia_data::Map>(&text).ok());
     !game.party.is_empty()
+        && game
+            .camera
+            .as_ref()
+            .is_none_or(crate::player::saved_camera::CameraState::valid)
         && game
             .music
             .as_ref()

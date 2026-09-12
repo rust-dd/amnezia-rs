@@ -10,31 +10,15 @@ pub(crate) mod message;
 
 #[derive(Resource)]
 struct Fixture {
-    directory: PathBuf,
-    path: PathBuf,
-    original_location: PathBuf,
+    slot: super::smoke_slot::Slot,
     map_music: Option<amnezia_data::MapInfoDef>,
     checks: u8,
 }
 
 pub(crate) fn configure(app: &mut App) {
-    let stamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let directory = std::env::temp_dir().join(format!(
-        "amnezia-smoke-save-music-{}-{stamp}",
-        std::process::id()
-    ));
-    std::fs::create_dir(&directory).unwrap();
-    let path = directory.join("slot.ron");
-    let original_location = app.world().resource::<SaveLocation>().0.clone();
-    assert_ne!(path, original_location);
-    app.insert_resource(SaveLocation(path.clone()));
+    let slot = super::smoke_slot::Slot::new(app, "save-music");
     app.insert_resource(Fixture {
-        directory,
-        path,
-        original_location,
+        slot,
         map_music: None,
         checks: 0,
     });
@@ -68,8 +52,7 @@ fn theme() -> BgmTrack {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
-    let path = world.resource::<Fixture>().path.clone();
-    assert_eq!(world.resource::<SaveLocation>().0, path);
+    let path = world.resource::<Fixture>().slot.path(world);
     let message_capture = message::drive(world, frame);
     match frame {
         260 => {
@@ -139,6 +122,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             game.format_version = 1;
             game.music = None;
             game.message = default();
+            game.camera = None;
             write_save(&path, &game).unwrap();
         }
         700 => {
@@ -203,10 +187,7 @@ pub(crate) fn verify_finished(world: &mut World) {
     message::verify_finished(world);
     let fixture = world.remove_resource::<Fixture>().unwrap();
     assert_eq!(fixture.checks, 15);
-    assert_eq!(world.resource::<SaveLocation>().0, fixture.path);
-    std::fs::remove_file(&fixture.path).unwrap();
-    std::fs::remove_dir(&fixture.directory).unwrap();
-    world.resource_mut::<SaveLocation>().0 = fixture.original_location;
+    fixture.slot.finish(world);
     let original = fixture.map_music.unwrap();
     let map_id = original.id;
     *world

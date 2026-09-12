@@ -17,6 +17,7 @@ use bevy::prelude::*;
 mod camera;
 pub(crate) use camera::CameraFollow;
 pub use camera::CameraPan;
+pub(crate) use camera::saved as saved_camera;
 
 const PLAYER_CHARSET: &str = "Chara1";
 const PLAYER_INDEX: u32 = 0;
