@@ -1,6 +1,5 @@
-//! The menu's input and rendering systems. Escape toggles the menu and backs out
-//! of a sub-screen; Up/Down move the active cursor; →, from the command list,
-//! focuses the party window for a status look; Enter/Space confirm. The pure
+//! The menu's input systems. Escape toggles the menu and backs out
+//! of a sub-screen; Up/Down move the active cursor; Enter/Space confirm. The pure
 //! navigation math lives in [`super::nav`]; these systems only apply it and touch
 //! the world (inventory, vitals, save request, title).
 
@@ -27,10 +26,7 @@ use bevy::prelude::*;
 use super::nav::{
     confirm_pressed, end_game_transition, escape_transition, item_target, skill_target, step,
 };
-use super::{
-    MemberAction, MenuAccess, MenuOpen, MenuScreen, MenuState, command, equip, items, skills,
-    use_item,
-};
+use super::{MenuAccess, MenuOpen, MenuScreen, MenuState, command, equip, items, skills, use_item};
 
 /// The transient overlays and flows that must not be interrupted by *opening* the
 /// menu: a message box, a running event, a choice or number prompt, a teleport
@@ -92,7 +88,7 @@ impl MenuSfx<'_> {
         }
     }
 
-    /// The cursor-move cue, played on any up/down/right navigation.
+    /// The cursor-move cue for list navigation.
     fn cursor(&mut self) {
         self.play(|s| &s.cursor);
     }
@@ -105,6 +101,10 @@ impl MenuSfx<'_> {
     /// The back/close cue, played when Escape backs out of or shuts the menu.
     fn cancel(&mut self) {
         self.play(|s| &s.cancel);
+    }
+
+    fn buzzer(&mut self) {
+        self.play(|s| &s.buzzer);
     }
 }
 
@@ -167,32 +167,33 @@ pub(super) fn menu_input(
     let up = keys.just_pressed(KeyCode::ArrowUp);
     let down = keys.just_pressed(KeyCode::ArrowDown);
     let members = party.snapshot().len().saturating_sub(1);
-    // Cursor cue on any vertical move, decision cue on a confirm; the Escape
-    // (cancel) cue is played in its own branch above.
     if up || down {
         sfx.cursor();
     }
-    if confirm {
+    if confirm
+        && !matches!(
+            state.screen,
+            MenuScreen::Command | MenuScreen::MemberSelect { .. }
+        )
+    {
         sfx.decision();
     }
     match state.screen {
         MenuScreen::Command => {
             state.cursor = step(state.cursor, up, down, command::COMMANDS.len() - 1);
-            if keys.just_pressed(KeyCode::ArrowRight) {
-                sfx.cursor();
-                state.screen = MenuScreen::MemberSelect {
-                    action: MemberAction::Status,
-                    cursor: 0,
-                };
-            } else if confirm {
-                match command::dispatch(command::COMMANDS[state.cursor]) {
+            if confirm {
+                let command = command::COMMANDS[state.cursor];
+                if !command::enabled(command, party.snapshot().len(), gates.save_access.0) {
+                    sfx.buzzer();
+                    return;
+                }
+                sfx.decision();
+                match command::dispatch(command) {
                     command::CommandAction::Open(screen) => state.screen = screen,
-                    // Save access disabled (opcode 11930) makes the Save entry inert.
-                    command::CommandAction::Save if gates.save_access.0 => {
+                    command::CommandAction::Save => {
                         save_request.0 = true;
                         state.screen = MenuScreen::Saved;
                     }
-                    command::CommandAction::Save => {}
                 }
             }
         }
@@ -225,7 +226,12 @@ pub(super) fn menu_input(
             let cursor = step(cursor, up, down, members);
             state.screen = MenuScreen::MemberSelect { action, cursor };
             if confirm {
-                state.screen = command::member_screen(action, cursor);
+                if command::member_enabled(action, cursor, &party, &vitals) {
+                    sfx.decision();
+                    state.screen = command::member_screen(action, cursor);
+                } else {
+                    sfx.buzzer();
+                }
             }
         }
         MenuScreen::SkillList { member, cursor } => {
@@ -340,6 +346,8 @@ pub(super) fn menu_input(
 mod tests {
     use super::*;
     use crate::menu::testkit;
+
+    mod guards;
 
     /// A headless app with just the menu input system and the resources it reads,
     /// opened on `screen` with `cursor` as the command-list cursor.

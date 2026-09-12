@@ -23,7 +23,14 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 980 {
         world.resource_mut::<Party>().restore(Vec::new());
     }
+    if frame == 1055 {
+        let state = world.resource::<MenuState>();
+        assert_eq!(state.screen, MenuScreen::Command);
+        assert_eq!(state.cursor, 2);
+        info!("field menu: empty-party commands and right-arrow guard verified");
+    }
     if frame == 1060 {
+        world.resource_mut::<MenuState>().cursor = 0;
         world.resource_mut::<Party>().restore(vec![1, 2, 3, 4]);
         world.resource_mut::<Vitals>().heal_all();
         world.resource_mut::<crate::save::SaveAccess>().0 = false;
@@ -49,6 +56,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         return None;
     }
     assert!(world.resource::<MenuOpen>().0);
+    assert_eq!(world.resource::<MenuState>().screen, MenuScreen::Command);
     let party = world.resource::<Party>();
     let empty = label == "menu-font-empty";
     assert_eq!(party.snapshot().is_empty(), empty);

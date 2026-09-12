@@ -5,8 +5,7 @@
 //! command drills into its flow: the held-item list and field-use for Item; a
 //! party-member prompt then a skill list (and a field heal) for Skill; an
 //! interactive equipment screen for Equipment; a save request for Save; and a
-//! return-to-title confirmation for End Game. Selecting a member from the party
-//! window (→ from the command list) opens that member's status detail.
+//! return-to-title confirmation for End Game.
 //!
 //! The Skill list shows only the chosen caster's known skills — the actor
 //! `learnings` at or below its current level (their SP is what a cast spends).

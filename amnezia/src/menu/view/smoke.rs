@@ -9,9 +9,11 @@ struct Checks(Arc<AtomicUsize>);
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        450 => Some(KeyCode::ArrowRight),
-        480 | 510 | 540 => Some(KeyCode::ArrowDown),
+        435 | 480 | 510 | 540 | 1010 | 1030 => Some(KeyCode::ArrowDown),
+        450 | 995 | 1020 | 1040 => Some(KeyCode::Enter),
         620 => Some(KeyCode::Escape),
+        640 => Some(KeyCode::ArrowUp),
+        1050 => Some(KeyCode::ArrowRight),
         _ => None,
     }
 }
@@ -52,7 +54,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let member = label == "menu-layout-member";
     let expected = if member {
         MenuScreen::MemberSelect {
-            action: crate::menu::MemberAction::Status,
+            action: crate::menu::MemberAction::Skill,
             cursor: 3,
         }
     } else {

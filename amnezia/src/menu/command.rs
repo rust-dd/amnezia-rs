@@ -5,7 +5,9 @@
 //! each confirm drills into.
 
 use super::{MemberAction, MenuScreen};
+use crate::state::Party;
 use crate::terms::Terms;
+use crate::vitals::Vitals;
 
 /// The RM2000 default main-menu commands, in cursor order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,6 +27,33 @@ pub(super) const COMMANDS: [Command; 5] = [
     Command::Save,
     Command::EndGame,
 ];
+
+pub(super) fn enabled(command: Command, members: usize, save: bool) -> bool {
+    match command {
+        Command::Item | Command::Skill | Command::Equipment => members > 0,
+        Command::Save => save,
+        Command::EndGame => true,
+    }
+}
+
+pub(super) fn member_enabled(
+    action: MemberAction,
+    member: usize,
+    party: &Party,
+    vitals: &Vitals,
+) -> bool {
+    let roster = party.snapshot();
+    let Some(&actor) = roster.get(member) else {
+        return false;
+    };
+    if action != MemberAction::Skill {
+        return true;
+    }
+    let active = vitals.states(actor);
+    !crate::conditions::definitions()
+        .iter()
+        .any(|state| state.restriction == 1 && active.contains(&state.id))
+}
 
 /// The localised label for a command, sourced from the real RM2000 Terms (the
 /// main-menu commands reuse the battle `command_item` / `command_skill` terms and

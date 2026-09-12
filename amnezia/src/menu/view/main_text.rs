@@ -1,4 +1,4 @@
-use super::{MemberField, render};
+use super::{MemberField, command, render};
 use crate::font::bitmap::{BitmapFont, CRITICAL, DEFAULT, DISABLED, KNOCKOUT, PixelText, Run};
 use crate::i18n;
 use crate::terms::Terms;
@@ -30,10 +30,10 @@ pub(super) fn at(x: f32, y: f32, width: u32) -> impl Bundle {
 }
 
 pub(super) fn command_color(index: usize, members: usize, save: bool) -> u32 {
-    if (index < 3 && members == 0) || (index == 3 && !save) {
-        DISABLED
-    } else {
+    if command::enabled(command::COMMANDS[index], members, save) {
         DEFAULT
+    } else {
+        DISABLED
     }
 }
 
