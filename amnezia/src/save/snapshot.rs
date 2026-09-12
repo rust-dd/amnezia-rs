@@ -69,4 +69,6 @@ pub(super) struct SaveGame {
     /// Missing legacy data differs from an explicitly saved silent scene.
     #[serde(default)]
     pub(super) music: Option<crate::audio::saved::MusicState>,
+    #[serde(default)]
+    pub(super) message: crate::dialogue::saved::MessageState,
 }

@@ -17,7 +17,7 @@ pub struct MessageBox {
     pub lines: Vec<String>,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct MessageFace {
     name: Option<String>,
     index: u32,

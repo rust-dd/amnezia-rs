@@ -26,7 +26,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-const SAVE_FORMAT_VERSION: u32 = 2;
+const SAVE_FORMAT_VERSION: u32 = 3;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -136,6 +136,7 @@ struct SaveIo<'w, 's> {
 /// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 struct SceneState<'w> {
+    message: crate::dialogue::saved::Capture<'w>,
     music: crate::audio::saved::Capture<'w>,
     transitions: Option<ResMut<'w, crate::transitions::Settings>>,
     game_frames: Option<ResMut<'w, crate::timing::GameFrames>>,
@@ -238,6 +239,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                message: scene.message.snapshot(&dialogue),
                 music: scene.music.snapshot(),
                 format_version: SAVE_FORMAT_VERSION,
                 game_frames: scene.game_frames.as_deref().copied().unwrap_or_default(),
@@ -307,6 +309,7 @@ fn save_or_load(
             save_io.commands.queue(crate::session::clear_for_reload);
             let map_id = game.map_id;
             save_io.commands.queue(move |world: &mut World| {
+                game.message.restore(world);
                 crate::audio::saved::prepare(world, map_id, game.music);
             });
             switches.load(game.switches);

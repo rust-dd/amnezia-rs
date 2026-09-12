@@ -6,6 +6,7 @@
 
 mod input_prompts;
 mod options;
+pub(crate) mod saved;
 #[cfg(test)]
 mod tests;
 mod typewriter;
@@ -66,7 +67,9 @@ impl Dialogue {
 /// [`MessagePosition::Bottom`] is RM2000's usual placement; [`view`] moves the
 /// box when the interpreter changes this. `Top`/`Middle` are only produced by
 /// the interpreter's MessageOptions arm, which lands separately.
-#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    Resource, Default, Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 pub enum MessagePosition {
     Top,
     Middle,
@@ -105,6 +108,40 @@ pub(crate) fn verify_battle_layer(world: &mut World) {
         .unwrap();
     assert_eq!(target.0, camera);
     assert_eq!(*visibility, Visibility::Visible);
+}
+
+pub(crate) fn verify_saved_presentation(
+    world: &mut World,
+    top: bool,
+    transparent: bool,
+    face: bool,
+) {
+    verify_placement(world, top);
+    let expected = |shown| {
+        if shown {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        }
+    };
+    let frames = world
+        .query_filtered::<&Visibility, With<view::DialogueFrame>>()
+        .iter(world)
+        .copied()
+        .collect::<Vec<_>>();
+    assert!(!frames.is_empty());
+    assert!(
+        frames
+            .iter()
+            .all(|visibility| *visibility == expected(!transparent))
+    );
+    assert_eq!(
+        *world
+            .query_filtered::<&Visibility, With<view::DialogueFace>>()
+            .single(world)
+            .unwrap(),
+        expected(face)
+    );
 }
 
 impl Plugin for DialoguePlugin {

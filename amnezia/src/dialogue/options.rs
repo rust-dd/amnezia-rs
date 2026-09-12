@@ -1,7 +1,9 @@
 use super::MessagePosition;
 use bevy::prelude::*;
 
-#[derive(Resource, Default, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(
+    Resource, Default, Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize,
+)]
 pub struct MessageOptions {
     pub fixed: bool,
     pub continue_events: bool,

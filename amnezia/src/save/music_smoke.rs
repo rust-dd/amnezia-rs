@@ -6,6 +6,8 @@ use crate::audio::{
 use bevy::audio::{AudioSink, AudioSinkPlayback};
 use bevy::ecs::system::RunSystemOnce;
 
+pub(crate) mod message;
+
 #[derive(Resource)]
 struct Fixture {
     directory: PathBuf,
@@ -68,6 +70,7 @@ fn theme() -> BgmTrack {
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     let path = world.resource::<Fixture>().path.clone();
     assert_eq!(world.resource::<SaveLocation>().0, path);
+    let message_capture = message::drive(world, frame);
     match frame {
         260 => {
             assert_eq!(world.resource::<MapData>().map_id, 3);
@@ -135,6 +138,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             let mut game = read_save(&path).unwrap();
             game.format_version = 1;
             game.music = None;
+            game.message = default();
             write_save(&path, &game).unwrap();
         }
         700 => {
@@ -145,7 +149,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         }
         _ => {}
     }
-    None
+    message_capture
 }
 
 fn verify(world: &mut World, current: Option<BgmTrack>, memorized: Option<BgmTrack>) {
@@ -196,6 +200,7 @@ fn verify(world: &mut World, current: Option<BgmTrack>, memorized: Option<BgmTra
 }
 
 pub(crate) fn verify_finished(world: &mut World) {
+    message::verify_finished(world);
     let fixture = world.remove_resource::<Fixture>().unwrap();
     assert_eq!(fixture.checks, 15);
     assert_eq!(world.resource::<SaveLocation>().0, fixture.path);
