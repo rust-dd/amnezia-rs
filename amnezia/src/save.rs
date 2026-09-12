@@ -1,5 +1,6 @@
 //! Save crystals and title-screen loading share a persistent, single-slot snapshot.
 
+pub(crate) mod animation_smoke;
 pub(crate) mod camera_smoke;
 pub(crate) mod music_smoke;
 pub(crate) mod picture_smoke;
@@ -31,7 +32,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-const SAVE_FORMAT_VERSION: u32 = 7;
+const SAVE_FORMAT_VERSION: u32 = 8;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -137,6 +138,7 @@ struct SaveIo<'w, 's> {
 /// Scene resources grouped to keep [`save_or_load`] within Bevy's parameter limit.
 #[derive(SystemParam)]
 struct SceneState<'w, 's> {
+    animation: crate::animation::saved::Capture<'w, 's>,
     screen: crate::screenfx::saved::Capture<'w>,
     pictures: crate::picture::saved::Capture<'w, 's>,
     camera: Option<Res<'w, crate::player::CameraPan>>,
@@ -243,6 +245,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                map_animation: scene.animation.snapshot(),
                 screen: Some(scene.screen.snapshot(&scene.tone)),
                 pictures: scene.pictures.snapshot(),
                 camera: scene.camera.as_ref().map(|camera| camera.snapshot()),
@@ -306,7 +309,7 @@ fn save_or_load(
             let Some(game) = read_save(&save_io.location.0) else {
                 return;
             };
-            if !valid_destination(&game) {
+            if !valid_destination(&game, &scene.animation) {
                 error!(
                     "load failed: unsupported format or invalid map/party in {}",
                     save_io.location.0.display()
@@ -316,6 +319,7 @@ fn save_or_load(
             save_io.commands.queue(crate::session::clear_for_reload);
             let map_id = game.map_id;
             save_io.commands.queue(move |world: &mut World| {
+                crate::animation::saved::prepare(world, map_id, game.map_animation);
                 crate::screenfx::saved::prepare(world, map_id, game.screen);
                 crate::picture::saved::prepare(world, map_id, game.pictures);
                 game.message.restore(world);
@@ -402,7 +406,7 @@ fn save_or_load(
     }
 }
 
-fn valid_destination(game: &SaveGame) -> bool {
+fn valid_destination(game: &SaveGame, animation: &crate::animation::saved::Capture) -> bool {
     if game.format_version > SAVE_FORMAT_VERSION {
         return false;
     }
@@ -426,7 +430,9 @@ fn valid_destination(game: &SaveGame) -> bool {
             .as_ref()
             .is_none_or(crate::audio::saved::MusicState::valid)
         && game.timer_remaining.is_finite()
-        && map.is_some_and(|map| game.x < map.width && game.y < map.height)
+        && map.is_some_and(|map| {
+            game.x < map.width && game.y < map.height && animation.valid(&game.map_animation, &map)
+        })
 }
 
 #[cfg(test)]

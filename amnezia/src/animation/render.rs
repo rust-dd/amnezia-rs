@@ -3,6 +3,8 @@
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 
+pub(super) mod saved;
+
 /// The render layer the effect-overlay camera draws. Cells, flash quads, and the
 /// battle scene carry it so only that fixed, higher-`order` camera renders them —
 /// painting over the layer-0 world instead of hiding behind it.

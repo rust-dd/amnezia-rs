@@ -63,7 +63,7 @@ fn full_effect_state_survives_the_file_scene_cleanup_and_rebuilt_map() {
     assert!(
         std::fs::read_to_string(&path)
             .unwrap()
-            .contains("format_version: 7,")
+            .contains("format_version: 8,")
     );
     app.insert_resource(TintState::default());
     app.insert_resource(Fx::default());

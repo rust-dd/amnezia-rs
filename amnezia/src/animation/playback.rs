@@ -2,6 +2,8 @@ use super::cells::CellRenderer;
 use super::*;
 use crate::timing::GameFrames;
 
+pub(crate) mod saved;
+
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum AnimationSet {
     Advance,
@@ -182,6 +184,7 @@ pub(super) fn clear_map_animations(
 }
 
 pub(crate) fn reset_transient(world: &mut World) {
+    saved::reset(world);
     map::flash::reset(world);
     let entities = world
         .query::<(Entity, &LiveAnimation)>()

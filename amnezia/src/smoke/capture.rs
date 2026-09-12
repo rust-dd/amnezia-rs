@@ -39,6 +39,7 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let screen_flash_snapshot = crate::screenfx::flash_smoke::snapshot(world, label);
     let saved_screen_snapshot = crate::screenfx::saved::smoke::snapshot(world, label);
     let weather_snapshot = crate::screenfx::weather_smoke::snapshot(world, label);
+    let saved_animation_snapshot = crate::animation::saved::smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -116,6 +117,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &weather_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &saved_animation_snapshot {
                 snapshot.verify(&capture.image);
             }
         },

@@ -7,10 +7,15 @@ struct CharacterFlash {
     frame: u32,
 }
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(in crate::animation) struct Expire;
+
 pub(in crate::animation) fn register(app: &mut App) {
     app.add_message::<crate::world::MapRebuilt>().add_systems(
         PostUpdate,
-        expire.before(crate::legacy_colors::world::WorldColors),
+        expire
+            .in_set(Expire)
+            .before(crate::legacy_colors::world::WorldColors),
     );
 }
 

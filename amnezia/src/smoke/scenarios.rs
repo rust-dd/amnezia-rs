@@ -41,6 +41,7 @@ pub(super) fn start(world: &mut World, scenario: &str) {
             | "save-camera"
             | "save-pictures"
             | "save-weather"
+            | "save-animations"
             | "map-animations"
             | "map-flashes"
             | "weather"
@@ -169,7 +170,9 @@ pub(super) fn start(world: &mut World, scenario: &str) {
 }
 
 pub(super) fn selected() -> &'static str {
-    if std::env::args().any(|arg| arg == "--smoke-save-weather") {
+    if std::env::args().any(|arg| arg == "--smoke-save-animations") {
+        "save-animations"
+    } else if std::env::args().any(|arg| arg == "--smoke-save-weather") {
         "save-weather"
     } else if std::env::args().any(|arg| arg == "--smoke-weather") {
         "weather"

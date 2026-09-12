@@ -37,6 +37,8 @@ impl Plugin for SmokePlugin {
             crate::save::screen_smoke::configure(app);
         } else if scenario == "save-weather" {
             crate::save::weather_smoke::configure(app);
+        } else if scenario == "save-animations" {
+            crate::save::animation_smoke::configure(app);
         }
         app.insert_resource(completion::Completion::new(scenario));
         app.insert_resource(SmokeRun {
@@ -94,6 +96,7 @@ fn input(world: &mut World) {
                 | "save-pictures"
                 | "save-screen"
                 | "save-weather"
+                | "save-animations"
                 | "weather"
                 | "gameover"
                 | "battle-defeat"
@@ -171,6 +174,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "save-weather"
         && let Some(label) = crate::save::weather_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "save-animations"
+        && let Some(label) = crate::save::animation_smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -370,6 +378,8 @@ fn drive(world: &mut World) {
             crate::save::screen_smoke::verify_finished(world);
         } else if scenario == "save-weather" {
             crate::save::weather_smoke::verify_finished(world);
+        } else if scenario == "save-animations" {
+            crate::save::animation_smoke::verify_finished(world);
         } else if scenario == "battle-transitions" {
             crate::battle::flow::smoke::verify_finished(world);
         } else if matches!(scenario, "gameover" | "battle-defeat") {

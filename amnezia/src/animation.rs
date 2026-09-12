@@ -8,6 +8,8 @@ mod cells;
 mod map;
 mod playback;
 mod render;
+#[cfg(test)]
+mod save_tests;
 mod scene;
 pub(crate) mod smoke;
 
@@ -30,6 +32,7 @@ pub(crate) use map::flash_smoke as map_flash_smoke;
 pub(crate) use map::smoke as map_smoke;
 pub(crate) use playback::AnimationSet;
 pub(crate) use playback::reset_transient;
+pub(crate) use playback::saved;
 pub(crate) use render::flash_power_level;
 pub use render::{overlay_layer, overlay_translation};
 
@@ -121,7 +124,7 @@ pub struct BattlerFlash {
 /// The character a [`ShowMapAnimation`] plays on, already resolved from the
 /// RM2000 char-ref by the interpreter: the hero, or a map event by id (a
 /// this-event ref is resolved to a concrete id before it reaches here).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AnimTarget {
     Hero,
     Event(u32),
@@ -159,6 +162,7 @@ impl Plugin for AnimationPlugin {
         cells::register(app);
         map::flash::register(app);
         scene::register(app);
+        saved::register(app);
         app.add_message::<PlayAnimation>()
             .add_message::<ShowMapAnimation>()
             .add_message::<crate::world::MapRebuilt>()
