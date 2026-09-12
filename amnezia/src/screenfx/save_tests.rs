@@ -42,6 +42,7 @@ fn reload(app: &mut App) {
 }
 
 fn active_effects(app: &mut App) -> saved::ScreenState {
+    weather::rain::Scroll::restore(app.world_mut(), [12.25, 149.5]);
     app.world_mut()
         .write_message(ScreenEffect::tint(&[70, 90, 110, 50, 30, 0]));
     app.update();
@@ -62,7 +63,7 @@ fn full_effect_state_survives_the_file_scene_cleanup_and_rebuilt_map() {
     assert!(
         std::fs::read_to_string(&path)
             .unwrap()
-            .contains("format_version: 6,")
+            .contains("format_version: 7,")
     );
     app.insert_resource(TintState::default());
     app.insert_resource(Fx::default());

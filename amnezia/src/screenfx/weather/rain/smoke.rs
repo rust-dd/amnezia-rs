@@ -7,6 +7,7 @@ use std::sync::{
 
 mod lifecycle;
 mod pixels;
+pub(crate) mod saved;
 
 pub(crate) use pixels::snapshot;
 
@@ -37,7 +38,7 @@ fn command(map_id: u32, strength: i32) -> EventCommand {
         .clone()
 }
 
-fn start(world: &mut World, map: u32, strength: i32) {
+pub(crate) fn start(world: &mut World, map: u32, strength: i32) {
     assert!(
         !world
             .resource::<crate::interpreter::RunningEvent>()
@@ -75,7 +76,7 @@ fn fixture(world: &mut World) {
     };
 }
 
-fn setup(world: &mut World) {
+pub(crate) fn setup(world: &mut World) {
     let camera = world
         .resource::<crate::player::CameraPan>()
         .position

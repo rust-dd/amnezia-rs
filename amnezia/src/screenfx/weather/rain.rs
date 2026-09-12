@@ -15,9 +15,22 @@ mod view;
 pub(crate) use view::Canvas;
 
 #[derive(Resource, Default, Clone, Debug, PartialEq)]
-struct Scroll {
+pub(in crate::screenfx) struct Scroll {
     pan: Vec2,
     previous: Option<Vec2>,
+}
+
+impl Scroll {
+    pub(in crate::screenfx) fn snapshot(&self) -> [f32; 2] {
+        self.pan.to_array()
+    }
+
+    pub(in crate::screenfx) fn restore(world: &mut World, pan: [f32; 2]) {
+        world.insert_resource(Self {
+            pan: Vec2::from_array(pan),
+            previous: None,
+        });
+    }
 }
 
 pub(super) fn register(app: &mut App) {
@@ -43,9 +56,13 @@ fn step(time: Res<Time>, scene: ScenePause, weather: Res<Weather>, mut rain: Res
 pub(in crate::screenfx) fn reset(world: &mut World) {
     if world.contains_resource::<Rain>() {
         world.insert_resource(Rain::default());
-        world.insert_resource(Scroll::default());
+    }
+    if let Some(mut scroll) = world.get_resource_mut::<Scroll>() {
+        *scroll = Scroll::default();
     }
 }
 
+#[cfg(test)]
+mod save_tests;
 #[cfg(test)]
 mod tests;

@@ -61,6 +61,7 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-save-music
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-camera
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-pictures
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-screen
+cargo run -p amnezia --locked -- --smoke-test --smoke-save-weather
 ```
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
@@ -82,6 +83,8 @@ The `map-animations` scenario checks moving character targets against original a
 The `weather` scenario executes original rain commands from Map0028/0038. Eight captures check the 6×24 streak, all three strengths, lifetime alpha, 320×160 wrapping, tone, camera pan/shake and unchanged UI against reference pixels. It also checks real menu pauses and map transfers, then shows the original forest and a live battle. The snow/fog compatibility renderers are separate; original game events only use rain.
 
 The `save-screen` scenario uses an isolated slot to restore an unfinished tone change, flash and camera shake. It opens and closes the actual menu to check that effects pause and resume, samples toned world and untinted foreground pixels, and loads legacy screen defaults.
+
+The `save-weather` scenario restores weather scrolling during a camera pan, with fresh raindrops on load. Three captures check the continued rain against reference pixels; the isolated slot also covers legacy defaults, unchanged legacy files and scrolling saved while weather is disabled.
 
 The game renders its world, text and menus together at 320×240, then scales the result in whole physical pixels with black letterboxing. Windows smaller than the native canvas are downscaled proportionally. The display scenario checks normal, wide, portrait, odd-sized and small outputs against direct GPU readbacks of the native canvas.
 

@@ -7,6 +7,7 @@ pub(crate) mod screen_smoke;
 mod smoke_slot;
 mod snapshot;
 mod storage;
+pub(crate) mod weather_smoke;
 use snapshot::SaveGame;
 #[cfg(test)]
 use storage::save_dir;
@@ -30,7 +31,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-const SAVE_FORMAT_VERSION: u32 = 6;
+const SAVE_FORMAT_VERSION: u32 = 7;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -126,9 +127,6 @@ struct SaveIo<'w, 's> {
     save_request: ResMut<'w, SaveRequest>,
     event_save: ResMut<'w, EventSaveRequest>,
     location: Res<'w, SaveLocation>,
-    // The runtime equipment store, snapshotted on save and restored on load
-    // beside the party and inventory. Bundled here so [`save_or_load`] stays
-    // within Bevy's 16-parameter cap.
     equipment: ResMut<'w, Equipment>,
     battle: Option<Res<'w, crate::battle::BattleActive>>,
     title: Option<Res<'w, crate::title::TitleActive>>,
