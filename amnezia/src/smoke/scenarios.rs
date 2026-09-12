@@ -27,6 +27,7 @@ pub(super) fn start(world: &mut World, scenario: &str) {
             | "transitions"
             | "return-title"
             | "save-music"
+            | "save-npcs"
             | "save-screen"
     ) {
         message_options::entry()
@@ -183,6 +184,8 @@ pub(super) fn selected() -> &'static str {
         "save-music"
     } else if std::env::args().any(|arg| arg == "--smoke-save-camera") {
         "save-camera"
+    } else if std::env::args().any(|arg| arg == "--smoke-save-npcs") {
+        "save-npcs"
     } else if std::env::args().any(|arg| arg == "--smoke-save-pictures") {
         "save-pictures"
     } else if std::env::args().any(|arg| arg == "--smoke-save-screen") {

@@ -11,6 +11,7 @@ mod music;
 #[test]
 fn save_game_ron_round_trip() {
     let game = SaveGame {
+        map_events: Vec::new(),
         map_animation: default(),
         screen: None,
         pictures: Vec::new(),
@@ -55,7 +56,7 @@ fn save_game_ron_round_trip() {
         save_access: false,
     };
     let ron = ron::ser::to_string_pretty(&game, PrettyConfig::default()).unwrap();
-    let decoded: SaveGame = ron::from_str(&ron).unwrap();
+    let decoded = ron::from_str::<SaveGame>(&ron).unwrap();
     assert_eq!(game, decoded);
 }
 
@@ -101,9 +102,6 @@ fn corrupt_continue_does_not_mutate_the_current_session() {
 
 #[test]
 fn resolved_save_path_is_absolute_and_cwd_independent() {
-    // The bug's core: the save path must not depend on the working directory,
-    // so a save written on one launch is found on the next wherever the game
-    // (or the packaged `.app`) was started from.
     assert!(
         save_path().is_absolute(),
         "the save path must be absolute so it is independent of the CWD"
@@ -113,14 +111,10 @@ fn resolved_save_path_is_absolute_and_cwd_independent() {
 
 #[test]
 fn resolve_lets_event_save_and_menu_load_bypass_the_running_gate() {
-    // Gated (a dialogue or a still-running event): the interpreter save (opcode
-    // 11910) and the title's Continue (menu_load) both still fire, but the F5 /
-    // menu save and the F9 dev load are held back.
     assert_eq!(resolve(true, false, false, false, true), Some(Action::Save));
     assert_eq!(resolve(false, true, false, false, true), None);
     assert_eq!(resolve(false, false, true, false, true), Some(Action::Load));
     assert_eq!(resolve(false, false, false, true, true), None);
-    // Ungated: every request fires; a save wins a tie against a load.
     assert_eq!(
         resolve(false, true, false, false, false),
         Some(Action::Save)
@@ -143,7 +137,6 @@ fn open_save_menu_saves_while_its_event_is_running() {
     let _ = std::fs::remove_file(&path);
     let mut app = save_app(path.clone());
     app.insert_resource(MapData::for_test(20, 15));
-    // An event is mid-run when the save is requested (as `OpenSaveMenu` is).
     let mut running = RunningEvent::default();
     running.start(1, Vec::new());
     assert!(running.active());
@@ -156,7 +149,6 @@ fn open_save_menu_saves_while_its_event_is_running() {
         charset: "Chara1".into(),
         index: 0,
     });
-    // Stand in for the interpreter's OpenSaveMenu (opcode 11910) arm.
     app.world_mut().resource_mut::<EventSaveRequest>().0 = true;
     app.update();
 
@@ -175,10 +167,9 @@ fn open_save_menu_saves_while_its_event_is_running() {
 
 #[test]
 fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
-    // A valid save at the map-2 save crystal (16, 6), with a switch set so the
-    // restore is observable.
     let path = temp_slot("continue");
     let game = SaveGame {
+        map_events: Vec::new(),
         map_animation: default(),
         screen: None,
         pictures: Vec::new(),
@@ -225,7 +216,6 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     write_save(&path, &game).unwrap();
 
     let mut app = save_app(path.clone());
-    // The boot intro autostart is mid-run: `gated` would refuse a plain load.
     let mut running = RunningEvent::default();
     running.start(1, Vec::new());
     assert!(running.active());
@@ -238,7 +228,6 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
         charset: "Chara1".into(),
         index: 0,
     });
-    // The title's Continue sets this; it must load despite the running event.
     app.world_mut().resource_mut::<LoadRequest>().0 = true;
     app.update();
 
@@ -268,11 +257,9 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
 
 #[test]
 fn load_restores_name_charset_and_screen_state() {
-    // A slot that carries a renamed hero, a reskinned costume, a purple twilight
-    // tint, and heavy snow: a Continue must put all four back into their live
-    // resources so the resumed scene looks exactly as it was saved.
     let path = temp_slot("scene");
     let game = SaveGame {
+        map_events: Vec::new(),
         map_animation: default(),
         screen: None,
         pictures: Vec::new(),
@@ -366,9 +353,6 @@ fn load_restores_name_charset_and_screen_state() {
 
 #[test]
 fn old_slot_without_scene_fields_keeps_boot_defaults() {
-    // A pre-#46 slot has no name/charset/tone/weather. Loading it must not blank
-    // the hero name, wipe the costume, or black out the screen — the boot defaults
-    // (and the neutral tone) stay in place while the rest of the state restores.
     let path = temp_slot("legacy");
     let legacy = "(map_id:2,x:16,y:6,dir:4,switches:[(8,true)],\
         variables:[],party:[1],items:[],gold:0,progression:[],vitals:[])";
@@ -430,7 +414,6 @@ fn save_and_load_restore_the_runtime_equipment_store() {
         charset: "Chara1".into(),
         index: 0,
     });
-    // A member's gear was changed at runtime; the save must capture it.
     app.world_mut()
         .resource_mut::<Equipment>()
         .load(vec![(1, [7, 0, 3, 0, 0])]);
@@ -438,8 +421,6 @@ fn save_and_load_restore_the_runtime_equipment_store() {
     app.update();
     assert!(path.exists(), "the save was written");
 
-    // Wipe the live store, then Continue: the saved loadout must come back so a
-    // resume keeps the changed gear.
     app.world_mut().resource_mut::<Equipment>().load(vec![]);
     app.world_mut().resource_mut::<LoadRequest>().0 = true;
     app.update();
@@ -456,6 +437,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
     let path = temp_slot("roundtrip");
     let _ = std::fs::remove_file(&path);
     let game = SaveGame {
+        map_events: Vec::new(),
         map_animation: default(),
         screen: None,
         pictures: Vec::new(),
@@ -500,7 +482,6 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
         save_access: false,
     };
     write_save(&path, &game).unwrap();
-    // "Restart": a fresh read at the same resolved path finds and decodes it.
     assert!(
         slot_exists(&path),
         "the written slot must be found on re-read"

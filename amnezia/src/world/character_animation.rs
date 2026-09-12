@@ -1,6 +1,6 @@
 use super::Character;
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct CharacterAnimation {
     pub(crate) mode: u32,
     pub(crate) paused: bool,
@@ -9,6 +9,10 @@ pub(crate) struct CharacterAnimation {
 }
 
 impl CharacterAnimation {
+    pub(super) fn valid(&self) -> bool {
+        self.mode <= 6 && self.count < 24 && (0.0..1.0).contains(&self.fraction)
+    }
+
     pub(crate) fn keeps_facing(&self) -> bool {
         matches!(self.mode, 2..=5)
     }

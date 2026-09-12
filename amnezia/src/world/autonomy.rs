@@ -96,7 +96,7 @@ impl MoveGuards<'_> {
 /// An event's autonomous-movement state: the active page's move fields plus a
 /// countdown to the next step and a per-event RNG. Built by [`AutoMove::new`]
 /// from the page the NPC spawned with.
-#[derive(Component)]
+#[derive(Component, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AutoMove {
     move_type: u32,
     frequency: u32,
@@ -106,6 +106,13 @@ pub struct AutoMove {
 }
 
 impl AutoMove {
+    pub(super) fn valid(&self) -> bool {
+        self.move_type <= 6
+            && (1..=8).contains(&self.frequency)
+            && (1..=6).contains(&self.speed)
+            && self.timer.is_finite()
+    }
+
     /// Build from an active page's `move_type`/`move_frequency`/`move_speed`,
     /// seeding the RNG from the event id (so same-map random movers don't step
     /// in lockstep) and arming the first step one full frequency delay out.

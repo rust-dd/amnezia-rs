@@ -16,6 +16,7 @@ use bevy::prelude::Component;
 mod decode;
 mod jump;
 mod lifecycle;
+mod saved;
 
 /// Logical frames per second the RM2000 stop-count delays are measured in.
 const FPS: f32 = 60.0;
@@ -36,7 +37,7 @@ pub(crate) enum StepEffect {
 /// A character's progress through a forced move route. Attached (inactive) to
 /// every hero and event sprite so the `MoveEvent` opcode can load a route onto
 /// any target; a `move_type == 6` NPC spawns with its page route already armed.
-#[derive(Component)]
+#[derive(Component, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct RouteStepper {
     pub(crate) animation: crate::world::character_animation::CharacterAnimation,
     commands: Vec<MoveCommandDef>,

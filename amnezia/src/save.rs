@@ -3,6 +3,7 @@
 pub(crate) mod animation_smoke;
 pub(crate) mod camera_smoke;
 pub(crate) mod music_smoke;
+pub(crate) mod npc_smoke;
 pub(crate) mod picture_smoke;
 pub(crate) mod screen_smoke;
 mod smoke_slot;
@@ -32,7 +33,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-const SAVE_FORMAT_VERSION: u32 = 8;
+pub(crate) const SAVE_FORMAT_VERSION: u32 = 9;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -101,6 +102,7 @@ impl Plugin for SavePlugin {
         crate::audio::saved::register(app);
         crate::player::saved_camera::register(app);
         crate::screenfx::saved::register(app);
+        crate::world::saved::register(app);
         app.init_resource::<LoadRequest>()
             .init_resource::<LoadOutcome>()
             .init_resource::<SaveRequest>()
@@ -138,6 +140,7 @@ struct SaveIo<'w, 's> {
 /// Scene resources grouped to keep [`save_or_load`] within Bevy's parameter limit.
 #[derive(SystemParam)]
 struct SceneState<'w, 's> {
+    characters: crate::world::saved::Capture<'w, 's>,
     animation: crate::animation::saved::Capture<'w, 's>,
     screen: crate::screenfx::saved::Capture<'w>,
     pictures: crate::picture::saved::Capture<'w, 's>,
@@ -245,6 +248,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                map_events: scene.characters.snapshot(),
                 map_animation: scene.animation.snapshot(),
                 screen: Some(scene.screen.snapshot(&scene.tone)),
                 pictures: scene.pictures.snapshot(),
@@ -319,6 +323,7 @@ fn save_or_load(
             save_io.commands.queue(crate::session::clear_for_reload);
             let map_id = game.map_id;
             save_io.commands.queue(move |world: &mut World| {
+                crate::world::saved::prepare(world, map_id, game.map_events);
                 crate::animation::saved::prepare(world, map_id, game.map_animation);
                 crate::screenfx::saved::prepare(world, map_id, game.screen);
                 crate::picture::saved::prepare(world, map_id, game.pictures);
@@ -396,8 +401,6 @@ fn save_or_load(
                     player.index = game.charset_index;
                 }
             }
-            // The teleport picks this up next, reloading the saved map at the saved
-            // tile; `swap_map` reads the state we just restored above.
             pending.reload(game.map_id, game.x, game.y);
             save_io.outcome.0 = Some(true);
             info!("loaded game from {}", save_io.location.0.display());
@@ -431,7 +434,10 @@ fn valid_destination(game: &SaveGame, animation: &crate::animation::saved::Captu
             .is_none_or(crate::audio::saved::MusicState::valid)
         && game.timer_remaining.is_finite()
         && map.is_some_and(|map| {
-            game.x < map.width && game.y < map.height && animation.valid(&game.map_animation, &map)
+            game.x < map.width
+                && game.y < map.height
+                && animation.valid(&game.map_animation, &map)
+                && crate::world::saved::valid(&game.map_events, &map)
         })
 }
 

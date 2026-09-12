@@ -2,6 +2,54 @@ use super::*;
 use crate::assets::{asset_root, load_ron};
 
 #[test]
+fn a_moving_event_can_change_from_hidden_or_tile_graphics_to_a_character() {
+    for old_tile in [0, 1] {
+        let mut app = app_with_event(Event {
+            id: 1,
+            x: 3,
+            y: 4,
+            name: String::new(),
+            pages: vec![page("", old_tile)],
+        });
+        app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+            std::time::Duration::from_secs_f64(1.0 / 60.0),
+        ));
+        app.add_systems(
+            Update,
+            crate::world::walk::<EventSprite>
+                .after(refresh_pages)
+                .before(super::super::update_event_sprites),
+        );
+        let world = app.world_mut();
+        let (mut ch, mut queue, mut route) = world
+            .query::<(&mut EventSprite, &mut MoveQueue, &mut RouteStepper)>()
+            .single_mut(world)
+            .unwrap();
+        route.force_route(RouteStepper::from_move_event(&[
+            1, 8, 0, 0, 34, 6, 67, 104, 97, 114, 97, 49, 1, 36, 1,
+        ]));
+        crate::world::drive_route(
+            &mut *ch,
+            &mut queue,
+            &mut route,
+            (0, 0),
+            1.0 / 60.0,
+            |_, _, _, _, _| true,
+        );
+        app.update();
+        let world = app.world_mut();
+        let (ch, queue, sprite, visible) = world
+            .query::<(&EventSprite, &MoveQueue, &Sprite, &Visibility)>()
+            .single(world)
+            .unwrap();
+        assert!(queue.busy());
+        assert_eq!((ch.charset.as_str(), ch.index), ("Chara1", 1));
+        assert_eq!(*visible, Visibility::Visible);
+        assert_eq!(sprite.custom_size, Some(Vec2::new(24.0, 32.0)));
+    }
+}
+
+#[test]
 fn translucent_pages_use_the_original_third_transparency_step() {
     let mut translucent = page("Chara1", 0);
     translucent.translucent = true;

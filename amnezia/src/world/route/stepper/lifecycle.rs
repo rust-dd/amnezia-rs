@@ -1,6 +1,7 @@
 use super::{MoveCommandDef, MoveRouteDef, RouteStepper, decode, step_delay_secs, turn_delay_secs};
 use amnezia_data::EventPage;
 
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(super) struct Suspended {
     commands: Vec<MoveCommandDef>,
     index: usize,
@@ -11,6 +12,10 @@ pub(super) struct Suspended {
 }
 
 impl Suspended {
+    pub(super) fn valid(&self) -> bool {
+        self.index <= self.commands.len().saturating_add(1) && (1..=8).contains(&self.frequency)
+    }
+
     fn take(route: &mut RouteStepper) -> Self {
         Self {
             commands: std::mem::take(&mut route.commands),

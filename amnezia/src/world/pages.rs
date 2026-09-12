@@ -5,8 +5,14 @@ use crate::tiles::{self, CHAR_Y_OFFSET};
 use amnezia_data::{Event, EventPage};
 use bevy::prelude::*;
 
-#[derive(Component)]
+#[derive(Component, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(super) struct PageState(Option<usize>);
+
+impl PageState {
+    pub(super) fn valid(&self, event: &Event) -> bool {
+        self.0.is_none_or(|index| index < event.pages.len())
+    }
+}
 
 #[derive(Resource)]
 pub(super) struct EventTileset(pub Handle<Image>);

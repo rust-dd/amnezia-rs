@@ -19,6 +19,7 @@ mod movement;
 mod pages;
 mod render;
 mod route;
+pub(crate) mod saved;
 mod scene_pause;
 mod screen;
 mod terrain;
@@ -58,9 +59,8 @@ pub struct MainCamera;
 /// A rendered event NPC: its event id, live tile position, and current
 /// facing/frame/graphic. A running `MoveEvent` enqueues route steps that
 /// [`walk`] tweens across tiles (updating `tile_x`/`tile_y`), while
-/// [`update_event_sprites`] reflects facing/frame/graphic changes onto the
-/// sprite when the NPC is not mid-step.
-#[derive(Component)]
+/// [`update_event_sprites`] reflects facing/frame/graphic and visibility changes.
+#[derive(Component, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EventSprite {
     pub id: u32,
     pub tile_x: i32,
@@ -217,7 +217,8 @@ impl Plugin for WorldPlugin {
                         touch::trigger,
                         update_event_sprites,
                     )
-                        .chain(),
+                        .chain()
+                        .after(saved::RestoreCharacters),
                     route::route_hero
                         .after(crate::appearance::ActorGraphics)
                         .before(walk::<crate::player::Player>),
@@ -308,9 +309,6 @@ pub fn load_map(
     );
 
     for (index, &id) in map.lower.iter().enumerate() {
-        // A star- or wall-flagged lower tile (roof/wall face/treetop painted on
-        // the ground layer) draws above the hero, the same rule the upper layer
-        // uses; ordinary ground stays below everything.
         let z = if tiles::above_hero_lower(id, &passages_down) {
             tiles::Z_TILE_ABOVE
         } else {
@@ -340,9 +338,6 @@ pub fn load_map(
     }
     for (index, &id) in map.upper.iter().enumerate() {
         if let Some(source) = tiles::upper_source(id) {
-            // "Above hero" upper tiles (roof/tree/tall-object tops) draw over the
-            // hero so the hero walks behind them; ordinary upper tiles stay below
-            // the hero.
             let z = if tiles::above_hero(id, &passages_up) {
                 tiles::Z_TILE_ABOVE
             } else {
@@ -380,9 +375,7 @@ pub fn load_map(
     (data, MapEvents { events: map.events })
 }
 
-/// Re-render event NPCs whose facing/frame/graphic changed, reflecting the new
-/// charset sub-rect (and charset image) onto the sprite. Skips NPCs mid-step:
-/// [`walk`] owns their rendering while a move tweens.
+/// Refresh changed NPC graphics and visibility. [`walk`] owns active-step placement.
 fn update_event_sprites(
     asset_server: Res<AssetServer>,
     data: Res<MapData>,
@@ -402,13 +395,13 @@ fn update_event_sprites(
         return;
     };
     for (event, queue, mut sprite, mut visibility, mut transform) in &mut sprites {
-        if queue.busy() {
-            continue;
-        }
         let (mut graphic, visible) = pages::graphic(event, &tileset.0, &asset_server);
         graphic.color = sprite.color;
         *sprite = graphic;
         *visibility = visible;
+        if queue.busy() {
+            continue;
+        }
         let (x, y) = data.tile_center(event.tile_x, event.tile_y);
         transform.translation = Vec3::new(x, y + event.y_offset(), event.draw_z(event.tile_y));
     }

@@ -60,11 +60,10 @@ fn full_effect_state_survives_the_file_scene_cleanup_and_rebuilt_map() {
     let (mut app, path) = app("full_state");
     let expected = active_effects(&mut app);
     save(&mut app);
-    assert!(
-        std::fs::read_to_string(&path)
-            .unwrap()
-            .contains("format_version: 8,")
-    );
+    assert!(std::fs::read_to_string(&path).unwrap().contains(&format!(
+        "format_version: {},",
+        crate::save::SAVE_FORMAT_VERSION
+    )));
     app.insert_resource(TintState::default());
     app.insert_resource(Fx::default());
     reload(&mut app);

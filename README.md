@@ -63,10 +63,13 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-save-pictures
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-screen
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-weather
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-animations
+cargo run -p amnezia --locked -- --smoke-test --smoke-save-npcs
 cargo run -p amnezia --locked -- --smoke-test --smoke-dialogue-timing
 ```
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
+
+The `save-npcs` scenario uses an isolated temporary save to check NPC position, appearance, in-progress movement and route continuation through a real map rebuild. It compares three rendered poses with the original character sheet against an isolated black background and verifies legacy NPC defaults without rewriting the old file. Hero/vehicle motion and interpreter continuation remain separate restoration tasks.
 
 The `dialogue-timing` scenario checks the original Tiffany/Ron slow headers at 60/144 FPS, rendered text visibility, a long pause and automatic page closure. It verifies the pause arrow's logical cycle and four visible/hidden captures against 512 source-image pixels. It presses keys during typing, closes completed pages/choices with Escape, edits a number and checks that no menu opens accidentally. It also verifies message ownership, all three original waiting key queries and the Draco's parallel held-Cancel query. These checks do not establish full font, window-animation or original-executable visual parity.
 

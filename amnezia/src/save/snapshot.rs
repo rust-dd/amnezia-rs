@@ -79,4 +79,6 @@ pub(super) struct SaveGame {
     pub(super) screen: Option<crate::screenfx::saved::ScreenState>,
     #[serde(default)]
     pub(super) map_animation: crate::animation::saved::MapState,
+    #[serde(default)]
+    pub(super) map_events: Vec<crate::world::saved::EventState>,
 }
