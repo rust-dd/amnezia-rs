@@ -16,6 +16,7 @@ use bevy::text::{FontSource, LineHeight, TextLayout};
 
 use super::{MenuOpen, MenuScreen, MenuState, command, render};
 
+pub(super) mod clocks;
 pub(super) mod end_game;
 mod main_text;
 pub(crate) mod smoke;
@@ -438,7 +439,7 @@ pub(super) fn update_ui(
 
     for (cursor, mut node, mut visibility) in &mut cursors {
         let top = match (cursor.0, state.screen) {
-            (CursorId::Command, MenuScreen::Command) => {
+            (CursorId::Command, MenuScreen::Command | MenuScreen::MemberSelect { .. }) => {
                 Some(CMD_ROW_TOP + state.cursor as f32 * CMD_ROW_PITCH)
             }
             (CursorId::Status, MenuScreen::MemberSelect { cursor, .. }) => {

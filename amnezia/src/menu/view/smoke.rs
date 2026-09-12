@@ -11,7 +11,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
         435 | 480 | 510 | 540 | 1010 | 1030 => Some(KeyCode::ArrowDown),
         450 | 995 | 1020 | 1040 => Some(KeyCode::Enter),
-        620 => Some(KeyCode::Escape),
+        620 | 760 | 780 => Some(KeyCode::Escape),
         640 => Some(KeyCode::ArrowUp),
         1050 => Some(KeyCode::ArrowRight),
         _ => None,
@@ -33,8 +33,11 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             .set(1001.0, 751.0);
     }
     match frame {
+        373 => Some("menu-cursor-light"),
+        570 => Some("menu-member-blink"),
         580 => Some("menu-layout-member"),
         740 => Some("menu-layout-resized"),
+        786 => Some("menu-cursor-reopen"),
         _ => super::text_smoke::drive(world, frame),
     }
 }
@@ -47,11 +50,16 @@ pub(crate) struct Snapshot {
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     if !matches!(
         label,
-        "menu-early" | "menu-layout-member" | "menu-layout-resized"
+        "menu-early"
+            | "menu-cursor-light"
+            | "menu-member-blink"
+            | "menu-layout-member"
+            | "menu-layout-resized"
+            | "menu-cursor-reopen"
     ) {
         return None;
     }
-    let member = label == "menu-layout-member";
+    let member = matches!(label, "menu-layout-member" | "menu-member-blink");
     let expected = if member {
         MenuScreen::MemberSelect {
             action: crate::menu::MemberAction::Skill,
@@ -88,12 +96,29 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     for (x, y, w, h) in [(0, 0, 88, 96), (0, 208, 88, 32), (88, 0, 232, 240)] {
         border(&mut pixels, skin, (x, y, w, h), 32, false);
     }
-    let cursor = if member {
-        (148, 182, 168, 48)
+    let command_source = if matches!(label, "menu-early" | "menu-layout-resized") {
+        96
     } else {
-        (4, 8, 80, 16)
+        64
     };
-    border(&mut pixels, skin, cursor, 64, true);
+    let clock = world.resource::<clocks::Clock>();
+    assert_eq!(
+        clock.source_x(CursorId::Command) as u32,
+        command_source,
+        "{label}"
+    );
+    border(
+        &mut pixels,
+        skin,
+        (4, 8 + u32::from(member) * 16, 80, 16),
+        command_source,
+        true,
+    );
+    if member {
+        let source = if label == "menu-member-blink" { 96 } else { 64 };
+        assert_eq!(clock.source_x(CursorId::Status) as u32, source, "{label}");
+        border(&mut pixels, skin, (148, 182, 168, 48), source, true);
+    }
     let faces = world
         .query::<(&MenuFace, &ImageNode, &InheritedVisibility)>()
         .iter(world)
@@ -214,5 +239,5 @@ impl Snapshot {
 }
 
 pub(crate) fn verify_finished(world: &World) {
-    assert_eq!(world.resource::<Checks>().0.load(Ordering::Relaxed), 3);
+    assert_eq!(world.resource::<Checks>().0.load(Ordering::Relaxed), 6);
 }

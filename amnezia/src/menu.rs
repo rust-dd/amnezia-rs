@@ -133,6 +133,7 @@ impl Plugin for MenuPlugin {
         app.init_resource::<MenuOpen>()
             .init_resource::<MenuAccess>()
             .init_resource::<MenuState>()
+            .init_resource::<view::clocks::Clock>()
             .init_resource::<view::end_game::Clock>()
             .add_systems(Startup, view::spawn_ui)
             .add_systems(
@@ -140,6 +141,7 @@ impl Plugin for MenuPlugin {
                 (
                     input::menu_input.in_set(MenuInput),
                     view::update_ui.after(MenuInput),
+                    view::clocks::update.after(MenuInput),
                     view::end_game::update.after(MenuInput),
                 ),
             );

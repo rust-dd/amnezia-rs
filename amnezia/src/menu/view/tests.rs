@@ -11,14 +11,10 @@ fn scaffold() -> App {
     app
 }
 
-#[test]
-fn end_game_does_not_use_the_legacy_full_screen_text_panel() {
+fn viewing(screen: MenuScreen) -> App {
     let mut app = scaffold();
     app.insert_resource(MenuOpen(true))
-        .insert_resource(MenuState {
-            cursor: 4,
-            screen: MenuScreen::EndGame { cursor: 1 },
-        })
+        .insert_resource(MenuState { cursor: 4, screen })
         .insert_resource(super::super::testkit::data())
         .init_resource::<Party>()
         .init_resource::<Progression>()
@@ -29,8 +25,16 @@ fn end_game_does_not_use_the_legacy_full_screen_text_panel() {
         .insert_resource(crate::font::bitmap::BitmapFont::from_id(0))
         .init_resource::<crate::save::SaveAccess>()
         .insert_resource(HeroName("Ron".into()))
-        .add_systems(Update, update_ui);
+        .init_resource::<crate::timing::GameFrames>()
+        .init_resource::<clocks::Clock>()
+        .add_systems(Update, (update_ui, clocks::update));
     app.update();
+    app
+}
+
+#[test]
+fn end_game_does_not_use_the_legacy_full_screen_text_panel() {
+    let mut app = viewing(MenuScreen::EndGame { cursor: 1 });
     let world = app.world_mut();
     let (_, visibility) = world
         .query::<(&MenuWindow, &Visibility)>()
@@ -38,6 +42,40 @@ fn end_game_does_not_use_the_legacy_full_screen_text_panel() {
         .find(|(window, _)| window.0 == WindowId::Content)
         .unwrap();
     assert_eq!(*visibility, Visibility::Hidden);
+}
+
+#[test]
+fn inactive_command_cursor_remains_visible_during_member_selection() {
+    let mut app = viewing(MenuScreen::MemberSelect {
+        action: crate::menu::MemberAction::Skill,
+        cursor: 0,
+    });
+    let world = app.world_mut();
+    for (cursor, visibility) in world.query::<(&MenuCursor, &Visibility)>().iter(world) {
+        if matches!(cursor.0, CursorId::Command | CursorId::Status) {
+            assert_eq!(*visibility, Visibility::Inherited);
+        }
+    }
+}
+
+#[test]
+fn main_menu_cursor_reaches_the_second_skin_phase_after_twelve_logical_frames() {
+    let mut app = viewing(MenuScreen::Command);
+    app.world_mut()
+        .resource_mut::<crate::timing::GameFrames>()
+        .frame = 12;
+    app.update();
+    let world = app.world_mut();
+    let (_, pieces) = world
+        .query::<(&MenuCursor, &Children)>()
+        .iter(world)
+        .find(|(cursor, _)| matches!(cursor.0, CursorId::Command))
+        .unwrap();
+    assert_eq!(pieces.len(), 9);
+    for entity in pieces {
+        let rect = world.get::<ImageNode>(*entity).unwrap().rect.unwrap();
+        assert!(rect.min.x >= 96.0 && rect.max.x <= 128.0, "{rect:?}");
+    }
 }
 
 #[test]
