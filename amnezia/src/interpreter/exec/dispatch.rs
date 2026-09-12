@@ -6,7 +6,7 @@
 
 use super::super::commands::{
     apply_change_gold, apply_change_items, apply_change_level, apply_change_party,
-    apply_control_switches, decode_key_accept, key_code,
+    apply_control_switches,
 };
 use super::super::flow::{
     after_loop_end, call_event_page, choice_labels, find_label, loop_start, skip_else_body,
@@ -433,37 +433,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             frame.ip += 1;
             Flow::Advance
         }
-        KEY_INPUT_PROC => {
-            let var_id = command.params.first().copied().unwrap_or(0).max(0) as u32;
-            let wait = command.params.get(1).copied().unwrap_or(0) != 0;
-            let accept = decode_key_accept(&command.params);
-            if wait {
-                // Reset the target and pause; the resume block stores the pressed
-                // key's code and advances once a key comes in.
-                x.variables.set(var_id, 0);
-                frame.key_var = var_id;
-                frame.key_accept = accept;
-                frame.key_pending = true;
-                Flow::Yield
-            } else {
-                // No-wait: sample the accepted keys once (held counts) and store the
-                // code (0 when none is down), then continue.
-                let keys = &x.subsystems.flow.keys;
-                let code = key_code(
-                    &accept,
-                    keys.pressed(KeyCode::ArrowUp),
-                    keys.pressed(KeyCode::ArrowDown),
-                    keys.pressed(KeyCode::ArrowLeft),
-                    keys.pressed(KeyCode::ArrowRight),
-                    keys.pressed(KeyCode::Enter) || keys.pressed(KeyCode::Space),
-                    keys.pressed(KeyCode::Escape),
-                    keys.pressed(KeyCode::ShiftLeft) || keys.pressed(KeyCode::ShiftRight),
-                );
-                x.variables.set(var_id, code);
-                frame.ip += 1;
-                Flow::Advance
-            }
-        }
+        KEY_INPUT_PROC => super::key_input::execute(frame, x, &command),
         CHANGE_SAVE_ACCESS => {
             x.subsystems.access.save_access.0 = command.params.first().copied().unwrap_or(0) != 0;
             frame.ip += 1;

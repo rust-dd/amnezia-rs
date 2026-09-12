@@ -5,7 +5,12 @@ use crate::timing::GameFrames;
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
+mod key_queries;
 mod prompts;
+
+pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
+    key_queries::input(world, frame)
+}
 
 #[derive(Resource, Default)]
 struct Fixture {
@@ -66,6 +71,7 @@ fn start(world: &mut World, case: u32, message: EventCommand, fps: f64) {
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     assert!(!world.resource::<crate::menu::MenuOpen>().0);
+    key_queries::drive(world, frame);
     if let Some(label) = prompts::drive(world, frame) {
         return Some(label);
     }
@@ -166,6 +172,7 @@ fn verify_view(world: &mut World, expected: &str) {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    key_queries::verify_finished(world);
     prompts::verify_finished(world);
     let fixture = world.resource::<Fixture>();
     assert_eq!(fixture.completed, 7);

@@ -9,10 +9,10 @@
 mod actors;
 mod dispatch;
 mod handlers;
+mod key_input;
 mod message_gate;
 mod vehicles;
 
-use super::commands::key_code;
 use super::frame::{Frame, MAX_STEPS_PER_FRAME};
 use super::params::SubsystemIo;
 use crate::audio::AudioRequest;
@@ -168,30 +168,8 @@ pub(super) fn run_frame(
         frame.input_pending = false;
         frame.ip += 1;
     }
-    // Resume a waiting KeyInputProc: poll the accepted keys and, once one is
-    // pressed, store its RM2000 code in the target variable and step past the
-    // command; otherwise keep the event paused for another frame.
-    if frame.key_pending {
-        if x.message_active() {
-            return RunOutcome::Yielded;
-        }
-        let keys = &x.subsystems.flow.keys;
-        let code = key_code(
-            &frame.key_accept,
-            keys.just_pressed(KeyCode::ArrowUp),
-            keys.just_pressed(KeyCode::ArrowDown),
-            keys.just_pressed(KeyCode::ArrowLeft),
-            keys.just_pressed(KeyCode::ArrowRight),
-            keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space),
-            keys.just_pressed(KeyCode::Escape),
-            keys.just_pressed(KeyCode::ShiftLeft) || keys.just_pressed(KeyCode::ShiftRight),
-        );
-        if code == 0 {
-            return RunOutcome::Yielded;
-        }
-        x.variables.set(frame.key_var, code);
-        frame.key_pending = false;
-        frame.ip += 1;
+    if !key_input::resume(frame, x) {
+        return RunOutcome::Yielded;
     }
     if frame.wait > 0.0 {
         frame.wait -= dt;

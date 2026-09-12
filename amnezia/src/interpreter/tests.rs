@@ -31,6 +31,7 @@ use bevy::prelude::*;
 
 mod actor_commands;
 mod camera;
+mod key_input;
 mod message_options;
 mod message_ownership;
 mod movement;

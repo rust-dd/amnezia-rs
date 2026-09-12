@@ -8,7 +8,6 @@ pub(super) fn needs_free_message(command: &EventCommand) -> bool {
         | ERASE_SCREEN | SHOW_SCREEN | GAME_OVER | OPEN_SAVE_MENU | RETURN_TO_TITLE => true,
         // The original non-English RPG2000 runtime also blocks picture commands.
         SHOW_PICTURE | MOVE_PICTURE | ERASE_PICTURE => true,
-        KEY_INPUT_PROC => command.params.get(1).copied().unwrap_or(0) != 0,
         CHANGE_LEVEL => command.params.get(5).copied().unwrap_or(0) != 0,
         _ => false,
     }

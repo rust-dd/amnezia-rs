@@ -97,7 +97,7 @@ pub(super) struct FlowCtx<'w, 's> {
     pub(super) map_events: Option<Res<'w, MapEvents>>,
     pub(super) map_data: Option<Res<'w, MapData>>,
     pub(super) players: Query<'w, 's, &'static Player>,
-    pub(super) keys: Res<'w, ButtonInput<KeyCode>>,
+    pub(super) keys: ResMut<'w, ButtonInput<KeyCode>>,
     pub(super) title: ResMut<'w, TitleActive>,
 }
 

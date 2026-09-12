@@ -70,6 +70,9 @@ impl Plugin for SmokePlugin {
 fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario == "dialogue-timing" && crate::dialogue::timing_smoke::held_input(world, frame) {
+        return;
+    }
     let requested = if matches!(scenario, "gameover" | "battle-defeat") {
         crate::gameover::smoke::input(world, frame, scenario == "battle-defeat")
     } else if scenario == "return-title" {
