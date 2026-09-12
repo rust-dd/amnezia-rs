@@ -21,6 +21,7 @@ use bevy::prelude::*;
 pub(crate) use input_prompts::InputPrompts;
 pub use options::MessageOptions;
 use typewriter::Typewriter;
+pub(crate) use typewriter::smoke as timing_smoke;
 
 /// The active dialogue: the sequence of boxes, which one is showing, and the
 /// current page's letter-by-letter reveal (rebuilt when the box changes).
@@ -147,6 +148,7 @@ pub(crate) fn verify_saved_presentation(
 impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Dialogue>()
+            .init_resource::<crate::timing::GameFrames>()
             .init_resource::<MessageOptions>()
             .init_resource::<MessagePosition>()
             .init_resource::<MessageTransparent>()
@@ -192,13 +194,9 @@ fn interact(
     }
     if dialogue.active {
         match dialogue.reveal.as_mut() {
-            // A `\!` mid-text pause: resume typing the rest of the page.
             Some(reveal) if reveal.waiting_for_key() => reveal.resume(),
-            // Still typing: fast-forward to the fully-revealed page.
             Some(reveal) if !reveal.is_complete() => reveal.fast_forward(),
-            // Page fully shown: advance to the next box (or close the dialogue).
             Some(_) => dialogue.advance(),
-            // The reveal has not been built yet this frame; ignore the press.
             None => {}
         }
         return;

@@ -82,6 +82,8 @@ fn input(world: &mut World) {
         crate::save::screen_smoke::input(frame)
     } else if scenario == "weather" {
         crate::screenfx::weather_smoke::input(frame)
+    } else if scenario == "dialogue-timing" {
+        crate::dialogue::timing_smoke::input(frame)
     } else {
         None
     };
@@ -106,6 +108,7 @@ fn input(world: &mut World) {
                 | "battle-menus"
                 | "battle-transitions"
                 | "message-options"
+                | "dialogue-timing"
                 | "display"
                 | "actor-names"
                 | "ui-layers"
@@ -189,6 +192,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "message-options" {
         message_options::drive(world, frame);
+    }
+    if scenario == "dialogue-timing"
+        && let Some(label) = crate::dialogue::timing_smoke::drive(world, frame)
+    {
+        capture(world, label);
     }
     if scenario == "ui-layers"
         && let Some(label) = ui_layers::drive(world, frame)
@@ -347,6 +355,8 @@ fn drive(world: &mut World) {
         }
         if scenario == "display" {
             crate::display::smoke::verify_finished(world);
+        } else if scenario == "dialogue-timing" {
+            crate::dialogue::timing_smoke::verify_finished(world);
         } else if scenario == "map-animations" {
             crate::animation::map_smoke::verify_finished(world);
         } else if scenario == "world-tones" {

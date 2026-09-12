@@ -63,9 +63,12 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-save-pictures
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-screen
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-weather
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-animations
+cargo run -p amnezia --locked -- --smoke-test --smoke-dialogue-timing
 ```
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
+
+The `dialogue-timing` scenario checks the original Tiffany/Ron slow headers at 60/144 FPS, rendered text visibility, a long pause and automatic page closure. It verifies that the event following a message waits for closure. These checks do not establish font, window-animation or original-executable visual parity.
 
 A successful run logs `completed all final checks` and returns exit code 0. Closing the test window before verification finishes returns a nonzero status. The diagnostic `--smoke-test --smoke-close-early` deliberately closes its own window early and must return exit code 1; it is a failure-path check, not a gameplay scenario.
 

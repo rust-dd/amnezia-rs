@@ -1,26 +1,20 @@
-//! The per-page letter-by-letter reveal. RM2000 prints a message one glyph at a
-//! time, spacing the glyphs by a frame budget the `\s[n]` speed code scales, and
-//! pausing on the timing codes (`\.`, `\|`, `\!`). This mirrors EasyRPG's
-//! `Window_Message::UpdateMessage`: a per-frame [`Typewriter::tick`] consumes a
-//! wait budget and appends glyphs, the confirm key [`Typewriter::fast_forward`]s
-//! to the full page, and `\^` marks the page to [`Typewriter::kill_page`] itself.
+//! Western message reveal on the shared 60 Hz clock, including paired half-width
+//! glyphs, control-code parity, line/page waits and automatic page completion.
 
 use crate::state::Variables;
 use crate::text::{Segment, parse_segments};
 use bevy::prelude::*;
 
+mod cadence;
+pub(crate) mod smoke;
+use cadence::Cadence;
+#[cfg(test)]
+mod campaign_tests;
+
 /// `\.` reveal pause, in frames (EasyRPG waits 16 despite the "quarter second").
 const QUARTER_PAUSE_FRAMES: u32 = 16;
 /// `\|` reveal pause, in frames (EasyRPG waits 61 despite the "one second").
 const FULL_PAUSE_FRAMES: u32 = 61;
-
-/// Frames a single glyph occupies at a given RM2000 speed. Speed 1 (the default)
-/// reveals about one glyph per frame; higher speeds slow the reveal, matching
-/// EasyRPG's `speed * width / 2 + 1` for half-width glyphs.
-fn glyph_frames(speed: u8) -> u32 {
-    let speed = speed.clamp(1, 20) as u32;
-    if speed <= 1 { 1 } else { speed / 2 + 1 }
-}
 
 /// The reveal state of one message page: the parsed [`Segment`] stream, how far
 /// into it the reveal has progressed, the glyphs shown so far, and the RM2000
@@ -30,9 +24,10 @@ pub(super) struct Typewriter {
     segments: Vec<Segment>,
     cursor: usize,
     revealed: String,
-    speed: u8,
+    cadence: Cadence,
     wait: u32,
-    instant: bool,
+    last_frame: Option<u32>,
+    finishing: bool,
     waiting_key: bool,
     kill_page: bool,
     done: bool,
@@ -44,7 +39,6 @@ impl Typewriter {
     pub(super) fn new(raw: &str, hero: &str, variables: &Variables) -> Self {
         Self {
             segments: parse_segments(raw, hero, variables),
-            speed: 1,
             ..Default::default()
         }
     }
@@ -69,11 +63,9 @@ impl Typewriter {
         self.kill_page
     }
 
-    /// Advance the reveal by one frame: spend a frame of the current wait, or
-    /// consume the next segment (append a glyph, apply a speed/pause code, or stop
-    /// at a `\!` key-wait). Instant runs (`\>`) and completion append with no wait.
+    /// Spend one logical tick, consuming segments until a delay or key-wait.
     pub(super) fn tick(&mut self) {
-        if self.done || self.waiting_key {
+        if self.done {
             return;
         }
         loop {
@@ -81,36 +73,60 @@ impl Typewriter {
                 self.wait -= 1;
                 return;
             }
-            let Some(segment) = self.segments.get(self.cursor) else {
-                self.done = true;
+            if self.waiting_key {
                 return;
+            }
+            let Some(segment) = self.segments.get(self.cursor) else {
+                if self.finishing {
+                    self.done = true;
+                    return;
+                }
+                self.finishing = true;
+                self.wait = self.cadence.newline(true);
+                continue;
             };
             self.cursor += 1;
             match segment {
-                Segment::Char(c) => {
+                Segment::Char('\n') => {
+                    self.revealed.push('\n');
+                    self.finishing = self.cursor == self.segments.len();
+                    self.wait = self.cadence.newline(self.finishing);
+                }
+                Segment::Char(c) if !c.is_control() => {
                     self.revealed.push(*c);
-                    if !self.instant {
-                        self.wait = glyph_frames(self.speed);
-                    }
+                    let next = self.segments.get(self.cursor);
+                    let last_line = next.is_none_or(|next| matches!(next, Segment::Char('\n')));
+                    let last_page =
+                        next.is_none() || (last_line && self.cursor + 1 == self.segments.len());
+                    self.wait = self.cadence.character(last_line, last_page);
                 }
-                Segment::Speed(n) => self.speed = (*n).clamp(1, 20),
+                Segment::Char(_) => {}
+                Segment::Speed(n) => {
+                    self.wait = self.cadence.control(0);
+                    self.cadence.speed = (*n).clamp(1, 20);
+                }
                 Segment::QuarterPause => {
-                    if !self.instant {
-                        self.wait = QUARTER_PAUSE_FRAMES;
-                    }
+                    self.wait = self.cadence.control(
+                        QUARTER_PAUSE_FRAMES + u32::from(self.cadence.speed.saturating_sub(16)),
+                    );
                 }
-                Segment::FullPause => {
-                    if !self.instant {
-                        self.wait = FULL_PAUSE_FRAMES;
-                    }
-                }
+                Segment::FullPause => self.wait = self.cadence.control(FULL_PAUSE_FRAMES),
                 Segment::WaitKey => {
+                    self.wait = self.cadence.control(0);
                     self.waiting_key = true;
-                    return;
                 }
-                Segment::KillPage => self.kill_page = true,
-                Segment::InstantOn => self.instant = true,
-                Segment::InstantOff => self.instant = false,
+                Segment::KillPage => {
+                    self.kill_page = true;
+                    self.wait = self.cadence.control(u32::from(self.cadence.speed));
+                }
+                Segment::InstantOn => {
+                    self.wait = self.cadence.control(0);
+                    self.cadence.instant = true;
+                }
+                Segment::InstantOff => {
+                    self.cadence.instant = false;
+                    self.wait = self.cadence.control(u32::from(self.cadence.speed));
+                }
             }
         }
     }
@@ -123,15 +139,15 @@ impl Typewriter {
             self.cursor += 1;
             match segment {
                 Segment::Char(c) => self.revealed.push(*c),
-                Segment::Speed(n) => self.speed = (*n).clamp(1, 20),
+                Segment::Speed(n) => self.cadence.speed = (*n).clamp(1, 20),
                 Segment::WaitKey => {
                     self.waiting_key = true;
                     self.wait = 0;
                     return;
                 }
                 Segment::KillPage => self.kill_page = true,
-                Segment::InstantOn => self.instant = true,
-                Segment::InstantOff => self.instant = false,
+                Segment::InstantOn => self.cadence.instant = true,
+                Segment::InstantOff => self.cadence.instant = false,
                 Segment::QuarterPause | Segment::FullPause => {}
             }
         }
@@ -145,133 +161,52 @@ impl Typewriter {
     }
 }
 
-/// Drive the active page's reveal: build a [`Typewriter`] for the current box the
-/// first frame it shows, tick it forward, and — when a `\^` page finishes —
-/// advance past it automatically without waiting for the confirm key.
+/// Consume logical ticks without charging a new page for time before it opened.
 pub(super) fn drive_reveal(
     mut dialogue: ResMut<super::Dialogue>,
     hero: Res<crate::text::HeroName>,
     variables: Res<Variables>,
+    frames: Res<crate::timing::GameFrames>,
+    scene: crate::world::ScenePause,
 ) {
     if !dialogue.active {
         return;
     }
-    if dialogue.reveal.is_none() {
-        let index = dialogue.index;
-        if let Some(raw) = dialogue.boxes.get(index).map(|b| b.lines.join("\n")) {
-            dialogue.reveal = Some(Typewriter::new(&raw, &hero.0, &variables));
+    let ticks = dialogue.reveal.as_mut().map_or(1, |reveal| {
+        let previous = reveal.last_frame.replace(frames.frame);
+        previous.map_or(1, |previous| frames.frame.wrapping_sub(previous))
+    });
+    if scene.screen_effects_paused() {
+        return;
+    }
+    for _ in 0..ticks {
+        if dialogue.reveal.is_none() {
+            let Some(raw) = dialogue
+                .boxes
+                .get(dialogue.index)
+                .map(|page| page.lines.join("\n"))
+            else {
+                dialogue.close();
+                break;
+            };
+            let mut reveal = Typewriter::new(&raw, &hero.0, &variables);
+            reveal.last_frame = Some(frames.frame);
+            dialogue.reveal = Some(reveal);
         }
-    }
-    if let Some(reveal) = dialogue.reveal.as_mut() {
+        let reveal = dialogue.reveal.as_mut().unwrap();
         reveal.tick();
-    }
-    let auto_close = dialogue
-        .reveal
-        .as_ref()
-        .is_some_and(|r| r.is_complete() && r.kill_page());
-    if auto_close {
-        dialogue.advance();
+        if reveal.is_complete() && reveal.kill_page() {
+            dialogue.advance();
+            if !dialogue.active {
+                break;
+            }
+        } else if reveal.is_complete() || reveal.waiting_for_key() {
+            break;
+        }
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn writer(raw: &str) -> Typewriter {
-        Typewriter::new(raw, "Ron", &Variables::default())
-    }
-
-    #[test]
-    fn reveals_one_glyph_per_tick_at_default_speed() {
-        let mut tw = writer("abcd");
-        tw.tick();
-        assert_eq!(tw.text(), "a");
-        tw.tick();
-        assert_eq!(tw.text(), "ab");
-        tw.tick();
-        tw.tick();
-        assert_eq!(tw.text(), "abcd");
-    }
-
-    #[test]
-    fn completes_after_the_last_glyph() {
-        let mut tw = writer("hi");
-        for _ in 0..8 {
-            tw.tick();
-        }
-        assert!(tw.is_complete());
-        assert_eq!(tw.text(), "hi");
-    }
-
-    #[test]
-    fn fast_forward_reveals_the_whole_page() {
-        let mut tw = writer("a longer line");
-        tw.tick();
-        tw.fast_forward();
-        assert_eq!(tw.text(), "a longer line");
-        assert!(tw.is_complete());
-    }
-
-    #[test]
-    fn full_pause_delays_the_next_glyph() {
-        let mut tw = writer("a\\|b");
-        tw.tick(); // reveal 'a'
-        assert_eq!(tw.text(), "a");
-        tw.tick(); // hit the pause: schedules the full-second wait
-        for _ in 0..(FULL_PAUSE_FRAMES - 1) {
-            assert_eq!(tw.text(), "a");
-            tw.tick();
-        }
-        tw.tick();
-        assert_eq!(tw.text(), "ab");
-    }
-
-    #[test]
-    fn kill_page_marks_completion_without_a_key() {
-        let mut tw = writer("x\\^");
-        for _ in 0..6 {
-            tw.tick();
-        }
-        assert!(tw.is_complete());
-        assert!(tw.kill_page());
-        assert_eq!(tw.text(), "x");
-    }
-
-    #[test]
-    fn wait_key_pauses_until_resumed() {
-        let mut tw = writer("a\\!b");
-        for _ in 0..6 {
-            tw.tick();
-        }
-        assert!(tw.waiting_for_key());
-        assert!(!tw.is_complete());
-        assert_eq!(tw.text(), "a");
-        tw.resume();
-        for _ in 0..6 {
-            tw.tick();
-        }
-        assert_eq!(tw.text(), "ab");
-        assert!(tw.is_complete());
-    }
-
-    #[test]
-    fn higher_speed_reveals_more_slowly() {
-        let mut tw = writer("\\s[10]ab");
-        tw.tick();
-        // Speed 10 budgets glyph_frames(10) = 6 frames per glyph, so one tick in
-        // the first glyph is on screen but the second has not started.
-        assert_eq!(tw.text(), "a");
-        for _ in 0..glyph_frames(10) {
-            tw.tick();
-        }
-        assert_eq!(tw.text(), "ab");
-    }
-
-    #[test]
-    fn instant_run_reveals_without_waiting() {
-        let mut tw = writer("\\>abcdef\\<");
-        tw.tick();
-        assert_eq!(tw.text(), "abcdef");
-    }
-}
+mod clock_tests;
+#[cfg(test)]
+mod tests;
