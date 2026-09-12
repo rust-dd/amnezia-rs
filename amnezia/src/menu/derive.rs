@@ -1,8 +1,4 @@
-//! Actor numbers derived for the menu the same way the battle system derives
-//! them, so a member's menu figures match the fight exactly. The battle's
-//! `logic` module is private, so this mirrors its `actor_hp_sp_at`,
-//! `actor_stats_at` (+ `equipment_bonus`), and the RM2000 experience curve behind
-//! [`crate::progression`]; keep it in step if those change.
+//! Menu statistics matching battle derivation, with the shared experience curve.
 
 use amnezia_data::{ActorDef, ItemDef};
 
@@ -53,32 +49,12 @@ pub(super) fn stats_with_slots(
 }
 
 /// The experience still owed to reach the next level, or `None` at `max_level`.
-/// `total` and `level` come from [`crate::progression::Progression`]; the curve
-/// below mirrors that module's private `exp_for_level`.
 pub(super) fn exp_to_next(def: &ActorDef, total: u32, level: u32) -> Option<u32> {
     if level >= def.max_level {
         None
     } else {
-        Some(exp_for_level(level + 1, def).saturating_sub(total))
+        Some(crate::progression::exp_for_level(level + 1, def).saturating_sub(total))
     }
-}
-
-/// Cumulative experience needed to reach `level` (level 1 = 0), a verbatim mirror
-/// of [`crate::progression`]'s private curve so the menu's "to next" figure lines
-/// up with the level the progression actually awards.
-fn exp_for_level(level: u32, def: &ActorDef) -> u32 {
-    if level <= 1 {
-        return 0;
-    }
-    let factor = 1.0 + def.exp_inflation as f64 / 100.0;
-    let correction = def.exp_correction as f64;
-    let mut standard = def.exp_base as f64;
-    let mut total = 0.0_f64;
-    for _ in 1..level {
-        total += standard.floor();
-        standard = standard * factor + correction;
-    }
-    total as u32
 }
 
 #[cfg(test)]
@@ -182,6 +158,47 @@ mod tests {
             stats_with_slots(&bare, 1, &items, [7, 0, 0, 0, 0]),
             [16 + 6 + 5, 8 + 4, 8 + 3, 8 + 2]
         );
+    }
+
+    #[test]
+    fn menu_experience_uses_the_original_decaying_inflation_curve() {
+        let d = def();
+        assert_eq!(exp_to_next(&d, 30, 2), Some(54));
+        assert_eq!(exp_to_next(&d, 84, 3), Some(88));
+        let mut corrected = d;
+        corrected.exp_correction = 100;
+        assert_eq!(exp_to_next(&corrected, 0, 1), Some(130));
+    }
+
+    #[test]
+    fn every_original_actor_menu_threshold_is_the_actual_next_level_boundary() {
+        let actors = crate::assets::load_ron::<Vec<ActorDef>>(&format!(
+            "{}/actors.ron",
+            crate::assets::asset_root()
+        ));
+        assert_eq!(actors.len(), 10);
+        for actor in actors {
+            for target in 1..actor.max_level {
+                let mut progression = crate::progression::Progression::default();
+                progression.set_level(&actor, target);
+                let level = progression.level(&actor);
+                let total = progression.total(&actor);
+                let Some(remaining) = exp_to_next(&actor, total, level) else {
+                    assert_eq!(level, actor.max_level);
+                    continue;
+                };
+                assert!(remaining > 0, "actor {} level {level}", actor.id);
+                progression.add(&actor, remaining - 1);
+                assert_eq!(progression.level(&actor), level);
+                progression.add(&actor, 1);
+                assert!(
+                    progression.level(&actor) > level,
+                    "actor {} level {level}: displayed threshold {}",
+                    actor.id,
+                    total + remaining
+                );
+            }
+        }
     }
 
     #[test]

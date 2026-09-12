@@ -69,6 +69,17 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     );
     let font = world.resource::<BitmapFont>();
     let terms = world.resource::<Terms>();
+    let data = world.resource::<GameData>();
+    for (index, member) in members.iter().enumerate() {
+        if let Some((_, threshold)) = member.exp {
+            let actor = data.actor(index as u32 + 1).unwrap();
+            let mut progression = Progression::default();
+            progression.load(vec![(actor.id, threshold - 1)]);
+            assert_eq!(progression.level(actor), member.level);
+            progression.add(actor, 1);
+            assert!(progression.level(actor) > member.level);
+        }
+    }
     let handle = world
         .resource::<AssetServer>()
         .load("graphics/System/System.png");

@@ -162,7 +162,7 @@ fn calculate_exp(level: u32, base: u32, inflation: u32, correction: u32) -> u32 
 /// `GetBaseExp(level)` is `CalculateExp(level - 1)`, evaluated from the actor's
 /// `exp_base`/`exp_inflation`/`exp_correction`. Monotonic in `level`, so more
 /// experience always maps to an equal-or-higher level.
-fn exp_for_level(level: u32, def: &ActorDef) -> u32 {
+pub(crate) fn exp_for_level(level: u32, def: &ActorDef) -> u32 {
     if level <= 1 {
         return 0;
     }

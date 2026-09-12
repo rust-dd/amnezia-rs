@@ -259,6 +259,32 @@ mod tests {
     }
 
     #[test]
+    fn original_party_experience_columns_use_the_actual_level_thresholds() {
+        let data = GameData {
+            actors: crate::assets::load_ron(&format!("{}/actors.ron", crate::assets::asset_root())),
+            ..testkit::data()
+        };
+        let mut party = Party::default();
+        party.restore(vec![1, 2, 3, 4]);
+        let members = members(
+            &crate::text::HeroName("Ron".into()),
+            &data,
+            &party,
+            &Progression::default(),
+            &Vitals::default(),
+        );
+        assert_eq!(
+            members.iter().map(|member| member.exp).collect::<Vec<_>>(),
+            vec![
+                Some((30, 83)),
+                Some((80, 165)),
+                Some((2033, 2651)),
+                Some((1091, 1515))
+            ]
+        );
+    }
+
+    #[test]
     fn members_report_each_roster_slot_with_face_and_vitals() {
         let mut vitals = Vitals::default();
         vitals.set(1, 20, 5);
