@@ -13,6 +13,9 @@ use bevy::transform::TransformSystems;
 use flash::Flashing;
 use shake::ShakeState;
 
+pub(crate) mod battle_smoke;
+#[cfg(test)]
+mod battle_tests;
 mod flash;
 mod shake;
 mod tone;
@@ -120,7 +123,10 @@ impl Plugin for ScreenFxPlugin {
             .add_plugins(tone::ScreenTonePlugin)
             .add_plugins(weather::WeatherPlugin)
             .add_systems(Startup, spawn_overlays.after(crate::world::setup_cameras))
-            .add_systems(Update, step_effects)
+            .add_systems(
+                Update,
+                step_effects.after(crate::battle::flow::BattleFlowSet),
+            )
             .add_systems(
                 PostUpdate,
                 apply_camera_shake
@@ -164,6 +170,8 @@ fn transparent() -> BackgroundColor {
 fn step_effects(
     transition: crate::transitions::TransitionPause,
     time: Res<Time>,
+    battle: Option<Res<crate::battle::Battle>>,
+    mut current_battle: Local<Option<u64>>,
     mut effects: MessageReader<ScreenEffect>,
     mut fx: ResMut<Fx>,
     mut layers: Query<&mut BackgroundColor, With<FlashOverlay>>,
@@ -171,6 +179,13 @@ fn step_effects(
     for effect in effects.read() {
         apply_effect(&mut fx, effect);
     }
+    let generation = battle
+        .filter(|battle| battle.phase != crate::battle::Phase::Inactive)
+        .map(|battle| battle.generation);
+    if generation.is_some() && generation != *current_battle {
+        fx.flash = None;
+    }
+    *current_battle = generation;
     if !transition.paused() {
         let dt = time.delta_secs();
         step_flash(&mut fx, dt);

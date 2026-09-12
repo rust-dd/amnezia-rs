@@ -6,11 +6,16 @@ struct Trace {
     shots: u8,
     ready_at: Option<u32>,
     finished: bool,
+    shake: Option<Vec2>,
+    screen_checks: u8,
 }
 
 pub(crate) fn entry() -> Vec<EventCommand> {
     [
         (10810, "", vec![3, 15, 12]),
+        (11030, "", vec![75, 100, 125, 100, 0, 0]),
+        (11040, "", vec![31, 5, 10, 31, 600, 0]),
+        (11050, "", vec![3, 5, 600, 0]),
         (10710, "Cave1", vec![0, 2, 1, 0, 1, 0]),
         (10210, "", vec![0, 9997, 9997, 0]),
     ]
@@ -43,6 +48,27 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         _ => None,
     };
     let finished = flow.stage == Stage::Map && world.resource::<crate::state::Switches>().get(9997);
+    if finished && !world.resource::<Trace>().finished {
+        crate::screenfx::battle_smoke::map_return(world);
+        world.resource_mut::<Trace>().screen_checks |= 4;
+    }
+    if let Some((index, _)) = shot
+        && world.resource::<Trace>().shots & (1 << index) == 0
+    {
+        if index == 0 {
+            let shake = crate::screenfx::battle_smoke::map_exit(world);
+            let mut trace = world.resource_mut::<Trace>();
+            trace.shake = Some(shake);
+            trace.screen_checks |= 1;
+        } else if index == 2 {
+            let shake = world
+                .resource::<Trace>()
+                .shake
+                .expect("map exit was checked");
+            crate::screenfx::battle_smoke::battle_entry(world, shake);
+            world.resource_mut::<Trace>().screen_checks |= 2;
+        }
+    }
     let mut trace = world.resource_mut::<Trace>();
     if finished {
         trace.finished = true;
@@ -66,6 +92,7 @@ pub(crate) fn verify_finished(world: &World) {
     let trace = world.resource::<Trace>();
     assert_eq!(trace.shots, 0b111111);
     assert!(trace.finished);
+    assert_eq!(trace.screen_checks, 0b111);
     assert!(!world.resource::<BattleActive>().0);
     assert!(!world.resource::<crate::transitions::Transition>().erased());
     info!("battle flashes, zoom, mosaic and return completed before the map event resumed");
