@@ -85,8 +85,8 @@ fn main() -> AppExit {
     if offscreen {
         plugins = plugins.disable::<bevy::winit::WinitPlugin>();
     }
-    App::new()
-        .add_plugins(plugins)
+    let mut app = App::new();
+    app.add_plugins(plugins)
         .add_plugins(legacy_colors::LegacyColorsPlugin)
         .add_plugins(display::DisplayPlugin)
         .add_plugins(timing::TimingPlugin)
@@ -131,6 +131,6 @@ fn main() -> AppExit {
         .add_plugins(vehicles::VehiclePlugin)
         .add_plugins(conditions::ConditionsPlugin)
         .add_plugins(panorama::PanoramaPlugin)
-        .add_plugins(smoke::SmokePlugin)
-        .run()
+        .add_plugins(smoke::SmokePlugin);
+    smoke::completion::run(&mut app)
 }

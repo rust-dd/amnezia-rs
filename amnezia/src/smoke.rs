@@ -3,6 +3,7 @@ use capture::capture;
 
 mod camera;
 mod capture;
+pub(crate) mod completion;
 mod looping;
 mod message_options;
 pub(crate) mod offscreen;
@@ -26,6 +27,7 @@ impl Plugin for SmokePlugin {
         }
         offscreen::configure(app);
         let scenario = scenarios::selected();
+        app.insert_resource(completion::Completion::new(scenario));
         app.insert_resource(SmokeRun {
             frame: 0,
             scenario,
@@ -102,6 +104,9 @@ fn drive(world: &mut World) {
         smoke.frame += 1;
         smoke.frame
     };
+    if completion::close_early(world, frame) {
+        return;
+    }
     if frame == 60 {
         capture(world, "title");
     }
@@ -357,6 +362,7 @@ fn drive(world: &mut World) {
         } else if scenario == "actor-names" {
             crate::battle::smoke::verify_actor_names(world);
         }
+        world.resource::<completion::Completion>().mark();
         world.write_message(AppExit::Success);
     }
 }

@@ -60,6 +60,8 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-return-title
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
 
+A successful run logs `completed all final checks` and returns exit code 0. Closing the test window before verification finishes returns a nonzero status. The diagnostic `--smoke-test --smoke-close-early` deliberately closes its own window early and must return exit code 1; it is a failure-path check, not a gameplay scenario.
+
 Add `--smoke-offscreen` to render all camera layers into a GPU texture without a native window, including on a locked desktop. This still requires a working graphics adapter. Captures use the separate `amnezia-smoke-offscreen-*.png` prefix; empty images fail the check. Offscreen runs test rendering and scripted input, not native window/input integration.
 
 The game renders its world, text and menus together at 320×240, then scales the result in whole physical pixels with black letterboxing. Windows smaller than the native canvas are downscaled proportionally. The display scenario checks normal, wide, portrait, odd-sized and small outputs against direct GPU readbacks of the native canvas.
