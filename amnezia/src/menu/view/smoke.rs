@@ -33,7 +33,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     match frame {
         580 => Some("menu-layout-member"),
         740 => Some("menu-layout-resized"),
-        _ => None,
+        _ => super::text_smoke::drive(world, frame),
     }
 }
 

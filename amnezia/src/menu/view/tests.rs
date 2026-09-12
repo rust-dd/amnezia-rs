@@ -11,6 +11,17 @@ fn scaffold() -> App {
     app
 }
 
+#[test]
+fn all_main_menu_fields_use_original_bitmap_text() {
+    let mut app = scaffold();
+    let world = app.world_mut();
+    let count = world
+        .query_filtered::<&crate::font::bitmap::PixelText, With<MenuText>>()
+        .iter(world)
+        .count();
+    assert_eq!(count, 5 + 1 + 4 * 7);
+}
+
 fn position_in_window(world: &World, mut entity: Entity) -> Vec2 {
     let mut position = Vec2::ZERO;
     loop {
@@ -132,6 +143,8 @@ fn renamed_hero_refreshes_an_already_open_menu_without_moving_the_cursor() {
         .init_resource::<Vitals>()
         .init_resource::<Equipment>()
         .init_resource::<Terms>()
+        .insert_resource(crate::font::bitmap::BitmapFont::from_id(0))
+        .init_resource::<crate::save::SaveAccess>()
         .insert_resource(HeroName("Ron".into()))
         .add_systems(Update, update_ui);
     let name = app
@@ -141,15 +154,21 @@ fn renamed_hero_refreshes_an_already_open_menu_without_moving_the_cursor() {
                 slot: 0,
                 field: MemberField::Name,
             }),
-            Text::default(),
+            PixelText::default(),
             Visibility::Inherited,
         ))
         .id();
     app.update();
-    assert_eq!(app.world().get::<Text>(name).unwrap().0, "Ron");
+    assert_eq!(
+        app.world().get::<PixelText>(name).unwrap().runs[0].text,
+        "Ron"
+    );
     app.update();
     app.world_mut().resource_mut::<HeroName>().0 = "Áron".into();
     app.update();
-    assert_eq!(app.world().get::<Text>(name).unwrap().0, "Áron");
+    assert_eq!(
+        app.world().get::<PixelText>(name).unwrap().runs[0].text,
+        "Áron"
+    );
     assert_eq!(app.world().resource::<MenuState>().cursor, 0);
 }

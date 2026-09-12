@@ -69,12 +69,19 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         }
         _ => return None,
     };
-    let visible = world
+    let mut visible = world
         .query::<(&Text, &InheritedVisibility)>()
         .iter(world)
         .filter(|(_, v)| v.get())
-        .map(|(t, _)| t.0.as_str())
+        .map(|(t, _)| t.0.clone())
         .collect::<Vec<_>>();
+    visible.extend(
+        world
+            .query::<(&crate::font::bitmap::PixelText, &InheritedVisibility)>()
+            .iter(world)
+            .filter(|(_, visibility)| visibility.get())
+            .flat_map(|(text, _)| text.runs.iter().map(|run| run.text.clone())),
+    );
     assert!(
         visible.iter().any(|text| text.contains("Áron")),
         "{label}: {visible:?}"

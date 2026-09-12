@@ -4,6 +4,7 @@
 use crate::assets::resolve_png;
 use crate::equipment::Equipment;
 use crate::font::GameFont;
+use crate::font::bitmap::{PixelText, Run};
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
@@ -11,13 +12,15 @@ use crate::terms::Terms;
 use crate::vitals::Vitals;
 use crate::windowskin::frame;
 use bevy::prelude::*;
-use bevy::text::{FontSource, Justify, LineHeight, TextLayout};
+use bevy::text::{FontSource, LineHeight, TextLayout};
 
 use super::{MenuOpen, MenuScreen, MenuState, command, render};
 
+mod main_text;
 pub(crate) mod smoke;
 #[cfg(test)]
 mod tests;
+pub(crate) mod text_smoke;
 
 /// One RM2000 FaceSet cell is 48×48 in a 4×4 grid; drawn at native size in the
 /// 144×144 (48×3) portrait box the status layout reserves.
@@ -115,16 +118,16 @@ pub(super) fn spawn_ui(
             MenuWindow(WindowId::Panel),
         ))
         .with_children(|panel| {
-            spawn_command_window(panel, &system, &font);
-            spawn_gold_window(panel, &system, &font);
-            spawn_status_window(panel, &system, &font);
+            spawn_command_window(panel, &system);
+            spawn_gold_window(panel, &system);
+            spawn_status_window(panel, &system);
             spawn_content_window(panel, &system, &font);
         });
 }
 
 /// The command window (RM2000 0,0,88,96 → 0,0,264,288): five bare command rows
 /// under a windowskin cursor.
-fn spawn_command_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>, font: &GameFont) {
+fn spawn_command_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>) {
     panel
         .spawn((
             window_node(0.0, 0.0, 264.0, 288.0),
@@ -136,16 +139,15 @@ fn spawn_command_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>
             cursor_sprite(w, system, CursorId::Command, 12.0, 240.0, 48.0);
             for i in 0..command::COMMANDS.len() {
                 w.spawn((
-                    text_at(font, 24.0, CMD_ROW_TOP + 6.0 + i as f32 * CMD_ROW_PITCH),
+                    main_text::at(24.0, CMD_ROW_TOP + 6.0 + i as f32 * CMD_ROW_PITCH, 72),
                     MenuText(TextSlot::Command(i)),
                 ));
             }
         });
 }
 
-/// The gold window (RM2000 0,208,88,32 → 0,624,264,96): a right-aligned
-/// `<amount> <currency-term>` line (`Window_Gold` / `DrawCurrencyValue`).
-fn spawn_gold_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>, font: &GameFont) {
+/// Right-aligned gold and currency, with independent palette colours.
+fn spawn_gold_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>) {
     panel
         .spawn((
             window_node(0.0, 624.0, 264.0, 96.0),
@@ -154,27 +156,14 @@ fn spawn_gold_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>, f
         ))
         .with_children(|w| {
             frame(w, system);
-            w.spawn((
-                Text::new(String::new()),
-                text_font(font),
-                TextColor(Color::WHITE),
-                TextLayout::justify(Justify::Right),
-                Node {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(24.0),
-                    right: Val::Px(24.0),
-                    top: Val::Px(30.0),
-                    ..default()
-                },
-                MenuText(TextSlot::Gold),
-            ));
+            w.spawn((main_text::at(24.0, 30.0, 72), MenuText(TextSlot::Gold)));
         });
 }
 
 /// The status window (RM2000 88,0,232,240 → 264,0,696,720): a portrait plus the
 /// member's identity and vitals per row, under the member-select cursor. Field
 /// offsets are `Window_MenuStatus::Refresh` values ×3.
-fn spawn_status_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>, font: &GameFont) {
+fn spawn_status_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>) {
     panel
         .spawn((
             window_node(264.0, 0.0, 696.0, 720.0),
@@ -211,7 +200,7 @@ fn spawn_status_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>,
                     ));
                     let field = |f, x, y| {
                         (
-                            text_at(font, x, y),
+                            main_text::at(x, y, 216 - (x / 3.0) as u32),
                             MenuText(TextSlot::Member { slot, field: f }),
                         )
                     };
@@ -297,21 +286,6 @@ fn cursor_sprite(
         .with_children(|parent| crate::windowskin::cursor(parent, system));
 }
 
-/// A blank absolutely-positioned text node at `(x, y)` in the game font.
-fn text_at(font: &GameFont, x: f32, y: f32) -> impl Bundle {
-    (
-        Text::new(String::new()),
-        text_font(font),
-        TextColor(Color::WHITE),
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(x),
-            top: Val::Px(y),
-            ..default()
-        },
-    )
-}
-
 /// The native 12px font cell at the UI's threefold coordinate scale.
 fn text_font(font: &GameFont) -> TextFont {
     TextFont {
@@ -336,7 +310,7 @@ pub(super) fn update_ui(
     equipment: Res<Equipment>,
     terms: Res<Terms>,
     hero_name: Res<crate::text::HeroName>,
-    asset_server: Res<AssetServer>,
+    drawing: main_text::Drawing,
     mut windows: Query<
         (&MenuWindow, &mut Visibility),
         (Without<MenuCursor>, Without<MenuText>, Without<MenuFace>),
@@ -346,9 +320,10 @@ pub(super) fn update_ui(
         (Without<MenuWindow>, Without<MenuText>, Without<MenuFace>),
     >,
     mut texts: Query<
-        (&MenuText, &mut Text, &mut Visibility, &mut TextColor),
+        (&MenuText, &mut PixelText, &mut Visibility, &mut Node),
         (Without<MenuWindow>, Without<MenuCursor>, Without<MenuFace>),
     >,
+    mut content_texts: Query<&mut Text, With<MenuText>>,
     mut faces: Query<
         (&MenuFace, &mut ImageNode, &mut Visibility),
         (Without<MenuWindow>, Without<MenuCursor>, Without<MenuText>),
@@ -362,6 +337,9 @@ pub(super) fn update_ui(
         && !hero_name.is_changed()
         && !party.is_changed()
         && !progression.is_changed()
+        && !terms.is_changed()
+        && !drawing.font.is_changed()
+        && !drawing.save_access.is_changed()
     {
         return;
     }
@@ -379,7 +357,6 @@ pub(super) fn update_ui(
     }
 
     let members = render::members(&hero_name, &data, &party, &progression, &vitals);
-    let gold = render::gold(&inventory, &terms);
     let content = render::content(
         &hero_name,
         state.screen,
@@ -392,33 +369,49 @@ pub(super) fn update_ui(
         &terms,
     );
 
-    for (slot, mut text, mut visibility, mut color) in &mut texts {
-        *color = TextColor(Color::WHITE);
+    for mut text in &mut content_texts {
+        **text = content.text.clone();
+    }
+    for (slot, mut text, mut visibility, mut node) in &mut texts {
         *visibility = Visibility::Inherited;
-        match slot.0 {
+        let runs = match slot.0 {
             TextSlot::Command(i) => {
-                **text = command::label(command::COMMANDS[i], &terms);
+                vec![Run::new(
+                    command::label(command::COMMANDS[i], &terms),
+                    0,
+                    0,
+                    main_text::command_color(i, members.len(), drawing.save_access.0),
+                )]
             }
-            TextSlot::Gold => **text = gold.clone(),
-            TextSlot::Content => **text = content.text.clone(),
+            TextSlot::Gold => main_text::gold(inventory.gold(), &terms, &drawing.font),
+            TextSlot::Content => continue,
             TextSlot::Member { slot, field } => match members.get(slot) {
                 Some(member) => {
-                    let (value, tint) = member_field(member, field, &terms);
-                    **text = value;
-                    *color = TextColor(tint);
+                    if matches!(field, MemberField::Hp | MemberField::Sp) {
+                        let width = main_text::vital_width(member);
+                        text.size.x = width;
+                        node.width = Val::Px(width as f32 * 3.0);
+                        node.left = Val::Px((216 - width) as f32 * 3.0);
+                    }
+                    main_text::member(member, field, &terms, &drawing.font)
                 }
                 None => {
-                    **text = String::new();
                     *visibility = Visibility::Hidden;
+                    Vec::new()
                 }
             },
+        };
+        if text.runs != runs {
+            text.runs = runs;
         }
     }
 
     for (face, mut image, mut visibility) in &mut faces {
         match members.get(face.0) {
             Some(member) if !member.face_name.is_empty() => {
-                image.image = asset_server.load(resolve_png("FaceSet", &member.face_name));
+                image.image = drawing
+                    .server
+                    .load(resolve_png("FaceSet", &member.face_name));
                 let (col, row) = (
                     (member.face_index % 4) as f32,
                     (member.face_index / 4) as f32,
@@ -455,54 +448,6 @@ pub(super) fn update_ui(
             }
             None => *visibility = Visibility::Hidden,
         }
-    }
-}
-
-/// The text and RM2000 font tint for one status field. The Lv / HP / SP prefixes
-/// come from the real RM2000 short terms (`lvl_short` / `hp_short` / `sp_short`),
-/// falling back to the abbreviations when blank. HP/SP low-value tints mirror
-/// `Window_Base::GetValueFontColor` (knockout when empty, critical at ≤¼).
-fn member_field(member: &render::MemberView, field: MemberField, terms: &Terms) -> (String, Color) {
-    let t = &terms.0;
-    match field {
-        MemberField::Name => (member.name.clone(), Color::WHITE),
-        MemberField::Title => (member.title.clone(), Color::WHITE),
-        MemberField::Level => (
-            format!("{} {}", terms.label(&t.lvl_short, "Lv"), member.level),
-            Color::WHITE,
-        ),
-        MemberField::Condition => (member.condition.clone(), Color::WHITE),
-        MemberField::Hp => (
-            format!(
-                "{} {}/{}",
-                terms.label(&t.hp_short, "HP"),
-                member.hp,
-                member.max_hp
-            ),
-            value_color(member.hp, member.max_hp, true),
-        ),
-        MemberField::Exp => (member.exp.clone(), Color::WHITE),
-        MemberField::Sp => (
-            format!(
-                "{} {}/{}",
-                terms.label(&t.sp_short, "SP"),
-                member.sp,
-                member.max_sp
-            ),
-            value_color(member.sp, member.max_sp, false),
-        ),
-    }
-}
-
-/// `Window_Base::GetValueFontColor`: knockout red at zero (HP only), critical
-/// amber at a quarter or less of the maximum, otherwise the default white.
-fn value_color(have: i32, max: i32, can_knockout: bool) -> Color {
-    if can_knockout && have == 0 {
-        Color::srgb(0.86, 0.22, 0.22)
-    } else if max > 0 && have <= max / 4 {
-        Color::srgb(1.0, 0.84, 0.25)
-    } else {
-        Color::WHITE
     }
 }
 

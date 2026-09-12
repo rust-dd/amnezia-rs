@@ -35,6 +35,7 @@ mod use_item;
 mod view;
 
 pub(crate) use view::smoke as layout_smoke;
+pub(crate) use view::text_smoke as font_smoke;
 
 #[cfg(test)]
 mod name_tests;

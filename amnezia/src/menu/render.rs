@@ -1,10 +1,4 @@
-//! The menu's render dispatch. The top-level Command screen and the member-select
-//! prompt are the RM2000 three-window main menu — a command list, a gold window,
-//! and a party status window — laid out by [`super::view`]; this module builds the
-//! per-member figures ([`members`]) and the gold line ([`gold`]) those windows
-//! show. Every other screen is a single content window whose text — and, for the
-//! scrolling item and skill lists, the line its windowskin cursor sits on — this
-//! module composes ([`content`]).
+//! Party figures for the main menu and the remaining text-based subscreens.
 
 use crate::equipment::Equipment;
 use crate::gamedata::GameData;
@@ -19,9 +13,6 @@ use super::{MenuScreen, derive, equip, items, skills, status, use_item};
 /// The End Game confirmation rows, in cursor order (Igen = yes returns to title).
 pub(super) const END_GAME_ROWS: [&str; 2] = ["Igen", "Nem"];
 
-/// The normal-condition label when no persistent affliction is present.
-const CONDITION_OK: &str = "Jó";
-
 /// One party member's status-window figures: the FaceSet portrait, identity, and
 /// the numbers the status window prints beside the face. HP/SP are kept as raw
 /// current/maximum values so [`super::view`] can tint the low ones the RM2000 way.
@@ -32,7 +23,8 @@ pub(super) struct MemberView {
     pub title: String,
     pub level: u32,
     pub condition: String,
-    pub exp: String,
+    pub condition_color: Option<u32>,
+    pub exp: Option<(u32, u32)>,
     pub hp: i32,
     pub max_hp: i32,
     pub sp: i32,
@@ -59,20 +51,21 @@ pub(super) fn members(
                 let (max_hp, max_sp) = derive::max_hp_sp(def, level);
                 let (hp, sp) = vitals.get_stored(id).unwrap_or((max_hp, max_sp));
                 let total = progression.total(def);
-                let exp = match derive::exp_to_next(def, total, level) {
-                    Some(rem) => format!("E {total}/{}", total + rem),
-                    None => format!("E {total}/---"),
-                };
+                let exp = derive::exp_to_next(def, total, level)
+                    .map(|remaining| (total, total + remaining));
+                let active = vitals.states(id);
+                let condition = crate::conditions::definitions()
+                    .iter()
+                    .filter(|state| active.contains(&state.id))
+                    .max_by_key(|state| (state.id == 1, state.priority, state.id));
                 MemberView {
                     face_name: def.face_name.clone(),
                     face_index: def.face_index,
                     name: i18n::tr(hero_name.actor(def)),
                     title: i18n::tr(&def.title),
                     level,
-                    condition: match crate::conditions::names(vitals, id) {
-                        states if states.is_empty() => CONDITION_OK.to_string(),
-                        states => states,
-                    },
+                    condition: condition.map_or_else(String::new, |state| i18n::tr(&state.name)),
+                    condition_color: condition.map(|state| state.color),
                     exp,
                     hp,
                     max_hp,
@@ -87,7 +80,8 @@ pub(super) fn members(
                 title: String::new(),
                 level: 0,
                 condition: String::new(),
-                exp: String::new(),
+                condition_color: None,
+                exp: None,
                 hp: 0,
                 max_hp: 0,
                 sp: 0,
@@ -95,17 +89,6 @@ pub(super) fn members(
             },
         })
         .collect()
-}
-
-/// The gold window's `<amount> <currency-term>` line (right-aligned by the view,
-/// mirroring `Window_Gold::Refresh` → `DrawCurrencyValue`). The currency word is
-/// the real RM2000 `gold` term, falling back to `Arany` when blank.
-pub(super) fn gold(inventory: &Inventory, terms: &Terms) -> String {
-    format!(
-        "{} {}",
-        inventory.gold(),
-        terms.label(&terms.0.gold, "Arany")
-    )
 }
 
 /// A content screen's text plus — for the scrolling item and skill lists — the
@@ -244,6 +227,37 @@ mod tests {
     use super::*;
     use crate::menu::testkit;
 
+    fn condition(vitals: &Vitals) -> String {
+        members(
+            &crate::text::HeroName("Ron".into()),
+            &testkit::data(),
+            &Party::default(),
+            &Progression::default(),
+            vitals,
+        )
+        .remove(0)
+        .condition
+    }
+
+    #[test]
+    fn normal_menu_condition_does_not_invent_a_good_status_label() {
+        assert!(condition(&Vitals::default()).is_empty());
+    }
+
+    #[test]
+    fn menu_condition_shows_only_the_highest_priority_original_state() {
+        let mut vitals = Vitals::default();
+        vitals.set_states(1, vec![2, 3]);
+        assert_eq!(condition(&vitals), "Vakság");
+    }
+
+    #[test]
+    fn knockout_menu_condition_keeps_the_original_empty_name() {
+        let mut vitals = Vitals::default();
+        vitals.set(1, 0, 0);
+        assert!(condition(&vitals).is_empty());
+    }
+
     #[test]
     fn members_report_each_roster_slot_with_face_and_vitals() {
         let mut vitals = Vitals::default();
@@ -262,19 +276,8 @@ mod tests {
         assert_eq!(ron.face_index, 6);
         assert_eq!((ron.hp, ron.max_hp), (20, 63));
         assert_eq!((ron.sp, ron.max_sp), (5, 37));
-        assert_eq!(ron.condition, "Jó");
-    }
-
-    #[test]
-    fn gold_line_shows_amount_then_currency_term() {
-        let mut inv = Inventory::default();
-        inv.add_gold(250);
-        // A blank term falls back to the Hungarian currency word.
-        assert_eq!(gold(&inv, &Terms::default()), "250 Arany");
-        // The parsed currency term wins when present.
-        let mut terms = Terms::default();
-        terms.0.gold = "Gold".into();
-        assert_eq!(gold(&inv, &terms), "250 Gold");
+        assert_eq!(ron.condition, "");
+        assert_eq!(ron.condition_color, None);
     }
 
     #[test]

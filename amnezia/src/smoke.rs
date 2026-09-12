@@ -292,6 +292,7 @@ fn drive(world: &mut World) {
             ui_layers::verify_finished(world);
         } else if scenario == "menu" {
             crate::menu::layout_smoke::verify_finished(world);
+            crate::menu::font_smoke::verify_finished(world);
         } else if scenario == "actor-graphics" {
             crate::appearance::smoke::verify_finished(world);
         } else if scenario == "font-colors" {
