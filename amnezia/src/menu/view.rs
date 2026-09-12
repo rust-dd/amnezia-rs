@@ -102,7 +102,7 @@ pub(super) fn spawn_ui(
     font: Res<GameFont>,
     asset_server: Res<AssetServer>,
 ) {
-    let system: Handle<Image> = asset_server.load("graphics/System/System.png");
+    let system = asset_server.load::<Image>("graphics/System/System.png");
     commands
         .spawn((
             Node {
@@ -114,6 +114,12 @@ pub(super) fn spawn_ui(
                 ..default()
             },
             Visibility::Hidden,
+            ImageNode {
+                image: system.clone(),
+                rect: Some(Rect::new(0.0, 32.0, 1.0, 33.0)),
+                image_mode: NodeImageMode::Stretch,
+                ..default()
+            },
             GlobalZIndex(100),
             MenuWindow(WindowId::Panel),
         ))

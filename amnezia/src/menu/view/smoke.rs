@@ -76,6 +76,13 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let images = world.resource::<Assets<Image>>();
     let skin = images.get(&system).unwrap();
     let mut pixels = Vec::new();
+    let background = skin.get_color_at(0, 32).unwrap().to_srgba().to_u8_array();
+    assert_eq!(background[3], 255);
+    for y in 96..208 {
+        for x in 0..88 {
+            pixels.push((x, y, background));
+        }
+    }
     for (x, y, w, h) in [(0, 0, 88, 96), (0, 208, 88, 32), (88, 0, 232, 240)] {
         border(&mut pixels, skin, (x, y, w, h), 32, false);
     }

@@ -12,6 +12,26 @@ fn scaffold() -> App {
 }
 
 #[test]
+fn field_scene_background_uses_the_original_system_color_pixel() {
+    let mut app = scaffold();
+    let world = app.world_mut();
+    let (_, image) = world
+        .query::<(&MenuWindow, Option<&ImageNode>)>()
+        .iter(world)
+        .find(|(window, _)| window.0 == WindowId::Panel)
+        .unwrap();
+    let image = image.expect("the field menu must cover the map between its windows");
+    assert_eq!(image.rect, Some(Rect::new(0.0, 32.0, 1.0, 33.0)));
+    assert_eq!(
+        image.image,
+        world
+            .resource::<AssetServer>()
+            .load("graphics/System/System.png")
+    );
+    assert!(matches!(image.image_mode, NodeImageMode::Stretch));
+}
+
+#[test]
 fn all_main_menu_fields_use_original_bitmap_text() {
     let mut app = scaffold();
     let world = app.world_mut();
