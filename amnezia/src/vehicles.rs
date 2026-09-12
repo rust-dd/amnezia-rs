@@ -3,6 +3,7 @@ mod flight;
 mod landing_tests;
 mod model;
 mod render;
+pub(crate) mod saved;
 #[cfg(test)]
 mod tests;
 
@@ -48,7 +49,7 @@ impl Plugin for VehiclePlugin {
                 PreUpdate,
                 keyboard.in_set(VehicleInput).after(crate::save::SaveSet),
             )
-            .add_systems(Update, advance)
+            .add_systems(Update, advance.after(saved::RestoreVehicles))
             .add_systems(
                 PostUpdate,
                 (

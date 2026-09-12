@@ -72,6 +72,7 @@ impl Default for VehicleSave {
     }
 }
 
+#[derive(Clone)]
 pub(super) struct Motion {
     pub queue: MoveQueue,
     pub route: RouteStepper,

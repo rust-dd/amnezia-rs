@@ -1,6 +1,6 @@
 use super::*;
 use bevy::ecs::system::SystemParam;
-use movement::saved::MotionState;
+pub(crate) use movement::saved::MotionState;
 use pages::{EventTileset, PageState};
 use serde::{Deserialize, Serialize};
 

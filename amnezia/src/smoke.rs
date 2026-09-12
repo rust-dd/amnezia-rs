@@ -35,6 +35,8 @@ impl Plugin for SmokePlugin {
             crate::save::npc_smoke::configure(app);
         } else if scenario == "save-hero" {
             crate::save::hero_smoke::configure(app);
+        } else if scenario == "save-vehicles" {
+            crate::save::vehicle_smoke::configure(app);
         } else if scenario == "save-pictures" {
             crate::save::picture_smoke::configure(app);
         } else if scenario == "save-screen" {
@@ -104,6 +106,7 @@ fn input(world: &mut World) {
                 | "save-camera"
                 | "save-npcs"
                 | "save-hero"
+                | "save-vehicles"
                 | "save-pictures"
                 | "save-screen"
                 | "save-weather"
@@ -307,6 +310,11 @@ fn drive(world: &mut World) {
     {
         capture(world, label);
     }
+    if scenario == "save-vehicles"
+        && let Some(label) = crate::save::vehicle_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "water"
         && let Some(label) = crate::world::water_smoke::drive(world, frame)
     {
@@ -439,6 +447,8 @@ fn drive(world: &mut World) {
             crate::save::npc_smoke::verify_finished(world);
         } else if scenario == "save-hero" {
             crate::save::hero_smoke::verify_finished(world);
+        } else if scenario == "save-vehicles" {
+            crate::save::vehicle_smoke::verify_finished(world);
         } else if scenario == "save-pictures" {
             crate::save::picture_smoke::verify_finished(world);
         } else if scenario == "intro" {

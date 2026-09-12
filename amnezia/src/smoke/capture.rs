@@ -44,10 +44,14 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let dialogue_arrow_snapshot = crate::dialogue::timing_smoke::arrow_snapshot(world, label);
     let saved_npc_snapshot = crate::world::saved::smoke::snapshot(world, label);
     let saved_hero_snapshot = crate::save::hero_smoke::pixels::snapshot(world, label);
+    let saved_vehicle_snapshot = crate::save::vehicle_smoke::pixels::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
             verify_content(&capture.image, &label);
+            if let Some(snapshot) = &saved_vehicle_snapshot {
+                snapshot.verify(&capture.image);
+            }
             if let Some(snapshot) = &saved_hero_snapshot {
                 snapshot.verify(&capture.image);
             }

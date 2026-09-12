@@ -1,5 +1,7 @@
 use super::*;
 
+mod saved_motion;
+
 #[test]
 fn vehicle_collision_reads_live_route_through_state() {
     let mut vehicles = Vehicles::default();

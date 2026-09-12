@@ -65,6 +65,7 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-save-weather
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-animations
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-npcs
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-hero
+cargo run -p amnezia --locked -- --smoke-test --smoke-save-vehicles
 cargo run -p amnezia --locked -- --smoke-test --smoke-dialogue-timing
 ```
 
@@ -72,7 +73,9 @@ Run them one at a time. These are focused regression scenarios, not a full campa
 
 The `save-npcs` scenario uses an isolated temporary save to check NPC position, appearance, in-progress movement and route continuation through a real map rebuild. It compares three rendered poses with the original character sheet against an isolated black background and verifies legacy NPC defaults without rewriting the old file.
 
-The `save-hero` scenario saves during a jump with a following camera. It checks exact motion and camera restoration throughout the loading fade, the original reset from temporary route graphics to the party leader's costume, continued movement without repeated commands and legacy defaults. Three rendered poses are checked against 2304 original character/background pixels. It uses an isolated slot; vehicle motion and foreground interpreter continuation remain separate restoration tasks.
+The `save-hero` scenario saves during a jump with a following camera. It checks exact motion and camera restoration throughout the loading fade, the original reset from temporary route graphics to the party leader's costume, continued movement without repeated commands and legacy defaults. Three rendered poses are checked against 2304 original character/background pixels. It uses an isolated slot.
+
+The `save-vehicles` scenario saves during airship ascent and during simultaneous boat, ship and airship movement. It checks exact state throughout both loading fades, rider/camera synchronization, retained temporary vehicle graphics and opacity, completed routes and legacy defaults. Five captures compare 11,520 original character, opacity and isolated-background pixels; the mounted hero must remain hidden. It uses its own temporary slot. Foreground interpreter continuation remains a separate restoration task.
 
 The `dialogue-timing` scenario checks the original Tiffany/Ron slow headers at 60/144 FPS, rendered text visibility, a long pause and automatic page closure. It verifies the pause arrow's logical cycle and four visible/hidden captures against 512 source-image pixels. It presses keys during typing, closes completed pages/choices with Escape, edits a number and checks that no menu opens accidentally. It also verifies message ownership, all three original waiting key queries and the Draco's parallel held-Cancel query. These checks do not establish full font, window-animation or original-executable visual parity.
 

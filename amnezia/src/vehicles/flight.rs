@@ -43,6 +43,13 @@ impl AirshipFlight {
         false
     }
 
+    pub(super) fn valid(&self) -> bool {
+        self.ascent <= 256
+            && self.descent <= 256
+            && (self.ascent == 0 || self.descent == 0)
+            && (0.0..1.0).contains(&self.fraction)
+    }
+
     pub(super) fn sanitize(&mut self) {
         self.ascent = self.ascent.min(256);
         self.descent = if self.ascent > 0 {
