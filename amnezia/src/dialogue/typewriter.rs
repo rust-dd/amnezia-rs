@@ -6,8 +6,10 @@ use crate::text::{Segment, parse_segments};
 use bevy::prelude::*;
 
 mod cadence;
+mod pause_arrow;
 pub(crate) mod smoke;
 use cadence::Cadence;
+use pause_arrow::PauseArrow;
 #[cfg(test)]
 mod campaign_tests;
 
@@ -25,6 +27,7 @@ pub(super) struct Typewriter {
     cursor: usize,
     revealed: String,
     cadence: Cadence,
+    pause: PauseArrow,
     wait: u32,
     last_frame: Option<u32>,
     finishing: bool,
@@ -63,8 +66,13 @@ impl Typewriter {
         self.kill_page
     }
 
+    pub(super) fn arrow_visible(&self) -> bool {
+        self.pause.visible()
+    }
+
     /// Spend one logical tick, consuming segments until a delay or key-wait.
     pub(super) fn tick(&mut self) {
+        self.pause.advance(1);
         if self.done {
             return;
         }
@@ -82,6 +90,7 @@ impl Typewriter {
                     return;
                 }
                 self.finishing = true;
+                self.pause.set(!self.kill_page);
                 self.wait = self.cadence.newline(true);
                 continue;
             };
@@ -90,6 +99,9 @@ impl Typewriter {
                 Segment::Char('\n') => {
                     self.revealed.push('\n');
                     self.finishing = self.cursor == self.segments.len();
+                    if self.finishing {
+                        self.pause.set(!self.kill_page);
+                    }
                     self.wait = self.cadence.newline(self.finishing);
                 }
                 Segment::Char(c) if !c.is_control() => {
@@ -114,6 +126,7 @@ impl Typewriter {
                 Segment::WaitKey => {
                     self.wait = self.cadence.control(0);
                     self.waiting_key = true;
+                    self.pause.set(true);
                 }
                 Segment::KillPage => {
                     self.kill_page = true;
@@ -134,6 +147,7 @@ impl Typewriter {
     /// Release a `\!` key-wait so the reveal resumes on the next tick.
     pub(super) fn resume(&mut self) {
         self.waiting_key = false;
+        self.pause.set(false);
     }
 }
 
@@ -155,7 +169,7 @@ pub(super) fn drive_reveal(
     if scene.screen_effects_paused() {
         return;
     }
-    for _ in 0..ticks {
+    for tick in 0..ticks {
         if dialogue.reveal.is_none() {
             let Some(raw) = dialogue
                 .boxes
@@ -177,6 +191,7 @@ pub(super) fn drive_reveal(
                 break;
             }
         } else if reveal.is_complete() || reveal.waiting_for_key() {
+            reveal.pause.advance(ticks - tick - 1);
             break;
         }
     }

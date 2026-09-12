@@ -74,8 +74,18 @@ fn bevy_reveal_matches_the_same_logical_timeline_at_low_and_high_fps() {
             }
             let actual = app.world().resource::<Dialogue>().reveal.as_ref().unwrap();
             assert_eq!(
-                (actual.text(), actual.is_complete(), actual.wait),
-                (reference.text(), reference.is_complete(), reference.wait),
+                (
+                    actual.text(),
+                    actual.is_complete(),
+                    actual.wait,
+                    actual.arrow_visible()
+                ),
+                (
+                    reference.text(),
+                    reference.is_complete(),
+                    reference.wait,
+                    reference.arrow_visible()
+                ),
                 "{fps} FPS at {after}"
             );
         }

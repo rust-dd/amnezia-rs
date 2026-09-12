@@ -6,6 +6,8 @@ use crate::assets::resolve_png;
 use crate::font::bitmap::{DEFAULT, PixelText, Run};
 use bevy::prelude::*;
 
+#[cfg(test)]
+mod arrow_tests;
 pub(crate) mod smoke;
 #[cfg(test)]
 mod tests;
@@ -23,10 +25,6 @@ const FACE_Y: f32 = 48.0;
 const CONTENTS_WIDTH: u32 = 304;
 const CONTENTS_HEIGHT: u32 = 64;
 
-/// Frames the continue arrow stays visible, then hidden, per blink half-cycle
-/// (EasyRPG's `arrow_animation_frames`).
-const ARROW_BLINK_FRAMES: u32 = 20;
-
 #[derive(Component)]
 pub(super) struct DialoguePanel;
 
@@ -41,8 +39,7 @@ pub(super) struct DialogueFace;
 #[derive(Component)]
 pub(super) struct DialogueFrame;
 
-/// The blinking "▼" continue indicator, shown at the box's bottom edge once a
-/// page is fully revealed and waiting for the confirm key.
+/// The pause indicator at the window's bottom edge, including final text delays.
 #[derive(Component)]
 pub(super) struct DialogueArrow;
 
@@ -223,12 +220,10 @@ pub(super) fn render_box(
     }
 }
 
-/// Each frame, show the glyphs the reveal has uncovered and blink the continue
-/// arrow while a fully-revealed page (or a `\!` pause) waits for the confirm key.
+/// Render the bitmap contents and the logical pause-arrow state.
 #[allow(clippy::type_complexity)]
 pub(super) fn render_reveal(
     dialogue: Res<Dialogue>,
-    mut frame: Local<u32>,
     mut texts: Query<&mut PixelText, With<DialogueText>>,
     mut arrows: Query<
         &mut Visibility,
@@ -265,12 +260,8 @@ pub(super) fn render_reveal(
         }
     }
 
-    *frame = frame.wrapping_add(1);
-    let waiting =
-        reveal.is_some_and(|r| r.waiting_for_key() || (r.is_complete() && !r.kill_page()));
-    let blink_on = (*frame / ARROW_BLINK_FRAMES).is_multiple_of(2);
     if let Ok(mut visibility) = arrows.single_mut() {
-        *visibility = visible_if(waiting && blink_on);
+        *visibility = visible_if(reveal.is_some_and(|reveal| reveal.arrow_visible()));
     }
 }
 

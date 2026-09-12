@@ -41,10 +41,14 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let weather_snapshot = crate::screenfx::weather_smoke::snapshot(world, label);
     let saved_animation_snapshot = crate::animation::saved::smoke::snapshot(world, label);
     let dialogue_snapshot = crate::dialogue::font_smoke::snapshot(world, label);
+    let dialogue_arrow_snapshot = crate::dialogue::timing_smoke::arrow_snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
             verify_content(&capture.image, &label);
+            if let Some(snapshot) = &dialogue_arrow_snapshot {
+                snapshot.verify(&capture.image);
+            }
             if let Some(snapshot) = &dialogue_snapshot {
                 snapshot.verify(&capture.image);
             }

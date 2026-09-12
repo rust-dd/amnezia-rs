@@ -5,8 +5,11 @@ use crate::timing::GameFrames;
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
+mod arrows;
 mod key_queries;
 mod prompts;
+
+pub(crate) use arrows::snapshot as arrow_snapshot;
 
 pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
     key_queries::input(world, frame)
@@ -130,7 +133,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     };
     assert_eq!(actual, expected, "case {case}, logical tick {age}");
     assert!(!world.resource::<Switches>().get(9000 + case));
-    verify_view(world, &actual);
+    let pause_start = if case == 1 { 21 } else { 9 };
+    let arrow = case < 3 && complete && (age - pause_start) % 40 < 20;
+    verify_view(world, &actual, arrow);
     let mut fixture = world.resource_mut::<Fixture>();
     fixture.checks += 1;
     if complete {
@@ -140,7 +145,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         (1, 1) => Some((1, "dialogue-tiffany-first")),
         (1, 10) => Some((2, "dialogue-tiffany-partial")),
         (1, 21) => Some((4, "dialogue-tiffany-complete")),
+        (1, 41) => Some((32, "dialogue-tiffany-arrow-hidden")),
         (2, 9) => Some((8, "dialogue-ron-144fps")),
+        (2, 29) => Some((64, "dialogue-ron-arrow-hidden")),
         (3, 30) => Some((16, "dialogue-long-pause")),
         _ => None,
     };
@@ -151,7 +158,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     })
 }
 
-fn verify_view(world: &mut World, expected: &str) {
+fn verify_view(world: &mut World, expected: &str, arrow: bool) {
     let (text, visible) = world
         .query_filtered::<
             (&crate::font::bitmap::PixelText, &InheritedVisibility),
@@ -163,6 +170,14 @@ fn verify_view(world: &mut World, expected: &str) {
     assert_eq!(text.runs[0].text, expected);
     assert!(visible.get());
     assert_eq!(
+        world
+            .query_filtered::<&InheritedVisibility, With<view::DialogueArrow>>()
+            .single(world)
+            .unwrap()
+            .get(),
+        arrow,
+    );
+    assert_eq!(
         *world
             .query_filtered::<&Visibility, With<view::DialoguePanel>>()
             .single(world)
@@ -172,11 +187,12 @@ fn verify_view(world: &mut World, expected: &str) {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    arrows::verify_finished(world);
     key_queries::verify_finished(world);
     prompts::verify_finished(world);
     let fixture = world.resource::<Fixture>();
     assert_eq!(fixture.completed, 7);
-    assert_eq!(fixture.captures, 31);
+    assert_eq!(fixture.captures, 127);
     assert!(fixture.checks > 200);
     for switch in 9001..=9003 {
         assert!(world.resource::<Switches>().get(switch));
