@@ -131,30 +131,6 @@ impl Typewriter {
         }
     }
 
-    /// Reveal the rest of the page at once (the confirm key pressed mid-reveal),
-    /// stopping at a `\!` key-wait so a mid-text pause still holds. Applies the
-    /// speed/instant/kill-page codes it passes and drops the reveal pauses.
-    pub(super) fn fast_forward(&mut self) {
-        while let Some(segment) = self.segments.get(self.cursor) {
-            self.cursor += 1;
-            match segment {
-                Segment::Char(c) => self.revealed.push(*c),
-                Segment::Speed(n) => self.cadence.speed = (*n).clamp(1, 20),
-                Segment::WaitKey => {
-                    self.waiting_key = true;
-                    self.wait = 0;
-                    return;
-                }
-                Segment::KillPage => self.kill_page = true,
-                Segment::InstantOn => self.cadence.instant = true,
-                Segment::InstantOff => self.cadence.instant = false,
-                Segment::QuarterPause | Segment::FullPause => {}
-            }
-        }
-        self.wait = 0;
-        self.done = true;
-    }
-
     /// Release a `\!` key-wait so the reveal resumes on the next tick.
     pub(super) fn resume(&mut self) {
         self.waiting_key = false;

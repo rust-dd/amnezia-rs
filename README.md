@@ -68,7 +68,7 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-dialogue-timing
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
 
-The `dialogue-timing` scenario checks the original Tiffany/Ron slow headers at 60/144 FPS, rendered text visibility, a long pause and automatic page closure. It verifies that the event following a message waits for closure. These checks do not establish font, window-animation or original-executable visual parity.
+The `dialogue-timing` scenario checks the original Tiffany/Ron slow headers at 60/144 FPS, rendered text visibility, a long pause and automatic page closure. It presses keys during typing, closes completed pages/choices with Escape, edits a number and checks that no menu opens accidentally. It also verifies that the event following a message waits for closure. These checks do not establish font, window-animation or original-executable visual parity.
 
 The `font` scenario checks dialogue bitmap glyphs, palette/shadow colors, portrait placement, four-line spacing, window background/frame composition, transparency and long-line clipping against the source graphics. It covers top, middle and bottom placement; message opening/closing and pause-arrow timing are separate checks.
 
@@ -108,11 +108,12 @@ The game opens on a **title screen** — pick *Új játék* (New Game) or *Betö
 | --- | --- |
 | **Arrow keys** | Walk (hold to keep walking); move the cursor in any menu, choice, shop or battle |
 | **Space** / **Enter** | Action: talk to people, open doors, read signs; advance a message; confirm a menu/choice/shop/battle selection |
-| **Escape** | Open the in-game menu or return to the previous menu/target selection |
-| **→** (main menu commands) | Select a party member to inspect their status |
+| **Escape** | Advance a completed message or release its key-wait; otherwise open the in-game menu or return to the previous menu/target selection |
 | **↑ / ↓** (menu open) | Select a command, party member, or list entry |
 | **← / →** (battle items/skills) | Move between the two list columns |
 | **F2** | Toggle the display language: Magyar / English |
+
+Enter, Space and Escape do not skip text while it is being typed, matching the original message window.
 
 Amnézia uses save crystals. The menu's Save command and **S** shortcut work only while the original events allow saving. Development saves use `saves/slot1.ron`; macOS release saves use `~/Library/Application Support/Amnezia/saves/slot1.ron`.
 

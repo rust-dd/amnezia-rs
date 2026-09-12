@@ -1,10 +1,12 @@
 //! Dialogue: the message-box UI, plus the action-key interaction that starts an
 //! event's interpreter run when the player presses it facing that event. The
 //! interpreter opens boxes via [`Dialogue::open`]; the [`typewriter`] reveals
-//! each page letter by letter, [`view`] draws it, and the confirm key here
-//! fast-forwards the reveal or advances/closes the box.
+//! each page letter by letter and [`view`] draws it. Decision or Cancel advances
+//! a completed page or releases an explicit key-wait.
 
 mod input_prompts;
+#[cfg(test)]
+mod interaction_tests;
 mod options;
 pub(crate) mod saved;
 #[cfg(test)]
@@ -18,7 +20,7 @@ use crate::player::{Player, facing_tile};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::world::{MapData, MapEvents};
 use bevy::prelude::*;
-pub(crate) use input_prompts::InputPrompts;
+pub(crate) use input_prompts::{InputPrompts, PromptFrame};
 pub use options::MessageOptions;
 use typewriter::Typewriter;
 pub(crate) use typewriter::smoke as timing_smoke;
@@ -148,6 +150,7 @@ pub(crate) fn verify_saved_presentation(
 
 impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
+        InputPrompts::register(app);
         app.init_resource::<Dialogue>()
             .init_resource::<crate::timing::GameFrames>()
             .init_resource::<MessageOptions>()
@@ -172,9 +175,8 @@ impl Plugin for DialoguePlugin {
 /// Advance an open message box on the action key, or — when idle — start the
 /// interpreter for an action-key (trigger 0) event on the tile the player faces.
 ///
-/// While a page is still revealing, the action key fast-forwards it to the full
-/// page; on a `\!` mid-text pause it resumes the reveal; only once the page is
-/// fully shown does the key advance to the next box (or close the dialogue).
+/// Typing ignores Decision and Cancel. Both release a key-wait or advance a
+/// completed page; only Decision can start a new map interaction.
 #[allow(clippy::too_many_arguments)]
 fn interact(
     keys: Res<ButtonInput<KeyCode>>,
@@ -190,19 +192,22 @@ fn interact(
     mut running: ResMut<RunningEvent>,
     players: Query<(&Player, Option<&crate::world::MoveQueue>)>,
 ) {
-    if !keys.just_pressed(KeyCode::Space) && !keys.just_pressed(KeyCode::Enter) {
+    let decision = keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter);
+    if (!decision && !keys.just_pressed(KeyCode::Escape))
+        || scene.screen_effects_paused()
+        || prompts.nested_active()
+    {
         return;
     }
     if dialogue.active {
         match dialogue.reveal.as_mut() {
             Some(reveal) if reveal.waiting_for_key() => reveal.resume(),
-            Some(reveal) if !reveal.is_complete() => reveal.fast_forward(),
-            Some(_) => dialogue.advance(),
-            None => {}
+            Some(reveal) if reveal.is_complete() => dialogue.advance(),
+            _ => {}
         }
         return;
     }
-    if scene.paused() || prompts.active() {
+    if !decision || scene.paused() || prompts.active() {
         return;
     }
     if running.active() {

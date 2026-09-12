@@ -327,6 +327,13 @@ fn drive(world: &mut World) {
             capture(world, "escape");
         }
     }
+    if scenario == "battle-events"
+        && world.resource::<SmokeRun>().finish_at.is_none()
+        && crate::battle::smoke::events_ready(world)
+    {
+        capture(world, "battle-events");
+        world.resource_mut::<SmokeRun>().finish_at = Some(frame + 45);
+    }
     if frame.is_multiple_of(300) {
         let map = world.resource::<crate::world::MapData>().map_id;
         let running = world
@@ -338,14 +345,14 @@ fn drive(world: &mut World) {
             .map(|p| (p.tile_x, p.tile_y));
         info!("smoke frame={frame} map={map} hero={hero:?} event={running:?}");
     }
-    if frame == 1200 && scenario != "escape" {
+    if frame == 1200 && !matches!(scenario, "escape" | "battle-events") {
         capture(world, scenario);
     }
     if frame == 360 && !matches!(scenario, "intro" | "gameover" | "battle-defeat") {
         capture(world, &format!("{scenario}-early"));
     }
     let finish = world.resource::<SmokeRun>().finish_at.unwrap_or(
-        if matches!(scenario, "escape" | "battle-menus") {
+        if matches!(scenario, "escape" | "battle-menus" | "battle-events") {
             2400
         } else {
             1260

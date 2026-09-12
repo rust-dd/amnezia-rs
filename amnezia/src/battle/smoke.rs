@@ -37,6 +37,17 @@ pub(crate) fn verify_events(world: &World) {
     );
 }
 
+pub(crate) fn events_ready(world: &World) -> bool {
+    world.resource::<crate::state::Switches>().get(9999)
+        && world.resource::<crate::world::MapData>().map_id == 3
+        && !world.resource::<super::BattleActive>().0
+        && !world
+            .resource::<crate::interpreter::RunningEvent>()
+            .active()
+        && !world.resource::<crate::dialogue::Dialogue>().active
+        && !world.resource::<crate::teleport::Fade>().busy()
+}
+
 pub(crate) fn prepare(world: &mut World) {
     world
         .resource_mut::<crate::state::Party>()

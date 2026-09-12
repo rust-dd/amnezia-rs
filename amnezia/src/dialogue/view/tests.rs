@@ -67,7 +67,13 @@ fn show(app: &mut App, raw: &str, face: bool) {
     }]);
     let mut reveal =
         crate::dialogue::Typewriter::new(raw, "Ron", &crate::state::Variables::default());
-    reveal.fast_forward();
+    for _ in 0..200 {
+        if reveal.is_complete() {
+            break;
+        }
+        reveal.tick();
+    }
+    assert!(reveal.is_complete());
     dialogue.reveal = Some(reveal);
     app.update();
 }

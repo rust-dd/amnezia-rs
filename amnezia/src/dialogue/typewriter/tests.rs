@@ -97,15 +97,6 @@ fn completes_after_the_last_glyph() {
 }
 
 #[test]
-fn fast_forward_reveals_the_whole_page() {
-    let mut tw = writer("a longer line");
-    tw.tick();
-    tw.fast_forward();
-    assert_eq!(tw.text(), "a longer line");
-    assert!(tw.is_complete());
-}
-
-#[test]
 fn full_pause_delays_the_next_glyph() {
     let mut tw = writer("a\\|b");
     tw.tick();
