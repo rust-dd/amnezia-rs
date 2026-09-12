@@ -9,20 +9,19 @@ use bevy::transform::TransformSystems;
 pub const PICTURE_LAYER: usize = 3;
 
 /// RM2000 neutral tone: every channel 100, i.e. no change.
-const NEUTRAL: [f32; 4] = [100.0, 100.0, 100.0, 100.0];
+const NEUTRAL: [f64; 4] = [100.0; 4];
 
 /// The picture camera stays untinted above the world.
 #[derive(Component)]
 pub struct FrontCamera;
 
-/// The live screen tone: the currently displayed values, the command's target,
-/// and the seconds left to reach it. Values are RM2000 0..200. Public so the save
-/// system can snapshot the current tone and restore it (via [`Self::set_tone`]).
-#[derive(Resource)]
+/// The original retains fractional channels and an integer 60 Hz time remaining.
+#[derive(Resource, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct TintState {
-    current: [f32; 4],
-    target: [f32; 4],
-    secs_left: f32,
+    current: [f64; 4],
+    target: [f64; 4],
+    frames_left: u32,
+    fraction: f64,
 }
 
 impl Default for TintState {
@@ -30,24 +29,34 @@ impl Default for TintState {
         Self {
             current: NEUTRAL,
             target: NEUTRAL,
-            secs_left: 0.0,
+            frames_left: 0,
+            fraction: 0.0,
         }
     }
 }
 
 impl TintState {
-    /// The currently displayed tone in RM2000 units (R, G, B, saturation; each
-    /// 0..200, 100 neutral) — what a save snapshots.
+    /// The displayed channels in renderer units, with 100 neutral.
     pub fn tone(&self) -> [f32; 4] {
-        self.current
+        self.current.map(|value| value as f32)
     }
 
     /// Restore a settled tone: snap both the displayed value and the target to
     /// `tone` with no interpolation left, so a loaded tint holds at once.
     pub fn set_tone(&mut self, tone: [f32; 4]) {
-        self.current = tone;
-        self.target = tone;
-        self.secs_left = 0.0;
+        self.current = tone.map(f64::from);
+        self.target = self.current;
+        self.frames_left = 0;
+        self.fraction = 0.0;
+    }
+
+    pub(super) fn valid(&self) -> bool {
+        self.current
+            .iter()
+            .chain(&self.target)
+            .all(|value| value.is_finite() && (*value as f32).is_finite())
+            && self.fraction.is_finite()
+            && (0.0..1.0).contains(&self.fraction)
     }
 }
 
@@ -57,7 +66,7 @@ impl Plugin for ScreenTonePlugin {
     fn build(&self, app: &mut App) {
         crate::legacy_colors::world::register(app);
         app.init_resource::<TintState>()
-            .add_systems(Update, update_tone)
+            .add_systems(Update, update_tone.in_set(super::ScreenEffectsSet))
             .add_systems(
                 PostUpdate,
                 sync_front_camera
@@ -68,38 +77,43 @@ impl Plugin for ScreenTonePlugin {
 }
 
 /// Update the shared tone while scene transitions hold its interpolation.
-fn update_tone(
-    transition: crate::transitions::TransitionPause,
+pub(super) fn update_tone(
+    pause: super::EffectPause,
     time: Res<Time>,
     mut effects: MessageReader<ScreenEffect>,
     mut state: ResMut<TintState>,
 ) {
     for effect in effects.read() {
         if let ScreenEffect::Tint { r, g, b, sat, secs } = *effect {
-            state.target = [r as f32, g as f32, b as f32, sat as f32];
-            state.secs_left = secs;
-            if secs <= 0.0 {
+            state.target = [r, g, b, sat].map(f64::from);
+            state.frames_left = (secs * 60.0).round().max(0.0) as u32;
+            state.fraction = 0.0;
+            if state.frames_left == 0 {
                 state.current = state.target;
             }
         }
     }
-    if !transition.paused() {
+    if !pause.paused() {
         step_tint(&mut state, time.delta_secs());
     }
 }
 
-/// Advance the tone toward its target so it arrives after `secs_left` more
-/// seconds (RM2000 interpolates the tone over the `TintScreen` duration).
-fn step_tint(state: &mut TintState, dt: f32) {
-    if state.secs_left <= 0.0 {
-        state.current = state.target;
+pub(super) fn step_tint(state: &mut TintState, dt: f32) {
+    if state.frames_left == 0 {
         return;
     }
-    let t = (dt / state.secs_left).clamp(0.0, 1.0);
-    for i in 0..4 {
-        state.current[i] += (state.target[i] - state.current[i]) * t;
+    state.fraction += f64::from(dt) * 60.0;
+    while state.fraction + 1e-6 >= 1.0 && state.frames_left > 0 {
+        let frames = f64::from(state.frames_left);
+        for i in 0..4 {
+            state.current[i] = (state.current[i] * (frames - 1.0) + state.target[i]) / frames;
+        }
+        state.frames_left -= 1;
+        state.fraction = (state.fraction - 1.0).max(0.0);
     }
-    state.secs_left -= dt;
+    if state.frames_left == 0 {
+        state.fraction = 0.0;
+    }
 }
 
 /// Keep the picture camera aligned with the followed, shaken main camera, so
@@ -121,6 +135,46 @@ fn sync_front_camera(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tone_uses_original_integer_steps_and_keeps_its_subframe_at_15_to_144_fps() {
+        let mut reference = Vec::from([NEUTRAL]);
+        for left in (1..=60).rev() {
+            let previous = *reference.last().unwrap();
+            reference.push(std::array::from_fn(|i| {
+                (previous[i] * f64::from(left - 1) + [70.0, 90.0, 110.0, 50.0][i]) / f64::from(left)
+            }));
+        }
+        for fps in [15, 30, 60, 120, 144] {
+            let mut state = TintState {
+                target: [70.0, 90.0, 110.0, 50.0],
+                frames_left: 60,
+                ..default()
+            };
+            let mut clock = crate::timing::GameFrames::default();
+            for _ in 0..fps * 2 {
+                clock.advance(1.0 / f64::from(fps));
+                step_tint(&mut state, 1.0 / fps as f32);
+                assert_eq!(state.current, reference[clock.frame.min(60) as usize]);
+                assert!(state.valid());
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_tone_channels_and_fractional_clocks_are_rejected() {
+        for case in 0..5 {
+            let mut state = TintState::default();
+            match case {
+                0 => state.current[0] = f64::NAN,
+                1 => state.target[0] = f64::MAX,
+                2 => state.fraction = f64::INFINITY,
+                3 => state.fraction = -0.01,
+                _ => state.fraction = 1.0,
+            }
+            assert!(!state.valid());
+        }
+    }
 
     use crate::legacy_colors::tone::{apply, uniform as tone_uniform};
 
@@ -144,8 +198,8 @@ mod tests {
         for _ in 0..4 {
             app.update();
         }
-        assert_eq!(app.world().resource::<TintState>().tone(), NEUTRAL);
-        assert_eq!(app.world().resource::<TintState>().secs_left, 2.0);
+        assert_eq!(app.world().resource::<TintState>().current, NEUTRAL);
+        assert_eq!(app.world().resource::<TintState>().frames_left, 120);
         app.world_mut()
             .resource_mut::<crate::transitions::Transition>()
             .clear();
@@ -174,8 +228,8 @@ mod tests {
     #[test]
     fn neutral_tone_is_the_identity() {
         let src = [204, 102, 51];
-        assert_eq!(apply(src, NEUTRAL), src);
-        assert_eq!(tone_uniform(NEUTRAL), Vec4::splat(128.0));
+        assert_eq!(apply(src, NEUTRAL.map(|v| v as f32)), src);
+        assert_eq!(tone_uniform(NEUTRAL.map(|v| v as f32)), Vec4::splat(128.0));
     }
 
     #[test]
@@ -210,22 +264,20 @@ mod tests {
         let mut state = TintState {
             current: NEUTRAL,
             target: [50.0, 50.0, 50.0, 50.0],
-            secs_left: 1.0,
+            frames_left: 60,
+            fraction: 0.0,
         };
         step_tint(&mut state, 0.5);
         assert!((state.current[0] - 75.0).abs() < 1e-4);
-        assert!(state.secs_left > 0.0);
+        assert_eq!(state.frames_left, 30);
         step_tint(&mut state, 0.5);
         assert!((state.current[0] - 50.0).abs() < 1e-4);
     }
 
     #[test]
     fn zero_duration_tint_snaps_to_target() {
-        let mut state = TintState {
-            current: NEUTRAL,
-            target: [0.0, 0.0, 0.0, 100.0],
-            secs_left: 0.0,
-        };
+        let mut state = TintState::default();
+        state.set_tone([0.0, 0.0, 0.0, 100.0]);
         step_tint(&mut state, 0.016);
         assert_eq!(state.current, [0.0, 0.0, 0.0, 100.0]);
     }

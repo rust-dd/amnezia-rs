@@ -3,6 +3,7 @@
 pub(crate) mod camera_smoke;
 pub(crate) mod music_smoke;
 pub(crate) mod picture_smoke;
+pub(crate) mod screen_smoke;
 mod smoke_slot;
 mod snapshot;
 mod storage;
@@ -29,7 +30,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-const SAVE_FORMAT_VERSION: u32 = 5;
+const SAVE_FORMAT_VERSION: u32 = 6;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -97,6 +98,7 @@ impl Plugin for SavePlugin {
     fn build(&self, app: &mut App) {
         crate::audio::saved::register(app);
         crate::player::saved_camera::register(app);
+        crate::screenfx::saved::register(app);
         app.init_resource::<LoadRequest>()
             .init_resource::<LoadOutcome>()
             .init_resource::<SaveRequest>()
@@ -134,12 +136,10 @@ struct SaveIo<'w, 's> {
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
 }
 
-/// The scene resources a save now also snapshots and restores beyond the core
-/// state: the hero's name ([`HeroName`]), the active weather ([`Weather`] and its
-/// [`WeatherStrength`]), and the screen tone ([`TintState`]). Bundled into one
-/// `SystemParam` so [`save_or_load`] stays within Bevy's 16-parameter cap.
+/// Scene resources grouped to keep [`save_or_load`] within Bevy's parameter limit.
 #[derive(SystemParam)]
 struct SceneState<'w, 's> {
+    screen: crate::screenfx::saved::Capture<'w>,
     pictures: crate::picture::saved::Capture<'w, 's>,
     camera: Option<Res<'w, crate::player::CameraPan>>,
     message: crate::dialogue::saved::Capture<'w>,
@@ -245,6 +245,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                screen: Some(scene.screen.snapshot(&scene.tone)),
                 pictures: scene.pictures.snapshot(),
                 camera: scene.camera.as_ref().map(|camera| camera.snapshot()),
                 message: scene.message.snapshot(&dialogue),
@@ -317,6 +318,7 @@ fn save_or_load(
             save_io.commands.queue(crate::session::clear_for_reload);
             let map_id = game.map_id;
             save_io.commands.queue(move |world: &mut World| {
+                crate::screenfx::saved::prepare(world, map_id, game.screen);
                 crate::picture::saved::prepare(world, map_id, game.pictures);
                 game.message.restore(world);
                 crate::player::saved_camera::prepare(world, map_id, game.camera);
@@ -415,6 +417,7 @@ fn valid_destination(game: &SaveGame) -> bool {
         .ok()
         .and_then(|text| ron::from_str::<amnezia_data::Map>(&text).ok());
     !game.party.is_empty()
+        && game.screen.as_ref().is_none_or(|screen| screen.valid())
         && crate::picture::saved::valid(&game.pictures)
         && game
             .camera

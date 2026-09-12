@@ -5,7 +5,8 @@ use bevy::prelude::*;
 pub(crate) mod smoke;
 
 /// The current level is fractional; only the rendered byte is truncated.
-pub(super) struct Flashing {
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Flashing {
     rgb: [i32; 3],
     level: f64,
     frames_left: u32,
@@ -13,6 +14,14 @@ pub(super) struct Flashing {
 }
 
 impl Flashing {
+    pub(super) fn valid(&self) -> bool {
+        self.rgb.iter().all(|v| (0..=31).contains(v))
+            && self.level.is_finite()
+            && (0.0..=31.0).contains(&self.level)
+            && self.fraction.is_finite()
+            && (0.0..1.0).contains(&self.fraction)
+    }
+
     pub(super) fn new(r: i32, g: i32, b: i32, intensity: i32, secs: f32) -> Self {
         Self {
             rgb: [r, g, b],
@@ -44,6 +53,22 @@ impl Flashing {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invalid_saved_flash_channels_levels_and_clocks_are_rejected() {
+        for case in 0..6 {
+            let mut state = Flashing::new(31, 10, 5, 20, 1.0);
+            match case {
+                0 => state.rgb[0] = 32,
+                1 => state.level = f64::NAN,
+                2 => state.level = -1.0,
+                3 => state.fraction = f64::INFINITY,
+                4 => state.fraction = -0.01,
+                _ => state.fraction = 1.0,
+            }
+            assert!(!state.valid());
+        }
+    }
 
     #[test]
     fn original_five_bit_channels_expand_by_eight_including_alpha() {

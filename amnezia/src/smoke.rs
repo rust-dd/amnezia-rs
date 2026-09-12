@@ -33,6 +33,8 @@ impl Plugin for SmokePlugin {
             crate::save::camera_smoke::configure(app);
         } else if scenario == "save-pictures" {
             crate::save::picture_smoke::configure(app);
+        } else if scenario == "save-screen" {
+            crate::save::screen_smoke::configure(app);
         }
         app.insert_resource(completion::Completion::new(scenario));
         app.insert_resource(SmokeRun {
@@ -71,6 +73,8 @@ fn input(world: &mut World) {
         crate::battle::smoke::input(frame)
     } else if scenario == "menu" {
         crate::menu::layout_smoke::input(frame)
+    } else if scenario == "save-screen" {
+        crate::save::screen_smoke::input(frame)
     } else {
         None
     };
@@ -83,6 +87,7 @@ fn input(world: &mut World) {
                 | "save-music"
                 | "save-camera"
                 | "save-pictures"
+                | "save-screen"
                 | "gameover"
                 | "battle-defeat"
                 | "font"
@@ -206,6 +211,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "screen-events"
         && let Some(label) = crate::transitions::event_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "save-screen"
+        && let Some(label) = crate::save::screen_smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -337,6 +347,8 @@ fn drive(world: &mut World) {
             crate::transitions::smoke::verify_finished(world);
         } else if scenario == "screen-events" {
             crate::transitions::event_smoke::verify_finished(world);
+        } else if scenario == "save-screen" {
+            crate::save::screen_smoke::verify_finished(world);
         } else if scenario == "battle-transitions" {
             crate::battle::flow::smoke::verify_finished(world);
         } else if matches!(scenario, "gameover" | "battle-defeat") {

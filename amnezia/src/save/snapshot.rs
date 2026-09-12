@@ -75,4 +75,6 @@ pub(super) struct SaveGame {
     pub(super) camera: Option<crate::player::saved_camera::CameraState>,
     #[serde(default)]
     pub(super) pictures: Vec<crate::picture::saved::PictureState>,
+    #[serde(default)]
+    pub(super) screen: Option<crate::screenfx::saved::ScreenState>,
 }

@@ -26,8 +26,8 @@ const FRAME_SECS: f32 = 1.0 / 60.0;
 /// no single frame moves more than `cutoff` pixels.
 pub fn next_position(strength: i32, speed: i32, time_left: i32, position: i32) -> i32 {
     let amplitude = 1 + 2 * strength;
-    let phase = (time_left * 4 * (speed + 2)).rem_euclid(256) as f64 * PI / 128.0;
-    // EasyRPG's `amplitude * sin(phase) * -1`, truncated toward zero (C++ int cast).
+    let phase =
+        (i64::from(time_left) * 4 * (i64::from(speed) + 2)).rem_euclid(256) as f64 * PI / 128.0;
     let raw = (-(amplitude as f64 * phase.sin())) as i32;
     let cutoff = (speed * amplitude / 8) + 1;
     raw.clamp(position - cutoff, position + cutoff)
@@ -35,7 +35,7 @@ pub fn next_position(strength: i32, speed: i32, time_left: i32, position: i32) -
 
 /// The live shake: the current command's strength/speed, the remaining frame
 /// count, the current integer position, and a sub-frame time accumulator.
-#[derive(Default)]
+#[derive(Default, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ShakeState {
     strength: i32,
     speed: i32,
@@ -45,6 +45,19 @@ pub struct ShakeState {
 }
 
 impl ShakeState {
+    pub(super) fn valid(&self) -> bool {
+        (0..=9).contains(&self.strength)
+            && (0..=9).contains(&self.speed)
+            && self.time_left >= 0
+            && self.position.unsigned_abs() <= 19
+            && self.accumulator.is_finite()
+            && (0.0..1.0).contains(&self.accumulator)
+    }
+
+    pub(super) fn position(&self) -> f32 {
+        self.position as f32
+    }
+
     /// Begin a `ShakeScreen` of `power`/`speed` lasting `secs`. `power <= 0` (or a
     /// non-positive duration) is treated as no shake, matching the remake's
     /// "power 0 → none" rule. The position is deliberately not reset, so a shake
@@ -68,6 +81,7 @@ impl ShakeState {
     pub fn step(&mut self, dt: f32) -> f32 {
         if self.time_left <= 0 {
             self.position = 0;
+            self.accumulator = 0.0;
             return 0.0;
         }
         self.accumulator += f64::from(dt) * 60.0;
@@ -75,7 +89,10 @@ impl ShakeState {
             self.advance_frame();
             self.accumulator = (self.accumulator - 1.0).max(0.0);
         }
-        self.position as f32
+        if self.time_left == 0 {
+            self.accumulator = 0.0;
+        }
+        self.position()
     }
 
     /// One 60 fps step of `Shake::Update`: decrement the timer, then either move
@@ -93,6 +110,37 @@ impl ShakeState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn invalid_saved_shake_parameters_and_clocks_are_rejected() {
+        for case in 0..7 {
+            let mut state = ShakeState::default();
+            match case {
+                0 => state.strength = i32::MAX,
+                1 => state.speed = -1,
+                2 => state.time_left = -1,
+                3 => state.position = i32::MIN,
+                4 => state.accumulator = f64::INFINITY,
+                5 => state.accumulator = -0.01,
+                _ => state.accumulator = 1.0,
+            }
+            assert!(!state.valid());
+        }
+    }
+
+    #[test]
+    fn long_saved_shakes_do_not_overflow_the_phase_calculation() {
+        let mut shake = ShakeState {
+            strength: 9,
+            speed: 9,
+            time_left: i32::MAX,
+            ..Default::default()
+        };
+        assert!(shake.valid());
+        let period = (i64::from(i32::MAX - 1) * 44).rem_euclid(256) as i32;
+        let expected = (-19.0 * (f64::from(period) * PI / 128.0).sin()) as i32;
+        assert_eq!(shake.step(FRAME_SECS), expected as f32);
+    }
 
     #[test]
     fn eight_frame_damage_shake_keeps_its_timeline_at_low_and_high_fps() {

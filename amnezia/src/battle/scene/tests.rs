@@ -15,7 +15,7 @@ fn battle_shake_moves_the_scene_without_moving_windows_or_normal_animation_cells
         .init_resource::<crate::battle::BattleActive>()
         .init_resource::<crate::menu::MenuOpen>()
         .init_resource::<crate::shop::ShopOpen>()
-        .init_resource::<crate::title::TitleActive>()
+        .insert_resource(crate::title::TitleActive(false))
         .init_resource::<crate::gameover::GameOverActive>()
         .init_resource::<crate::timing::GameFrames>()
         .add_message::<crate::world::MapChanged>()

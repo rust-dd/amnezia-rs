@@ -17,6 +17,11 @@ pub(crate) mod battle_smoke;
 #[cfg(test)]
 mod battle_tests;
 mod flash;
+#[cfg(test)]
+mod pause_tests;
+#[cfg(test)]
+mod save_tests;
+pub(crate) mod saved;
 mod shake;
 mod tone;
 mod weather;
@@ -104,6 +109,18 @@ pub struct ScreenShakeSet;
 pub(crate) struct ScreenEffectsSet;
 
 #[derive(bevy::ecs::system::SystemParam)]
+struct EffectPause<'w> {
+    transition: crate::transitions::TransitionPause<'w>,
+    scene: crate::world::ScenePause<'w>,
+}
+
+impl EffectPause<'_> {
+    fn paused(&self) -> bool {
+        self.transition.paused() || self.scene.screen_effects_paused()
+    }
+}
+
+#[derive(bevy::ecs::system::SystemParam)]
 pub(crate) struct ScreenShake<'w> {
     fx: Option<Res<'w, Fx>>,
 }
@@ -185,7 +202,7 @@ fn transparent() -> BackgroundColor {
 
 /// Ingest new effects, advance every running effect, and repaint the overlays.
 fn step_effects(
-    transition: crate::transitions::TransitionPause,
+    pause: EffectPause,
     time: Res<Time>,
     battle: Option<Res<crate::battle::Battle>>,
     mut current_battle: Local<Option<u64>>,
@@ -203,7 +220,7 @@ fn step_effects(
         fx.flash = None;
     }
     *current_battle = generation;
-    if !transition.paused() {
+    if !pause.paused() {
         let dt = time.delta_secs();
         step_flash(&mut fx, dt);
         step_shake(&mut fx, dt);

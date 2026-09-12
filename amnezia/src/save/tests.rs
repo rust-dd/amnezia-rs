@@ -11,6 +11,7 @@ mod music;
 #[test]
 fn save_game_ron_round_trip() {
     let game = SaveGame {
+        screen: None,
         pictures: Vec::new(),
         camera: None,
         message: default(),
@@ -177,6 +178,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     // restore is observable.
     let path = temp_slot("continue");
     let game = SaveGame {
+        screen: None,
         pictures: Vec::new(),
         camera: None,
         message: default(),
@@ -269,6 +271,7 @@ fn load_restores_name_charset_and_screen_state() {
     // resources so the resumed scene looks exactly as it was saved.
     let path = temp_slot("scene");
     let game = SaveGame {
+        screen: None,
         pictures: Vec::new(),
         camera: None,
         message: default(),
@@ -450,6 +453,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
     let path = temp_slot("roundtrip");
     let _ = std::fs::remove_file(&path);
     let game = SaveGame {
+        screen: None,
         pictures: Vec::new(),
         camera: None,
         message: default(),
