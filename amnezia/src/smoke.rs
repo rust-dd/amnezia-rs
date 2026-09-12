@@ -60,6 +60,8 @@ fn input(world: &mut World) {
         crate::title::smoke::return_input(frame)
     } else if scenario == "battle-menus" {
         crate::battle::smoke::input(frame)
+    } else if scenario == "menu" {
+        crate::menu::layout_smoke::input(frame)
     } else {
         None
     };
@@ -218,11 +220,10 @@ fn drive(world: &mut World) {
     {
         capture(world, label);
     }
-    if frame == 300 && scenario == "menu" {
-        world.resource_mut::<crate::menu::MenuOpen>().0 = true;
-        world
-            .resource_mut::<crate::state::Party>()
-            .restore(vec![1, 2, 3, 4]);
+    if scenario == "menu"
+        && let Some(label) = crate::menu::layout_smoke::drive(world, frame)
+    {
+        capture(world, label);
     }
     if frame == 900 && scenario == "timer" {
         assert!(world.resource::<crate::battle::BattleActive>().0);
@@ -289,6 +290,8 @@ fn drive(world: &mut World) {
             crate::animation::map_flash_smoke::verify_finished(world);
         } else if scenario == "ui-layers" {
             ui_layers::verify_finished(world);
+        } else if scenario == "menu" {
+            crate::menu::layout_smoke::verify_finished(world);
         } else if scenario == "actor-graphics" {
             crate::appearance::smoke::verify_finished(world);
         } else if scenario == "font-colors" {

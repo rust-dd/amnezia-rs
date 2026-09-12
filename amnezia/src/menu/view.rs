@@ -1,11 +1,5 @@
-//! The menu panel's spawned scaffold and its per-frame refresh. The overlay is the
-//! RM2000 default main menu rebuilt at ×3 (our 960×720 window is exactly three
-//! times RM2000's 320×240): a command window top-left, a gold window bottom-left,
-//! and a party status window on the right, each a `System.png` 9-slice frame. A
-//! fourth, near-fullscreen content window carries every sub-screen's text. The
-//! selected row is marked with a windowskin cursor rectangle (the `System.png`
-//! cursor sprite), not a text caret. State and input live in the parent module;
-//! this one builds the nodes and reflects [`MenuState`] into them.
+//! Field-menu windows use native coordinates scaled threefold for Bevy UI.
+//! Subscreens still share a content panel; their state and input live in the parent.
 
 use crate::assets::resolve_png;
 use crate::equipment::Equipment;
@@ -15,11 +9,13 @@ use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 use crate::terms::Terms;
 use crate::vitals::Vitals;
+use crate::windowskin::frame;
 use bevy::prelude::*;
 use bevy::text::{FontSource, Justify, LineHeight, TextLayout};
 
 use super::{MenuOpen, MenuScreen, MenuState, command, render};
 
+pub(crate) mod smoke;
 #[cfg(test)]
 mod tests;
 
@@ -32,12 +28,12 @@ const MAX_SLOTS: usize = 4;
 
 /// Command-list row pitch (RM2000 16 × 3) and the top of the first row/cursor.
 const CMD_ROW_PITCH: f32 = 48.0;
-const CMD_ROW_TOP: f32 = 8.0;
+const CMD_ROW_TOP: f32 = 24.0;
 
 /// Status-window per-member row pitch (RM2000 58 × 3) and the top of the first
 /// member row (past the 8px windowskin border).
 const MEMBER_PITCH: f32 = 174.0;
-const MEMBER_TOP: f32 = 8.0;
+const MEMBER_TOP: f32 = 24.0;
 
 /// Content-list row pitch: the fixed line height composed text is laid out with,
 /// so the content cursor lands on the right row, and the text's top inset.
@@ -137,10 +133,10 @@ fn spawn_command_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>
         ))
         .with_children(|w| {
             frame(w, system);
-            cursor_sprite(w, system, CursorId::Command, 4.0, 256.0, 48.0);
+            cursor_sprite(w, system, CursorId::Command, 12.0, 240.0, 48.0);
             for i in 0..command::COMMANDS.len() {
                 w.spawn((
-                    text_at(font, 16.0, CMD_ROW_TOP + 12.0 + i as f32 * CMD_ROW_PITCH),
+                    text_at(font, 24.0, CMD_ROW_TOP + 6.0 + i as f32 * CMD_ROW_PITCH),
                     MenuText(TextSlot::Command(i)),
                 ));
             }
@@ -165,9 +161,9 @@ fn spawn_gold_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>, f
                 TextLayout::justify(Justify::Right),
                 Node {
                     position_type: PositionType::Absolute,
-                    left: Val::Px(12.0),
-                    right: Val::Px(12.0),
-                    top: Val::Px(34.0),
+                    left: Val::Px(24.0),
+                    right: Val::Px(24.0),
+                    top: Val::Px(30.0),
                     ..default()
                 },
                 MenuText(TextSlot::Gold),
@@ -187,36 +183,47 @@ fn spawn_status_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>,
         ))
         .with_children(|w| {
             frame(w, system);
-            cursor_sprite(w, system, CursorId::Status, 164.0, 504.0, 144.0);
-            for slot in 0..MAX_SLOTS {
-                let top = MEMBER_TOP + slot as f32 * MEMBER_PITCH;
-                w.spawn((
-                    Node {
-                        position_type: PositionType::Absolute,
-                        left: Val::Px(8.0),
-                        top: Val::Px(top),
-                        width: Val::Px(144.0),
-                        height: Val::Px(144.0),
-                        ..default()
-                    },
-                    ImageNode::default(),
-                    Visibility::Hidden,
-                    MenuFace(slot),
-                ));
-                let field = |f, x, y| {
-                    (
-                        text_at(font, x, y),
-                        MenuText(TextSlot::Member { slot, field: f }),
-                    )
-                };
-                w.spawn(field(MemberField::Name, 176.0, top + 6.0));
-                w.spawn(field(MemberField::Title, 440.0, top + 6.0));
-                w.spawn(field(MemberField::Level, 176.0, top + 54.0));
-                w.spawn(field(MemberField::Condition, 302.0, top + 54.0));
-                w.spawn(field(MemberField::Hp, 494.0, top + 54.0));
-                w.spawn(field(MemberField::Exp, 176.0, top + 102.0));
-                w.spawn(field(MemberField::Sp, 494.0, top + 102.0));
-            }
+            cursor_sprite(w, system, CursorId::Status, 180.0, 504.0, 144.0);
+            w.spawn(Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(24.0),
+                top: Val::Px(24.0),
+                right: Val::Px(24.0),
+                bottom: Val::Px(24.0),
+                overflow: Overflow::clip(),
+                ..default()
+            })
+            .with_children(|w| {
+                for slot in 0..MAX_SLOTS {
+                    let top = slot as f32 * MEMBER_PITCH;
+                    w.spawn((
+                        Node {
+                            position_type: PositionType::Absolute,
+                            left: Val::Px(0.0),
+                            top: Val::Px(top),
+                            width: Val::Px(144.0),
+                            height: Val::Px(144.0),
+                            ..default()
+                        },
+                        ImageNode::default(),
+                        Visibility::Hidden,
+                        MenuFace(slot),
+                    ));
+                    let field = |f, x, y| {
+                        (
+                            text_at(font, x, y),
+                            MenuText(TextSlot::Member { slot, field: f }),
+                        )
+                    };
+                    w.spawn(field(MemberField::Name, 168.0, top + 6.0));
+                    w.spawn(field(MemberField::Title, 432.0, top + 6.0));
+                    w.spawn(field(MemberField::Level, 168.0, top + 54.0));
+                    w.spawn(field(MemberField::Condition, 294.0, top + 54.0));
+                    w.spawn(field(MemberField::Hp, 486.0, top + 54.0));
+                    w.spawn(field(MemberField::Exp, 168.0, top + 102.0));
+                    w.spawn(field(MemberField::Sp, 486.0, top + 102.0));
+                }
+            });
         });
 }
 
@@ -265,38 +272,7 @@ fn window_node(left: f32, top: f32, width: f32, height: f32) -> Node {
     }
 }
 
-/// A window's two windowskin layers: the 9-sliced border and the stretched centre
-/// fill, both filling the window behind its content (same slices as the dialogue).
-fn frame(window: &mut ChildSpawnerCommands, system: &Handle<Image>) {
-    window.spawn((
-        inset_node(0.0),
-        ImageNode {
-            image: system.clone(),
-            rect: Some(Rect::new(32.0, 0.0, 64.0, 32.0)),
-            image_mode: NodeImageMode::Sliced(TextureSlicer {
-                border: BorderRect::all(8.0),
-                center_scale_mode: SliceScaleMode::Stretch,
-                sides_scale_mode: SliceScaleMode::Stretch,
-                max_corner_scale: 1.0,
-            }),
-            ..default()
-        },
-    ));
-    window.spawn((
-        inset_node(4.0),
-        ImageNode {
-            image: system.clone(),
-            rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
-            image_mode: NodeImageMode::Stretch,
-            ..default()
-        },
-    ));
-}
-
-/// A hidden windowskin selection cursor: the `System.png` cursor sprite (region
-/// 64,0..96,32) 9-sliced over the row. Its `top` is set each frame; `left`,
-/// `width`, and `height` are fixed per window. Spawned before the text so the text
-/// draws on top of the translucent cursor fill.
+/// Cursor corners retain their eight native pixels even on a sixteen-pixel row.
 fn cursor_sprite(
     window: &mut ChildSpawnerCommands,
     system: &Handle<Image>,
@@ -305,29 +281,20 @@ fn cursor_sprite(
     width: f32,
     height: f32,
 ) {
-    window.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            left: Val::Px(left),
-            top: Val::Px(0.0),
-            width: Val::Px(width),
-            height: Val::Px(height),
-            ..default()
-        },
-        ImageNode {
-            image: system.clone(),
-            rect: Some(Rect::new(64.0, 0.0, 96.0, 32.0)),
-            image_mode: NodeImageMode::Sliced(TextureSlicer {
-                border: BorderRect::all(8.0),
-                center_scale_mode: SliceScaleMode::Stretch,
-                sides_scale_mode: SliceScaleMode::Stretch,
-                max_corner_scale: 1.0,
-            }),
-            ..default()
-        },
-        Visibility::Hidden,
-        MenuCursor(id),
-    ));
+    window
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(left),
+                top: Val::Px(0.0),
+                width: Val::Px(width),
+                height: Val::Px(height),
+                ..default()
+            },
+            Visibility::Hidden,
+            MenuCursor(id),
+        ))
+        .with_children(|parent| crate::windowskin::cursor(parent, system));
 }
 
 /// A blank absolutely-positioned text node at `(x, y)` in the game font.
@@ -350,18 +317,6 @@ fn text_font(font: &GameFont) -> TextFont {
     TextFont {
         font: FontSource::Handle(font.0.clone()),
         font_size: FontSize::Px(crate::font::UI_FONT_PX),
-        ..default()
-    }
-}
-
-/// An absolutely-positioned node inset by `px` on every side of its parent.
-fn inset_node(px: f32) -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        left: Val::Px(px),
-        right: Val::Px(px),
-        top: Val::Px(px),
-        bottom: Val::Px(px),
         ..default()
     }
 }

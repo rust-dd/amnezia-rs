@@ -34,6 +34,8 @@ mod status;
 mod use_item;
 mod view;
 
+pub(crate) use view::smoke as layout_smoke;
+
 #[cfg(test)]
 mod name_tests;
 #[cfg(test)]

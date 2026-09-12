@@ -29,6 +29,7 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let world_tone_snapshot = crate::legacy_colors::world_smoke::snapshot(world, label);
     let map_flash_snapshot = crate::animation::map_flash_smoke::snapshot(world, label);
     let ui_layer_snapshot = ui_layers::snapshot(world, label);
+    let menu_snapshot = crate::menu::layout_smoke::snapshot(world, label);
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
@@ -76,6 +77,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &ui_layer_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &menu_snapshot {
                 snapshot.verify(&capture.image);
             }
         },

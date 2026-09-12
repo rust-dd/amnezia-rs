@@ -48,6 +48,7 @@ mod title;
 mod transitions;
 mod vehicles;
 mod vitals;
+mod windowskin;
 mod world;
 
 use assets::{asset_root, load_ron};
