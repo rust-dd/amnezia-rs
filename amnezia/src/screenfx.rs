@@ -21,6 +21,7 @@ mod shake;
 mod tone;
 mod weather;
 
+pub(crate) use flash::smoke as flash_smoke;
 pub use tone::{FrontCamera, PICTURE_LAYER, TintState};
 pub use weather::{Weather, WeatherStrength};
 

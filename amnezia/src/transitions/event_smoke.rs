@@ -27,6 +27,9 @@ pub(crate) fn entry() -> Vec<EventCommand> {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if let Some(label) = crate::screenfx::flash_smoke::drive(world, frame) {
+        return Some(label);
+    }
     if frame == 260 {
         assert_eq!(world.resource::<crate::world::MapData>().map_id, 99);
         assert!(
@@ -85,6 +88,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 }
 
 pub(crate) fn verify_finished(world: &mut World) {
+    crate::screenfx::flash_smoke::verify_finished(world);
     let trace = world.resource::<Trace>();
     assert!(trace.erase && trace.hidden_transfer && trace.show && trace.resumed);
     let player = world

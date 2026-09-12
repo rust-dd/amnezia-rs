@@ -73,6 +73,8 @@ The `save-camera` scenario also uses an isolated temporary slot. It saves a lock
 
 The `save-pictures` scenario saves moving, tinted and waving pictures alongside screen-pinned and map-anchored graphics. Its isolated slot checks exact restoration, continued animation, 18 original graphic samples while the camera moves, and clearing stale pictures when loading empty or legacy saves.
 
+The `screen-events` scenario also checks strong and weak FlashScreen commands against byte-level reference blends on black, colored and white backgrounds. Seven captures verify the decay and unchanged UI above the flash.
+
 The game renders its world, text and menus together at 320×240, then scales the result in whole physical pixels with black letterboxing. Windows smaller than the native canvas are downscaled proportionally. The display scenario checks normal, wide, portrait, odd-sized and small outputs against direct GPU readbacks of the native canvas.
 
 ### Packaging (macOS)
