@@ -2,7 +2,12 @@ use super::model::{Battle, MenuLevel, Phase};
 use bevy::prelude::*;
 
 mod messages;
-pub(crate) use messages::verify_finished;
+pub(in crate::battle) mod shake;
+
+pub(crate) fn verify_finished(world: &World) {
+    messages::verify_finished(world);
+    shake::verify_finished(world);
+}
 
 pub(crate) fn defeat(world: &mut World) {
     let mut battle = world.resource_mut::<Battle>();
@@ -63,6 +68,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
 
 pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     let impact = messages::drive(world, frame);
+    let shake = shake::drive(world, frame);
     status_colors(world, frame);
     if let Some(tone) = match frame {
         900 => Some([50.0, 100.0, 150.0, 0.0]),
@@ -150,7 +156,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         1130 => Some("battle-ally-target"),
         1230 => Some("battle-resized"),
         1250 => Some("battle-skill-usage"),
-        _ => super::hud::movement_label(frame).or(impact),
+        _ => super::hud::movement_label(frame).or(impact).or(shake),
     };
     if matches!(label, Some("battle-action-flash" | "battle-action-fade")) {
         assert!(world.resource::<Battle>().log.is_empty());

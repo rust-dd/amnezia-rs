@@ -14,6 +14,7 @@
 use std::f64::consts::PI;
 
 /// Seconds per RM2000 logic frame (the fixed 60 fps the recurrence assumes).
+#[cfg(test)]
 const FRAME_SECS: f32 = 1.0 / 60.0;
 
 /// The next integer shake position, a direct port of `Shake::NextPosition`.
@@ -40,7 +41,7 @@ pub struct ShakeState {
     speed: i32,
     time_left: i32,
     position: i32,
-    accumulator: f32,
+    accumulator: f64,
 }
 
 impl ShakeState {
@@ -69,10 +70,10 @@ impl ShakeState {
             self.position = 0;
             return 0.0;
         }
-        self.accumulator += dt;
-        while self.accumulator >= FRAME_SECS && self.time_left > 0 {
+        self.accumulator += f64::from(dt) * 60.0;
+        while self.accumulator + 1e-6 >= 1.0 && self.time_left > 0 {
             self.advance_frame();
-            self.accumulator -= FRAME_SECS;
+            self.accumulator = (self.accumulator - 1.0).max(0.0);
         }
         self.position as f32
     }
@@ -92,6 +93,25 @@ impl ShakeState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn eight_frame_damage_shake_keeps_its_timeline_at_low_and_high_fps() {
+        let positions = [0.0, 5.0, 5.0, 2.0, -2.0, -6.0, -6.0, -4.0, 0.0];
+        for fps in [15, 30, 60, 144] {
+            let mut clock = crate::timing::GameFrames::default();
+            let mut shake = ShakeState::default();
+            shake.start(3, 5, 8.0 / 60.0);
+            for update in 0..fps {
+                clock.advance(1.0 / fps as f64);
+                let position = shake.step(1.0 / fps as f32);
+                assert_eq!(
+                    position,
+                    positions[clock.frame.min(8) as usize],
+                    "{fps} FPS, update {update}"
+                );
+            }
+        }
+    }
 
     #[test]
     fn next_position_matches_easyrpg_reference_values() {

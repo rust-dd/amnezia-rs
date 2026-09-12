@@ -113,6 +113,7 @@ pub struct Battle {
     /// Animation flashes are independent; absorption does not trigger this blink.
     pub(in crate::battle) pending_blinks: Vec<(f32, f32)>,
     pub(in crate::battle) pending_action_flashes: Vec<Source>,
+    pub(in crate::battle) pending_shake: bool,
     /// Battle sound effects owed as the current tick's actions resolve (a hit
     /// landed, a foe felled, an attack evaded), drained each frame by `battle.rs`
     /// into `AudioRequest`s named from the loaded `SystemDef` and cleared by
@@ -365,6 +366,7 @@ impl Battle {
         self.hit_reports.clear();
         self.pending_blinks.clear();
         self.pending_action_flashes.clear();
+        self.pending_shake = false;
         self.pending_se.clear();
         self.menu = MenuLevel::Command;
         self.cursor = 0;

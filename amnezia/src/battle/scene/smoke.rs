@@ -1,7 +1,14 @@
 use super::*;
 use crate::legacy_colors::{flash::SpriteFlash, hue::HueShift, tone::SpriteTone};
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 
-pub(crate) struct Snapshot(Vec<(u32, u32, [u8; 4])>);
+pub(crate) struct Snapshot {
+    pixels: Vec<(u32, u32, [u8; 4])>,
+    shake_checks: Option<Arc<AtomicUsize>>,
+}
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     if !matches!(
@@ -17,6 +24,9 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             | "battle-action-fade"
             | "battle-tone"
             | "battle-tone-light"
+            | "battle-shake-right"
+            | "battle-shake-left"
+            | "battle-shake-restored"
     ) {
         return None;
     }
@@ -41,6 +51,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         "battle-target-fade" => 96,
         "battle-action-flash" => 80,
         "battle-action-fade" => 64,
+        "battle-shake-right" => 80,
+        "battle-shake-left" => 48,
         _ => 0,
     };
     assert_eq!(enemies[0].4[3], expected_flash, "{label}");
@@ -68,9 +80,18 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let images = world.resource::<Assets<Image>>();
     let backdrop = images.get(&backdrop).unwrap();
     assert_eq!(backdrop.size(), UVec2::new(320, 160));
+    let shift = match label {
+        "battle-shake-right" => 5,
+        "battle-shake-left" => -6,
+        _ => 0,
+    };
     let mut expected = (0..320 * 160)
         .map(|i| {
-            let pixel = rgba(backdrop, i % 320, i / 320);
+            let x = (i % 320) as i32 - shift;
+            if !(0..320).contains(&x) {
+                return [0, 0, 0, 255];
+            }
+            let pixel = rgba(backdrop, x as u32, i / 320);
             let rgb = crate::legacy_colors::tone::apply([pixel[0], pixel[1], pixel[2]], tone);
             [rgb[0], rgb[1], rgb[2], pixel[3]]
         })
@@ -83,7 +104,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     }
     for (_, base, source, hue, flash, opacity, tone) in enemies {
         let source = images.get(&source).unwrap();
-        let left = base.x as i32 + 160 - source.width() as i32 / 2;
+        let left = base.x as i32 + shift + 160 - source.width() as i32 / 2;
         let top = base.y as i32 + 120 - source.height() as i32 / 2;
         for y in 0..source.height() {
             for x in 0..source.width() {
@@ -112,14 +133,39 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             }
         }
     }
-    let pixels = expected
+    let mut pixels = expected
         .into_iter()
         .enumerate()
         .filter(|(i, _)| sampled[*i])
         .map(|(i, pixel)| (i as u32 % 320, i as u32 / 320, pixel))
         .collect::<Vec<_>>();
     assert!(pixels.len() > 1000);
-    Some(Snapshot(pixels))
+    let shake_checks = label.starts_with("battle-shake-").then(|| {
+        let system = world
+            .resource::<AssetServer>()
+            .load::<Image>("graphics/System/System.png");
+        let skin = images.get(&system).unwrap();
+        for x in 0..320 {
+            let sx = if x < 8 {
+                32 + x
+            } else if x >= 312 {
+                56 + x - 312
+            } else {
+                40 + (x - 8) % 16
+            };
+            for y in 0..8 {
+                let pixel = rgba(skin, sx, y);
+                if pixel[3] == 255 {
+                    pixels.push((x, 160 + y, pixel));
+                }
+            }
+        }
+        crate::battle::smoke::shake::checks(world)
+    });
+    Some(Snapshot {
+        pixels,
+        shake_checks,
+    })
 }
 
 fn rgba(image: &Image, x: u32, y: u32) -> [u8; 4] {
@@ -128,13 +174,19 @@ fn rgba(image: &Image, x: u32, y: u32) -> [u8; 4] {
 
 impl Snapshot {
     pub(crate) fn verify(&self, image: &Image) {
-        for &(x, y, expected) in &self.0 {
+        for &(x, y, expected) in &self.pixels {
             let actual = crate::display::smoke::pixel_at(image, x, y);
             assert!(
                 actual.iter().zip(expected).all(|(a, b)| a.abs_diff(b) <= 1),
                 "battler ({x},{y}): expected {expected:?}, got {actual:?}"
             );
         }
-        info!("battler flash/blink: {} GPU pixels verified", self.0.len());
+        if let Some(checks) = &self.shake_checks {
+            checks.fetch_add(1, Ordering::Relaxed);
+        }
+        info!(
+            "battler flash/blink: {} GPU pixels verified",
+            self.pixels.len()
+        );
     }
 }

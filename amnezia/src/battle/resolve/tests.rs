@@ -12,6 +12,7 @@ mod equipment;
 mod impact_rules;
 mod item_messages;
 mod messages;
+mod shake;
 mod skill_requirements;
 mod state_behavior;
 mod state_messages;

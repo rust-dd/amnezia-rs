@@ -90,6 +90,7 @@ impl Battle {
         }
         let pos = self.battler_pos(target);
         if normal_impact {
+            self.pending_shake |= dmg > 0 && matches!(target, Source::Party(_));
             self.pending_se.push(match target {
                 Source::Party(_) => BattleSe::ActorDamaged,
                 Source::Enemy(_) => BattleSe::EnemyDamaged,

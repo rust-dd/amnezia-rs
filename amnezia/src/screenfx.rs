@@ -99,6 +99,20 @@ fn tenths(v: i32) -> f32 {
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ScreenShakeSet;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ScreenEffectsSet;
+
+#[derive(bevy::ecs::system::SystemParam)]
+pub(crate) struct ScreenShake<'w> {
+    fx: Option<Res<'w, Fx>>,
+}
+
+impl ScreenShake<'_> {
+    pub(crate) fn offset(&self) -> Vec2 {
+        self.fx.as_ref().map_or(Vec2::ZERO, |fx| fx.shake_offset)
+    }
+}
+
 #[derive(Component)]
 struct FlashOverlay;
 
@@ -125,7 +139,9 @@ impl Plugin for ScreenFxPlugin {
             .add_systems(Startup, spawn_overlays.after(crate::world::setup_cameras))
             .add_systems(
                 Update,
-                step_effects.after(crate::battle::flow::BattleFlowSet),
+                step_effects
+                    .in_set(ScreenEffectsSet)
+                    .after(crate::battle::flow::BattleFlowSet),
             )
             .add_systems(
                 PostUpdate,

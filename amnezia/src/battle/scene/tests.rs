@@ -1,6 +1,86 @@
 use super::*;
 
 #[test]
+fn battle_shake_moves_the_scene_without_moving_windows_or_normal_animation_cells() {
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()))
+        .init_asset::<Image>()
+        .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+            std::time::Duration::from_secs_f64(1.0 / 60.0),
+        ))
+        .insert_resource(Battle {
+            phase: Phase::PartyCommand,
+            ..default()
+        })
+        .init_resource::<crate::battle::BattleActive>()
+        .init_resource::<crate::menu::MenuOpen>()
+        .init_resource::<crate::shop::ShopOpen>()
+        .init_resource::<crate::title::TitleActive>()
+        .init_resource::<crate::gameover::GameOverActive>()
+        .init_resource::<crate::timing::GameFrames>()
+        .add_message::<crate::world::MapChanged>()
+        .add_message::<crate::animation::BattlerFlash>()
+        .add_plugins(crate::screenfx::ScreenFxPlugin);
+    register(&mut app);
+    let base = Vec2::new(16.0, -24.0);
+    let enemy = app
+        .world_mut()
+        .spawn((
+            SceneEntity,
+            Battler {
+                index: 0,
+                base,
+                height: 48.0,
+            },
+            Sprite::default(),
+            Transform::from_translation(overlay_translation(base, BATTLER_Z)),
+        ))
+        .id();
+    let backdrop = app
+        .world_mut()
+        .spawn((SceneEntity, Transform::from_xyz(0.0, 0.0, BACKDROP_Z)))
+        .id();
+    let other = app
+        .world_mut()
+        .spawn(Transform::from_xyz(40.0, 30.0, 510.0))
+        .id();
+    let canvas = app
+        .world_mut()
+        .spawn((
+            SceneEntity,
+            Canvas,
+            Transform::from_xyz(0.0, 0.0, BACKDROP_Z - 1.0),
+        ))
+        .id();
+    app.update();
+    app.world_mut()
+        .write_message(crate::screenfx::ScreenEffect::Shake {
+            power: 3,
+            speed: 5,
+            secs: 8.0 / 60.0,
+        });
+    for x in [5.0, 5.0, 2.0, -2.0, -6.0, -6.0, -4.0, 0.0, 0.0] {
+        app.update();
+        assert_eq!(
+            app.world().get::<Transform>(backdrop).unwrap().translation,
+            Vec3::new(x, 0.0, BACKDROP_Z)
+        );
+        assert_eq!(
+            app.world().get::<Transform>(enemy).unwrap().translation,
+            Vec3::new(base.x + x, -base.y, BATTLER_Z)
+        );
+        assert_eq!(
+            app.world().get::<Transform>(other).unwrap().translation,
+            Vec3::new(40.0, 30.0, 510.0)
+        );
+        assert_eq!(
+            app.world().get::<Transform>(canvas).unwrap().translation,
+            Vec3::new(0.0, 0.0, BACKDROP_Z - 1.0)
+        );
+    }
+}
+
+#[test]
 fn original_monster_hues_reach_each_live_battler_sprite() {
     use crate::battle::model::{Progression, Vitals, testkit};
     let monsters = crate::assets::load_ron::<Vec<amnezia_data::MonsterDef>>(&format!(
@@ -36,8 +116,17 @@ fn original_monster_hues_reach_each_live_battler_sprite() {
         .set_tone([50.0, 100.0, 150.0, 0.0]);
     app.update();
     let world = app.world_mut();
+    assert!(
+        world
+            .query_filtered::<&Sprite, With<SceneEntity>>()
+            .iter(world)
+            .any(|sprite| {
+                sprite.color == Color::BLACK && sprite.custom_size == Some(Vec2::new(320.0, 240.0))
+            }),
+        "battle has a fixed black canvas beneath the moving backdrop"
+    );
     let backdrop = world
-        .query_filtered::<&Sprite, (With<SceneEntity>, Without<Battler>)>()
+        .query_filtered::<&Sprite, (With<SceneEntity>, Without<Battler>, Without<Canvas>)>()
         .single(world)
         .unwrap();
     assert_eq!(backdrop.custom_size, Some(Vec2::new(320.0, 240.0)));

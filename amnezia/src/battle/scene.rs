@@ -35,6 +35,11 @@ const FALLBACK_BATTLER_HEIGHT: f32 = 48.0;
 #[derive(Component)]
 pub(super) struct SceneEntity;
 
+#[derive(Component)]
+struct Canvas;
+
+type MovingScene = (With<SceneEntity>, Without<Canvas>);
+
 /// An enemy battler sprite: its index into [`Battle::enemies`], its RM2000
 /// screen-offset base — the anchor animations play on and the point a target
 /// flash is matched against — and its measured pixel height, from which an
@@ -76,6 +81,13 @@ fn sync_scene(
     if battle.phase == Phase::Inactive {
         return;
     }
+    commands.spawn((
+        Sprite::from_color(Color::BLACK, Vec2::new(320.0, 240.0)),
+        Transform::from_xyz(0.0, 0.0, BACKDROP_Z - 1.0),
+        overlay_layer(),
+        SceneEntity,
+        Canvas,
+    ));
     let tone = SpriteTone(tint.as_ref().map_or([100.0; 4], |tint| tint.tone()));
     let image = asset_server.load(resolve_png("Backdrop", &battle.background));
     commands.spawn((
@@ -183,6 +195,16 @@ fn sync_tone(
     }
 }
 
+fn apply_shake(
+    shake: crate::screenfx::ScreenShake,
+    mut scene: Query<(Option<&Battler>, &mut Transform), MovingScene>,
+) {
+    for (battler, mut transform) in &mut scene {
+        let base = battler.map_or(Vec2::ZERO, |battler| battler.base);
+        transform.translation = overlay_translation(base + shake.offset(), transform.translation.z);
+    }
+}
+
 pub fn register(app: &mut App) {
     effects::register(app);
     app.add_systems(
@@ -194,6 +216,11 @@ pub fn register(app: &mut App) {
     )
     .add_systems(
         PostUpdate,
-        sync_tone.before(crate::legacy_colors::hue::HueSet),
+        (
+            sync_tone.before(crate::legacy_colors::hue::HueSet),
+            apply_shake
+                .after(EffectsSet)
+                .before(bevy::transform::TransformSystems::Propagate),
+        ),
     );
 }
