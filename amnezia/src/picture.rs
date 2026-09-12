@@ -8,11 +8,11 @@
 //! RM2000 fixed-to-map flag: a screen-pinned picture re-centres on the (shaken)
 //! camera every frame, a map-fixed one holds a world anchor and scrolls with the
 //! map. Pictures shake with the screen (they track the shaken camera) but are
-//! never touched by the screen tint, and all pictures are cleared on a map
-//! change ([`clear_on_map_change`]), matching RPG Maker 2000's transfer default.
+//! never touched by the screen tint. Rebuilding the map clears the previous
+//! scene's pictures; same-map repositioning preserves them.
 
 use crate::screenfx::ScreenShakeSet;
-use crate::world::MapChanged;
+use crate::world::MapRebuilt;
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
 use bevy::transform::TransformSystems;
@@ -269,12 +269,13 @@ pub struct PicturePlugin;
 impl Plugin for PicturePlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<PictureCommand>()
+            .add_message::<MapRebuilt>()
             .add_plugins(Material2dPlugin::<render::PictureMaterial>::default())
             .add_systems(Startup, render::setup_picture_mesh)
             .add_systems(
                 Update,
                 (
-                    clear_on_map_change,
+                    clear_on_map_change.after(crate::teleport::MapTransfer),
                     render::apply_commands,
                     render::size_pictures,
                     drive_tweens,
@@ -305,12 +306,10 @@ fn drive_tweens(
     }
 }
 
-/// Erase every picture when the map changes, matching RM2000's transfer default
-/// (it clears pictures on transfer). The interpreter is paused across the fade,
-/// so the destination map's own `ShowPicture`s run only after this has cleared.
+/// Clear the previous scene before destination picture commands can run.
 fn clear_on_map_change(
     mut commands: Commands,
-    mut changed: MessageReader<MapChanged>,
+    mut changed: MessageReader<MapRebuilt>,
     pictures: Query<Entity, With<Picture>>,
 ) {
     if changed.read().last().is_none() {

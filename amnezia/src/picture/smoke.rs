@@ -1,7 +1,12 @@
 use super::{Effect, Picture, PictureCommand, effects::EffectState, render::PictureMaterial};
 use bevy::prelude::*;
 
+mod transfers;
+
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if frame >= 600 {
+        return transfers::drive(world, frame);
+    }
     if frame == 260 {
         for (id, x, keyed) in [(1, 230.0, 0), (2, 280.0, 1)] {
             world.write_message(PictureCommand::show(
@@ -199,7 +204,7 @@ pub(crate) fn verify_image(image: &Image, label: &str, expected: &[PixelCheck]) 
             expected.len()
         );
     }
-    if label != "pictures-color-key" {
+    if !matches!(label, "pictures-color-key" | "pictures-transfer-same") {
         return;
     }
     let opaque = at(220, 50);
@@ -215,6 +220,12 @@ pub(crate) fn verify_image(image: &Image, label: &str, expected: &[PixelCheck]) 
         &opaque[..3],
         "keyed pixels must reveal the map"
     );
-    assert_eq!(&at(10, 10)[..3], &[0, 0, 0], "opaque credits background");
+    if label == "pictures-color-key" {
+        assert_eq!(&at(10, 10)[..3], &[0, 0, 0], "opaque credits background");
+    }
     info!("picture color-key GPU assertions passed");
+}
+
+pub(crate) fn verify_finished(world: &World) {
+    transfers::verify_finished(world);
 }

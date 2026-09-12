@@ -4,7 +4,9 @@ use crate::player::{CameraPan, Player};
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::tiles::CHAR_Y_OFFSET;
 use crate::transitions::{Kind, TransitionIo};
-use crate::world::{MapChanged, MapData, MapEvents, MapScene, MoveQueue, RouteStepper, load_map};
+use crate::world::{
+    MapChanged, MapData, MapEvents, MapRebuilt, MapScene, MoveQueue, RouteStepper, load_map,
+};
 use bevy::prelude::*;
 
 #[derive(Resource, Default)]
@@ -50,6 +52,7 @@ impl Plugin for TeleportPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PendingTeleport>()
             .init_resource::<Fade>()
+            .add_message::<MapRebuilt>()
             .add_systems(
                 Update,
                 drive_fade
@@ -74,6 +77,7 @@ fn drive_fade(
     mut map_events: ResMut<MapEvents>,
     mut pan: ResMut<CameraPan>,
     mut map_changed: MessageWriter<MapChanged>,
+    mut map_rebuilt: MessageWriter<MapRebuilt>,
     scene: Query<Entity, With<MapScene>>,
     mut players: Query<(
         &mut Player,
@@ -106,7 +110,7 @@ fn drive_fade(
         }
         Phase::Out => {
             if let Some((map_id, x, y)) = fade.target.take() {
-                swap_map(
+                let rebuilt = swap_map(
                     &mut commands,
                     &asset_server,
                     &switches,
@@ -123,6 +127,9 @@ fn drive_fade(
                     y,
                     fade.reload,
                 );
+                if rebuilt {
+                    map_rebuilt.write(MapRebuilt);
+                }
                 map_changed.write(MapChanged);
             }
             fade.phase = Phase::Prepare;
@@ -164,7 +171,7 @@ fn swap_map(
     x: u32,
     y: u32,
     reload: bool,
-) {
+) -> bool {
     let (tile_x, tile_y) = (x as i32, y as i32);
     // A teleport whose destination is the current map (RM2000 same-map transfer)
     // keeps the loaded map, its events, and their state — only the hero moves.
@@ -172,7 +179,7 @@ fn swap_map(
     if map_id == map_data.map_id && !reload {
         reposition_hero(players, map_data, tile_x, tile_y);
         pan.recenter(false);
-        return;
+        return false;
     }
     for entity in scene {
         commands.entity(entity).despawn();
@@ -190,6 +197,7 @@ fn swap_map(
     *map_data = data;
     *map_events = events;
     pan.recenter(true);
+    true
 }
 
 /// Move the persistent hero to tile `(tile_x, tile_y)` on `data`: update its

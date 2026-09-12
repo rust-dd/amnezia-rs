@@ -1,5 +1,7 @@
 use super::*;
 
+mod transfers;
+
 #[test]
 fn show_maps_position_flag_tone_transparency_and_zoom() {
     let params = [2, 1, 93, 94, 0, 100, 0, 1, 100, 100, 100, 100, 0, 60];
@@ -109,10 +111,10 @@ fn tween_interpolates_the_tone_toward_grayscale() {
 }
 
 #[test]
-fn a_map_change_despawns_every_picture() {
+fn a_map_rebuild_despawns_every_picture() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
-    app.add_message::<MapChanged>();
+    app.add_message::<MapRebuilt>();
     app.add_systems(Update, clear_on_map_change);
     app.world_mut().spawn(test_picture(1));
     app.world_mut().spawn(test_picture(2));
@@ -120,7 +122,7 @@ fn a_map_change_despawns_every_picture() {
     app.update();
     assert_eq!(count_pictures(&mut app), 2);
 
-    app.world_mut().write_message(MapChanged);
+    app.world_mut().write_message(MapRebuilt);
     app.update();
     assert_eq!(count_pictures(&mut app), 0);
 }

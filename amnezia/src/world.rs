@@ -188,11 +188,13 @@ pub struct RelocateEvent {
     pub y: u32,
 }
 
-/// Emitted once when the active map is replaced — a teleport/transfer or a
-/// save-load, both routed through the fade's `swap_map`. Pictures clear on it,
-/// matching RPG Maker 2000's transfer default (it erases pictures on transfer).
+/// Arrival at a transfer destination, including same-map repositioning.
 #[derive(Message)]
 pub struct MapChanged;
+
+/// A rebuilt map scene, including loading a saved map, but not same-map repositioning.
+#[derive(Message)]
+pub(crate) struct MapRebuilt;
 
 pub struct WorldPlugin;
 

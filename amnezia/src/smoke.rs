@@ -321,6 +321,8 @@ fn drive(world: &mut World) {
             crate::font::bitmap::smoke::verify_finished(world);
         } else if scenario == "animation-colors" {
             crate::animation::smoke::verify_finished(world);
+        } else if scenario == "pictures" {
+            crate::picture::smoke::verify_finished(world);
         } else if scenario == "water" {
             crate::world::water_smoke::verify_finished(world);
         } else if scenario == "transitions" {
