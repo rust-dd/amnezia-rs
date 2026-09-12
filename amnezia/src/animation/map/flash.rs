@@ -8,7 +8,7 @@ struct CharacterFlash {
 }
 
 pub(in crate::animation) fn register(app: &mut App) {
-    app.add_message::<crate::world::MapChanged>().add_systems(
+    app.add_message::<crate::world::MapRebuilt>().add_systems(
         PostUpdate,
         expire.before(crate::legacy_colors::world::WorldColors),
     );
@@ -73,12 +73,12 @@ fn expire(
     frames: Res<GameFrames>,
     pause: crate::transitions::TransitionPause,
     scene: crate::animation::scene::Scenes,
-    mut changes: MessageReader<crate::world::MapChanged>,
+    mut changes: MessageReader<crate::world::MapRebuilt>,
     mut flashes: Query<(Entity, &mut CharacterFlash, &mut SpriteFlash)>,
 ) {
     let changed = changes.read().count() != 0;
     for (entity, mut state, mut flash) in &mut flashes {
-        if changed || (!pause.paused() && !scene.paused() && state.frame != frames.frame) {
+        if changed || (!pause.paused() && !scene.frozen() && state.frame != frames.frame) {
             // Character flashes last one game tick; a live animation refreshes them.
             flash.0 = [0; 4];
             commands.entity(entity).remove::<CharacterFlash>();

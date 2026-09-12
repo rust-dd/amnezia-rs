@@ -18,6 +18,8 @@ pub(crate) mod battle_smoke;
 mod battle_tests;
 mod flash;
 #[cfg(test)]
+mod map_tests;
+#[cfg(test)]
 mod pause_tests;
 #[cfg(test)]
 mod save_tests;
@@ -108,6 +110,9 @@ pub struct ScreenShakeSet;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ScreenEffectsSet;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct MapScreenReset;
+
 #[derive(bevy::ecs::system::SystemParam)]
 struct EffectPause<'w> {
     transition: crate::transitions::TransitionPause<'w>,
@@ -151,10 +156,18 @@ pub struct ScreenFxPlugin;
 impl Plugin for ScreenFxPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<ScreenEffect>()
+            .add_message::<crate::world::MapRebuilt>()
             .init_resource::<Fx>()
             .add_plugins(tone::ScreenTonePlugin)
             .add_plugins(weather::WeatherPlugin)
             .add_systems(Startup, spawn_overlays.after(crate::world::setup_cameras))
+            .add_systems(
+                Update,
+                clear_map_flash
+                    .in_set(MapScreenReset)
+                    .after(crate::teleport::MapTransfer)
+                    .before(ScreenEffectsSet),
+            )
             .add_systems(
                 Update,
                 step_effects
@@ -181,6 +194,12 @@ fn spawn_overlays(mut commands: Commands, cameras: Query<Entity, With<FrontCamer
         UiTargetCamera(camera),
         FlashOverlay,
     ));
+}
+
+fn clear_map_flash(mut rebuilt: MessageReader<crate::world::MapRebuilt>, mut fx: ResMut<Fx>) {
+    if rebuilt.read().count() != 0 {
+        fx.flash = None;
+    }
 }
 
 /// An absolutely-positioned node filling the whole screen.

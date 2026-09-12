@@ -74,7 +74,9 @@ The `save-camera` scenario also uses an isolated temporary slot. It saves a lock
 
 The `save-pictures` scenario saves moving, tinted and waving pictures alongside screen-pinned and map-anchored graphics. Its isolated slot checks exact restoration, continued animation, 18 original graphic samples while the camera moves, and clearing stale pictures when loading empty or legacy saves.
 
-The `screen-events` scenario also checks strong and weak FlashScreen commands against byte-level reference blends on black, colored and white backgrounds. Seven captures verify the decay and unchanged UI above the flash.
+The `screen-events` scenario also checks strong and weak FlashScreen commands against byte-level reference blends on black, colored and white backgrounds. Seven captures verify the decay and unchanged UI above the flash. Additional transfers verify that local teleports freeze and retain the flash, while a different map clears it permanently.
+
+The `map-animations` scenario checks moving character targets against original animation pixels. A local teleport keeps the same visible cells frozen throughout both fades; playback resumes afterward. Rebuilding a different map clears the animation and its remaining flashes.
 
 The `save-screen` scenario uses an isolated slot to restore an unfinished tone change, flash and camera shake. It opens and closes the actual menu to check that effects pause and resume, samples toned world and untinted foreground pixels, and loads legacy screen defaults.
 

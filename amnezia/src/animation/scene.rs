@@ -4,6 +4,7 @@ use bevy::prelude::*;
 
 #[derive(SystemParam)]
 pub(super) struct Scenes<'w> {
+    fade: Option<Res<'w, crate::teleport::Fade>>,
     menu: Option<Res<'w, crate::menu::MenuOpen>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
     title: Option<Res<'w, crate::title::TitleActive>>,
@@ -13,6 +14,10 @@ pub(super) struct Scenes<'w> {
 }
 
 impl Scenes<'_> {
+    pub(super) fn frozen(&self) -> bool {
+        self.paused() || self.fade.as_ref().is_some_and(|fade| fade.busy())
+    }
+
     pub(super) fn paused(&self) -> bool {
         self.menu.as_ref().is_some_and(|v| v.0)
             || self.shop.as_ref().is_some_and(|v| v.0)

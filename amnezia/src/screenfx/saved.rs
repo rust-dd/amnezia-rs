@@ -74,6 +74,7 @@ pub(crate) fn register(app: &mut App) {
         Update,
         restore
             .after(crate::teleport::MapTransfer)
+            .after(super::MapScreenReset)
             .before(crate::interpreter::InterpreterStep)
             .before(super::ScreenEffectsSet),
     );

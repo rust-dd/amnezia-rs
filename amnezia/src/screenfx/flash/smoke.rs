@@ -8,10 +8,15 @@ use std::sync::{
 const BASES: [[u8; 3]; 3] = [[0, 0, 0], [64, 128, 192], [255; 3]];
 const UI: [u8; 3] = [40, 80, 120];
 
+mod transfers;
+
 #[derive(Resource, Default)]
 struct Checks(Arc<AtomicU32>);
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if let Some(label) = transfers::drive(world, frame) {
+        return Some(label);
+    }
     if frame == 600 {
         world.init_resource::<Checks>();
         let camera = world
@@ -141,5 +146,6 @@ impl Snapshot {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    transfers::verify_finished(world);
     assert_eq!(world.resource::<Checks>().0.load(Ordering::SeqCst), 7);
 }

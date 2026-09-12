@@ -92,7 +92,7 @@ pub(super) fn step_animations(
     for (entity, mut anim) in &mut animations {
         let delta = frames.frame.wrapping_sub(anim.last);
         anim.last = frames.frame;
-        if pause.paused() || scene.paused() || delta == 0 {
+        if pause.paused() || scene.frozen() || delta == 0 {
             continue;
         }
         let def = &library.0[anim.index];
@@ -163,9 +163,10 @@ pub(super) fn cancel(commands: &mut Commands, entity: Entity, animation: &mut Li
 }
 
 pub(super) fn clear_map_animations(
-    mut changes: MessageReader<crate::world::MapChanged>,
+    mut changes: MessageReader<crate::world::MapRebuilt>,
     mut commands: Commands,
     mut animations: Query<(Entity, &mut LiveAnimation)>,
+    flashes: Query<Entity, With<render::FlashQuad>>,
 ) {
     if changes.read().count() == 0 {
         return;
@@ -174,6 +175,9 @@ pub(super) fn clear_map_animations(
         if animation.slot == AnimationSlot::Map {
             cancel(&mut commands, entity, &mut animation);
         }
+    }
+    for entity in &flashes {
+        commands.entity(entity).despawn();
     }
 }
 

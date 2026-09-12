@@ -139,7 +139,7 @@ pub(super) fn fade_flashes(
     for (entity, mut flash, mut sprite) in &mut flashes {
         let delta = frames.frame.wrapping_sub(flash.last);
         flash.last = frames.frame;
-        if transition.paused() || scene.paused() {
+        if transition.paused() || scene.frozen() {
             continue;
         }
         flash.elapsed = flash.elapsed.saturating_add(delta);

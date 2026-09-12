@@ -7,6 +7,8 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+mod transfers;
+
 const LABELS: [&str; 10] = [
     "map-animation-walk-a",
     "map-animation-walk-b",
@@ -68,21 +70,10 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             return Some(LABELS[(since / 160 * 2 + since % 160) as usize]);
         }
     }
-    if frame == 1100 {
+    if frame == 1000 {
         start_case(world, 0);
     }
-    if frame == 1110 {
-        assert_eq!(world.resource::<ActiveAnimations>().total, 1);
-        world
-            .resource_mut::<crate::teleport::PendingTeleport>()
-            .reload(3, 15, 12);
-    }
-    if frame == 1200 {
-        assert_eq!(world.resource::<MapData>().map_id, 3);
-        assert_eq!(world.resource::<ActiveAnimations>().total, 0);
-        return Some("map-animation-transferred");
-    }
-    None
+    transfers::drive(world, frame)
 }
 
 fn start_case(world: &mut World, case: u32) {
@@ -168,7 +159,11 @@ pub(crate) struct Snapshot {
 }
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
-    let case = LABELS.iter().position(|&name| name == label)? / 2;
+    let case = if label == "map-animation-transfer-same" {
+        0
+    } else {
+        LABELS.iter().position(|&name| name == label)? / 2
+    };
     assert!(
         world.resource::<crate::state::Switches>().get(4500),
         "nonwaiting animation must continue its event"
@@ -292,9 +287,10 @@ impl Snapshot {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    transfers::verify_finished(world);
     assert_eq!(
         world.resource::<Checks>().pixels.load(Ordering::Relaxed),
-        LABELS.len()
+        LABELS.len() + 1
     );
     assert_eq!(world.resource::<Checks>().camera_modes, (1 << 3) | (1 << 4));
 }

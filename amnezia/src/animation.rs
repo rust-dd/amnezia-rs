@@ -161,7 +161,7 @@ impl Plugin for AnimationPlugin {
         scene::register(app);
         app.add_message::<PlayAnimation>()
             .add_message::<ShowMapAnimation>()
-            .add_message::<crate::world::MapChanged>()
+            .add_message::<crate::world::MapRebuilt>()
             .add_message::<BattlerFlash>()
             .insert_resource(AnimationLibrary(load_ron(&format!(
                 "{}/animations.ron",

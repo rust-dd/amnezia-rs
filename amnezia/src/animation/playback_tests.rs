@@ -6,6 +6,7 @@ mod map_flashes;
 mod map_targets;
 mod scenes;
 mod slots;
+mod transfers;
 
 fn app(fps: u32) -> App {
     fixture(fps, false)
