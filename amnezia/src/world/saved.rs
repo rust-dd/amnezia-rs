@@ -4,6 +4,7 @@ use movement::saved::MotionState;
 use pages::{EventTileset, PageState};
 use serde::{Deserialize, Serialize};
 
+pub(crate) mod hero;
 pub(crate) mod smoke;
 #[cfg(test)]
 mod tests;
@@ -19,6 +20,7 @@ pub(crate) struct EventState {
 
 #[derive(SystemParam)]
 pub(crate) struct Capture<'w, 's> {
+    hero: Query<'w, 's, (&'static MoveQueue, &'static RouteStepper), With<crate::player::Player>>,
     events: Query<
         'w,
         's,
@@ -33,6 +35,13 @@ pub(crate) struct Capture<'w, 's> {
 }
 
 impl Capture<'_, '_> {
+    pub(crate) fn hero(&self, player: &crate::player::Player) -> Option<hero::HeroState> {
+        self.hero
+            .single()
+            .ok()
+            .map(|(queue, route)| hero::HeroState::capture(player, queue, route))
+    }
+
     pub(crate) fn snapshot(&self) -> Vec<EventState> {
         let mut events = self
             .events
@@ -117,6 +126,7 @@ pub(crate) fn prepare(world: &mut World, map_id: u32, events: Vec<EventState>) {
 }
 
 pub(crate) fn register(app: &mut App) {
+    hero::register(app);
     app.add_message::<MapRebuilt>().add_systems(
         Update,
         restore

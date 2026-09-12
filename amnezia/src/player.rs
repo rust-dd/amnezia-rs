@@ -79,7 +79,9 @@ impl Plugin for PlayerPlugin {
             .init_resource::<HeroHidden>()
             .add_systems(
                 Update,
-                (move_player, walk::<Player>, update_player_sprite).chain(),
+                (move_player, walk::<Player>, update_player_sprite)
+                    .chain()
+                    .after(crate::world::saved::RestoreCharacters),
             )
             .add_systems(
                 PostUpdate,
@@ -287,14 +289,15 @@ pub(crate) fn update_player_sprite(
     mut players: Query<(&Player, &MoveQueue, &mut Sprite, &mut Transform), Changed<Player>>,
 ) {
     for (player, queue, mut sprite, mut transform) in &mut players {
-        // While a step tweens, `walk` owns the sprite; here we only render the
-        // hero at rest (keyboard turns, teleport arrival, settled routes).
-        if queue.busy() || player.charset.is_empty() {
+        if player.charset.is_empty() {
             continue;
         }
         sprite.image = asset_server.load(resolve_png("CharSet", &player.charset));
         let (sx, sy) = tiles::charset_source(player.index, player.dir, player.frame);
         sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
+        if queue.busy() {
+            continue;
+        }
         let (world_x, world_y) = data.tile_center(player.tile_x, player.tile_y);
         transform.translation.x = world_x;
         transform.translation.y = world_y + CHAR_Y_OFFSET;

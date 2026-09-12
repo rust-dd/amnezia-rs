@@ -2,6 +2,7 @@
 
 pub(crate) mod animation_smoke;
 pub(crate) mod camera_smoke;
+pub(crate) mod hero_smoke;
 pub(crate) mod music_smoke;
 pub(crate) mod npc_smoke;
 pub(crate) mod picture_smoke;
@@ -33,7 +34,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-pub(crate) const SAVE_FORMAT_VERSION: u32 = 9;
+pub(crate) const SAVE_FORMAT_VERSION: u32 = 10;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -248,6 +249,7 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let game = SaveGame {
+                hero_motion: scene.characters.hero(player),
                 map_events: scene.characters.snapshot(),
                 map_animation: scene.animation.snapshot(),
                 screen: Some(scene.screen.snapshot(&scene.tone)),
@@ -323,6 +325,7 @@ fn save_or_load(
             save_io.commands.queue(crate::session::clear_for_reload);
             let map_id = game.map_id;
             save_io.commands.queue(move |world: &mut World| {
+                crate::world::saved::hero::prepare(world, map_id, game.hero_motion);
                 crate::world::saved::prepare(world, map_id, game.map_events);
                 crate::animation::saved::prepare(world, map_id, game.map_animation);
                 crate::screenfx::saved::prepare(world, map_id, game.screen);
@@ -422,6 +425,10 @@ fn valid_destination(game: &SaveGame, animation: &crate::animation::saved::Captu
         .ok()
         .and_then(|text| ron::from_str::<amnezia_data::Map>(&text).ok());
     !game.party.is_empty()
+        && game
+            .hero_motion
+            .as_ref()
+            .is_none_or(|state| game.dir < 4 && state.valid())
         && game.screen.as_ref().is_none_or(|screen| screen.valid())
         && crate::picture::saved::valid(&game.pictures)
         && game

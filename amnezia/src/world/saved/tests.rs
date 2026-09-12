@@ -1,6 +1,7 @@
 use super::*;
 use crate::save::{EventSaveRequest, LoadOutcome, LoadRequest, SavePlugin};
 
+mod hero;
 mod lifecycle;
 mod motion;
 mod validation;
@@ -64,7 +65,33 @@ fn rebuild(world: &mut World) {
     {
         return;
     }
-    world.resource_mut::<crate::teleport::PendingTeleport>().0 = None;
+    let (_, x, y) = world
+        .resource_mut::<crate::teleport::PendingTeleport>()
+        .0
+        .take()
+        .unwrap();
+    let (wx, wy) = world.resource::<MapData>().tile_center(x as i32, y as i32);
+    for (mut hero, queue, route, transform) in world
+        .query::<(
+            &mut crate::player::Player,
+            Option<&mut MoveQueue>,
+            Option<&mut RouteStepper>,
+            Option<&mut Transform>,
+        )>()
+        .iter_mut(world)
+    {
+        hero.tile_x = x as i32;
+        hero.tile_y = y as i32;
+        if let Some(mut queue) = queue {
+            *queue = default();
+        }
+        if let Some(mut route) = route {
+            *route = default();
+        }
+        if let Some(mut transform) = transform {
+            transform.translation = Vec3::new(wx, wy + hero.y_offset(), hero.draw_z(y as i32));
+        }
+    }
     let entities = world
         .query_filtered::<Entity, With<EventSprite>>()
         .iter(world)

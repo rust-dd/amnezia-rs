@@ -81,4 +81,6 @@ pub(super) struct SaveGame {
     pub(super) map_animation: crate::animation::saved::MapState,
     #[serde(default)]
     pub(super) map_events: Vec<crate::world::saved::EventState>,
+    #[serde(default)]
+    pub(super) hero_motion: Option<crate::world::saved::hero::HeroState>,
 }
