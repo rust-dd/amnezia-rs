@@ -2,6 +2,9 @@
 
 mod view;
 
+#[cfg(test)]
+mod saved_tests;
+
 use bevy::prelude::*;
 
 /// The RM2000 game timer: `remaining` seconds counting down while `running`.
@@ -72,13 +75,18 @@ impl GameClock {
     }
 }
 
-/// Total whole seconds the game has been played, accumulated each frame and
-/// persisted in the save (RM2000 shows it on the save screen); a resumed game keeps
-/// counting from the saved total.
+/// Supplementary whole-second playtime metadata kept by the port.
+/// The original logical frame counter lives in [`crate::timing::GameFrames`].
 #[derive(Resource, Default)]
 pub struct PlayTime {
     pub seconds: u64,
     frac: f32,
+}
+
+impl PlayTime {
+    pub(crate) fn restore(&mut self, seconds: u64) {
+        *self = Self { seconds, frac: 0.0 };
+    }
 }
 
 pub struct GameClockPlugin;
@@ -137,7 +145,7 @@ fn tick_playtime(time: Res<Time>, scene: ClockScene, mut play: ResMut<PlayTime>)
     }
     play.frac += time.delta_secs();
     while play.frac >= 1.0 {
-        play.seconds += 1;
+        play.seconds = play.seconds.saturating_add(1);
         play.frac -= 1.0;
     }
 }

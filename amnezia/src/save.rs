@@ -365,7 +365,7 @@ fn save_or_load(
                 steps.count = game.field_steps;
             }
             save_io.equipment.load(game.equipment);
-            scene.playtime.seconds = game.playtime;
+            scene.playtime.restore(game.playtime);
             if let Some(frames) = scene.game_frames.as_deref_mut() {
                 *frames = game.game_frames;
                 frames.sanitize();
