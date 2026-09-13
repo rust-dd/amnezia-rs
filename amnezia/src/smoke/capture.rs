@@ -35,6 +35,7 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let end_game_snapshot = crate::menu::end_smoke::snapshot(world, label);
     let title_snapshot = crate::title::smoke::snapshot(world, label);
     let saved_message_snapshot = crate::save::music_smoke::message::snapshot(world, label);
+    let saved_erasure_snapshot = crate::save::music_smoke::erasure::snapshot(world, label);
     let saved_picture_snapshot = crate::save::picture_smoke::snapshot(world, label);
     let screen_flash_snapshot = crate::screenfx::flash_smoke::snapshot(world, label);
     let saved_screen_snapshot = crate::screenfx::saved::smoke::snapshot(world, label);
@@ -49,6 +50,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
             verify_content(&capture.image, &label);
+            if let Some(snapshot) = &saved_erasure_snapshot {
+                snapshot.verify(&capture.image);
+            }
             if let Some(snapshot) = &saved_vehicle_snapshot {
                 snapshot.verify(&capture.image);
             }

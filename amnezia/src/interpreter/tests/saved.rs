@@ -3,6 +3,7 @@ use crate::save::{EventSaveRequest, LoadOutcome, LoadRequest, SaveLocation, Save
 
 mod call_scope;
 mod continuation;
+mod erasure;
 mod fixture;
 mod originals;
 mod validation;

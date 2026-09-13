@@ -7,6 +7,7 @@ use bevy::audio::{AudioSink, AudioSinkPlayback};
 use bevy::ecs::system::RunSystemOnce;
 
 mod boundary;
+pub(crate) mod erasure;
 pub(crate) mod message;
 
 #[derive(Resource)]
@@ -56,6 +57,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     let path = world.resource::<Fixture>().slot.path(world);
     let message_capture = message::drive(world, frame);
     boundary::drive(world, frame);
+    let erasure_capture = erasure::drive(world, frame);
     match frame {
         260 => {
             assert_eq!(world.resource::<MapData>().map_id, 3);
@@ -135,7 +137,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         }
         _ => {}
     }
-    message_capture
+    erasure_capture.or(message_capture)
 }
 
 fn verify(world: &mut World, current: Option<BgmTrack>, memorized: Option<BgmTrack>) {
@@ -186,6 +188,7 @@ fn verify(world: &mut World, current: Option<BgmTrack>, memorized: Option<BgmTra
 }
 
 pub(crate) fn verify_finished(world: &mut World) {
+    erasure::verify_finished(world);
     boundary::verify_finished(world);
     message::verify_finished(world);
     let fixture = world.remove_resource::<Fixture>().unwrap();
