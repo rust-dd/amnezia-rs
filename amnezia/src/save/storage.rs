@@ -103,12 +103,18 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     result
 }
 
-pub(super) fn read_save(path: &Path) -> Option<SaveGame> {
+pub(super) fn source_path(path: &Path) -> PathBuf {
     let legacy = (path == save_path() && !path.exists())
         .then(legacy_save_path)
         .flatten();
-    let source = legacy.as_deref().filter(|p| p.is_file()).unwrap_or(path);
-    let text = std::fs::read_to_string(source).ok()?;
+    legacy
+        .filter(|p| p.is_file())
+        .unwrap_or_else(|| path.to_owned())
+}
+
+pub(super) fn read_save(path: &Path) -> Option<SaveGame> {
+    let source = source_path(path);
+    let text = std::fs::read_to_string(&source).ok()?;
     match ron::from_str(&text) {
         Ok(game) => Some(game),
         Err(e) => {

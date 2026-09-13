@@ -79,6 +79,24 @@ fn main_menu_cursor_reaches_the_second_skin_phase_after_twelve_logical_frames() 
 }
 
 #[test]
+fn main_menu_cursor_pauses_while_the_save_selector_owns_the_scene() {
+    let mut app = viewing(MenuScreen::Command);
+    let mut files = crate::menu::save_files::SaveFiles::default();
+    files.request();
+    app.insert_resource(files);
+    app.world_mut()
+        .resource_mut::<crate::timing::GameFrames>()
+        .frame = 12;
+    app.update();
+    assert_eq!(
+        app.world()
+            .resource::<clocks::Clock>()
+            .source_x(CursorId::Command),
+        64.0
+    );
+}
+
+#[test]
 fn field_scene_background_uses_the_original_system_color_pixel() {
     let mut app = scaffold();
     let world = app.world_mut();

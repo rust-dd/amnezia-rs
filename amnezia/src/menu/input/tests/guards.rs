@@ -69,10 +69,14 @@ fn enabled_commands_play_one_decision_and_enter_their_flows() {
         let mut app = with_sounds(cursor, MenuScreen::Command);
         app.world_mut().resource_mut::<SaveAccess>().0 = true;
         confirm(&mut app, KeyCode::Enter);
-        assert_ne!(
-            app.world().resource::<MenuState>().screen,
-            MenuScreen::Command
-        );
+        if cursor == 3 {
+            assert!(app.world().resource::<SaveFiles>().active());
+        } else {
+            assert_ne!(
+                app.world().resource::<MenuState>().screen,
+                MenuScreen::Command
+            );
+        }
         assert_eq!(
             sounds(&mut app),
             [AudioRequest::play_sound("decision", &[100, 100])]

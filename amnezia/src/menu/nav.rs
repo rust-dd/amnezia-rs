@@ -41,8 +41,6 @@ pub(super) fn escape_transition(open: bool, screen: MenuScreen) -> (bool, MenuSc
         MenuScreen::SkillTarget { member, .. } => {
             (open, MenuScreen::SkillList { member, cursor: 0 })
         }
-        // From the item picker, back out to the slot list (same slot); from the
-        // slot list, back out to the member picker.
         MenuScreen::Equip {
             member,
             slot,
@@ -69,7 +67,6 @@ pub(super) fn escape_transition(open: bool, screen: MenuScreen) -> (bool, MenuSc
                 cursor: member,
             },
         ),
-        MenuScreen::Saved => (open, MenuScreen::Command),
         MenuScreen::EndGame { .. } => (open, MenuScreen::Command),
     }
 }
@@ -124,7 +121,6 @@ mod tests {
 
     #[test]
     fn escape_backs_out_of_each_subscreen_then_closes_the_menu() {
-        // Opening from closed, and closing from the command list.
         assert_eq!(
             escape_transition(false, MenuScreen::Command),
             (true, MenuScreen::Command)
@@ -133,7 +129,6 @@ mod tests {
             escape_transition(true, MenuScreen::Command),
             (false, MenuScreen::Command)
         );
-        // Each sub-screen backs out to its parent, staying open.
         assert_eq!(
             escape_transition(true, MenuScreen::ItemList { cursor: 3 }),
             (true, MenuScreen::Command)
@@ -181,7 +176,6 @@ mod tests {
                 }
             )
         );
-        // From the item picker, Escape returns to the slot list (same slot).
         assert_eq!(
             escape_transition(
                 true,
@@ -214,9 +208,7 @@ mod tests {
 
     #[test]
     fn end_game_igen_returns_to_title_and_nem_cancels() {
-        // Igen (cursor 0): close the menu, raise the title.
         assert_eq!(end_game_transition(0, false), (false, true));
-        // Nem (cursor 1): stay open, leave the title as it was.
         assert_eq!(end_game_transition(1, false), (true, false));
     }
 
@@ -232,7 +224,6 @@ mod tests {
                 cursor: 0
             })
         );
-        // A gold/spacer row past the held items opens nothing.
         assert_eq!(item_target(1, &d, &inv), None);
     }
 
@@ -252,7 +243,6 @@ mod tests {
             testkit::heal_skill(2, "Gyógyítás", 8, 40),
             testkit::skill(3, "Tűzgolyó", 12),
         ];
-        // The hero (party member 0) has learned both skills.
         d.actors[0].learnings = vec![
             amnezia_data::Learning {
                 level: 1,
@@ -273,7 +263,6 @@ mod tests {
                 cursor: 0
             })
         );
-        // The battle-only attack skill is inert.
         assert_eq!(skill_target(0, 1, &d, &party, &prog), None);
     }
 

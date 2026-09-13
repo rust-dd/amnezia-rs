@@ -27,7 +27,9 @@ impl Plugin for SmokePlugin {
         }
         offscreen::configure(app);
         let scenario = scenarios::selected();
-        if scenario == "save-music" {
+        if scenario == "save-slots" {
+            crate::menu::save_files::smoke::configure(app);
+        } else if scenario == "save-music" {
             crate::save::music_smoke::configure(app);
         } else if scenario == "save-camera" {
             crate::save::camera_smoke::configure(app);
@@ -79,7 +81,9 @@ fn input(world: &mut World) {
     if scenario == "dialogue-timing" && crate::dialogue::timing_smoke::held_input(world, frame) {
         return;
     }
-    let requested = if matches!(scenario, "gameover" | "battle-defeat") {
+    let requested = if scenario == "save-slots" {
+        crate::menu::save_files::smoke::input(frame)
+    } else if matches!(scenario, "gameover" | "battle-defeat") {
         crate::gameover::smoke::input(world, frame, scenario == "battle-defeat")
     } else if scenario == "return-title" {
         crate::title::smoke::return_input(frame)
@@ -102,6 +106,7 @@ fn input(world: &mut World) {
         && !matches!(
             world.resource::<SmokeRun>().scenario,
             "return-title"
+                | "save-slots"
                 | "save-music"
                 | "save-camera"
                 | "save-npcs"
@@ -155,6 +160,11 @@ fn drive(world: &mut World) {
         world.resource_mut::<crate::session::NewGameRequest>().0 = true;
     }
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario == "save-slots"
+        && let Some(label) = crate::menu::save_files::smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "battle-menus"
         && let Some(label) = crate::battle::smoke::show(world, frame)
     {
@@ -392,7 +402,9 @@ fn drive(world: &mut World) {
                 "airship escape never reached the next dream scene"
             );
         }
-        if scenario == "display" {
+        if scenario == "save-slots" {
+            crate::menu::save_files::smoke::verify_finished(world);
+        } else if scenario == "display" {
             crate::display::smoke::verify_finished(world);
         } else if scenario == "font" {
             crate::dialogue::font_smoke::verify_finished(world);

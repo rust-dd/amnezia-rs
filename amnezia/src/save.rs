@@ -8,6 +8,7 @@ pub(crate) mod music_smoke;
 pub(crate) mod npc_smoke;
 mod numeric;
 pub(crate) mod picture_smoke;
+pub(crate) mod preview;
 pub(crate) mod screen_smoke;
 pub(crate) mod slots;
 mod smoke_slot;
@@ -51,7 +52,7 @@ pub struct LoadRequest(pub bool);
 pub struct LoadOutcome(pub Option<bool>);
 
 /// A request to save, honoured by [`save_or_load`] as if `F5` had been pressed.
-/// The in-game menu's Save action sets it, reusing the same snapshot path.
+/// Confirming a slot in the in-game menu sets it, reusing the same snapshot path.
 #[derive(Resource, Default)]
 pub struct SaveRequest(pub bool);
 

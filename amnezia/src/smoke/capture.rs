@@ -31,6 +31,7 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let map_flash_snapshot = crate::animation::map_flash_smoke::snapshot(world, label);
     let ui_layer_snapshot = ui_layers::snapshot(world, label);
     let menu_snapshot = crate::menu::layout_smoke::snapshot(world, label);
+    let save_selector_snapshot = crate::menu::save_files::smoke::snapshot(world, label);
     let menu_font_snapshot = crate::menu::font_smoke::snapshot(world, label);
     let end_game_snapshot = crate::menu::end_smoke::snapshot(world, label);
     let title_snapshot = crate::title::smoke::snapshot(world, label);
@@ -50,6 +51,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
             verify_content(&capture.image, &label);
+            if let Some(snapshot) = &save_selector_snapshot {
+                snapshot.verify(&capture.image);
+            }
             if let Some(snapshot) = &saved_erasure_snapshot {
                 snapshot.verify(&capture.image);
             }

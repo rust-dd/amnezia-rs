@@ -4,7 +4,7 @@
 //! party status window listing each member's name, level, and HP/SP. Confirming a
 //! command drills into its flow: the held-item list and field-use for Item; a
 //! party-member prompt then a skill list (and a field heal) for Skill; an
-//! interactive equipment screen for Equipment; a save request for Save; and a
+//! interactive equipment screen for Equipment; a slot selector for Save; and a
 //! return-to-title confirmation for End Game.
 //!
 //! The Skill list shows only the chosen caster's known skills — the actor
@@ -28,6 +28,7 @@ mod items;
 pub(crate) mod name_smoke;
 mod nav;
 mod render;
+pub(crate) mod save_files;
 mod skills;
 mod status;
 mod use_item;
@@ -109,7 +110,6 @@ enum MenuScreen {
     Status {
         member: usize,
     },
-    Saved,
     EndGame {
         cursor: usize,
     },
@@ -130,6 +130,7 @@ pub(crate) struct MenuInput;
 
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
+        save_files::register(app);
         app.init_resource::<MenuOpen>()
             .init_resource::<MenuAccess>()
             .init_resource::<MenuState>()

@@ -3,6 +3,7 @@
 //! navigation math lives in [`super::nav`]; these systems only apply it and touch
 //! the world (inventory, vitals, save request, title).
 
+use super::save_files::SaveFiles;
 use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::battle::BattleActive;
 use crate::choice::Choice;
@@ -13,7 +14,7 @@ use crate::gameover::GameOverActive;
 use crate::inputnumber::InputNumber;
 use crate::interpreter::RunningEvent;
 use crate::progression::Progression;
-use crate::save::{SaveAccess, SaveRequest};
+use crate::save::SaveAccess;
 use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party};
 use crate::teleport::Fade;
@@ -128,11 +129,14 @@ pub(super) fn menu_input(
     mut title: ResMut<TitleActive>,
     mut open: ResMut<MenuOpen>,
     mut state: ResMut<MenuState>,
-    mut save_request: ResMut<SaveRequest>,
+    mut save_files: ResMut<SaveFiles>,
     blockers: OpenBlockers,
     mut sfx: MenuSfx,
     mut skill_rng: Local<crate::interpreter::EventRng>,
 ) {
+    if save_files.active() {
+        return;
+    }
     // These guards block opening; an existing menu must remain usable and closable.
     if !open.0
         && (gates.shop.0 || gates.battle.0 || title.0 || !gates.menu_access.0 || blockers.any())
@@ -142,8 +146,6 @@ pub(super) fn menu_input(
     if keys.just_pressed(KeyCode::Escape) {
         let was_open = open.0;
         let (next_open, next_screen) = escape_transition(open.0, state.screen);
-        // Opening the menu is a decision cue; backing out of a sub-screen or
-        // closing it is a cancel cue.
         if next_open && !was_open {
             sfx.decision();
         } else {
@@ -159,9 +161,10 @@ pub(super) fn menu_input(
     if !open.0 {
         return;
     }
-    // The shortcut respects the same cutscene save restriction as the command.
     if gates.save_access.0 && keys.just_pressed(KeyCode::KeyS) {
-        save_request.0 = true;
+        save_files.request();
+        sfx.decision();
+        return;
     }
     let confirm = confirm_pressed(&keys);
     let up = keys.just_pressed(KeyCode::ArrowUp);
@@ -191,8 +194,7 @@ pub(super) fn menu_input(
                 match command::dispatch(command) {
                     command::CommandAction::Open(screen) => state.screen = screen,
                     command::CommandAction::Save => {
-                        save_request.0 = true;
-                        state.screen = MenuScreen::Saved;
+                        save_files.request();
                     }
                 }
             }
@@ -319,11 +321,6 @@ pub(super) fn menu_input(
             }
         }
         MenuScreen::Status { .. } => {}
-        MenuScreen::Saved => {
-            if confirm {
-                state.screen = MenuScreen::Command;
-            }
-        }
         MenuScreen::EndGame { cursor } => {
             let cursor = step(cursor, up, down, 1);
             state.screen = MenuScreen::EndGame { cursor };

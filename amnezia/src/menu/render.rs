@@ -192,16 +192,7 @@ pub(super) fn content(
             ),
             cursor_line: None,
         },
-        MenuScreen::Saved => ContentView {
-            text: compose_saved(),
-            cursor_line: None,
-        },
     }
-}
-
-/// The Save confirmation shown after the single-slot save is requested.
-fn compose_saved() -> String {
-    String::from("Mentés kész.\n\n[Enter] vissza   [Esc] vissza")
 }
 
 #[cfg(test)]
@@ -322,30 +313,5 @@ mod tests {
         );
         assert!(view.text.is_empty());
         assert_eq!(view.cursor_line, None);
-    }
-
-    #[test]
-    fn content_saved_screen_carries_both_dismissal_hints() {
-        let view = content(
-            &crate::text::HeroName("Ron".into()),
-            MenuScreen::Saved,
-            &testkit::data(),
-            &Party::default(),
-            &Progression::default(),
-            &Inventory::default(),
-            &Vitals::default(),
-            &Equipment::default(),
-            &Terms::default(),
-        );
-        assert!(
-            view.text.contains("[Enter] vissza"),
-            "enter hint: {}",
-            view.text
-        );
-        assert!(
-            view.text.contains("[Esc] vissza"),
-            "esc hint: {}",
-            view.text
-        );
     }
 }

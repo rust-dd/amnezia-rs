@@ -58,6 +58,7 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-gameover
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle-defeat
 cargo run -p amnezia --locked -- --smoke-test --smoke-return-title
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-music
+cargo run -p amnezia --locked -- --smoke-test --smoke-save-slots
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-camera
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-pictures
 cargo run -p amnezia --locked -- --smoke-test --smoke-save-screen
@@ -86,6 +87,8 @@ A successful run logs `completed all final checks` and returns exit code 0. Clos
 Add `--smoke-offscreen` to render all camera layers into a GPU texture without a native window, including on a locked desktop. This still requires a working graphics adapter. Captures use the separate `amnezia-smoke-offscreen-*.png` prefix; empty images fail the check. Offscreen runs test rendering and scripted input, not native window/input integration.
 
 The `save-music` scenario uses its own temporary save directory, never the player's slot. Two original crystal command lists save to the first and fifteenth slots, verifying that saving suspends the event and writes the selected file before its remaining commands run. The first file stays unchanged throughout the second slot's save and reloads. Reloading must preserve the exact foreground execution state throughout the entire fade, then resume its tail once without rewriting the slot. The scenario checks actual map reloads and decoded audio playback for current music, memorized music, saved silence and legacy saves. Loading from an erased screen must start black and reveal the map after the transition; this checks visibility, not original-map pixel parity. It also reopens messages after loading to check portrait pixels, a cleared face, placement, transparency and legacy message defaults. The legacy load also repairs out-of-range HP/SP, gold, item counts, variables, experience and countdown values. It preserves the first four unique valid party members and removes invalid item, gear, skill and state references without rewriting the file. It removes its own fixture files on success.
+
+The `save-slots` scenario drives the field menu's fifteen-slot save selector using Enter, Escape, arrows and Page Up. It checks an empty list, cancellation without writing, a real save to slot 2, saved-party previews, a corrupt fixture, scrolling and overwriting slot 15 without changing its neighbours. Five captures compare the original window, bitmap text, cursor, arrow and portrait pixels. Its temporary files are isolated from player saves and removed on success. Crystal entry and title-screen loading are separate restoration tasks.
 
 The `save-camera` scenario also uses an isolated temporary slot. It saves a locked camera during a pan, verifies restoration after rebuilding the map, continues the pan, unlocks following and checks legacy centering without camera data.
 

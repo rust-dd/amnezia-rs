@@ -43,16 +43,27 @@ impl Clock {
     }
 }
 
+#[derive(bevy::ecs::system::SystemParam)]
+pub(in crate::menu) struct Focus<'w> {
+    open: Res<'w, MenuOpen>,
+    state: Res<'w, MenuState>,
+    save_files: Option<Res<'w, crate::menu::save_files::SaveFiles>>,
+}
+
 pub(in crate::menu) fn update(
     frames: Res<GameFrames>,
-    open: Res<MenuOpen>,
-    state: Res<MenuState>,
+    focus: Focus,
     pause: crate::transitions::TransitionPause,
     mut clock: ResMut<Clock>,
     cursors: Query<(&MenuCursor, &Children)>,
     mut images: Query<&mut ImageNode>,
 ) {
-    clock.advance(frames.frame, open.0, state.screen, pause.paused());
+    clock.advance(
+        frames.frame,
+        focus.open.0,
+        focus.state.screen,
+        pause.paused() || focus.save_files.is_some_and(|files| files.active()),
+    );
     for (cursor, pieces) in &cursors {
         if matches!(cursor.0, CursorId::Content) {
             continue;

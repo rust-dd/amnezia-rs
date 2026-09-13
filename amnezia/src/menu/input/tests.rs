@@ -1,5 +1,6 @@
 use super::*;
 use crate::menu::testkit;
+use crate::save::SaveRequest;
 
 mod guards;
 mod message_frames;
@@ -22,6 +23,7 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
         .insert_resource(MenuOpen(true))
         .insert_resource(MenuState { cursor, screen })
         .init_resource::<SaveRequest>()
+        .init_resource::<SaveFiles>()
         .init_resource::<Dialogue>()
         .init_resource::<RunningEvent>()
         .init_resource::<Choice>()
@@ -29,8 +31,6 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
         .init_resource::<Fade>()
         .init_resource::<GameOverActive>()
         .init_resource::<ButtonInput<KeyCode>>()
-        // `menu_input` writes navigation SE; register the channel (SystemSounds
-        // is optional, so the tests run without loading the effects).
         .add_message::<AudioRequest>()
         .add_systems(Update, menu_input);
     app
@@ -58,20 +58,27 @@ fn press_frame(app: &mut App, key: KeyCode) {
 }
 
 #[test]
-fn save_command_saves_and_confirms_when_save_access_is_enabled() {
-    // Manual saving starts disabled; a save crystal temporarily enables it.
+fn save_command_waits_for_a_slot_before_requesting_a_save() {
     let mut app = app_on(3, MenuScreen::Command);
     app.world_mut().insert_resource(SaveAccess(true));
     confirm(&mut app, KeyCode::Enter);
     assert!(
-        app.world().resource::<SaveRequest>().0,
-        "with save access on, the Save command must raise SaveRequest"
+        !app.world().resource::<SaveRequest>().0,
+        "entering the file selector must not write the first slot"
     );
     assert_eq!(
         app.world().resource::<MenuState>().screen,
-        MenuScreen::Saved,
-        "and show the save confirmation screen"
+        MenuScreen::Command,
+        "the command cursor remains underneath the modal file selector"
     );
+}
+
+#[test]
+fn save_shortcut_waits_for_a_slot_before_requesting_a_save() {
+    let mut app = app_on(3, MenuScreen::Command);
+    app.world_mut().insert_resource(SaveAccess(true));
+    confirm(&mut app, KeyCode::KeyS);
+    assert!(!app.world().resource::<SaveRequest>().0);
 }
 
 #[test]

@@ -13,6 +13,7 @@ pub(super) fn start(world: &mut World, scenario: &str) {
     let commands = if matches!(
         scenario,
         "message-options"
+            | "save-slots"
             | "dialogue-timing"
             | "world-tones"
             | "ui-layers"
@@ -174,7 +175,9 @@ pub(super) fn start(world: &mut World, scenario: &str) {
 }
 
 pub(super) fn selected() -> &'static str {
-    if std::env::args().any(|arg| arg == "--smoke-dialogue-timing") {
+    if std::env::args().any(|arg| arg == "--smoke-save-slots") {
+        "save-slots"
+    } else if std::env::args().any(|arg| arg == "--smoke-dialogue-timing") {
         "dialogue-timing"
     } else if std::env::args().any(|arg| arg == "--smoke-save-animations") {
         "save-animations"
