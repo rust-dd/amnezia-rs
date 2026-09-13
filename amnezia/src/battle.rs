@@ -64,7 +64,7 @@ pub(crate) fn reset_session(world: &mut World) {
 pub struct BattleActive(pub bool);
 
 /// How a battle ended, read by the interpreter to pick its handler branch.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum BattleOutcome {
     Victory,
     Escape,

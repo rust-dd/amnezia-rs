@@ -121,6 +121,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         600 => {
             let mut game = read_save(&path).unwrap();
             game.format_version = 1;
+            game.foreground = None;
             game.music = None;
             game.message = default();
             game.camera = None;

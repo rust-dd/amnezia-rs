@@ -29,6 +29,7 @@ mod opcodes;
 mod parallel;
 mod params;
 mod present;
+pub(crate) mod saved;
 #[cfg(test)]
 mod tests;
 

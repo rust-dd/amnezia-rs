@@ -162,7 +162,7 @@ pub(super) fn apply_change_level(
 }
 
 /// Which keys a `KeyInputProc` (11610) accepts, decoded from its parameters.
-#[derive(Clone, Copy, Default, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Default, PartialEq, Eq, Debug, serde::Serialize, serde::Deserialize)]
 pub(super) struct KeyAccept {
     pub decision: bool,
     pub cancel: bool,
@@ -253,18 +253,13 @@ mod tests {
 
     #[test]
     fn battle_anim_wait_blocks_only_when_the_wait_flag_is_set() {
-        // `params = [anim_id, target, wait, global]`. A clear wait flag never
-        // blocks; a set one blocks for the animation's frame count at 1/30 s.
         assert_eq!(battle_anim_wait(&[62, 10001, 0, 0], 12), None);
         assert_eq!(
             battle_anim_wait(&[62, 10001, 1, 0], 12),
             Some(12.0 * crate::animation::FRAME_SECS)
         );
-        // 12 frames at 1/30 s is 0.4 s.
         assert!((battle_anim_wait(&[62, 10001, 1, 0], 12).unwrap() - 0.4).abs() < 1e-6);
-        // A missing wait param (short list) is treated as no-wait.
         assert_eq!(battle_anim_wait(&[62, 10001], 12), None);
-        // A set flag with a zero-frame (or absent) animation blocks for zero time.
         assert_eq!(battle_anim_wait(&[62, 10001, 1, 0], 0), Some(0.0));
     }
 
@@ -310,7 +305,6 @@ mod tests {
         assert!(party.has(2));
         apply_change_party(&mut party, &data, &[1, 0, 2]);
         assert!(!party.has(2));
-        // An actor with no database entry is ignored (RM2000 AddActor).
         apply_change_party(&mut party, &data, &[0, 0, 99]);
         assert!(!party.has(99), "unknown actor id refused");
     }
@@ -337,7 +331,6 @@ mod tests {
     fn operate_value_reads_constant_variable_and_negates_on_subtract() {
         let mut vars = Variables::default();
         vars.set(7, 40);
-        // operand_type 0 = constant, 1 = variable; operation 1 = subtract.
         assert_eq!(operate_value(0, 0, 5, &vars), 5);
         assert_eq!(operate_value(0, 1, 7, &vars), 40);
         assert_eq!(operate_value(1, 0, 5, &vars), -5);
@@ -402,7 +395,6 @@ mod tests {
         let vars = Variables::default();
         let party = Party::default();
         assert_eq!(prog.level(&data.actors[0]), 2);
-        // [mode 1 (actor 1), add, constant, +5, show_msg] -> level 2 + 5 = 7.
         apply_change_level(&mut prog, &data, &[1, 1, 0, 0, 5, 0], &vars, &party);
         assert_eq!(prog.level(&data.actors[0]), 7);
         apply_change_level(&mut prog, &data, &[1, 1, 1, 0, 99, 0], &vars, &party);
@@ -411,7 +403,6 @@ mod tests {
 
     #[test]
     fn key_accept_decodes_short_and_full_forms() {
-        // Short (< 6): params[2] enables all arrows, params[3]/[4] decision/cancel.
         let short = decode_key_accept(&[52, 1, 1, 1, 0]);
         assert_eq!(
             short,
@@ -425,7 +416,6 @@ mod tests {
                 shift: false,
             }
         );
-        // Full (>= 6): individual down/left/right/up plus shift.
         let full = decode_key_accept(&[52, 1, 0, 1, 0, 1, 1, 0, 0, 0]);
         assert!(full.decision && full.shift && full.down && !full.left && !full.up);
     }
@@ -441,7 +431,6 @@ mod tests {
             right: true,
             shift: true,
         };
-        // Cancel (6) outranks decision (5) which outranks the arrows.
         assert_eq!(
             key_code(&accept, false, false, false, false, true, true, false),
             6
@@ -462,7 +451,6 @@ mod tests {
             key_code(&accept, false, false, false, false, false, false, false),
             0
         );
-        // An unaccepted key stays silent even when pressed.
         let only_decision = KeyAccept {
             decision: true,
             ..Default::default()

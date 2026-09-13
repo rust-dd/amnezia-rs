@@ -9,6 +9,7 @@ use super::commands::KeyAccept;
 use crate::battle::BattleOutcome;
 use crate::interpreter::flow::{skip_battle_handler, skip_shop_handler};
 use amnezia_data::EventCommand;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A frame-local cap on executed commands, so a malformed list (e.g. a branch
@@ -23,6 +24,7 @@ pub(super) const MAX_CALL_DEPTH: usize = 64;
 /// A caller frame suspended by `CallEvent` (12330): the interrupted command list,
 /// the instruction pointer to resume at, and the event id in scope. The callee
 /// runs in place; reaching its end pops the frame and resumes the caller.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub(super) struct CallFrame {
     pub(super) commands: Vec<EventCommand>,
     pub(super) ip: usize,
@@ -32,7 +34,7 @@ pub(super) struct CallFrame {
 /// The per-run interpreter state: the command list, the instruction pointer,
 /// whether a run is live, the pending-wait timers, and every subsystem-block
 /// suspension flag. Shared verbatim by the foreground and parallel interpreters.
-#[derive(Default)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub(super) struct Frame {
     pub(super) commands: Vec<EventCommand>,
     pub(super) ip: usize,

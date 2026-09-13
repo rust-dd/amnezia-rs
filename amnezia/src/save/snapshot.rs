@@ -85,4 +85,6 @@ pub(super) struct SaveGame {
     pub(super) hero_motion: Option<crate::world::saved::hero::HeroState>,
     #[serde(default)]
     pub(super) vehicle_motion: Option<crate::vehicles::saved::State>,
+    #[serde(default)]
+    pub(super) foreground: Option<crate::interpreter::saved::State>,
 }

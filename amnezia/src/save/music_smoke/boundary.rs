@@ -4,6 +4,9 @@ use amnezia_data::{EventCommand, Map};
 #[derive(Resource, Default)]
 struct Probe {
     before: Option<Vec<u8>>,
+    saved: Option<crate::interpreter::saved::State>,
+    slot_bytes: Vec<u8>,
+    held: u32,
     checked: u8,
 }
 
@@ -57,19 +60,57 @@ pub(super) fn drive(world: &mut World, frame: u32) {
         }
         303 | 493 => {
             let saved = read_save(&path).unwrap();
+            assert!(saved.foreground.is_some());
             assert!(saved.switches.contains(&(9901, true)));
             assert!(!saved.switches.contains(&(9902, true)));
             assert!(world.resource::<Switches>().get(9901));
             assert!(world.resource::<Switches>().get(9902));
             assert!(!world.resource::<EventSaveRequest>().0);
             assert!(!world.resource::<RunningEvent>().active());
-            world.resource_mut::<Probe>().checked |= if frame == 303 { 2 } else { 8 };
+            let mut probe = world.resource_mut::<Probe>();
+            probe.saved = saved.foreground;
+            probe.slot_bytes = std::fs::read(&path).unwrap();
+            probe.held = 0;
+            probe.checked |= if frame == 303 { 2 } else { 8 };
             info!("save boundary: original crystal suspended, file written before event tail");
         }
         _ => {}
     }
+    check_restore(world, frame);
 }
 
 pub(super) fn verify_finished(world: &mut World) {
-    assert_eq!(world.remove_resource::<Probe>().unwrap().checked, 15);
+    assert_eq!(world.remove_resource::<Probe>().unwrap().checked, 63);
+}
+
+fn check_restore(world: &mut World, frame: u32) {
+    if !(321..410).contains(&frame) && !(501..590).contains(&frame) {
+        return;
+    }
+    let path = world.resource::<Fixture>().slot.path(world);
+    assert_eq!(
+        std::fs::read(path).unwrap(),
+        world.resource::<Probe>().slot_bytes
+    );
+    assert!(!world.resource::<EventSaveRequest>().0);
+    assert!(world.resource::<Switches>().get(9901));
+    if world.resource::<Fade>().busy() {
+        assert_eq!(
+            world.resource::<RunningEvent>().snapshot(),
+            world.resource::<Probe>().saved
+        );
+        assert!(!world.resource::<Switches>().get(9902));
+        world.resource_mut::<Probe>().held += 1;
+    } else {
+        assert!(world.resource::<Probe>().held > 60);
+        assert!(!world.resource::<RunningEvent>().active());
+        assert!(world.resource::<Switches>().get(9902));
+        let bit = if frame < 410 { 16 } else { 32 };
+        if world.resource::<Probe>().checked & bit == 0 {
+            info!(
+                "saved interpreter: exact state through the entire load fade, original crystal tail resumed once without rewriting the slot"
+            );
+        }
+        world.resource_mut::<Probe>().checked |= bit;
+    }
 }
