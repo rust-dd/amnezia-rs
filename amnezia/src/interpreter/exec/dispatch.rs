@@ -255,8 +255,6 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         }
         MOVE_EVENT => handlers::move_event(frame, &command, x),
         PROCEED_WITH_MOVEMENT => {
-            // The blocking half of a "wait until movement complete" Move Event: hold
-            // here until every forced route has drained (see `run_frame`).
             frame.wait_movement = true;
             frame.ip += 1;
             Flow::Yield
@@ -362,11 +360,9 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         ERASE_SCREEN | SHOW_SCREEN | TINT_SCREEN | FLASH_SCREEN | SHAKE_SCREEN | SHOW_PICTURE
         | MOVE_PICTURE | ERASE_PICTURE | GAME_OVER => handlers::present(frame, &command, x),
         OPEN_SAVE_MENU => {
-            // Request a single-slot save; `save_or_load` performs it even while this
-            // event still runs — only a fade defers it — so the crystal saves.
             x.subsystems.event_save.0 = true;
             frame.ip += 1;
-            Flow::Advance
+            Flow::Yield
         }
         CHANGE_LEVEL => {
             apply_change_level(
@@ -445,8 +441,6 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         CALL_EVENT => {
-            // Run the called page as a sub-frame; the caller resumes at ip+1 when
-            // the callee ends. Depth-guarded against a self-calling cycle.
             match x
                 .subsystems
                 .flow
@@ -470,7 +464,6 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         RETURN_TO_TITLE => {
-            // Hand the screen back to the title, mirroring the menu's End Game path.
             x.subsystems.flow.title.0 = true;
             Flow::Stop
         }
@@ -512,7 +505,6 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         _ => {
-            // Any remaining unmapped command (including the empty `code: 0`) advances.
             frame.ip += 1;
             Flow::Advance
         }

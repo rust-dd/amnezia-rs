@@ -36,6 +36,7 @@ mod message_options;
 mod message_ownership;
 mod movement;
 mod outcomes;
+mod save_boundary;
 mod screen_coordinates;
 mod transfers;
 mod transitions;
@@ -151,7 +152,6 @@ fn interp_app() -> App {
         .add_message::<SpriteChange>()
         .add_message::<ShowMapAnimation>()
         .add_message::<crate::world::RelocateEvent>();
-    // Reset the common events the plugin loaded from the shipped stub asset.
     app.insert_resource(CommonEvents::default());
     app.world_mut().spawn((
         Player {
@@ -179,7 +179,6 @@ fn set_switch(app: &mut App, id: u32, value: bool) {
 #[test]
 fn common_autostart_fires_only_while_its_switch_is_on() {
     let mut app = interp_app();
-    // Common event 1 (autostart, gated on switch 5) turns switch 10 on.
     app.insert_resource(CommonEvents(vec![common(
         1,
         1,
@@ -187,7 +186,6 @@ fn common_autostart_fires_only_while_its_switch_is_on() {
         vec![switch_cmd(10, 0, 0), cmd(0, 0, vec![])],
     )]));
 
-    // Switch 5 is off: the autostart never runs, so switch 10 stays off.
     for _ in 0..3 {
         app.update();
     }
@@ -196,12 +194,10 @@ fn common_autostart_fires_only_while_its_switch_is_on() {
         "autostart must not fire with its switch off"
     );
 
-    // Switch 5 on: `autorun` starts the common event, which sets switch 10.
     set_switch(&mut app, 5, true);
     app.update();
     assert!(switch_on(&app, 10), "autostart fires once its switch is on");
 
-    // Switch 5 back off, switch 10 cleared: the autostart no longer restarts.
     set_switch(&mut app, 5, false);
     set_switch(&mut app, 10, false);
     for _ in 0..3 {
@@ -216,7 +212,6 @@ fn common_autostart_fires_only_while_its_switch_is_on() {
 #[test]
 fn parallel_common_event_steps_and_loops_every_frame() {
     let mut app = interp_app();
-    // Parallel common event (unconditional) toggles switch 20 each pass.
     app.insert_resource(CommonEvents(vec![common(
         1,
         2,
@@ -239,14 +234,12 @@ fn parallel_common_event_steps_and_loops_every_frame() {
         "and the third pass toggles it on again"
     );
 
-    // The foreground never started — the background page does not block it.
     assert!(!app.world().resource::<RunningEvent>().active());
 }
 
 #[test]
 fn parallel_map_page_runs_and_pauses_under_a_scene() {
     let mut app = interp_app();
-    // A trigger-4 parallel-process map page toggles switch 21 each frame.
     app.insert_resource(MapEvents {
         events: vec![map_event(
             1,
@@ -259,7 +252,6 @@ fn parallel_map_page_runs_and_pauses_under_a_scene() {
     assert!(switch_on(&app, 21), "the trigger-4 page steps each frame");
     assert_eq!(app.world().resource::<ParallelPool>().count(), 1);
 
-    // A battle owns the scene: the whole pool pauses, so the toggle freezes.
     app.world_mut().resource_mut::<BattleActive>().0 = true;
     let frozen = switch_on(&app, 21);
     for _ in 0..4 {
@@ -271,7 +263,6 @@ fn parallel_map_page_runs_and_pauses_under_a_scene() {
         "a parallel page must not step while a battle owns the scene"
     );
 
-    // Battle over: the pool resumes stepping.
     app.world_mut().resource_mut::<BattleActive>().0 = false;
     app.update();
     assert_ne!(
@@ -308,7 +299,6 @@ fn parallel_switches_continue_during_another_interpreters_message() {
 #[test]
 fn parallel_writes_are_visible_to_the_foreground() {
     let mut app = interp_app();
-    // Parallel common event sets switch 30 on (once; it then keeps re-setting it).
     app.insert_resource(CommonEvents(vec![common(
         1,
         2,
@@ -321,8 +311,6 @@ fn parallel_writes_are_visible_to_the_foreground() {
         "the parallel event set the shared switch"
     );
 
-    // A foreground event branches on switch 30 (set by the parallel event) and,
-    // seeing it on, sets switch 31 — proving both read the same state.
     app.world_mut().resource_mut::<RunningEvent>().start(
         99,
         vec![
@@ -341,9 +329,7 @@ fn parallel_writes_are_visible_to_the_foreground() {
 #[test]
 fn move_event_is_fire_and_forget() {
     let mut app = interp_app();
-    // A trigger-3 autorun: a hero MoveEvent (11330) followed by a switch. RM2000's
-    // MoveEvent does not block, so the switch after it runs in the same command
-    // burst — were 11330 blocking, switch 40 would stay off until the route drained.
+    // MoveEvent is fire-and-forget; the switch must run in the same burst.
     app.insert_resource(MapEvents {
         events: vec![map_event(
             1,
@@ -360,7 +346,6 @@ fn move_event_is_fire_and_forget() {
         switch_on(&app, 40),
         "MoveEvent must not block the command that follows it"
     );
-    // The route was loaded onto the hero's stepper (fire-and-forget), not dropped.
     let world = app.world_mut();
     let mut q = world.query_filtered::<&RouteStepper, With<Player>>();
     assert!(

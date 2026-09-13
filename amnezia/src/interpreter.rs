@@ -8,11 +8,8 @@
 //! are a flat list with a per-command `indent`; conditional branches use that
 //! indent to delimit their bodies.
 
-use crate::battle::BattleActive;
 use crate::dialogue::Dialogue;
 use crate::gameover::GameOverActive;
-use crate::menu::MenuOpen;
-use crate::shop::ShopOpen;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::Fade;
 use crate::title::TitleActive;
@@ -137,22 +134,20 @@ fn autorun(
     inventory: Res<Inventory>,
     dialogue: Res<Dialogue>,
     fade: Res<Fade>,
-    menu: Res<MenuOpen>,
-    shop: Res<ShopOpen>,
-    battle: Res<BattleActive>,
+    save: Res<crate::save::EventSaveRequest>,
+    blockers: Blockers,
     title: Res<TitleActive>,
     gameover: Res<GameOverActive>,
     transition: Res<crate::transitions::Transition>,
     mut running: ResMut<RunningEvent>,
 ) {
     if running.active()
+        || save.0
         || prompts.active()
         || dialogue.active
         || fade.busy()
         || transition.busy()
-        || menu.0
-        || shop.0
-        || battle.0
+        || blockers.any()
         || title.0
         || gameover.0
     {
@@ -166,8 +161,7 @@ fn autorun(
             return;
         }
     }
-    // No map autostart is waiting: run a common autostart whose switch is on. The
-    // common event runs in the global scope, so its `this event` reference is 0.
+    // Common events use global scope, so their "this event" reference is 0.
     for ce in &common_events.0 {
         if ce.trigger == 1 && parallel::common_gate_on(ce, &switches) && !ce.commands.is_empty() {
             running.start(0, ce.commands.clone());

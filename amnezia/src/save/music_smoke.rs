@@ -6,6 +6,7 @@ use crate::audio::{
 use bevy::audio::{AudioSink, AudioSinkPlayback};
 use bevy::ecs::system::RunSystemOnce;
 
+mod boundary;
 pub(crate) mod message;
 
 #[derive(Resource)]
@@ -54,6 +55,7 @@ fn theme() -> BgmTrack {
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     let path = world.resource::<Fixture>().slot.path(world);
     let message_capture = message::drive(world, frame);
+    boundary::drive(world, frame);
     match frame {
         260 => {
             assert_eq!(world.resource::<MapData>().map_id, 3);
@@ -75,7 +77,6 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             world.write_message(AudioRequest::MemorizeBgm);
             world.write_message(house().replay());
         }
-        300 | 490 => world.resource_mut::<EventSaveRequest>().0 = true,
         303 => {
             let game = read_save(&path).unwrap();
             assert_eq!(game.format_version, SAVE_FORMAT_VERSION);
@@ -184,6 +185,7 @@ fn verify(world: &mut World, current: Option<BgmTrack>, memorized: Option<BgmTra
 }
 
 pub(crate) fn verify_finished(world: &mut World) {
+    boundary::verify_finished(world);
     message::verify_finished(world);
     let fixture = world.remove_resource::<Fixture>().unwrap();
     assert_eq!(fixture.checks, 15);

@@ -67,6 +67,7 @@ impl Exec<'_, '_> {
 
     pub(super) fn scene_paused(&self, fade_busy: bool, overlay_open: bool) -> bool {
         fade_busy
+            || self.subsystems.event_save.0
             || self.subsystems.mapfx.transitions.state.busy()
             || overlay_open
             || self.pending.0.is_some()
@@ -147,16 +148,11 @@ pub(super) fn run_frame(
         }
         frame.choice_pending = false;
     }
-    // Resume after a merchant screen closes: record whether a trade happened and
-    // step into the block so the Transaction/Stay (or NoTransaction/Cancel)
-    // handler arms self-select, mirroring the battle-outcome handlers.
     if frame.shop_pending {
         frame.shop_transacted = Some(x.subsystems.merchant.outcome.transacted);
         frame.shop_pending = false;
         frame.ip += 1;
     }
-    // Resume after the player entered a number: store it in the target variable,
-    // then step past the InputNumber command.
     if frame.input_pending {
         if x.subsystems.input_number.active() {
             return RunOutcome::Yielded;
@@ -185,8 +181,6 @@ pub(super) fn run_frame(
     }
     for _ in 0..MAX_STEPS_PER_FRAME {
         let Some(command) = frame.commands.get(frame.ip).cloned() else {
-            // A callee finished: pop back to the caller frame and resume it; the
-            // run ends only when there is no caller left to return to.
             if let Some(caller) = frame.call_stack.pop() {
                 frame.commands = caller.commands;
                 frame.ip = caller.ip;
