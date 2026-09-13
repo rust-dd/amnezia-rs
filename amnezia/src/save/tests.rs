@@ -4,6 +4,7 @@ mod actor_state;
 mod camera;
 mod fixture;
 mod frame_clock;
+mod gameplay;
 pub(crate) use fixture::save_resources;
 mod message;
 mod music;

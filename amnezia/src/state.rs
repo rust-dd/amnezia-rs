@@ -8,13 +8,13 @@ use std::collections::HashMap;
 /// RM2000 caps the active party at four members (EasyRPG `Game_Party::AddActor`).
 const MAX_PARTY: usize = 4;
 /// The RM2000 gold ceiling (EasyRPG `Game_Constants::MaxGoldValue`).
-const MAX_GOLD: i32 = 999_999;
+pub(crate) const MAX_GOLD: i32 = 999_999;
 /// The default RM2000 per-item stack limit (EasyRPG `Game_Constants::MaxItemCount`).
-const MAX_ITEM_COUNT: u32 = 99;
+pub(crate) const MAX_ITEM_COUNT: u32 = 99;
 /// The RM2000 variable bounds: every write clamps into `[MIN_VAR, MAX_VAR]`
 /// (EasyRPG `Game_Variables::min_2k`/`max_2k`, the RPG2000 six-nines range).
-const MIN_VAR: i32 = -999_999;
-const MAX_VAR: i32 = 999_999;
+pub(crate) const MIN_VAR: i32 = -999_999;
+pub(crate) const MAX_VAR: i32 = 999_999;
 
 /// The game's on/off switches, keyed by 1-based id (default false).
 #[derive(Resource, Default)]
@@ -326,11 +326,11 @@ mod tests {
         let flags = |party: &Party, inv: &Inventory| {
             active_page(&ev, &sw, &var, party, inv).map(|p| p.condition.flags)
         };
-        assert_eq!(flags(&party, &inv), Some(0)); // no item, actor 3 absent
+        assert_eq!(flags(&party, &inv), Some(0));
         inv.add_item(5, 1);
-        assert_eq!(flags(&party, &inv), Some(0x08)); // has item 5
+        assert_eq!(flags(&party, &inv), Some(0x08));
         party.add(3);
-        assert_eq!(flags(&party, &inv), Some(0x10)); // actor 3 joined (higher page)
+        assert_eq!(flags(&party, &inv), Some(0x10));
     }
 
     #[test]
@@ -349,7 +349,7 @@ mod tests {
         let mut party = Party::default();
         assert!(party.has(1) && !party.has(2));
         party.add(2);
-        party.add(2); // idempotent
+        party.add(2);
         assert!(party.has(2));
         party.remove(2);
         assert!(!party.has(2));
@@ -360,7 +360,7 @@ mod tests {
         let mut inv = Inventory::default();
         inv.add_item(181, 2);
         assert_eq!(inv.count(181), 2);
-        inv.remove_item(181, 5); // saturates at 0
+        inv.remove_item(181, 5);
         assert_eq!(inv.count(181), 0);
         inv.add_gold(100);
         inv.remove_gold(30);
@@ -369,26 +369,26 @@ mod tests {
 
     #[test]
     fn party_refuses_a_fifth_member() {
-        let mut party = Party::default(); // starts with the hero (actor 1)
+        let mut party = Party::default();
         party.add(2);
         party.add(3);
         party.add(4);
         assert_eq!(party.snapshot(), vec![1, 2, 3, 4]);
-        party.add(5); // the party is full — RM2000 caps at four
+        party.add(5);
         assert_eq!(party.snapshot(), vec![1, 2, 3, 4], "fifth member refused");
     }
 
     #[test]
     fn gold_and_item_counts_are_clamped_to_their_maxima() {
         let mut inv = Inventory::default();
-        inv.add_gold(2_000_000); // above the 999_999 ceiling
+        inv.add_gold(2_000_000);
         assert_eq!(inv.gold(), MAX_GOLD);
-        inv.remove_gold(5_000_000); // never below zero
+        inv.remove_gold(5_000_000);
         assert_eq!(inv.gold(), 0);
 
-        inv.add_item(7, 250); // above the 99 stack cap
+        inv.add_item(7, 250);
         assert_eq!(inv.count(7), MAX_ITEM_COUNT);
-        inv.add_item(7, 50); // stays capped
+        inv.add_item(7, 50);
         assert_eq!(inv.count(7), MAX_ITEM_COUNT);
     }
 }

@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 /// The RM2000 (RPG2000) experience ceiling: stored EXP never exceeds this
 /// (EasyRPG `Game_Constants::MaxExpValue`).
-const MAX_EXP: u32 = 999_999;
+pub(crate) const MAX_EXP: u32 = 999_999;
 
 /// Stored total experience per actor id. An absent actor sits at the experience
 /// of its starting level (see [`Progression::total`]).
@@ -239,7 +239,6 @@ mod tests {
         c.exp_correction = 100;
         assert_eq!(exp_for_level(2, &c), 130);
 
-        // The curve is clamped to the RM2000 experience ceiling.
         let mut steep = def();
         steep.exp_base = 900_000;
         steep.exp_inflation = 100;
@@ -267,13 +266,10 @@ mod tests {
             },
         ];
         let mut p = Progression::default();
-        // At the starting level 1 only the level-1 skill is known.
         assert_eq!(p.known_skill_ids(&d), vec![5]);
-        // Climbing to level 3 (its exp threshold) adds skill 8.
         p.add(&d, exp_for_level(3, &d));
         assert!(p.level(&d) >= 3);
         assert_eq!(p.known_skill_ids(&d), vec![5, 8]);
-        // A level that crosses the level-7 learning adds skill 12.
         p.set_level(&d, 7);
         assert_eq!(p.known_skill_ids(&d), vec![5, 8, 12]);
     }
@@ -315,9 +311,7 @@ mod tests {
         let mut d = def();
         d.level = 5;
         let mut p = Progression::default();
-        // No experience earned, but never below the starting level.
         assert_eq!(p.level(&d), 5);
-        // A mountain of experience never exceeds max_level.
         p.add(&d, 10_000_000);
         assert_eq!(p.level(&d), d.max_level);
     }

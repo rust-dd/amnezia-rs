@@ -5,6 +5,7 @@ pub(crate) mod camera_smoke;
 pub(crate) mod hero_smoke;
 pub(crate) mod music_smoke;
 pub(crate) mod npc_smoke;
+mod numeric;
 pub(crate) mod picture_smoke;
 pub(crate) mod screen_smoke;
 mod smoke_slot;
@@ -35,7 +36,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-pub(crate) const SAVE_FORMAT_VERSION: u32 = 13;
+pub(crate) const SAVE_FORMAT_VERSION: u32 = 14;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -126,6 +127,7 @@ impl Plugin for SavePlugin {
 /// 16-parameter cap.
 #[derive(SystemParam)]
 struct SaveIo<'w, 's> {
+    data: Option<Res<'w, crate::gamedata::GameData>>,
     transition: Option<Res<'w, crate::transitions::Transition>>,
     commands: Commands<'w, 's>,
     outcome: ResMut<'w, LoadOutcome>,
@@ -250,7 +252,7 @@ fn save_or_load(
             };
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
-            let game = SaveGame {
+            let mut game = SaveGame {
                 foreground: running.snapshot(),
                 vehicle_motion: scene
                     .vehicles
@@ -309,6 +311,10 @@ fn save_or_load(
                 menu_access: scene.menu_access.as_ref().map(|v| v.0),
                 save_access: scene.save_access.as_ref().is_some_and(|v| v.0),
             };
+            if !numeric::prepare(&mut game, save_io.data.as_deref()) {
+                error!("save failed: invalid gameplay numbers");
+                return;
+            }
             match write_save(&save_io.location.0, &game) {
                 Ok(()) => info!("saved game to {}", save_io.location.0.display()),
                 Err(e) => error!("save failed: {e}"),
@@ -319,12 +325,14 @@ fn save_or_load(
             // or corrupt file can't wedge a waiting Continue on the title screen.
             save_io.load_request.0 = false;
             save_io.outcome.0 = Some(false);
-            let Some(game) = read_save(&save_io.location.0) else {
+            let Some(mut game) = read_save(&save_io.location.0) else {
                 return;
             };
-            if !valid_destination(&game, &scene.animation) {
+            if !valid_destination(&game, &scene.animation)
+                || !numeric::prepare(&mut game, save_io.data.as_deref())
+            {
                 error!(
-                    "load failed: unsupported format or invalid map/party in {}",
+                    "load failed: unsupported format or invalid saved state in {}",
                     save_io.location.0.display()
                 );
                 return;
