@@ -15,7 +15,10 @@ pub(crate) struct Snapshot {
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let (top, offset, selected) = match label {
         "save-slots-early" => (0, 0, 0),
-        "save-slots-bottom" | "save-slots-updated" => (12, 0, 14),
+        "save-slots-bottom"
+        | "save-slots-updated"
+        | "save-crystal-cancel"
+        | "save-crystal-confirm" => (12, 0, 14),
         "save-slots-corrupt" => (11, 0, 11),
         "save-slots-moving" => (10, -55, 10),
         _ => return None,
@@ -30,7 +33,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         let Contents::Party(party) = &entries[14].contents else {
             panic!("saved party preview missing")
         };
-        let expected = if label == "save-slots-updated" {
+        let expected = if label != "save-slots-bottom" {
             ("Áron", 23)
         } else {
             ("Álmos", 17)

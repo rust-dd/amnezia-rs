@@ -24,4 +24,8 @@ impl ActiveSlot {
             first_slot.with_file_name(format!("slot{}.ron", self.0))
         }
     }
+
+    pub(crate) fn index(self) -> usize {
+        usize::from(self.0 - 1)
+    }
 }

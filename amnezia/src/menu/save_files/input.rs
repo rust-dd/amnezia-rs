@@ -10,6 +10,7 @@ use bevy::prelude::*;
 pub(super) fn update(
     keys: Res<ButtonInput<KeyCode>>,
     frames: Res<GameFrames>,
+    pause: crate::transitions::TransitionPause,
     open: Res<MenuOpen>,
     data: Res<GameData>,
     location: Res<SaveLocation>,
@@ -31,17 +32,24 @@ pub(super) fn update(
         files.last_frame = frames.frame;
         return;
     }
-    if files.entries.is_none() {
+    if files.entries.is_none() || files.finished.is_some() {
         return;
     }
     let elapsed = frames.frame.wrapping_sub(files.last_frame);
     files.last_frame = frames.frame;
+    if pause.paused() {
+        return;
+    }
     if !files.navigation.moving() {
         if keys.just_pressed(KeyCode::Escape) {
             if let Some(sounds) = sounds {
                 play_system_se(&mut audio, &sounds.cancel);
             }
-            *files = default();
+            if files.event_menu.is_some() {
+                files.finished = Some(false);
+            } else {
+                *files = default();
+            }
             return;
         }
         if crate::menu::nav::confirm_pressed(&keys) {
@@ -49,8 +57,12 @@ pub(super) fn update(
                 play_system_se(&mut audio, &sounds.decision);
             }
             *slot = ActiveSlot::new(files.navigation.index as u8 + 1).unwrap();
-            request.0 = true;
-            *files = default();
+            if files.event_menu.is_some() {
+                files.finished = Some(true);
+            } else {
+                request.0 = true;
+                *files = default();
+            }
             return;
         }
     }

@@ -1,5 +1,6 @@
 use super::*;
 
+mod selector;
 mod storage;
 
 #[test]

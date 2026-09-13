@@ -56,10 +56,9 @@ pub struct LoadOutcome(pub Option<bool>);
 #[derive(Resource, Default)]
 pub struct SaveRequest(pub bool);
 
-/// A save requested by the event interpreter (opcode 11910, `OpenSaveMenu`) — the
-/// save crystal. Unlike [`SaveRequest`], [`save_or_load`] honours it even while
-/// the requesting event is still `running.active()`; only a fade defers it. Kept
-/// distinct so the F5 / menu save stays gated behind a running event as before.
+/// An event-requested save scene (opcode 11910, `OpenSaveMenu`). The selector
+/// keeps it set while choosing, cancels it without writing, or lets the save
+/// system consume it after approval while the foreground event is still paused.
 #[derive(Resource, Default)]
 pub struct EventSaveRequest(pub bool);
 
@@ -128,6 +127,7 @@ impl Plugin for SavePlugin {
 /// 16-parameter cap.
 #[derive(SystemParam)]
 struct SaveIo<'w, 's> {
+    files: Option<Res<'w, crate::menu::save_files::SaveFiles>>,
     data: Option<Res<'w, crate::gamedata::GameData>>,
     transition: Option<Res<'w, crate::transitions::Transition>>,
     commands: Commands<'w, 's>,
@@ -245,6 +245,9 @@ fn save_or_load(
     // A fade defers every save and load. A pending interpreter save is left set
     // (not consumed) so it retries once the fade ends.
     if fade.busy() || save_io.transition.as_ref().is_some_and(|t| t.busy()) {
+        return;
+    }
+    if save_io.files.as_ref().is_some_and(|files| files.active()) {
         return;
     }
     let event_save = std::mem::take(&mut save_io.event_save.0);

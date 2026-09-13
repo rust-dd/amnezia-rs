@@ -18,6 +18,7 @@ struct SmokeRun {
     scenario: &'static str,
     escaped_cast: u8,
     finish_at: Option<u32>,
+    save_menu_frames: u32,
 }
 
 impl Plugin for SmokePlugin {
@@ -54,6 +55,7 @@ impl Plugin for SmokePlugin {
             scenario,
             escaped_cast: 0,
             finish_at: None,
+            save_menu_frames: 0,
         })
         .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
             std::time::Duration::from_secs_f64(1.0 / 60.0),
@@ -78,6 +80,12 @@ impl Plugin for SmokePlugin {
 fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario.starts_with("save-")
+        && scenario != "save-slots"
+        && crate::menu::save_files::smoke::event_input(world)
+    {
+        return;
+    }
     if scenario == "dialogue-timing" && crate::dialogue::timing_smoke::held_input(world, frame) {
         return;
     }
@@ -144,6 +152,21 @@ fn input(world: &mut World) {
 }
 
 fn drive(world: &mut World) {
+    if world.resource::<SmokeRun>().scenario != "save-slots"
+        && crate::menu::save_files::smoke::event_active(world)
+    {
+        if completion::close_early(world, world.resource::<SmokeRun>().frame) {
+            return;
+        }
+        let mut smoke = world.resource_mut::<SmokeRun>();
+        smoke.save_menu_frames += 1;
+        assert!(
+            smoke.save_menu_frames <= 240,
+            "save selector did not complete within four seconds"
+        );
+        return;
+    }
+    world.resource_mut::<SmokeRun>().save_menu_frames = 0;
     let frame = {
         let mut smoke = world.resource_mut::<SmokeRun>();
         smoke.frame += 1;

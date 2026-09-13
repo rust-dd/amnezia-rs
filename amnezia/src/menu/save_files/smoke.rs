@@ -9,6 +9,7 @@ use std::sync::{
 };
 
 pub(crate) use super::view::pixels::snapshot;
+mod crystals;
 
 #[derive(Resource)]
 struct Fixture {
@@ -48,13 +49,40 @@ pub(crate) fn configure(app: &mut App) {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        310 | 400 | 420 | 450 | 560 | 580 | 600 => Some(KeyCode::Enter),
-        380 | 540 | 650 => Some(KeyCode::Escape),
+        310 | 400 | 420 | 450 | 560 | 580 | 600 | 950 => Some(KeyCode::Enter),
+        380 | 540 | 650 | 850 => Some(KeyCode::Escape),
         405 => Some(KeyCode::ArrowDown),
         480 => Some(KeyCode::PageUp),
         510 => Some(KeyCode::ArrowUp),
         _ => None,
     }
+}
+
+pub(crate) fn event_input(world: &mut World) -> bool {
+    let files = world.resource::<SaveFiles>();
+    if files.event_menu.is_none() {
+        return false;
+    }
+    let target = world.resource::<ActiveSlot>().index();
+    let key = if files.entries.is_none() || files.finished.is_some() || files.navigation.moving() {
+        None
+    } else if files.navigation.index < target {
+        Some(KeyCode::ArrowDown)
+    } else if files.navigation.index > target {
+        Some(KeyCode::ArrowUp)
+    } else {
+        Some(KeyCode::Enter)
+    };
+    let mut keys = world.resource_mut::<ButtonInput<KeyCode>>();
+    keys.reset_all();
+    if let Some(key) = key {
+        keys.press(key);
+    }
+    true
+}
+
+pub(crate) fn event_active(world: &World) -> bool {
+    world.resource::<SaveFiles>().event_menu.is_some()
 }
 
 fn path(world: &World, number: u8) -> PathBuf {
@@ -64,6 +92,9 @@ fn path(world: &World, number: u8) -> PathBuf {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if let Some(label) = crystals::drive(world, frame) {
+        return Some(label);
+    }
     if frame == 300 {
         assert!(
             !world
@@ -165,7 +196,8 @@ fn unchanged(world: &World, saved_last: bool) {
 }
 
 pub(crate) fn verify_finished(world: &mut World) {
-    assert_eq!(world.resource::<Pixels>().0.load(Ordering::Relaxed), 5);
+    crystals::verify_finished(world);
+    assert_eq!(world.resource::<Pixels>().0.load(Ordering::Relaxed), 7);
     assert_eq!(world.resource::<Fixture>().checks, 7);
     unchanged(world, true);
     let fixture = world.remove_resource::<Fixture>().unwrap();

@@ -1,7 +1,7 @@
 use super::*;
 use crate::save::{SaveLocation, SavePlugin};
 
-fn app(tag: &str) -> (App, std::path::PathBuf) {
+pub(super) fn app(tag: &str) -> (App, std::path::PathBuf) {
     let path = std::env::temp_dir().join(format!(
         "amnezia-save-boundary-{tag}-{}.ron",
         std::process::id()

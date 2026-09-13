@@ -82,6 +82,7 @@ pub(crate) fn clear_transient(world: &mut World) {
     reset::<crate::choice::Choice>(world);
     reset::<crate::inputnumber::InputNumber>(world);
     reset::<crate::menu::MenuOpen>(world);
+    reset::<crate::menu::save_files::SaveFiles>(world);
     reset::<crate::shop::ShopOpen>(world);
     reset::<crate::shop::ShopOutcome>(world);
     reset::<crate::battle::BattleActive>(world);

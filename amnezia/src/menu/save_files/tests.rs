@@ -30,8 +30,9 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
     .add_message::<crate::audio::AudioRequest>()
     .add_systems(
         Update,
-        (crate::menu::input::menu_input, input::update).chain(),
+        crate::menu::input::menu_input.in_set(crate::menu::MenuInput),
     );
+    super::register_flow(&mut app);
     let mut map = crate::world::MapData::for_test(20, 15);
     map.map_id = 2;
     app.insert_resource(map);
@@ -100,4 +101,5 @@ fn selecting_the_last_slot_saves_only_that_slot_after_confirmation() {
     std::fs::remove_dir(directory).unwrap();
 }
 
+mod events;
 mod navigation;
