@@ -34,6 +34,12 @@ impl Slot {
         self.path.clone()
     }
 
+    pub(super) fn selected_path(&self, world: &World) -> PathBuf {
+        world
+            .resource::<super::slots::ActiveSlot>()
+            .path(&self.path(world))
+    }
+
     pub(super) fn finish(self, world: &mut World) {
         assert_eq!(world.resource::<SaveLocation>().0, self.path);
         std::fs::remove_file(&self.path).unwrap();

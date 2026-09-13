@@ -87,7 +87,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             start(world, settings(true));
         }
         303 | 493 => {
-            let path = world.resource::<Fixture>().slot.path(world);
+            let path = world.resource::<Fixture>().slot.selected_path(world);
             assert_eq!(read_save(&path).unwrap().message, expected(frame == 303));
         }
         310 | 480 => start(world, settings(false)),

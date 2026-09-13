@@ -21,7 +21,7 @@ fn switch(id: i32, operation: i32) -> EventCommand {
 
 fn start(world: &mut World, map_id: u32) {
     world.init_resource::<Probe>();
-    let path = world.resource::<Fixture>().slot.path(world);
+    let path = world.resource::<Fixture>().slot.selected_path(world);
     world.resource_mut::<Probe>().before = std::fs::read(path).ok();
     let map = crate::assets::load_ron::<Map>(&format!(
         "{}/maps/map_{map_id:04}.ron",
@@ -46,7 +46,7 @@ fn start(world: &mut World, map_id: u32) {
 }
 
 pub(super) fn drive(world: &mut World, frame: u32) {
-    let path = world.resource::<Fixture>().slot.path(world);
+    let path = world.resource::<Fixture>().slot.selected_path(world);
     match frame {
         300 => start(world, 2),
         490 => start(world, 260),
@@ -87,7 +87,7 @@ fn check_restore(world: &mut World, frame: u32) {
     if !(321..410).contains(&frame) && !(501..590).contains(&frame) {
         return;
     }
-    let path = world.resource::<Fixture>().slot.path(world);
+    let path = world.resource::<Fixture>().slot.selected_path(world);
     assert_eq!(
         std::fs::read(path).unwrap(),
         world.resource::<Probe>().slot_bytes

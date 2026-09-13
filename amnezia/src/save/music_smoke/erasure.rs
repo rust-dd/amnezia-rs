@@ -14,7 +14,7 @@ struct Probe {
 pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     match frame {
         610 => {
-            let path = world.resource::<Fixture>().slot.path(world);
+            let path = world.resource::<Fixture>().slot.selected_path(world);
             world.insert_resource(Probe {
                 slot_bytes: std::fs::read(path).unwrap(),
                 ..default()
@@ -39,7 +39,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             let transition = world.resource::<crate::transitions::Transition>();
             assert!(!transition.event_erased && !transition.erased());
             assert!(!world.resource::<RunningEvent>().active());
-            let path = world.resource::<Fixture>().slot.path(world);
+            let path = world.resource::<Fixture>().slot.selected_path(world);
             assert_eq!(
                 std::fs::read(path).unwrap(),
                 world.resource::<Probe>().slot_bytes

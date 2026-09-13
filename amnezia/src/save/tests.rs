@@ -9,6 +9,7 @@ mod identities;
 pub(crate) use fixture::save_resources;
 mod message;
 mod music;
+mod slots;
 
 #[test]
 fn save_game_ron_round_trip() {

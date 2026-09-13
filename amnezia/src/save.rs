@@ -1,4 +1,4 @@
-//! Save crystals and title-screen loading share a persistent, single-slot snapshot.
+//! Save crystals and title-screen loading share versioned persistent snapshots.
 
 pub(crate) mod animation_smoke;
 pub(crate) mod camera_smoke;
@@ -9,6 +9,7 @@ pub(crate) mod npc_smoke;
 mod numeric;
 pub(crate) mod picture_smoke;
 pub(crate) mod screen_smoke;
+pub(crate) mod slots;
 mod smoke_slot;
 mod snapshot;
 mod storage;
@@ -69,8 +70,8 @@ pub struct EventSaveRequest(pub bool);
 #[derive(Resource, Default)]
 pub struct SaveAccess(pub bool);
 
-/// The resolved path the save/load systems read and write. Held as a resource so a
-/// headless test can point them at a temp file; the real game uses the
+/// The first slot's path and the directory containing subsequent slots.
+/// Tests can retain custom first-slot filenames; the real game uses the
 /// working-directory-independent [`save_path`].
 #[derive(Resource)]
 pub struct SaveLocation(pub PathBuf);
@@ -111,6 +112,7 @@ impl Plugin for SavePlugin {
             .init_resource::<EventSaveRequest>()
             .init_resource::<SaveAccess>()
             .init_resource::<SaveLocation>()
+            .init_resource::<slots::ActiveSlot>()
             .add_systems(
                 PreUpdate,
                 save_or_load
@@ -133,11 +135,22 @@ struct SaveIo<'w, 's> {
     save_request: ResMut<'w, SaveRequest>,
     event_save: ResMut<'w, EventSaveRequest>,
     location: Res<'w, SaveLocation>,
+    slot: Option<Res<'w, slots::ActiveSlot>>,
     equipment: ResMut<'w, Equipment>,
     battle: Option<Res<'w, crate::battle::BattleActive>>,
     title: Option<Res<'w, crate::title::TitleActive>>,
     gameover: Option<Res<'w, crate::gameover::GameOverActive>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
+}
+
+impl SaveIo<'_, '_> {
+    fn path(&self) -> PathBuf {
+        self.slot
+            .as_deref()
+            .copied()
+            .unwrap_or_default()
+            .path(&self.location.0)
+    }
 }
 
 /// Scene resources grouped to keep [`save_or_load`] within Bevy's parameter limit.
@@ -315,8 +328,9 @@ fn save_or_load(
                 error!("save failed: invalid gameplay data");
                 return;
             }
-            match write_save(&save_io.location.0, &game) {
-                Ok(()) => info!("saved game to {}", save_io.location.0.display()),
+            let path = save_io.path();
+            match write_save(&path, &game) {
+                Ok(()) => info!("saved game to {}", path.display()),
                 Err(e) => error!("save failed: {e}"),
             }
         }
@@ -325,7 +339,8 @@ fn save_or_load(
             // or corrupt file can't wedge a waiting Continue on the title screen.
             save_io.load_request.0 = false;
             save_io.outcome.0 = Some(false);
-            let Some(mut game) = read_save(&save_io.location.0) else {
+            let path = save_io.path();
+            let Some(mut game) = read_save(&path) else {
                 return;
             };
             if !valid_destination(&game, &scene.animation)
@@ -334,7 +349,7 @@ fn save_or_load(
             {
                 error!(
                     "load failed: unsupported format or invalid saved state in {}",
-                    save_io.location.0.display()
+                    path.display()
                 );
                 return;
             }
@@ -424,7 +439,7 @@ fn save_or_load(
             }
             pending.reload(game.map_id, game.x, game.y);
             save_io.outcome.0 = Some(true);
-            info!("loaded game from {}", save_io.location.0.display());
+            info!("loaded game from {}", path.display());
         }
         None => {}
     }

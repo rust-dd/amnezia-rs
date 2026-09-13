@@ -10,6 +10,7 @@ mod boundary;
 pub(crate) mod erasure;
 mod identities;
 pub(crate) mod message;
+mod multi_slots;
 mod numeric;
 
 #[derive(Resource)]
@@ -56,7 +57,8 @@ fn theme() -> BgmTrack {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
-    let path = world.resource::<Fixture>().slot.path(world);
+    multi_slots::drive(world, frame);
+    let path = world.resource::<Fixture>().slot.selected_path(world);
     let message_capture = message::drive(world, frame);
     boundary::drive(world, frame);
     let erasure_capture = erasure::drive(world, frame);
@@ -194,6 +196,7 @@ fn verify(world: &mut World, current: Option<BgmTrack>, memorized: Option<BgmTra
 }
 
 pub(crate) fn verify_finished(world: &mut World) {
+    multi_slots::verify_finished(world);
     erasure::verify_finished(world);
     boundary::verify_finished(world);
     message::verify_finished(world);
