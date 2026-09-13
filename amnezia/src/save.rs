@@ -3,6 +3,7 @@
 pub(crate) mod animation_smoke;
 pub(crate) mod camera_smoke;
 pub(crate) mod hero_smoke;
+mod identities;
 pub(crate) mod music_smoke;
 pub(crate) mod npc_smoke;
 mod numeric;
@@ -36,7 +37,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-pub(crate) const SAVE_FORMAT_VERSION: u32 = 14;
+pub(crate) const SAVE_FORMAT_VERSION: u32 = 15;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -61,13 +62,10 @@ pub struct SaveRequest(pub bool);
 pub struct EventSaveRequest(pub bool);
 
 /// Whether the in-menu Save command is allowed (RM2000 `ChangeSaveAccess`, opcode
-/// 11930). Amnézia is a crystal-save game: it forbids manual saves everywhere and
-/// enables them only for the instant a save crystal runs `OpenSaveMenu` (the 16
-/// crystals `enable`, 35 sites `disable`), so this starts **disabled** — unlike
-/// RPG_RT's enabled default — and the player can never save from the menu. Only the
-/// menu's Save entry (and the `Esc`-`S` quick save) honour it; the save crystal
-/// ([`EventSaveRequest`], `OpenSaveMenu`) and the `F5` dev hotkey are deliberately
-/// ungated, matching RPG_RT's `SetAllowSave`.
+/// 11930). Starts disabled until the original events set the menu permission.
+/// The menu's Save entry and shortcut honour it; save crystals invoke
+/// [`EventSaveRequest`] independently, without temporarily enabling menu saves.
+/// The development F5 hotkey also bypasses this permission.
 #[derive(Resource, Default)]
 pub struct SaveAccess(pub bool);
 
@@ -311,8 +309,10 @@ fn save_or_load(
                 menu_access: scene.menu_access.as_ref().map(|v| v.0),
                 save_access: scene.save_access.as_ref().is_some_and(|v| v.0),
             };
-            if !numeric::prepare(&mut game, save_io.data.as_deref()) {
-                error!("save failed: invalid gameplay numbers");
+            if !identities::prepare(&mut game, save_io.data.as_deref())
+                || !numeric::prepare(&mut game, save_io.data.as_deref())
+            {
+                error!("save failed: invalid gameplay data");
                 return;
             }
             match write_save(&save_io.location.0, &game) {
@@ -329,6 +329,7 @@ fn save_or_load(
                 return;
             };
             if !valid_destination(&game, &scene.animation)
+                || !identities::prepare(&mut game, save_io.data.as_deref())
                 || !numeric::prepare(&mut game, save_io.data.as_deref())
             {
                 error!(

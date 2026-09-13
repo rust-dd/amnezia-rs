@@ -6,12 +6,16 @@ pub(super) fn app(tag: &str) -> (App, std::path::PathBuf) {
         std::process::id()
     ));
     let mut app = interp_app();
-    app.add_plugins((AssetPlugin::default(), SavePlugin))
-        .init_asset::<Image>()
-        .init_resource::<crate::screenfx::TintState>()
-        .init_resource::<crate::timer::PlayTime>()
-        .insert_resource(SaveLocation(path.clone()))
-        .add_systems(Update, rebuild.in_set(crate::teleport::MapTransfer));
+    app.add_plugins((
+        AssetPlugin::default(),
+        SavePlugin,
+        crate::gamedata::GameDataPlugin,
+    ))
+    .init_asset::<Image>()
+    .init_resource::<crate::screenfx::TintState>()
+    .init_resource::<crate::timer::PlayTime>()
+    .insert_resource(SaveLocation(path.clone()))
+    .add_systems(Update, rebuild.in_set(crate::teleport::MapTransfer));
     app.world_mut().resource_mut::<MapData>().map_id = 2;
     let world = app.world_mut();
     let entity = world

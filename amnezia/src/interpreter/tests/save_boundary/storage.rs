@@ -7,11 +7,15 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
         std::process::id()
     ));
     let mut app = interp_app();
-    app.add_plugins((AssetPlugin::default(), SavePlugin))
-        .init_asset::<Image>()
-        .init_resource::<crate::screenfx::TintState>()
-        .init_resource::<crate::timer::PlayTime>()
-        .insert_resource(SaveLocation(path.clone()));
+    app.add_plugins((
+        AssetPlugin::default(),
+        SavePlugin,
+        crate::gamedata::GameDataPlugin,
+    ))
+    .init_asset::<Image>()
+    .init_resource::<crate::screenfx::TintState>()
+    .init_resource::<crate::timer::PlayTime>()
+    .insert_resource(SaveLocation(path.clone()));
     (app, path)
 }
 

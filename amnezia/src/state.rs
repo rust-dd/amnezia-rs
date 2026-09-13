@@ -6,7 +6,7 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 
 /// RM2000 caps the active party at four members (EasyRPG `Game_Party::AddActor`).
-const MAX_PARTY: usize = 4;
+pub(crate) const MAX_PARTY: usize = 4;
 /// The RM2000 gold ceiling (EasyRPG `Game_Constants::MaxGoldValue`).
 pub(crate) const MAX_GOLD: i32 = 999_999;
 /// The default RM2000 per-item stack limit (EasyRPG `Game_Constants::MaxItemCount`).

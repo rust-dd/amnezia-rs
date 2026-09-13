@@ -8,6 +8,7 @@ use bevy::ecs::system::RunSystemOnce;
 
 mod boundary;
 pub(crate) mod erasure;
+mod identities;
 pub(crate) mod message;
 mod numeric;
 
@@ -129,13 +130,15 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             game.message = default();
             game.camera = None;
             numeric::legacy_values(&mut game);
+            identities::legacy_values(&mut game);
             write_save(&path, &game).unwrap();
         }
         700 => {
             verify(world, Some(theme()), None);
             numeric::verify(world);
+            identities::verify(world);
             assert_eq!(read_save(&path).unwrap().format_version, 1);
-            world.resource_mut::<Fixture>().checks |= 8 | 16;
+            world.resource_mut::<Fixture>().checks |= 8 | 16 | 32;
             return Some("save-music-legacy");
         }
         _ => {}
@@ -195,7 +198,7 @@ pub(crate) fn verify_finished(world: &mut World) {
     boundary::verify_finished(world);
     message::verify_finished(world);
     let fixture = world.remove_resource::<Fixture>().unwrap();
-    assert_eq!(fixture.checks, 31);
+    assert_eq!(fixture.checks, 63);
     fixture.slot.finish(world);
     let original = fixture.map_music.unwrap();
     let map_id = original.id;
