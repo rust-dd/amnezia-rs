@@ -12,7 +12,7 @@ use super::super::flow::{
     after_loop_end, call_event_page, choice_labels, find_label, loop_start, skip_else_body,
     skip_option_body, skip_to_terminator,
 };
-use super::super::frame::{CallFrame, Frame, MAX_CALL_DEPTH};
+use super::super::frame::Frame;
 use super::super::opcodes::*;
 use super::handlers;
 use super::{Exec, Flow};
@@ -441,25 +441,14 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         CALL_EVENT => {
-            match x
+            let called = x
                 .subsystems
                 .flow
                 .map_events
                 .as_ref()
-                .and_then(|ev| call_event_page(&ev.events, &command.params, frame.event_id))
-            {
-                Some((commands, target)) if frame.call_stack.len() < MAX_CALL_DEPTH => {
-                    let caller = CallFrame {
-                        commands: std::mem::take(&mut frame.commands),
-                        ip: frame.ip + 1,
-                        event_id: frame.event_id,
-                    };
-                    frame.call_stack.push(caller);
-                    frame.commands = commands;
-                    frame.ip = 0;
-                    frame.event_id = target;
-                }
-                _ => frame.ip += 1,
+                .and_then(|ev| call_event_page(&ev.events, &command.params, frame.event_id));
+            if !called.is_some_and(|(commands, target)| frame.call(commands, target)) {
+                frame.ip += 1;
             }
             Flow::Advance
         }

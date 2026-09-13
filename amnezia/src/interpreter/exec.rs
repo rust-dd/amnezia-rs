@@ -181,10 +181,7 @@ pub(super) fn run_frame(
     }
     for _ in 0..MAX_STEPS_PER_FRAME {
         let Some(command) = frame.commands.get(frame.ip).cloned() else {
-            if let Some(caller) = frame.call_stack.pop() {
-                frame.commands = caller.commands;
-                frame.ip = caller.ip;
-                frame.event_id = caller.event_id;
+            if frame.return_to_caller() {
                 continue;
             }
             frame.stop();

@@ -77,6 +77,7 @@ fn invalid_foreground_frames_do_not_mutate_the_live_session_or_the_file() {
                 commands: Vec::new(),
                 ip: 1,
                 event_id: 0,
+                ..default()
             }),
             _ => {
                 frame.call_stack = vec![
@@ -84,6 +85,7 @@ fn invalid_foreground_frames_do_not_mutate_the_live_session_or_the_file() {
                         commands: Vec::new(),
                         ip: 0,
                         event_id: 0,
+                        ..default()
                     };
                     crate::interpreter::frame::MAX_CALL_DEPTH + 1
                 ]

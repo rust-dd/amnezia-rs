@@ -24,11 +24,17 @@ pub(super) const MAX_CALL_DEPTH: usize = 64;
 /// A caller frame suspended by `CallEvent` (12330): the interrupted command list,
 /// the instruction pointer to resume at, and the event id in scope. The callee
 /// runs in place; reaching its end pops the frame and resumes the caller.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub(super) struct CallFrame {
     pub(super) commands: Vec<EventCommand>,
     pub(super) ip: usize,
     pub(super) event_id: u32,
+    #[serde(default)]
+    pub(super) choices: HashMap<u32, i32>,
+    #[serde(default)]
+    pub(super) battle_outcome: Option<BattleOutcome>,
+    #[serde(default)]
+    pub(super) shop_transacted: Option<bool>,
 }
 
 /// The per-run interpreter state: the command list, the instruction pointer,
@@ -95,6 +101,37 @@ impl Frame {
     /// Reset to the idle state, dropping the command list and every suspension.
     pub(super) fn stop(&mut self) {
         self.reset();
+    }
+
+    pub(super) fn call(&mut self, commands: Vec<EventCommand>, event_id: u32) -> bool {
+        if self.call_stack.len() >= MAX_CALL_DEPTH {
+            return false;
+        }
+        self.call_stack.push(CallFrame {
+            commands: std::mem::take(&mut self.commands),
+            ip: self.ip + 1,
+            event_id: self.event_id,
+            choices: std::mem::take(&mut self.choices),
+            battle_outcome: self.battle_outcome.take(),
+            shop_transacted: self.shop_transacted.take(),
+        });
+        self.commands = commands;
+        self.ip = 0;
+        self.event_id = event_id;
+        true
+    }
+
+    pub(super) fn return_to_caller(&mut self) -> bool {
+        let Some(caller) = self.call_stack.pop() else {
+            return false;
+        };
+        self.commands = caller.commands;
+        self.ip = caller.ip;
+        self.event_id = caller.event_id;
+        self.choices = caller.choices;
+        self.battle_outcome = caller.battle_outcome;
+        self.shop_transacted = caller.shop_transacted;
+        true
     }
 
     fn reset(&mut self) {

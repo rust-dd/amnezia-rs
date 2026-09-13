@@ -1,6 +1,7 @@
 use super::*;
 use crate::save::{EventSaveRequest, LoadOutcome, LoadRequest, SaveLocation, SavePlugin};
 
+mod call_scope;
 mod continuation;
 mod fixture;
 mod originals;
