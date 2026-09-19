@@ -14,6 +14,7 @@ pub(crate) use crate::menu::view::item_list::pixels::snapshot;
 #[derive(Resource, Default)]
 pub(crate) struct Checks {
     pub pixels: Arc<AtomicUsize>,
+    pub target_pixels: Arc<AtomicUsize>,
     returned: bool,
     consumed: bool,
     audio: MessageCursor<AudioRequest>,
@@ -22,7 +23,7 @@ pub(crate) struct Checks {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        310 | 570 | 640 | 950 | 970 => Some(KeyCode::Escape),
+        310 | 570 | 640 | 950 | 970 | 1160 | 1170 | 1180 | 1190 => Some(KeyCode::Escape),
         320 | 380 | 530 | 550 | 600 | 620 | 625 => Some(KeyCode::Enter),
         370 => Some(KeyCode::ArrowRight),
         390 | 670 => Some(KeyCode::ArrowLeft),
@@ -117,6 +118,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 900 {
         world.insert_resource(Inventory::default());
     }
+    if let Some(label) = crate::menu::view::target::smoke::drive(world, frame) {
+        return Some(label);
+    }
     match frame {
         330 => Some("items-empty"),
         385 => Some("items-disabled"),
@@ -135,6 +139,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
     assert_eq!(checks.pixels.load(Ordering::Relaxed), 11);
+    assert_eq!(checks.target_pixels.load(Ordering::Relaxed), 8);
     assert!(checks.returned && checks.consumed);
     assert_eq!(checks.sounds, 15);
     assert!(!world.resource::<MenuOpen>().0);

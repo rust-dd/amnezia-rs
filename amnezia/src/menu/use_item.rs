@@ -1,12 +1,6 @@
-//! The field item-use sub-screen: pick a party member and apply a held,
-//! field-usable recovery item to them. This module owns the field-usable
-//! predicate, the held-item ordering that maps an item-list row back to an item id,
-//! the pure heal arithmetic (mirroring the battle item formula), and the target
-//! list rendering. The state transitions and the inventory/vitals writes live in
-//! the parent `menu` module.
+//! Field-item eligibility, inventory ordering and original recovery effects.
 
 use crate::gamedata::GameData;
-use crate::i18n;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 use crate::vitals::Vitals;
@@ -112,41 +106,6 @@ pub(super) fn apply_field_item(
         inventory.remove_item(item_id, 1);
     }
     changed
-}
-
-/// The item-target sub-screen: the item being applied plus the party roster with
-/// the selection cursor and each member's current/maximum HP and SP at their
-/// level.
-pub(super) fn compose_target(
-    hero_name: &crate::text::HeroName,
-    item_id: u32,
-    cursor: usize,
-    data: &GameData,
-    party: &Party,
-    progression: &Progression,
-    vitals: &Vitals,
-) -> String {
-    let name = data
-        .item(item_id)
-        .map(|item| i18n::tr(&item.name))
-        .unwrap_or_default();
-    let mut out = format!("Használ: {name}          [Esc] vissza\n\n");
-    for (row, &id) in party.snapshot().iter().enumerate() {
-        let marker = if row == cursor { "▶ " } else { "  " };
-        match data.actor(id) {
-            Some(def) => {
-                let level = progression.level(def);
-                let (max_hp, max_sp) = derive::max_hp_sp(def, level);
-                let (hp, sp) = vitals.get_stored(id).unwrap_or((max_hp, max_sp));
-                out.push_str(&format!(
-                    "{marker}{} — HP {hp}/{max_hp}   SP {sp}/{max_sp}\n",
-                    i18n::tr(hero_name.actor(def))
-                ));
-            }
-            None => out.push_str(&format!("{marker}#{id}\n")),
-        }
-    }
-    out
 }
 
 #[cfg(test)]
@@ -268,26 +227,6 @@ mod tests {
         inv.add_item(7, 1);
         inv.add_item(ITEM_HERB, 2);
         assert_eq!(held_item_ids(&d, &inv), vec![ITEM_HERB, 7]);
-    }
-
-    #[test]
-    fn target_view_names_the_item_and_lists_members_with_vitals() {
-        let mut vitals = Vitals::default();
-        vitals.set(1, 20, 5);
-        let text = compose_target(
-            &crate::text::HeroName("Ron".into()),
-            ITEM_HERB,
-            0,
-            &testkit::data(),
-            &Party::default(),
-            &Progression::default(),
-            &vitals,
-        );
-        assert!(text.contains("Gyógyfű"), "item name: {text}");
-        assert!(
-            text.contains("▶ Ron — HP 20/63"),
-            "cursor + member row: {text}"
-        );
     }
 
     #[test]

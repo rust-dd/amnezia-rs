@@ -37,6 +37,7 @@ mod view;
 pub(crate) use items::smoke as item_smoke;
 pub(crate) use view::end_game::smoke as end_smoke;
 pub(crate) use view::smoke as layout_smoke;
+pub(crate) use view::target::smoke as target_smoke;
 pub(crate) use view::text_smoke as font_smoke;
 
 #[cfg(test)]
@@ -139,6 +140,7 @@ impl Plugin for MenuPlugin {
             .init_resource::<items::List>()
             .init_resource::<view::clocks::Clock>()
             .init_resource::<view::end_game::Clock>()
+            .init_resource::<view::target::Clock>()
             .add_systems(Startup, view::spawn_ui)
             .add_systems(
                 Update,
@@ -146,6 +148,7 @@ impl Plugin for MenuPlugin {
                     (items::update, input::menu_input).chain().in_set(MenuInput),
                     view::update_ui.after(MenuInput),
                     view::item_list::update.after(MenuInput),
+                    view::target::update.after(MenuInput),
                     view::clocks::update.after(MenuInput),
                     view::end_game::update.after(MenuInput),
                 ),

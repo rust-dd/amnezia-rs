@@ -57,6 +57,30 @@ fn item_list_does_not_use_the_legacy_full_screen_text_panel() {
 }
 
 #[test]
+fn target_screens_do_not_use_the_legacy_full_screen_text_panel() {
+    for screen in [
+        MenuScreen::ItemTarget {
+            item_id: 5,
+            cursor: 0,
+        },
+        MenuScreen::SkillTarget {
+            member: 0,
+            skill_id: 1,
+            cursor: 0,
+        },
+    ] {
+        let mut app = viewing(screen);
+        let world = app.world_mut();
+        let (_, visibility) = world
+            .query::<(&MenuWindow, &Visibility)>()
+            .iter(world)
+            .find(|(window, _)| window.0 == WindowId::Content)
+            .unwrap();
+        assert_eq!(*visibility, Visibility::Hidden, "{screen:?}");
+    }
+}
+
+#[test]
 fn inactive_command_cursor_remains_visible_during_member_selection() {
     let mut app = viewing(MenuScreen::MemberSelect {
         action: crate::menu::MemberAction::Skill,

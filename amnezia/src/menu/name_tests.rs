@@ -63,8 +63,25 @@ fn renamed_hero_appears_in_every_menu_and_target_view() {
                 &equipment,
                 &terms,
             );
-            assert!(!view.text.contains("Ron"), "{screen:?}: {}", view.text);
-            assert!(view.text.contains(renamed), "{screen:?}: {}", view.text);
+            let text = if matches!(
+                screen,
+                MenuScreen::ItemTarget { .. } | MenuScreen::SkillTarget { .. }
+            ) {
+                view::target::party_text(
+                    &rows,
+                    &terms,
+                    &crate::font::bitmap::BitmapFont::from_id(0),
+                )
+                .runs
+                .into_iter()
+                .map(|run| run.text)
+                .collect::<Vec<_>>()
+                .join("\n")
+            } else {
+                view.text
+            };
+            assert!(!text.contains("Ron"), "{screen:?}: {text}");
+            assert!(text.contains(renamed), "{screen:?}: {text}");
         }
         assert_eq!(data.actor(1).unwrap().name, "Ron");
     }

@@ -117,50 +117,6 @@ pub(super) fn compose_list(
     (lines.join("\n"), cursor_line)
 }
 
-/// Compose the ally-target picker for a field skill: the skill being cast plus the
-/// party roster with the selection cursor and each member's current/maximum HP.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn compose_target(
-    hero_name: &crate::text::HeroName,
-    member: usize,
-    skill_id: u32,
-    cursor: usize,
-    data: &GameData,
-    party: &Party,
-    progression: &Progression,
-    vitals: &Vitals,
-) -> String {
-    let name = data
-        .skills
-        .iter()
-        .find(|s| s.id == skill_id)
-        .map(|s| i18n::tr(&s.name))
-        .unwrap_or_default();
-    let caster = party
-        .snapshot()
-        .get(member)
-        .and_then(|&id| data.actor(id))
-        .map(|def| i18n::tr(hero_name.actor(def)))
-        .unwrap_or_default();
-    let mut out = format!("{caster}: {name}          [Esc] vissza\n\n");
-    for (row, &id) in party.snapshot().iter().enumerate() {
-        let marker = if row == cursor { "▶ " } else { "  " };
-        match data.actor(id) {
-            Some(def) => {
-                let level = progression.level(def);
-                let (max_hp, max_sp) = derive::max_hp_sp(def, level);
-                let (hp, sp) = vitals.get_stored(id).unwrap_or((max_hp, max_sp));
-                out.push_str(&format!(
-                    "{marker}{} — HP {hp}/{max_hp}   SP {sp}/{max_sp}\n",
-                    i18n::tr(hero_name.actor(def))
-                ));
-            }
-            None => out.push_str(&format!("{marker}#{id}\n")),
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -222,7 +178,6 @@ mod tests {
     #[test]
     fn field_usable_accepts_ally_hp_heals_and_rejects_battle_skills() {
         assert!(field_usable(&testkit::heal_skill(2, "Gyógyítás", 8, 40)));
-        // A plain attack skill (scope 0) is battle-only.
         assert!(!field_usable(&testkit::skill(3, "Csapás", 10)));
     }
 
@@ -234,7 +189,6 @@ mod tests {
             testkit::heal_skill(2, "Gyógyítás", 8, 40),
             testkit::skill(3, "Tűzgolyó", 12),
         ];
-        // The hero (level 2) has learned both skills by level 1.
         d.actors[0].learnings = vec![
             Learning {
                 level: 1,
@@ -259,7 +213,6 @@ mod tests {
             text.contains("Tűzgolyó  SP 12  (harc)"),
             "attack tagged battle-only: {text}"
         );
-        // Header line 0, blank line 1, first skill on line 2.
         assert_eq!(cursor_line, Some(2), "cursor over the first skill: {text}");
     }
 
@@ -271,7 +224,6 @@ mod tests {
             testkit::heal_skill(2, "Gyógyítás", 8, 40),
             testkit::skill(3, "Tűzgolyó", 12),
         ];
-        // Only the heal (skill 2) is learned by level 2; the fireball needs level 5.
         d.actors[0].learnings = vec![
             Learning {
                 level: 1,
@@ -301,7 +253,6 @@ mod tests {
         d.skills = vec![testkit::heal_skill(2, "Gyógyítás", 8, 40)];
         let mut vitals = Vitals::default();
         vitals.set(1, 20, 30);
-        // One-member party: the caster is also the sole target.
         let ok = apply_field_skill(
             0,
             0,
@@ -314,7 +265,6 @@ mod tests {
             &mut EventRng::seeded(1),
         );
         assert!(ok, "an affordable field heal applies");
-        // HP 20 + 40 power = 60 (below the 63 max); SP 30 - 8 cost = 22.
         assert_eq!(vitals.get_stored(1), Some((60, 22)));
     }
 
@@ -329,7 +279,7 @@ mod tests {
         let prog = Progression::default();
 
         let mut broke = Vitals::default();
-        broke.set(1, 20, 3); // only 3 SP, heal costs 8
+        broke.set(1, 20, 3);
         assert!(!apply_field_skill(
             0,
             0,

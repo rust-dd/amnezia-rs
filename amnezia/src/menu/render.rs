@@ -8,7 +8,7 @@ use crate::state::{Inventory, Party};
 use crate::terms::Terms;
 use crate::vitals::Vitals;
 
-use super::{MenuScreen, derive, equip, skills, status, use_item};
+use super::{MenuScreen, derive, equip, skills, status};
 
 /// One party member's status-window figures: the FaceSet portrait, identity, and
 /// the numbers the status window prints beside the face. HP/SP are kept as raw
@@ -88,15 +88,13 @@ pub(super) fn members(
         .collect()
 }
 
-/// A content screen's text plus — for the scrolling item and skill lists — the
-/// composed-text line its windowskin cursor highlights. `None` leaves the content
-/// cursor hidden (the read-only and confirmation screens).
+/// Legacy subscreen text and its optional highlighted line.
 pub(super) struct ContentView {
     pub text: String,
     pub cursor_line: Option<usize>,
 }
 
-/// Compose legacy subscreen text; the main and End Game windows render separately.
+/// Compose the remaining skill-list, equipment and compatibility status text.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn content(
     hero_name: &crate::text::HeroName,
@@ -113,20 +111,10 @@ pub(super) fn content(
         MenuScreen::Command
         | MenuScreen::MemberSelect { .. }
         | MenuScreen::EndGame { .. }
-        | MenuScreen::ItemList { .. } => ContentView {
+        | MenuScreen::ItemList { .. }
+        | MenuScreen::ItemTarget { .. }
+        | MenuScreen::SkillTarget { .. } => ContentView {
             text: String::new(),
-            cursor_line: None,
-        },
-        MenuScreen::ItemTarget { item_id, cursor } => ContentView {
-            text: use_item::compose_target(
-                hero_name,
-                item_id,
-                cursor,
-                data,
-                party,
-                progression,
-                vitals,
-            ),
             cursor_line: None,
         },
         MenuScreen::SkillList { member, cursor } => {
@@ -141,23 +129,6 @@ pub(super) fn content(
             );
             ContentView { text, cursor_line }
         }
-        MenuScreen::SkillTarget {
-            member,
-            skill_id,
-            cursor,
-        } => ContentView {
-            text: skills::compose_target(
-                hero_name,
-                member,
-                skill_id,
-                cursor,
-                data,
-                party,
-                progression,
-                vitals,
-            ),
-            cursor_line: None,
-        },
         MenuScreen::Equip {
             member,
             slot,
@@ -293,6 +264,35 @@ mod tests {
         );
         assert!(view.text.is_empty());
         assert_eq!(view.cursor_line, None);
+    }
+
+    #[test]
+    fn target_screens_do_not_compose_non_original_headers_or_text_arrows() {
+        for screen in [
+            MenuScreen::ItemTarget {
+                item_id: 5,
+                cursor: 0,
+            },
+            MenuScreen::SkillTarget {
+                member: 0,
+                skill_id: 1,
+                cursor: 0,
+            },
+        ] {
+            let view = content(
+                &crate::text::HeroName("Ron".into()),
+                screen,
+                &testkit::data(),
+                &Party::default(),
+                &Progression::default(),
+                &Inventory::default(),
+                &Vitals::default(),
+                &Equipment::default(),
+                &Terms::default(),
+            );
+            assert!(view.text.is_empty(), "{screen:?}: {}", view.text);
+            assert_eq!(view.cursor_line, None);
+        }
     }
 
     #[test]

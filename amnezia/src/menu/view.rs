@@ -1,5 +1,5 @@
 //! Field-menu windows use native coordinates scaled threefold for Bevy UI.
-//! Target, skill and equipment subscreens still share a legacy content panel.
+//! Skill-list and equipment subscreens still share a legacy content panel.
 
 use crate::assets::resolve_png;
 use crate::equipment::Equipment;
@@ -21,6 +21,7 @@ pub(super) mod end_game;
 pub(super) mod item_list;
 mod main_text;
 pub(crate) mod smoke;
+pub(super) mod target;
 #[cfg(test)]
 mod tests;
 pub(crate) mod text_smoke;
@@ -59,8 +60,7 @@ enum WindowId {
 #[derive(Component)]
 pub(super) struct MenuWindow(WindowId);
 
-/// The three windowskin selection cursors: the command list, the status
-/// member-select, and the scrolling content lists (item/skill).
+/// Cursors for the main windows and the legacy content panel.
 #[derive(Clone, Copy)]
 enum CursorId {
     Command,
@@ -132,6 +132,7 @@ pub(super) fn spawn_ui(
             spawn_status_window(panel, &system);
             spawn_content_window(panel, &system, &font);
             item_list::spawn(panel, &system);
+            target::spawn(panel, &system);
             end_game::spawn(panel, &system);
         });
 }
@@ -227,8 +228,7 @@ fn spawn_status_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>)
         });
 }
 
-/// The near-fullscreen content window every sub-screen's text flows into, with a
-/// windowskin cursor for the scrolling item/skill lists.
+/// The remaining text-based subscreens share this content panel and cursor.
 fn spawn_content_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>, font: &GameFont) {
     panel
         .spawn((
@@ -366,7 +366,10 @@ pub(super) fn update_ui(
                 !main
                     && !matches!(
                         state.screen,
-                        MenuScreen::EndGame { .. } | MenuScreen::ItemList { .. }
+                        MenuScreen::EndGame { .. }
+                            | MenuScreen::ItemList { .. }
+                            | MenuScreen::ItemTarget { .. }
+                            | MenuScreen::SkillTarget { .. }
                     )
             }
         };
