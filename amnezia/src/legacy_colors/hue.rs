@@ -45,7 +45,7 @@ fn apply(
                 continue;
             };
             assert_eq!(data.len(), (source.width() * source.height() * 4) as usize);
-            for pixel in data.chunks_exact_mut(4).filter(|p| p[3] != 0) {
+            for pixel in data.as_chunks_mut::<4>().0.iter_mut().filter(|p| p[3] != 0) {
                 let rgb = rotate([pixel[0], pixel[1], pixel[2]], shift.degrees);
                 pixel[..3].copy_from_slice(&rgb);
             }

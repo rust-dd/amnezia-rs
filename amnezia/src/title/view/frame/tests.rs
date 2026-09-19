@@ -12,7 +12,15 @@ fn skin() -> Image {
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::default(),
     );
-    for (i, pixel) in image.data.as_mut().unwrap().chunks_exact_mut(4).enumerate() {
+    for (i, pixel) in image
+        .data
+        .as_mut()
+        .unwrap()
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .enumerate()
+    {
         pixel.copy_from_slice(&[(i % 160) as u8, (i / 160) as u8, 70, 255]);
     }
     image
@@ -26,7 +34,9 @@ fn the_closed_window_is_transparent_and_the_first_frame_clips_both_corner_halves
         closed
             .data
             .unwrap()
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .all(|pixel| pixel[3] == 0)
     );
     let first = render(&skin, 64, 1);

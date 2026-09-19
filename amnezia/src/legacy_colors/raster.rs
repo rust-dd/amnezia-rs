@@ -39,7 +39,12 @@ pub(super) fn render(
     let Some(data) = image.data.as_mut() else {
         return source.clone();
     };
-    for pixel in data.chunks_exact_mut(4).filter(|pixel| pixel[3] != 0) {
+    for pixel in data
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .filter(|pixel| pixel[3] != 0)
+    {
         if !neutral {
             let rgb = tone::apply([pixel[0], pixel[1], pixel[2]], tone);
             pixel[..3].copy_from_slice(&rgb);

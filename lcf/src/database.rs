@@ -115,8 +115,10 @@ pub fn parse_chipsets(bytes: &[u8]) -> Result<Vec<Chipset>, LcfError> {
                         return Err(LcfError::UnexpectedEof);
                     }
                     terrain_data = sub_data
-                        .chunks_exact(2)
-                        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|pair| u16::from_le_bytes(*pair))
                         .collect();
                 }
                 CHIPSET_PASSAGES_DOWN => passages_down = sub_data.to_vec(),

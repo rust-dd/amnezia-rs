@@ -106,5 +106,13 @@ fn the_viewport_repeats_every_one_hundred_sixty_rows_with_pan_and_shake_offsets(
         let start = (y * 320 + 17) * 4;
         assert_eq!(&pixels[start..start + 4], &[128, 192, 255, 84]);
     }
-    assert_eq!(pixels.chunks_exact(4).filter(|p| p[3] != 0).count(), 2);
+    assert_eq!(
+        pixels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|p| p[3] != 0)
+            .count(),
+        2
+    );
 }

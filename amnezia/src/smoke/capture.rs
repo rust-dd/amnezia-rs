@@ -170,7 +170,9 @@ fn has_visible_content(pixels: &[u8]) -> bool {
         return false;
     };
     pixels
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .filter(|pixel| &pixel[..3] != background && pixel[..3].iter().any(|&v| v > 16))
         .count()
         > pixels.len() / 400

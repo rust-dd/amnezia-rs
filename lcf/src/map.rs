@@ -43,8 +43,10 @@ fn decode_layer(
         });
     }
     Ok(data
-        .chunks_exact(2)
-        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|pair| u16::from_le_bytes(*pair))
         .collect())
 }
 
@@ -361,9 +363,6 @@ mod tests {
 
     #[test]
     fn parses_page_direction_and_defaults_pattern() {
-        // Page 1 carries an explicit direction chunk (0x17 = 3, left) but no
-        // pattern chunk; page 2 carries neither. The explicit direction survives,
-        // an omitted pattern defaults to 1, and an omitted direction to 2 (down).
         let mut page_a = varint(1);
         page_a.extend(subchunk(0x17, &varint(3)));
         page_a.push(0);
@@ -395,9 +394,6 @@ mod tests {
 
     #[test]
     fn parses_move_fields_and_applies_defaults() {
-        // Page 1 carries explicit move chunks (0x1F type 2, 0x20 freq 6, 0x25
-        // speed 5); page 2 carries none, so move_type defaults to 1 (random) and
-        // frequency/speed to 3 — the RM2000 defaults an omitted chunk stands for.
         let mut page_a = varint(1);
         page_a.extend(subchunk(0x1F, &varint(2)));
         page_a.extend(subchunk(0x20, &varint(6)));
@@ -445,8 +441,6 @@ mod tests {
 
     #[test]
     fn parses_page_move_route() {
-        // A move_type-6 page carrying a route chunk (0x29): commands move-down (2)
-        // and change_graphic "Torch" frame 1, with the repeat flag set.
         let cmds = {
             let mut c = varint(2);
             c.extend(varint(34));
