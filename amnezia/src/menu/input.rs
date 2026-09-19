@@ -4,7 +4,6 @@
 //! the world (inventory, vitals, save request, title).
 
 use super::save_files::SaveFiles;
-use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::battle::BattleActive;
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
@@ -20,7 +19,6 @@ use crate::state::{Inventory, Party};
 use crate::teleport::Fade;
 use crate::title::TitleActive;
 use crate::vitals::Vitals;
-use amnezia_data::SoundDef;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
@@ -28,6 +26,9 @@ use super::nav::{
     confirm_pressed, end_game_transition, escape_transition, item_target, skill_target, step,
 };
 use super::{MenuAccess, MenuOpen, MenuScreen, MenuState, command, equip, items, skills, use_item};
+
+mod sounds;
+use sounds::MenuSfx;
 
 /// The transient overlays and flows that must not be interrupted by *opening* the
 /// menu: a message box, a running event, a choice or number prompt, a teleport
@@ -76,43 +77,6 @@ pub(super) struct MenuGates<'w> {
     save_access: Res<'w, SaveAccess>,
 }
 
-/// The menu's navigation sound-effect channel: the audio writer and the loaded
-/// [`SystemSounds`]. Bundled into one `SystemParam` so [`menu_input`] stays within
-/// Bevy's 16-parameter cap. Each helper plays a system SE (a no-op until the
-/// sounds load), mirroring the choice/number boxes' cursor/decision/cancel cues.
-#[derive(SystemParam)]
-pub(super) struct MenuSfx<'w> {
-    audio: MessageWriter<'w, AudioRequest>,
-    sounds: Option<Res<'w, SystemSounds>>,
-}
-
-impl MenuSfx<'_> {
-    fn play(&mut self, pick: impl FnOnce(&SystemSounds) -> &SoundDef) {
-        if let Some(sounds) = &self.sounds {
-            play_system_se(&mut self.audio, pick(sounds));
-        }
-    }
-
-    /// The cursor-move cue for list navigation.
-    fn cursor(&mut self) {
-        self.play(|s| &s.cursor);
-    }
-
-    /// The confirm cue, played when a selection is entered.
-    fn decision(&mut self) {
-        self.play(|s| &s.decision);
-    }
-
-    /// The back/close cue, played when Escape backs out of or shuts the menu.
-    fn cancel(&mut self) {
-        self.play(|s| &s.cancel);
-    }
-
-    fn buzzer(&mut self) {
-        self.play(|s| &s.buzzer);
-    }
-}
-
 /// Toggle the menu on Escape (backing out of a sub-screen first) and drive the
 /// active screen: move the cursor and confirm into the next screen, apply a field
 /// item or skill, request a save, or return to the title on End Game.
@@ -140,7 +104,9 @@ pub(super) fn menu_input(
     }
     if matches!(
         state.screen,
-        MenuScreen::ItemList { .. } | MenuScreen::ItemTarget { .. }
+        MenuScreen::ItemList { .. }
+            | MenuScreen::ItemTarget { .. }
+            | MenuScreen::SkillTarget { .. }
     ) && (blockers.fade.busy()
         || blockers
             .transition
@@ -156,7 +122,11 @@ pub(super) fn menu_input(
         return;
     }
     if keys.just_pressed(KeyCode::Escape)
-        && !(open.0 && matches!(state.screen, MenuScreen::ItemTarget { .. }))
+        && !(open.0
+            && matches!(
+                state.screen,
+                MenuScreen::ItemTarget { .. } | MenuScreen::SkillTarget { .. }
+            ))
     {
         let was_open = open.0;
         let (next_open, next_screen) = if matches!(state.screen, MenuScreen::ItemTarget { .. }) {
@@ -198,6 +168,7 @@ pub(super) fn menu_input(
                 | MenuScreen::MemberSelect { .. }
                 | MenuScreen::ItemList { .. }
                 | MenuScreen::ItemTarget { .. }
+                | MenuScreen::SkillTarget { .. }
         )
     {
         sfx.decision();
@@ -285,8 +256,8 @@ pub(super) fn menu_input(
                 skill_id,
                 cursor,
             };
-            if confirm
-                && skills::apply_field_skill(
+            if confirm {
+                if skills::apply_field_skill(
                     member,
                     cursor,
                     skill_id,
@@ -296,9 +267,19 @@ pub(super) fn menu_input(
                     &mut vitals,
                     &equipment,
                     &mut skill_rng,
-                )
-            {
-                state.screen = MenuScreen::SkillList { member, cursor: 0 };
+                ) {
+                    sfx.skill(skill_id, &data);
+                } else {
+                    sfx.buzzer();
+                }
+            }
+            if keys.just_pressed(KeyCode::Escape) {
+                sfx.cancel();
+                let cursor = skills::known_skills(member, &data, &party, &progression)
+                    .iter()
+                    .position(|skill| skill.id == skill_id)
+                    .unwrap_or(0);
+                state.screen = MenuScreen::SkillList { member, cursor };
             }
         }
         MenuScreen::Equip {

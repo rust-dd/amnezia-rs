@@ -5,6 +5,10 @@ use bevy::prelude::*;
 
 pub(super) fn text(world: &World, label: &str) -> PixelText {
     let single = matches!(label, "target-item" | "target-used" | "target-empty");
+    let casting = matches!(
+        label,
+        "target-cast-ready" | "target-cast-first" | "target-cast-second" | "target-cast-full"
+    );
     let roster = if single { vec![1] } else { vec![1, 2, 3, 4] };
     assert_eq!(world.resource::<Party>().snapshot(), roster);
     let data = world.resource::<GameData>();
@@ -24,11 +28,19 @@ pub(super) fn text(world: &World, label: &str) -> PixelText {
         let (hp, sp) = match id {
             1 => (
                 match label {
-                    "target-used" => 57,
-                    "target-empty" => 63,
+                    "target-used" | "target-cast-first" => 57,
+                    "target-empty" | "target-cast-second" | "target-cast-full" => 63,
                     _ => 7,
                 },
-                5,
+                if casting { 30 } else { 5 },
+            ),
+            2 if casting => (
+                30,
+                match label {
+                    "target-cast-ready" => 75,
+                    "target-cast-first" => 60,
+                    _ => 45,
+                },
             ),
             2 => (0, 0),
             3 => (1, 0),
@@ -36,7 +48,7 @@ pub(super) fn text(world: &World, label: &str) -> PixelText {
         };
         assert_eq!(vitals.get_stored(id).unwrap_or((max_hp, max_sp)), (hp, sp));
         let states = match id {
-            2 => vec![1],
+            2 if !casting => vec![1],
             3 => vec![2],
             _ => Vec::new(),
         };

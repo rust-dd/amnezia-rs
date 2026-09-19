@@ -1,11 +1,14 @@
 use super::*;
+use crate::audio::{AudioRequest, SystemSounds};
 use crate::menu::testkit;
 use crate::save::SaveRequest;
+use amnezia_data::SoundDef;
 
 mod guards;
 mod item_list;
 mod item_target;
 mod message_frames;
+mod skill_target;
 
 /// A headless app with just the menu input system and the resources it reads,
 /// opened on `screen` with `cursor` as the command-list cursor.
@@ -111,8 +114,6 @@ fn menu_will_not_open_while_a_dialogue_is_active() {
 
 #[test]
 fn open_menu_still_closes_while_a_blocker_would_forbid_opening() {
-    // The guard gates opening only: an already-open menu closes on Escape even
-    // if a transient flow (here a running event) is flagged active.
     let mut app = app_on(0, MenuScreen::Command);
     app.world_mut().resource_mut::<Dialogue>().active = true;
     confirm(&mut app, KeyCode::Escape);

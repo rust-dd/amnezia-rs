@@ -24,6 +24,9 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         "target-party" => (9, 0, 3, 60, 8, 222),
         "target-self" => (49, 2, 0, 10, 124, 48),
         "target-skill" | "target-long-name" => (7, 0, 2, 8, 124, 48),
+        "target-cast-ready" | "target-cast-first" | "target-cast-second" | "target-cast-full" => {
+            (7, 1, 0, 15, 8, 48)
+        }
         _ => return None,
     };
     assert!(world.resource::<MenuOpen>().0);

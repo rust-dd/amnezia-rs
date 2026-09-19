@@ -17,6 +17,7 @@ pub(crate) struct Checks {
     pub target_pixels: Arc<AtomicUsize>,
     returned: bool,
     consumed: bool,
+    skill_returned: bool,
     audio: MessageCursor<AudioRequest>,
     sounds: u8,
 }
@@ -24,7 +25,8 @@ pub(crate) struct Checks {
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
         310 | 570 | 640 | 950 | 970 | 1160 | 1170 | 1180 | 1190 => Some(KeyCode::Escape),
-        320 | 380 | 530 | 550 | 600 | 620 | 625 => Some(KeyCode::Enter),
+        320 | 380 | 530 | 550 | 600 | 620 | 625 | 1131 | 1135 | 1145 => Some(KeyCode::Enter),
+        1140 => Some(KeyCode::Space),
         370 => Some(KeyCode::ArrowRight),
         390 | 670 => Some(KeyCode::ArrowLeft),
         400 | 410 | 420 | 430 | 440 | 450 | 460 | 470 | 480 | 490 | 500 | 510 => {
@@ -60,11 +62,21 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
                 .cloned()
                 .collect::<Vec<_>>();
             let sounds = world.resource::<SystemSounds>();
+            let song = amnezia_data::SoundDef {
+                name: "Song2".into(),
+                volume: 100,
+                tempo: 110,
+                ..default()
+            };
             let expected = match frame {
                 381 => Some((1, &sounds.buzzer)),
                 551 => Some((2, &sounds.item)),
                 621 => Some((4, &sounds.item)),
                 626 => Some((8, &sounds.buzzer)),
+                1132 => Some((16, &sounds.decision)),
+                1136 => Some((32, &song)),
+                1141 => Some((64, &song)),
+                1146 => Some((128, &sounds.buzzer)),
                 _ => None,
             };
             if let Some((flag, sound)) = expected {
@@ -118,6 +130,24 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 900 {
         world.insert_resource(Inventory::default());
     }
+    if frame == 1165 {
+        assert_eq!(
+            world.resource::<MenuState>().screen,
+            MenuScreen::SkillList {
+                member: 1,
+                cursor: 0
+            }
+        );
+        assert_eq!(
+            world.resource::<crate::vitals::Vitals>().get_stored(1),
+            Some((63, 30))
+        );
+        assert_eq!(
+            world.resource::<crate::vitals::Vitals>().get_stored(2),
+            Some((30, 45))
+        );
+        world.resource_mut::<Checks>().skill_returned = true;
+    }
     if let Some(label) = crate::menu::view::target::smoke::drive(world, frame) {
         return Some(label);
     }
@@ -139,13 +169,13 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
     assert_eq!(checks.pixels.load(Ordering::Relaxed), 11);
-    assert_eq!(checks.target_pixels.load(Ordering::Relaxed), 8);
-    assert!(checks.returned && checks.consumed);
-    assert_eq!(checks.sounds, 15);
+    assert_eq!(checks.target_pixels.load(Ordering::Relaxed), 12);
+    assert!(checks.returned && checks.consumed && checks.skill_returned);
+    assert_eq!(checks.sounds, 255);
     assert!(!world.resource::<MenuOpen>().0);
     assert_eq!(world.resource::<List>().navigation.index, 0);
     assert_eq!(world.resource::<Inventory>().count(105), 0);
     info!(
-        "item menu: original grid, descriptions, scrolling, disabled choices, target return and item consumption verified"
+        "item menu: grid, scrolling, original item/skill sounds, target return, HP/SP and item consumption verified"
     );
 }

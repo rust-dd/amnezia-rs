@@ -59,6 +59,27 @@ pub(in crate::menu) fn drive(world: &mut World, frame: u32) -> Option<&'static s
         world.resource_mut::<crate::text::HeroName>().0 =
             "Árvíztűrő tükörfúrógép rendkívül hosszú név".into();
     }
+    if frame == 1130 {
+        world.resource_mut::<crate::text::HeroName>().0 = "Áron".into();
+        let data = world.resource::<crate::gamedata::GameData>();
+        assert_eq!(
+            crate::menu::skills::known_skills(
+                1,
+                data,
+                world.resource::<crate::state::Party>(),
+                world.resource::<crate::progression::Progression>()
+            )[0]
+            .id,
+            7
+        );
+        world.resource_mut::<MenuState>().screen = MenuScreen::SkillList {
+            member: 1,
+            cursor: 0,
+        };
+        let mut vitals = world.resource_mut::<crate::vitals::Vitals>();
+        vitals.set(1, 7, 30);
+        vitals.set(2, 30, 75);
+    }
     match frame {
         540 => Some("target-item"),
         560 => Some("target-used"),
@@ -68,6 +89,10 @@ pub(in crate::menu) fn drive(world: &mut World, frame: u32) -> Option<&'static s
         1064 => Some("target-self"),
         1095 => Some("target-skill"),
         1125 => Some("target-long-name"),
+        1133 => Some("target-cast-ready"),
+        1138 => Some("target-cast-first"),
+        1143 => Some("target-cast-second"),
+        1154 => Some("target-cast-full"),
         _ => None,
     }
 }
