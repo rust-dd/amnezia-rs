@@ -14,6 +14,7 @@ fn with_sounds(cursor: usize, screen: MenuScreen) -> App {
         decision: sound("decision"),
         cancel: sound("cancel"),
         buzzer: sound("buzzer"),
+        item: sound("item"),
     });
     app
 }

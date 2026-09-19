@@ -1,6 +1,8 @@
 use super::List;
+use crate::audio::{AudioRequest, SystemSounds};
 use crate::menu::{MenuOpen, MenuScreen, MenuState};
 use crate::state::{Inventory, Party};
+use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use std::sync::{
     Arc,
@@ -14,12 +16,14 @@ pub(crate) struct Checks {
     pub pixels: Arc<AtomicUsize>,
     returned: bool,
     consumed: bool,
+    audio: MessageCursor<AudioRequest>,
+    sounds: u8,
 }
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        310 | 570 | 950 | 970 => Some(KeyCode::Escape),
-        320 | 380 | 530 | 550 | 600 | 620 => Some(KeyCode::Enter),
+        310 | 570 | 640 | 950 | 970 => Some(KeyCode::Escape),
+        320 | 380 | 530 | 550 | 600 | 620 | 625 => Some(KeyCode::Enter),
         370 => Some(KeyCode::ArrowRight),
         390 | 670 => Some(KeyCode::ArrowLeft),
         400 | 410 | 420 | 430 | 440 | 450 | 460 | 470 | 480 | 490 | 500 | 510 => {
@@ -47,6 +51,31 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         inventory.add_item(105, 2);
         inventory.add_gold(1234);
     }
+    if frame >= 300 {
+        world.resource_scope(|world, mut checks: Mut<Checks>| {
+            let requests = checks
+                .audio
+                .read(world.resource::<Messages<AudioRequest>>())
+                .cloned()
+                .collect::<Vec<_>>();
+            let sounds = world.resource::<SystemSounds>();
+            let expected = match frame {
+                381 => Some((1, &sounds.buzzer)),
+                551 => Some((2, &sounds.item)),
+                621 => Some((4, &sounds.item)),
+                626 => Some((8, &sounds.buzzer)),
+                _ => None,
+            };
+            if let Some((flag, sound)) = expected {
+                assert_eq!(
+                    requests,
+                    [AudioRequest::se(&sound.name, sound.volume, sound.tempo).unwrap()],
+                    "item sound at {frame}"
+                );
+                checks.sounds |= flag;
+            }
+        });
+    }
     if frame == 580 {
         assert_eq!(
             world.resource::<MenuState>().screen,
@@ -71,6 +100,20 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         );
         world.resource_mut::<Checks>().consumed = true;
     }
+    if frame == 630 {
+        assert_eq!(
+            world.resource::<MenuState>().screen,
+            MenuScreen::ItemTarget {
+                item_id: 105,
+                cursor: 0
+            }
+        );
+        assert_eq!(world.resource::<Inventory>().count(105), 0);
+        assert_eq!(
+            world.resource::<crate::vitals::Vitals>().get_stored(1),
+            Some((63, 5))
+        );
+    }
     if frame == 900 {
         world.insert_resource(Inventory::default());
     }
@@ -93,6 +136,7 @@ pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
     assert_eq!(checks.pixels.load(Ordering::Relaxed), 11);
     assert!(checks.returned && checks.consumed);
+    assert_eq!(checks.sounds, 15);
     assert!(!world.resource::<MenuOpen>().0);
     assert_eq!(world.resource::<List>().navigation.index, 0);
     assert_eq!(world.resource::<Inventory>().count(105), 0);

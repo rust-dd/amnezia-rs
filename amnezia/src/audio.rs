@@ -116,16 +116,14 @@ impl CurrentBgm {
 #[derive(Resource, Default)]
 pub struct MemorizedBgm(Option<BgmTrack>);
 
-/// The RM2000 system sound effects the UI plays: the cursor move, the confirm
-/// (decision), the cancel, and the buzzer (an invalid/disabled selection). Loaded
-/// once from `system.ron` so the menu, choice, number-input, shop, and title
-/// screens can play them like RPG_RT.
+/// The interface and item-use sound effects loaded from the original system data.
 #[derive(Resource, Default)]
 pub struct SystemSounds {
     pub cursor: SoundDef,
     pub decision: SoundDef,
     pub cancel: SoundDef,
     pub buzzer: SoundDef,
+    pub item: SoundDef,
 }
 
 /// The RM2000 scene BGM the non-map screens play, read from `system.ron`: the
@@ -163,6 +161,7 @@ impl Plugin for AudioPlugin {
                 decision: system.decision_se,
                 cancel: system.cancel_se,
                 buzzer: system.buzzer_se,
+                item: system.item_se,
             })
             .insert_resource(SystemMusic {
                 title: system.title_music,
@@ -385,7 +384,6 @@ mod tests {
         // An autorun page re-issues the same PlayBgm every cycle: unchanged params
         // are ignored, so the track is never restarted.
         assert_eq!(current.action_for("Field", 0.8, 1.0), BgmAction::Ignore);
-        // A changed volume (or tempo) adjusts in place — still no restart.
         assert_eq!(
             current.action_for("Field", 0.5, 1.0),
             BgmAction::UpdateParams
@@ -394,7 +392,6 @@ mod tests {
             current.action_for("Field", 0.8, 1.5),
             BgmAction::UpdateParams
         );
-        // A different track restarts.
         assert_eq!(current.action_for("House", 0.8, 1.0), BgmAction::Restart);
     }
 
@@ -443,7 +440,6 @@ mod tests {
 
     #[test]
     fn memorize_round_trips_the_current_track() {
-        // MemorizeBGM stores the current track; PlayMemorizedBGM replays it.
         let current = CurrentBgm::with_track("Elven", 0.66, 1.0);
         let memorized = MemorizedBgm(current.track());
         assert_eq!(
@@ -468,7 +464,6 @@ mod tests {
 
     #[test]
     fn memorize_of_silence_round_trips_to_nothing() {
-        // Memorizing while silent stores None, so a later restore plays nothing.
         let silent = CurrentBgm::default();
         let memorized = MemorizedBgm(silent.track());
         assert!(memorized.0.is_none());

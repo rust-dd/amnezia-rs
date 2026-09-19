@@ -60,8 +60,7 @@ pub(super) fn heal(hp: i32, sp: i32, max_hp: i32, max_sp: i32, item: &ItemDef) -
 
 /// Apply the field item to the `member`-th party member: heal via [`Vitals`]
 /// (max HP/SP derived at their level, exactly as battle does) and consume one from
-/// the inventory. Returns `true` when the stack is now empty, signalling the
-/// caller to return to the item list.
+/// the inventory. Returns whether any target recovered HP, SP or a condition.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn apply_field_item(
     item_id: u32,
@@ -112,7 +111,7 @@ pub(super) fn apply_field_item(
     if changed {
         inventory.remove_item(item_id, 1);
     }
-    inventory.count(item_id) == 0
+    changed
 }
 
 /// The item-target sub-screen: the item being applied plus the party roster with
@@ -300,7 +299,7 @@ mod tests {
         let mut vitals = Vitals::default();
         vitals.set(1, 20, 5);
 
-        let empty = apply_field_item(
+        let used = apply_field_item(
             ITEM_HERB,
             0,
             &d,
@@ -309,11 +308,11 @@ mod tests {
             &mut inv,
             &mut vitals,
         );
-        assert!(!empty, "one herb left, so still in the target screen");
+        assert!(used);
         assert_eq!(vitals.get_stored(1), Some((46, 5)));
         assert_eq!(inv.count(ITEM_HERB), 1);
 
-        let empty = apply_field_item(
+        let used = apply_field_item(
             ITEM_HERB,
             0,
             &d,
@@ -322,10 +321,7 @@ mod tests {
             &mut inv,
             &mut vitals,
         );
-        assert!(
-            empty,
-            "last herb consumed -> caller returns to the item list"
-        );
+        assert!(used);
         assert_eq!(inv.count(ITEM_HERB), 0);
     }
 

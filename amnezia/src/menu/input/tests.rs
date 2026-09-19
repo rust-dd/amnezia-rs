@@ -4,6 +4,7 @@ use crate::save::SaveRequest;
 
 mod guards;
 mod item_list;
+mod item_target;
 mod message_frames;
 
 /// A headless app with just the menu input system and the resources it reads,

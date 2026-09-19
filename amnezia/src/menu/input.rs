@@ -138,12 +138,14 @@ pub(super) fn menu_input(
     if save_files.active() {
         return;
     }
-    if matches!(state.screen, MenuScreen::ItemList { .. })
-        && (blockers.fade.busy()
-            || blockers
-                .transition
-                .as_ref()
-                .is_some_and(|transition| transition.busy()))
+    if matches!(
+        state.screen,
+        MenuScreen::ItemList { .. } | MenuScreen::ItemTarget { .. }
+    ) && (blockers.fade.busy()
+        || blockers
+            .transition
+            .as_ref()
+            .is_some_and(|transition| transition.busy()))
     {
         return;
     }
@@ -153,7 +155,9 @@ pub(super) fn menu_input(
     {
         return;
     }
-    if keys.just_pressed(KeyCode::Escape) {
+    if keys.just_pressed(KeyCode::Escape)
+        && !(open.0 && matches!(state.screen, MenuScreen::ItemTarget { .. }))
+    {
         let was_open = open.0;
         let (next_open, next_screen) = if matches!(state.screen, MenuScreen::ItemTarget { .. }) {
             (open.0, item_list.return_to_list(&data, &inventory))
@@ -190,7 +194,10 @@ pub(super) fn menu_input(
     if confirm
         && !matches!(
             state.screen,
-            MenuScreen::Command | MenuScreen::MemberSelect { .. } | MenuScreen::ItemList { .. }
+            MenuScreen::Command
+                | MenuScreen::MemberSelect { .. }
+                | MenuScreen::ItemList { .. }
+                | MenuScreen::ItemTarget { .. }
         )
     {
         sfx.decision();
@@ -226,8 +233,8 @@ pub(super) fn menu_input(
         MenuScreen::ItemTarget { item_id, cursor } => {
             let cursor = step(cursor, up, down, members);
             state.screen = MenuScreen::ItemTarget { item_id, cursor };
-            if confirm
-                && use_item::apply_field_item(
+            if confirm {
+                if use_item::apply_field_item(
                     item_id,
                     cursor,
                     &data,
@@ -235,8 +242,14 @@ pub(super) fn menu_input(
                     &progression,
                     &mut inventory,
                     &mut vitals,
-                )
-            {
+                ) {
+                    sfx.play(|sounds| &sounds.item);
+                } else {
+                    sfx.buzzer();
+                }
+            }
+            if keys.just_pressed(KeyCode::Escape) {
+                sfx.cancel();
                 state.screen = item_list.return_to_list(&data, &inventory);
             }
         }
