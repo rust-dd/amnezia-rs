@@ -158,7 +158,14 @@ pub(super) fn menu_input(
     let up = keys.just_pressed(KeyCode::ArrowUp);
     let down = keys.just_pressed(KeyCode::ArrowDown);
     let members = party.snapshot().len().saturating_sub(1);
-    if (up || down) && !matches!(state.screen, MenuScreen::ItemList { .. }) {
+    if (up || down)
+        && !matches!(
+            state.screen,
+            MenuScreen::ItemList { .. }
+                | MenuScreen::ItemTarget { .. }
+                | MenuScreen::SkillTarget { .. }
+        )
+    {
         sfx.cursor();
     }
     if confirm
@@ -202,8 +209,6 @@ pub(super) fn menu_input(
             }
         }
         MenuScreen::ItemTarget { item_id, cursor } => {
-            let cursor = step(cursor, up, down, members);
-            state.screen = MenuScreen::ItemTarget { item_id, cursor };
             if confirm {
                 if use_item::apply_field_item(
                     item_id,
@@ -250,12 +255,6 @@ pub(super) fn menu_input(
             skill_id,
             cursor,
         } => {
-            let cursor = step(cursor, up, down, members);
-            state.screen = MenuScreen::SkillTarget {
-                member,
-                skill_id,
-                cursor,
-            };
             if confirm {
                 if skills::apply_field_skill(
                     member,

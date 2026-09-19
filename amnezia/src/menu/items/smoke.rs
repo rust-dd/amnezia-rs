@@ -33,7 +33,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
             Some(KeyCode::ArrowDown)
         }
         680 | 690 | 700 | 710 | 720 | 730 | 740 | 750 | 760 | 770 | 800 => Some(KeyCode::ArrowUp),
-        _ => None,
+        _ => crate::menu::targets::smoke::input(frame),
     }
 }
 
@@ -151,6 +151,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if let Some(label) = crate::menu::view::target::smoke::drive(world, frame) {
         return Some(label);
     }
+    if let Some(label) = crate::menu::targets::smoke::drive(world, frame) {
+        return Some(label);
+    }
     match frame {
         330 => Some("items-empty"),
         385 => Some("items-disabled"),
@@ -169,12 +172,13 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
     assert_eq!(checks.pixels.load(Ordering::Relaxed), 11);
-    assert_eq!(checks.target_pixels.load(Ordering::Relaxed), 12);
+    assert_eq!(checks.target_pixels.load(Ordering::Relaxed), 18);
     assert!(checks.returned && checks.consumed && checks.skill_returned);
     assert_eq!(checks.sounds, 255);
     assert!(!world.resource::<MenuOpen>().0);
     assert_eq!(world.resource::<List>().navigation.index, 0);
     assert_eq!(world.resource::<Inventory>().count(105), 0);
+    crate::menu::targets::smoke::verify_finished(world);
     info!(
         "item menu: grid, scrolling, original item/skill sounds, target return, HP/SP and item consumption verified"
     );

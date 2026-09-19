@@ -9,6 +9,7 @@ mod item_list;
 mod item_target;
 mod message_frames;
 mod skill_target;
+mod target_navigation;
 
 /// A headless app with just the menu input system and the resources it reads,
 /// opened on `screen` with `cursor` as the command-list cursor.
@@ -30,6 +31,7 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
         .init_resource::<SaveRequest>()
         .init_resource::<SaveFiles>()
         .init_resource::<items::List>()
+        .init_resource::<crate::menu::targets::Navigation>()
         .init_resource::<crate::timing::GameFrames>()
         .init_resource::<Dialogue>()
         .init_resource::<RunningEvent>()
@@ -39,7 +41,10 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
         .init_resource::<GameOverActive>()
         .init_resource::<ButtonInput<KeyCode>>()
         .add_message::<AudioRequest>()
-        .add_systems(Update, (items::update, menu_input).chain());
+        .add_systems(
+            Update,
+            (items::update, crate::menu::targets::update, menu_input).chain(),
+        );
     app
 }
 

@@ -27,6 +27,11 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         "target-cast-ready" | "target-cast-first" | "target-cast-second" | "target-cast-full" => {
             (7, 1, 0, 15, 8, 48)
         }
+        "target-nav-wrap" => (0, 0, 3, 0, 182, 48),
+        "target-nav-page" | "target-nav-held-wrap" => (0, 0, 0, 0, 8, 48),
+        "target-nav-held" => (0, 0, 2, 0, 124, 48),
+        "target-nav-party" => (9, 0, 3, 60, 8, 222),
+        "target-nav-self" => (49, 2, 1, 10, 124, 48),
         _ => return None,
     };
     assert!(world.resource::<MenuOpen>().0);

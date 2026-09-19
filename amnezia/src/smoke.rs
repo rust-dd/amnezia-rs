@@ -91,6 +91,9 @@ fn input(world: &mut World) {
     if scenario == "dialogue-timing" && crate::dialogue::timing_smoke::held_input(world, frame) {
         return;
     }
+    if scenario == "items" && crate::menu::target_navigation_smoke::held_input(world, frame) {
+        return;
+    }
     let requested = if scenario == "save-slots" {
         crate::menu::save_files::smoke::input(frame)
     } else if scenario == "items" {
@@ -434,6 +437,8 @@ fn drive(world: &mut World) {
     let finish = world.resource::<SmokeRun>().finish_at.unwrap_or(
         if matches!(scenario, "escape" | "battle-menus" | "battle-events") {
             2400
+        } else if scenario == "items" {
+            1480
         } else {
             1260
         },

@@ -31,10 +31,12 @@ mod render;
 pub(crate) mod save_files;
 mod skills;
 mod status;
+mod targets;
 mod use_item;
 mod view;
 
 pub(crate) use items::smoke as item_smoke;
+pub(crate) use targets::smoke as target_navigation_smoke;
 pub(crate) use view::end_game::smoke as end_smoke;
 pub(crate) use view::smoke as layout_smoke;
 pub(crate) use view::target::smoke as target_smoke;
@@ -138,6 +140,7 @@ impl Plugin for MenuPlugin {
             .init_resource::<MenuAccess>()
             .init_resource::<MenuState>()
             .init_resource::<items::List>()
+            .init_resource::<targets::Navigation>()
             .init_resource::<view::clocks::Clock>()
             .init_resource::<view::end_game::Clock>()
             .init_resource::<view::target::Clock>()
@@ -145,7 +148,9 @@ impl Plugin for MenuPlugin {
             .add_systems(
                 Update,
                 (
-                    (items::update, input::menu_input).chain().in_set(MenuInput),
+                    (items::update, targets::update, input::menu_input)
+                        .chain()
+                        .in_set(MenuInput),
                     view::update_ui.after(MenuInput),
                     view::item_list::update.after(MenuInput),
                     view::target::update.after(MenuInput),
