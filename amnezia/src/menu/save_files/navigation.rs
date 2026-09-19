@@ -13,6 +13,7 @@ pub(super) struct Navigation {
     pub index: usize,
     pub top: usize,
     pub arrow: u32,
+    pub arrows: [bool; 2],
     pub cursors: [u32; COUNT as usize],
     old_top: usize,
     movement: Option<u32>,
@@ -21,9 +22,12 @@ pub(super) struct Navigation {
 
 impl Navigation {
     pub fn new(index: usize) -> Self {
+        let mut cursors = [0; COUNT as usize];
+        cursors[index] = 1;
         Self {
             index,
             top: index.saturating_sub(2),
+            cursors,
             ..default()
         }
     }
@@ -36,7 +40,11 @@ impl Navigation {
     }
 
     pub fn tick(&mut self, keys: &ButtonInput<KeyCode>, triggered: bool, timed: bool) -> bool {
-        self.arrow = (self.arrow + u32::from(timed)) % 40;
+        if timed {
+            self.arrow = (self.arrow + 1) % 40;
+            self.arrows = [self.top > 0, self.top + 3 < COUNT as usize]
+                .map(|enabled| enabled && self.arrow < 20);
+        }
         let moving = self.movement.is_some();
         if timed && let Some(frame) = &mut self.movement {
             *frame += 1;

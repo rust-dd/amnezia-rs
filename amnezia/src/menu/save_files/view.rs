@@ -151,14 +151,7 @@ pub(super) fn update(
             node.width = Val::Px((font.width(&crate::i18n::tr(&terms.0.file)) + 23) as f32 * 3.0);
             Some(cursor.0 == nav.index)
         } else if let Some(arrow) = arrow {
-            Some(
-                nav.arrow < 20
-                    && if arrow.0 {
-                        nav.top > 0
-                    } else {
-                        nav.top + 3 < crate::save::slots::COUNT as usize
-                    },
-            )
+            Some(nav.arrows[usize::from(!arrow.0)])
         } else {
             face.map(|face| face_data(entries, face).is_some_and(|(name, _)| !name.is_empty()))
         };

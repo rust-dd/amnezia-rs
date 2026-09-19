@@ -132,7 +132,12 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         }
         add_text(&mut pixels, font, skin, (4, y + 8), (312, 48), runs);
     }
-    arrows(&mut pixels, skin, top, nav.arrow < 20);
+    arrows(
+        &mut pixels,
+        skin,
+        top,
+        label != "load-slots-fade" && nav.arrow < 20,
+    );
     if label == "load-slots-fade" {
         assert_eq!(world.resource::<crate::transitions::Transition>().age(), 1);
         for (_, _, color) in &mut pixels {

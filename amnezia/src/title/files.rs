@@ -1,7 +1,7 @@
 use super::{AudioRequest, SystemSounds, TitleActive, TitleState, flow::Stage, play_se};
 use crate::gamedata::GameData;
 use crate::menu::{MenuOpen, save_files::SaveFiles};
-use crate::save::{LoadOutcome, LoadRequest, SaveLocation};
+use crate::save::{LoadOutcome, LoadRequest, SaveLocation, slots::ActiveSlot};
 use crate::transitions::{Kind, TransitionIo};
 use bevy::prelude::*;
 
@@ -10,6 +10,7 @@ pub(super) fn update(
     title: Res<TitleActive>,
     data: Res<GameData>,
     location: Res<SaveLocation>,
+    slot: Res<ActiveSlot>,
     mut state: ResMut<TitleState>,
     mut files: ResMut<SaveFiles>,
     mut open: ResMut<MenuOpen>,
@@ -55,7 +56,7 @@ pub(super) fn update(
             }
         }
         Stage::FileRetry => {
-            files.reject_load(now);
+            files.reject_load(now, *slot);
             if let Some(music) = music {
                 audio.write(AudioRequest::from_music(&music.title));
             }

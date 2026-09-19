@@ -15,6 +15,7 @@ fn flow_app() -> App {
         .init_resource::<TitleActive>()
         .init_resource::<TitleState>()
         .init_resource::<crate::save::SaveLocation>()
+        .init_resource::<crate::save::slots::ActiveSlot>()
         .init_resource::<crate::menu::MenuOpen>()
         .init_resource::<crate::menu::save_files::SaveFiles>()
         .init_resource::<ButtonInput<KeyCode>>()

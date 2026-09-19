@@ -82,6 +82,6 @@ fn clocks_count_logical_frames_without_advancing_on_extra_render_frames() {
                 nav.tick(&ButtonInput::default(), false, elapsed > 0);
             }
         }
-        assert_eq!((nav.arrow, nav.cursors[0]), (20, 18), "{fps} FPS");
+        assert_eq!((nav.arrow, nav.cursors[0]), (20, 19), "{fps} FPS");
     }
 }

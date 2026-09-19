@@ -2,6 +2,7 @@ use crate::gamedata::GameData;
 use crate::save::{
     SaveLocation,
     preview::{self, Entry},
+    slots::ActiveSlot,
 };
 use bevy::prelude::*;
 
@@ -66,11 +67,11 @@ impl SaveFiles {
         self.finished = None;
     }
 
-    pub(crate) fn reject_load(&mut self, frame: u32) {
+    pub(crate) fn reject_load(&mut self, frame: u32, slot: ActiveSlot) {
         self.suspended = false;
         self.last_frame = frame;
         if let Some(entries) = &mut self.entries {
-            entries[self.navigation.index].contents = crate::save::preview::Contents::Corrupt;
+            entries[slot.index()].contents = preview::Contents::Corrupt;
         }
     }
 }

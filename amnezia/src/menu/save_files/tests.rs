@@ -101,5 +101,6 @@ fn selecting_the_last_slot_saves_only_that_slot_after_confirmation() {
     std::fs::remove_dir(directory).unwrap();
 }
 
+mod clocks;
 mod events;
 mod navigation;

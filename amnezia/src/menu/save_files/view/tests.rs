@@ -107,3 +107,60 @@ fn load_uses_its_original_prompt_and_disables_empty_and_corrupt_file_labels() {
         }
     }
 }
+
+#[test]
+fn file_arrows_wait_for_the_first_tick_and_update_before_the_list_moves() {
+    let mut app = app();
+    let mut files = app.world_mut().resource_mut::<SaveFiles>();
+    files.entries = Some(vec![
+        crate::save::preview::Entry {
+            contents: Contents::Empty,
+            modified: None,
+        };
+        15
+    ]);
+    files.navigation = crate::menu::save_files::navigation::Navigation::new(2);
+    app.update();
+    assert_arrows(&mut app, [false, false]);
+    let mut keys = ButtonInput::default();
+    keys.press(KeyCode::ArrowDown);
+    app.world_mut()
+        .resource_mut::<SaveFiles>()
+        .navigation
+        .tick(&keys, true, true);
+    app.update();
+    assert_arrows(&mut app, [false, true]);
+    keys.reset_all();
+    app.world_mut()
+        .resource_mut::<SaveFiles>()
+        .navigation
+        .tick(&keys, false, true);
+    app.update();
+    assert_arrows(&mut app, [true, true]);
+    for _ in 0..18 {
+        app.world_mut()
+            .resource_mut::<SaveFiles>()
+            .navigation
+            .tick(&keys, false, true);
+    }
+    app.update();
+    assert_arrows(&mut app, [false, false]);
+    for _ in 0..20 {
+        app.world_mut()
+            .resource_mut::<SaveFiles>()
+            .navigation
+            .tick(&keys, false, true);
+    }
+    app.update();
+    assert_arrows(&mut app, [true, true]);
+}
+
+fn assert_arrows(app: &mut App, expected: [bool; 2]) {
+    let world = app.world_mut();
+    for (arrow, visibility) in world.query::<(&Arrow, &Visibility)>().iter(world) {
+        assert_eq!(
+            *visibility != Visibility::Hidden,
+            expected[usize::from(!arrow.0)]
+        );
+    }
+}
