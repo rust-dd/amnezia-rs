@@ -11,7 +11,7 @@ pub(crate) mod picture_smoke;
 pub(crate) mod preview;
 pub(crate) mod screen_smoke;
 pub(crate) mod slots;
-mod smoke_slot;
+pub(crate) mod smoke_slot;
 mod snapshot;
 mod storage;
 pub(crate) mod vehicle_smoke;
@@ -272,6 +272,10 @@ fn save_or_load(
             let (items, gold) = inventory.snapshot();
             let [tr, tg, tb, ts] = scene.tone.tone();
             let mut game = SaveGame {
+                saved_at: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .ok()
+                    .map(|elapsed| elapsed.as_secs()),
                 foreground: running.snapshot(),
                 vehicle_motion: scene
                     .vehicles

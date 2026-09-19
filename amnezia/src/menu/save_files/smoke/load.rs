@@ -17,14 +17,14 @@ pub(crate) fn configure(app: &mut App) {
         let bytes = if number == 12 {
             b"broken save".to_vec()
         } else {
-            format!("(format_version:15,map_id:3,x:15,y:12,dir:2,switches:[],variables:[],party:[1,2,3,4],items:[],gold:17,hero_name:\"{name}\",vitals:[(1,({hp},12))],charset:\"Chara1\")").into_bytes()
+            format!("(format_version:15,saved_at:Some({number}),map_id:3,x:15,y:12,dir:2,switches:[],variables:[],party:[1,2,3,4],items:[],gold:17,hero_name:\"{name}\",vitals:[(1,({hp},12))],charset:\"Chara1\")").into_bytes()
         };
         let target = path(app.world(), number);
         std::fs::write(&target, &bytes).unwrap();
         std::fs::File::open(&target)
             .unwrap()
             .set_times(std::fs::FileTimes::new().set_modified(
-                std::time::UNIX_EPOCH + std::time::Duration::from_secs(u64::from(number)),
+                std::time::UNIX_EPOCH + std::time::Duration::from_secs(100 - u64::from(number)),
             ))
             .unwrap();
         files.push((number, bytes));

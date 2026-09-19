@@ -1,6 +1,8 @@
 use super::*;
 use bevy::prelude::*;
 
+mod timestamps;
+
 fn database() -> GameData {
     let mut app = App::new();
     app.add_plugins(crate::gamedata::GameDataPlugin);
@@ -69,16 +71,16 @@ fn previews_distinguish_empty_corrupt_future_and_repairable_legacy_slots() {
 }
 
 #[test]
-fn most_recent_file_selects_the_initial_row_and_ties_keep_the_first() {
+fn the_latest_timestamp_selects_the_initial_row_and_ties_keep_the_first() {
     let mut entries = vec![
         Entry {
             contents: Contents::Empty,
-            modified: None
+            timestamp: None
         };
         15
     ];
     assert_eq!(latest(&entries), 0);
-    let older = SystemTime::UNIX_EPOCH;
+    let older = Duration::ZERO;
     let newer = older + std::time::Duration::from_secs(1);
     for index in [0, 6, 14] {
         entries[index].contents = Contents::Party(PartyPreview {
@@ -88,14 +90,14 @@ fn most_recent_file_selects_the_initial_row_and_ties_keep_the_first() {
             faces: Vec::new(),
         });
     }
-    entries[14].modified = Some(newer);
-    entries[0].modified = Some(older);
+    entries[14].timestamp = Some(newer);
+    entries[0].timestamp = Some(older);
     assert_eq!(latest(&entries), 14);
-    entries[6].modified = Some(newer);
+    entries[6].timestamp = Some(newer);
     assert_eq!(latest(&entries), 6);
     entries[3] = Entry {
         contents: Contents::Corrupt,
-        modified: Some(newer + std::time::Duration::from_secs(1)),
+        timestamp: Some(newer + std::time::Duration::from_secs(1)),
     };
     assert_eq!(latest(&entries), 6);
 }

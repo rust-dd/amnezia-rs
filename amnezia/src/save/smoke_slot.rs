@@ -1,6 +1,12 @@
 use super::{PathBuf, SaveLocation};
 use bevy::prelude::*;
 
+pub(crate) fn timestamped(bytes: &[u8], saved_at: u64) -> Vec<u8> {
+    let mut game = ron::de::from_bytes::<super::SaveGame>(bytes).unwrap();
+    game.saved_at = Some(saved_at);
+    ron::ser::to_string(&game).unwrap().into_bytes()
+}
+
 pub(super) struct Slot {
     directory: PathBuf,
     path: PathBuf,

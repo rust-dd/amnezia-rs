@@ -165,11 +165,12 @@ fn seed_previews(world: &mut World) {
         let contents = if number == 12 {
             b"broken save".to_vec()
         } else {
-            bytes.clone()
+            crate::save::smoke_slot::timestamped(&bytes, u64::from(number))
         };
         let target = path(world, number);
         std::fs::write(&target, &contents).unwrap();
-        let modified = std::time::UNIX_EPOCH + std::time::Duration::from_secs(u64::from(number));
+        let modified =
+            std::time::UNIX_EPOCH + std::time::Duration::from_secs(100 - u64::from(number));
         std::fs::File::open(&target)
             .unwrap()
             .set_times(std::fs::FileTimes::new().set_modified(modified))

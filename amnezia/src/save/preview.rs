@@ -2,7 +2,7 @@ use super::{SAVE_FORMAT_VERSION, identities, numeric, slots, storage};
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use std::path::Path;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct PartyPreview {
@@ -22,7 +22,7 @@ pub(crate) enum Contents {
 #[derive(Clone, Debug)]
 pub(crate) struct Entry {
     pub contents: Contents,
-    pub modified: Option<SystemTime>,
+    pub timestamp: Option<Duration>,
 }
 
 pub(crate) fn catalog(first: &Path, data: &GameData) -> Vec<Entry> {
@@ -35,7 +35,7 @@ pub(crate) fn latest(entries: &[Entry]) -> usize {
     let mut latest = None;
     let mut selected = 0;
     for (index, entry) in entries.iter().enumerate() {
-        if let Some(time) = entry.modified
+        if let Some(time) = entry.timestamp
             && matches!(entry.contents, Contents::Party(_))
             && latest.is_none_or(|previous| time > previous)
         {
@@ -49,7 +49,10 @@ pub(crate) fn latest(entries: &[Entry]) -> usize {
 fn read(path: &Path, data: &GameData) -> Entry {
     let source = storage::source_path(path);
     let metadata = std::fs::metadata(&source).ok();
-    let modified = metadata.as_ref().and_then(|value| value.modified().ok());
+    let timestamp = metadata
+        .as_ref()
+        .and_then(|value| value.modified().ok())
+        .and_then(|time| time.duration_since(SystemTime::UNIX_EPOCH).ok());
     let Some(mut game) = storage::read_save(path) else {
         return Entry {
             contents: if metadata.is_some() {
@@ -57,7 +60,7 @@ fn read(path: &Path, data: &GameData) -> Entry {
             } else {
                 Contents::Empty
             },
-            modified,
+            timestamp,
         };
     };
     if game.format_version > SAVE_FORMAT_VERSION
@@ -66,7 +69,7 @@ fn read(path: &Path, data: &GameData) -> Entry {
     {
         return Entry {
             contents: Contents::Corrupt,
-            modified,
+            timestamp,
         };
     }
     let actor = data.actor(game.party[0]).unwrap();
@@ -99,7 +102,7 @@ fn read(path: &Path, data: &GameData) -> Entry {
             hp,
             faces,
         }),
-        modified,
+        timestamp: game.saved_at.map(Duration::from_secs).or(timestamp),
     }
 }
 

@@ -49,7 +49,7 @@ fn save_rows_keep_empty_slots_enabled_and_render_no_invented_completion_or_playt
     app.world_mut().resource_mut::<SaveFiles>().entries = Some(vec![
         crate::save::preview::Entry {
             contents: Contents::Empty,
-            modified: None,
+            timestamp: None,
         };
         15
     ]);
@@ -75,7 +75,7 @@ fn load_uses_its_original_prompt_and_disables_empty_and_corrupt_file_labels() {
     let mut entries = vec![
         crate::save::preview::Entry {
             contents: Contents::Empty,
-            modified: None,
+            timestamp: None,
         };
         15
     ];
@@ -115,7 +115,7 @@ fn file_arrows_wait_for_the_first_tick_and_update_before_the_list_moves() {
     files.entries = Some(vec![
         crate::save::preview::Entry {
             contents: Contents::Empty,
-            modified: None,
+            timestamp: None,
         };
         15
     ]);

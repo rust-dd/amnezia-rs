@@ -10,10 +10,12 @@ pub(crate) use fixture::save_resources;
 mod message;
 mod music;
 mod slots;
+mod timestamps;
 
 #[test]
 fn save_game_ron_round_trip() {
     let game = SaveGame {
+        saved_at: Some(1234567890),
         foreground: None,
         vehicle_motion: None,
         hero_motion: None,
@@ -175,6 +177,7 @@ fn open_save_menu_saves_while_its_event_is_running() {
 fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
     let path = temp_slot("continue");
     let game = SaveGame {
+        saved_at: None,
         foreground: None,
         vehicle_motion: None,
         hero_motion: None,
@@ -268,6 +271,7 @@ fn continue_load_targets_the_saved_map_even_when_an_autostart_is_pending() {
 fn load_restores_name_charset_and_screen_state() {
     let path = temp_slot("scene");
     let game = SaveGame {
+        saved_at: None,
         foreground: None,
         vehicle_motion: None,
         hero_motion: None,
@@ -449,6 +453,7 @@ fn save_round_trips_to_the_resolved_path_and_is_found_after_restart() {
     let path = temp_slot("roundtrip");
     let _ = std::fs::remove_file(&path);
     let game = SaveGame {
+        saved_at: None,
         foreground: None,
         vehicle_motion: None,
         hero_motion: None,

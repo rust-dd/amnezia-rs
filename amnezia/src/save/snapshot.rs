@@ -5,6 +5,9 @@ use serde::{Deserialize, Serialize};
 pub(super) struct SaveGame {
     #[serde(default)]
     pub(super) format_version: u32,
+    /// Whole UTC seconds since the Unix epoch; absent in legacy port saves.
+    #[serde(default)]
+    pub(super) saved_at: Option<u64>,
     #[serde(default)]
     pub(super) game_frames: crate::timing::GameFrames,
     #[serde(default)]
