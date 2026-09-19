@@ -20,6 +20,8 @@ The original game data lives in proprietary RPG Maker 2000 formats: `.ldb`/`.lmt
 2. `cargo run -p amnezia-convert --bin amnezia-convert --locked -- --input original --output assets` converts it into `assets/`. Add `--data-only` when changing the database/map parser without reconverting graphics or music.
 3. `cargo run -p amnezia --locked` runs the game against the converted `assets/`.
 
+On macOS, the game opens centered on the active built-in display, regardless of the focused or primary monitor. If the built-in display is unavailable (for example, with the laptop lid closed), it uses the primary display. This only sets the initial position; the window can still be moved normally.
+
 ### Checks
 
 ```sh
@@ -109,7 +111,7 @@ The `save-weather` scenario restores weather scrolling during a camera pan, with
 
 The `save-animations` scenario saves the original Robbanás1 map animation, restores its exact playback phase and target flash, and checks that the reload fade holds it still. Two captures compare the resumed effect against 1824 original bitmap pixels. Legacy and explicitly empty slots must clear stale effects; all files belong to the isolated fixture.
 
-The game renders its world, text and menus together at 320×240, then scales the result in whole physical pixels with black letterboxing. Windows smaller than the native canvas are downscaled proportionally. The display scenario checks normal, wide, portrait, odd-sized and small outputs against direct GPU readbacks of the native canvas.
+The game renders its world, text and menus together at 320×240, then scales the result in whole physical pixels with black letterboxing. Windows smaller than the native canvas are downscaled proportionally. The display scenario checks normal, wide, portrait, odd-sized and small outputs against direct GPU readbacks of the native canvas. On macOS, its native run also verifies the visible window's actual monitor against the built-in-display preference.
 
 ### Packaging (macOS)
 

@@ -12,3 +12,7 @@ bevy = { workspace = true }
 encoding_rs = { workspace = true }
 ron = { workspace = true }
 serde = { workspace = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = { workspace = true }
+winit = { workspace = true }

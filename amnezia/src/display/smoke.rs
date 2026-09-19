@@ -19,6 +19,9 @@ pub(crate) struct Snapshot(Arc<Mutex<Pair>>, String);
 struct Checks(Vec<Snapshot>);
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if frame == 60 {
+        super::window::verify_native_window(world);
+    }
     if frame == 260 {
         world
             .resource_mut::<crate::interpreter::RunningEvent>()

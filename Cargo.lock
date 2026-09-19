@@ -168,9 +168,11 @@ version = "0.1.0"
 dependencies = [
  "amnezia-data",
  "bevy",
+ "core-graphics",
  "encoding_rs",
  "ron",
  "serde",
+ "winit",
 ]
 
 [[package]]

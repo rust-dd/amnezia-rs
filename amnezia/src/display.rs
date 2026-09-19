@@ -9,6 +9,9 @@ const NATIVE_SIZE: UVec2 = UVec2::new(320, 240);
 const PRESENTATION_LAYER: usize = 4;
 
 pub(crate) mod smoke;
+mod window;
+
+pub(crate) use window::primary_window;
 
 pub(crate) struct DisplayPlugin;
 
@@ -26,6 +29,7 @@ pub(crate) struct DisplaySetup;
 
 impl Plugin for DisplayPlugin {
     fn build(&self, app: &mut App) {
+        window::register(app);
         crate::transitions::render::register(app);
         app.insert_resource(UiScale(1.0 / 3.0))
             .add_systems(PostStartup, setup.in_set(DisplaySetup))

@@ -64,17 +64,7 @@ fn main() -> AppExit {
             ..default()
         })
         .set(WindowPlugin {
-            primary_window: Some(Window {
-                // WindowResolution uses physical pixels, including on Retina.
-                resolution: if offscreen {
-                    bevy::window::WindowResolution::new(960, 720)
-                } else {
-                    bevy::window::WindowResolution::new(1440, 1080)
-                },
-                resizable: true,
-                title: "Amnézia".to_string(),
-                ..default()
-            }),
+            primary_window: Some(display::primary_window(offscreen)),
             exit_condition: if offscreen {
                 bevy::window::ExitCondition::DontExit
             } else {
