@@ -1,6 +1,9 @@
 pub(crate) use super::view::smoke::{snapshot, verify_finished, verify_load_finished};
 use super::*;
 
+mod new_game;
+pub(crate) use new_game::{observe as new_game_frame, verify_finished as verify_new_game_finished};
+
 pub(crate) fn ready(world: &World) -> bool {
     world.resource::<TitleActive>().0 && world.resource::<TitleState>().stage == flow::Stage::Ready
 }
@@ -12,6 +15,7 @@ pub(crate) fn assert_continue(world: &World) {
 
 pub(crate) fn select_new_game(world: &mut World) {
     world.resource_mut::<TitleState>().cursor = NEW_GAME;
+    new_game::begin(world);
 }
 
 pub(crate) fn return_input(frame: u32) -> Option<KeyCode> {

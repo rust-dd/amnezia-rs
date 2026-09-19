@@ -7,6 +7,7 @@ use crate::teleport::{Fade, PendingTeleport};
 use crate::world::MapChanged;
 
 mod loading;
+mod new_game_clock;
 
 fn flow_app() -> App {
     let mut app = App::new();
@@ -81,7 +82,7 @@ fn title_waits_for_its_initial_fade_and_new_game_erases_for_six_frames() {
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::Enter);
     frame(&mut app, 34);
-    assert!(!app.world().resource::<NewGameRequest>().0);
+    assert!(!app.world().resource::<NewGameRequest>().requested);
     frame(&mut app, 35);
     assert_eq!(app.world().resource::<TitleState>().stage, Stage::Ready);
     frame(&mut app, 36);
@@ -99,10 +100,10 @@ fn title_waits_for_its_initial_fade_and_new_game_erases_for_six_frames() {
             |audio| matches!(audio, AudioRequest::FadeOutBgm { duration } if *duration == 0.8)
         )
     );
-    frame(&mut app, 41);
-    assert!(!app.world().resource::<NewGameRequest>().0);
-    frame(&mut app, 42);
-    assert!(app.world().resource::<NewGameRequest>().0);
+    frame(&mut app, 5);
+    assert!(!app.world().resource::<NewGameRequest>().requested);
+    frame(&mut app, 6);
+    assert!(app.world().resource::<NewGameRequest>().requested);
     assert!(
         app.world()
             .resource::<crate::transitions::Transition>()

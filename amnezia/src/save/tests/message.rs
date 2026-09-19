@@ -216,7 +216,7 @@ fn starting_a_new_game_clears_previously_loaded_message_settings() {
     assert_eq!(snapshot(app.world_mut()), read_save(&path).unwrap().message);
     app.world_mut()
         .resource_mut::<crate::session::NewGameRequest>()
-        .0 = true;
+        .requested = true;
     app.update();
     assert_eq!(snapshot(app.world_mut()), MessageState::default());
     std::fs::remove_file(path).unwrap();

@@ -70,6 +70,9 @@ pub(crate) fn drive(world: &mut World, frame: u32, battle: bool) -> Option<&'sta
     if frame < 150 {
         return None;
     }
+    if let Some(label) = crate::title::smoke::new_game_frame(world, frame) {
+        return Some(label);
+    }
     if battle
         && !world.resource::<Trace>().defeated
         && world.resource::<crate::battle::BattleActive>().0
@@ -124,6 +127,7 @@ pub(crate) fn verify_finished(world: &World, battle: bool) {
         assert!(trace.defeated && crate::title::smoke::ready(world));
     } else {
         assert!(trace.resumed);
+        crate::title::smoke::verify_new_game_finished(world);
     }
     info!("Game Over and title handoffs completed, battle defeat = {battle}");
 }

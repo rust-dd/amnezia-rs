@@ -53,16 +53,32 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         "title-open-first" | "title-reopen-first" => 1,
         "title-open-half" | "title-reopen-half" => 4,
         "title-open-last" | "title-reopen-last" => 7,
-        "title" | "title-open-ready" | "title-reopen-ready" | "title-return-ready"
-        | "title-load-return" => 8,
+        "title"
+        | "title-open-ready"
+        | "title-reopen-ready"
+        | "title-return-ready"
+        | "title-load-return"
+        | "title-new-game-fade" => 8,
         _ => return None,
     };
     world.init_resource::<Checks>();
     assert!(world.resource::<TitleActive>().0);
     assert_eq!(world.resource::<clock::Clock>().opened, expected, "{label}");
-    assert!(!world.resource::<crate::transitions::Transition>().busy());
+    let transition = world.resource::<crate::transitions::Transition>();
+    let mut pixels = pixels::expected(world, expected);
+    if label == "title-new-game-fade" {
+        assert!(transition.busy());
+        assert_eq!(transition.age(), 1);
+        for pixel in &mut pixels {
+            for channel in &mut pixel[..3] {
+                *channel = ((u32::from(*channel) * 128 + 127) / 255) as u8;
+            }
+        }
+    } else {
+        assert!(!transition.busy());
+    }
     Some(Snapshot {
-        pixels: pixels::expected(world, expected),
+        pixels,
         verified: world.resource::<Checks>().verified.clone(),
     })
 }
@@ -95,6 +111,13 @@ pub(crate) fn verify_finished(world: &World) {
 }
 
 pub(crate) fn verify_load_finished(world: &World) {
+    assert_eq!(
+        world.resource::<Checks>().verified.load(Ordering::Relaxed),
+        2
+    );
+}
+
+pub(in crate::title) fn verify_new_game_finished(world: &World) {
     assert_eq!(
         world.resource::<Checks>().verified.load(Ordering::Relaxed),
         2

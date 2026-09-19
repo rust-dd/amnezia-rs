@@ -16,7 +16,7 @@ fn new_game_reset_keeps_the_title_erased_until_the_start_map_is_ready() {
     app.world_mut()
         .resource_mut::<crate::transitions::Transition>()
         .hold_black();
-    app.world_mut().resource_mut::<NewGameRequest>().0 = true;
+    app.world_mut().resource_mut::<NewGameRequest>().requested = true;
     app.update();
     assert!(
         app.world()
@@ -76,7 +76,7 @@ fn new_game_clears_progress_and_rebuilds_even_the_same_start_map() {
             RouteStepper::default(),
         ))
         .id();
-    app.world_mut().resource_mut::<NewGameRequest>().0 = true;
+    app.world_mut().resource_mut::<NewGameRequest>().requested = true;
     app.update();
     assert_eq!(app.world().resource::<crate::timing::GameFrames>().frame, 0);
     for _ in 1..80 {

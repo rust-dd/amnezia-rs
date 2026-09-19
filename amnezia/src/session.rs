@@ -9,7 +9,17 @@ use crate::world::{MoveQueue, RouteStepper};
 use bevy::prelude::*;
 
 #[derive(Resource, Default)]
-pub struct NewGameRequest(pub bool);
+pub struct NewGameRequest {
+    pub requested: bool,
+    clock_prepared: bool,
+}
+
+impl NewGameRequest {
+    pub(crate) fn prepare_clock(&mut self, frames: &mut crate::timing::GameFrames) {
+        *frames = default();
+        self.clock_prepared = true;
+    }
+}
 
 pub struct SessionPlugin;
 
@@ -21,9 +31,10 @@ impl Plugin for SessionPlugin {
 }
 
 fn start_new_game(world: &mut World) {
-    if !std::mem::take(&mut world.resource_mut::<NewGameRequest>().0) {
+    if !world.resource::<NewGameRequest>().requested {
         return;
     }
+    let request = std::mem::take(&mut *world.resource_mut::<NewGameRequest>());
     clear_for_reload(world);
     reset::<Switches>(world);
     reset::<Variables>(world);
@@ -45,7 +56,10 @@ fn start_new_game(world: &mut World) {
     reset::<crate::screenfx::WeatherStrength>(world);
     reset::<crate::timer::PlayTime>(world);
     reset::<crate::timer::GameClock>(world);
-    reset::<crate::timing::GameFrames>(world);
+    // Title selection already started the clock before its outgoing transition.
+    if !request.clock_prepared {
+        reset::<crate::timing::GameFrames>(world);
+    }
     reset::<crate::menu::MenuAccess>(world);
     reset::<SaveAccess>(world);
     reset::<LoadRequest>(world);
@@ -66,6 +80,7 @@ fn start_new_game(world: &mut World) {
 
 /// Discard commands and overlays belonging to the previous play session.
 pub(crate) fn clear_transient(world: &mut World) {
+    reset::<NewGameRequest>(world);
     world.remove_resource::<crate::vehicles::saved::Pending>();
     world.remove_resource::<crate::world::saved::hero::Pending>();
     world.remove_resource::<crate::world::saved::Pending>();

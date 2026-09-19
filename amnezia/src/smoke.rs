@@ -185,7 +185,9 @@ fn drive(world: &mut World) {
     }
     if frame == 90 && world.resource::<SmokeRun>().scenario != "load-slots" {
         world.resource_mut::<crate::title::TitleActive>().0 = false;
-        world.resource_mut::<crate::session::NewGameRequest>().0 = true;
+        world
+            .resource_mut::<crate::session::NewGameRequest>()
+            .requested = true;
     }
     let scenario = world.resource::<SmokeRun>().scenario;
     if scenario == "load-slots"

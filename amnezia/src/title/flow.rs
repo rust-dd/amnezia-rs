@@ -3,7 +3,7 @@ use crate::audio::SystemMusic;
 use crate::save::{LoadOutcome, LoadRequest, SaveLocation};
 use crate::session::NewGameRequest;
 use crate::teleport::{Fade, PendingTeleport};
-use crate::transitions::{Kind, TransitionIo};
+use crate::transitions::{Kind, Transition, TransitionIo};
 use crate::world::MapChanged;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -65,16 +65,19 @@ pub(super) fn entered(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn input(
     keys: Res<ButtonInput<KeyCode>>,
     location: Res<SaveLocation>,
     title: Res<TitleActive>,
     mut state: ResMut<TitleState>,
-    mut transition: TransitionIo,
+    mut transition: ResMut<Transition>,
+    mut frames: ResMut<crate::timing::GameFrames>,
+    mut new_game: ResMut<NewGameRequest>,
     mut audio: MessageWriter<AudioRequest>,
     sounds: Option<Res<SystemSounds>>,
 ) {
-    if !title.0 || state.stage != Stage::Ready || transition.state.busy() {
+    if !title.0 || state.stage != Stage::Ready || transition.busy() {
         return;
     }
     let sounds = sounds.as_deref();
@@ -95,16 +98,20 @@ pub(super) fn input(
         play_se(&mut audio, sounds, |s| &s.decision);
         if action == TitleAction::NewGame {
             audio.write(AudioRequest::FadeOutBgm { duration: 0.8 });
+            new_game.prepare_clock(&mut frames);
         }
         let duration = if action == TitleAction::Shutdown {
             35
         } else {
             6
         };
-        let now = transition.frames.frame;
-        transition
-            .state
-            .start_for(Kind::Fade, true, now, IVec2::new(160, 120), duration);
+        transition.start_for(
+            Kind::Fade,
+            true,
+            frames.frame,
+            IVec2::new(160, 120),
+            duration,
+        );
         state.stage = Stage::Leaving(action);
     }
 }
@@ -140,7 +147,7 @@ pub(super) fn drive(
         Stage::Enter => state.stage = Stage::Wait(now.wrapping_add(20)),
         Stage::Showing => state.stage = Stage::Ready,
         Stage::Leaving(TitleAction::NewGame) => {
-            new_game.0 = true;
+            new_game.requested = true;
             state.stage = Stage::Loading;
         }
         Stage::Leaving(TitleAction::Continue) => {
@@ -179,7 +186,7 @@ pub(super) fn loaded(
         };
         return;
     }
-    let settled = !load_request.0 && !new_game.0 && !fade.busy() && pending.0.is_none();
+    let settled = !load_request.0 && !new_game.requested && !fade.busy() && pending.0.is_none();
     if swapped || settled {
         state.stage = Stage::Inactive;
         title.0 = false;
