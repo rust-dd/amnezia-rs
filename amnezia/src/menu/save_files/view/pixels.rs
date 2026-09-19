@@ -14,11 +14,13 @@ pub(crate) struct Snapshot {
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let (top, offset, selected) = match label {
-        "save-slots-early" => (0, 0, 0),
+        "save-slots-early" | "save-slots-fade" | "save-slots-cancel-fade" => (0, 0, 0),
         "save-slots-bottom"
         | "save-slots-updated"
         | "save-crystal-cancel"
         | "save-crystal-confirm"
+        | "save-crystal-fade"
+        | "save-crystal-erased-fade"
         | "load-slots-fade"
         | "load-slots-bottom"
         | "load-slots-reopened" => (12, 0, 14),
@@ -132,17 +134,17 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         }
         add_text(&mut pixels, font, skin, (4, y + 8), (312, 48), runs);
     }
-    arrows(
-        &mut pixels,
-        skin,
-        top,
-        label != "load-slots-fade" && nav.arrow < 20,
+    let fading_in = matches!(
+        label,
+        "load-slots-fade" | "save-slots-fade" | "save-crystal-fade" | "save-crystal-erased-fade"
     );
-    if label == "load-slots-fade" {
+    arrows(&mut pixels, skin, top, !fading_in && nav.arrow < 20);
+    if fading_in || label == "save-slots-cancel-fade" {
         assert_eq!(world.resource::<crate::transitions::Transition>().age(), 1);
+        let factor = if fading_in { 127 } else { 128 };
         for (_, _, color) in &mut pixels {
             for channel in &mut color[..3] {
-                *channel = ((u32::from(*channel) * 127 + 127) / 255) as u8;
+                *channel = ((u32::from(*channel) * factor + 127) / 255) as u8;
             }
         }
     }

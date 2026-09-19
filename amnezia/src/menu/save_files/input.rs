@@ -1,8 +1,7 @@
 use super::{Mode, SaveFiles};
 use crate::audio::{AudioRequest, SystemSounds, play_system_se};
-use crate::gamedata::GameData;
 use crate::menu::MenuOpen;
-use crate::save::{SaveLocation, SaveRequest, preview, slots::ActiveSlot};
+use crate::save::{preview, slots::ActiveSlot};
 use crate::timing::GameFrames;
 use bevy::prelude::*;
 
@@ -12,23 +11,16 @@ pub(super) fn update(
     frames: Res<GameFrames>,
     pause: crate::transitions::TransitionPause,
     open: Res<MenuOpen>,
-    data: Res<GameData>,
-    location: Res<SaveLocation>,
     mut files: ResMut<SaveFiles>,
     mut slot: ResMut<ActiveSlot>,
-    mut request: ResMut<SaveRequest>,
     sounds: Option<Res<SystemSounds>>,
     mut audio: MessageWriter<AudioRequest>,
 ) {
     if files.suspended {
         return;
     }
-    if !open.0 {
+    if !open.0 && !files.active() {
         *files = default();
-        return;
-    }
-    if files.requested {
-        files.prepare(&location, &data, frames.frame);
         return;
     }
     if files.entries.is_none() || files.finished.is_some() {
@@ -36,7 +28,7 @@ pub(super) fn update(
     }
     let elapsed = frames.frame.wrapping_sub(files.last_frame);
     files.last_frame = frames.frame;
-    if pause.paused() {
+    if pause.paused() || (files.mode == Mode::Save && files.stage != super::scene::Stage::Ready) {
         return;
     }
     let selected = files.navigation.index;
@@ -52,14 +44,7 @@ pub(super) fn update(
         if confirmed {
             *slot = ActiveSlot::new(selected as u8 + 1).unwrap();
         }
-        if files.event_menu.is_some() || files.mode == Mode::Load {
-            files.finished = Some(confirmed);
-        } else {
-            if confirmed {
-                request.0 = true;
-            }
-            *files = default();
-        }
+        files.finished = Some(confirmed);
     }
 }
 

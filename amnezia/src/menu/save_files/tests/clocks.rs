@@ -104,6 +104,7 @@ fn crystal_confirmation_updates_the_last_visible_frame_before_any_file_write() {
         .resource_mut::<crate::save::EventSaveRequest>()
         .0 = true;
     step(&mut app, None);
+    advance(&mut app, 12);
     let before = app.world().resource::<SaveFiles>().navigation.cursors[0];
     step(&mut app, Some(KeyCode::Enter));
     let files = app.world().resource::<SaveFiles>();
@@ -120,7 +121,7 @@ fn a_transition_holds_both_file_clocks_without_catching_up_on_return() {
     open_load(&mut app, true);
     let before = app.world().resource::<SaveFiles>().navigation.cursors[0];
     let mut transition = crate::transitions::Transition::default();
-    transition.start_for(crate::transitions::Kind::Fade, false, 0, IVec2::ZERO, 6);
+    transition.start_for(crate::transitions::Kind::Fade, false, 100, IVec2::ZERO, 6);
     app.insert_resource(transition);
     app.world_mut()
         .resource_mut::<crate::timing::GameFrames>()

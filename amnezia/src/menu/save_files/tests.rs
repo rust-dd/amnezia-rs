@@ -10,6 +10,11 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
         AssetPlugin::default(),
         crate::save::SavePlugin,
         crate::gamedata::GameDataPlugin,
+        crate::transitions::TransitionPlugin,
+        crate::timing::TimingPlugin,
+    ))
+    .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::ZERO,
     ))
     .init_asset::<Image>()
     .init_resource::<crate::interpreter::RunningEvent>()
@@ -58,14 +63,25 @@ fn step(app: &mut App, key: Option<KeyCode>) {
     app.update();
 }
 
+fn advance(app: &mut App, frames: u32) {
+    for _ in 0..frames {
+        step(app, None);
+    }
+}
+
+fn open_manual(app: &mut App) {
+    step(app, Some(KeyCode::Enter));
+    advance(app, 12);
+}
+
 #[test]
 fn cancel_returns_to_the_same_command_without_writing_or_closing_the_menu() {
     let (mut app, directory) = app("file_selector_cancel");
-    step(&mut app, Some(KeyCode::Enter));
+    open_manual(&mut app);
     assert!(app.world().resource::<SaveFiles>().active());
     assert!(!app.world().resource::<SaveRequest>().0);
     step(&mut app, Some(KeyCode::Escape));
-    step(&mut app, None);
+    advance(&mut app, 12);
     assert!(!app.world().resource::<SaveFiles>().active());
     assert!(app.world().resource::<MenuOpen>().0);
     assert_eq!(app.world().resource::<MenuState>().cursor, 3);
@@ -76,7 +92,7 @@ fn cancel_returns_to_the_same_command_without_writing_or_closing_the_menu() {
 #[test]
 fn selecting_the_last_slot_saves_only_that_slot_after_confirmation() {
     let (mut app, directory) = app("file_selector_last");
-    step(&mut app, Some(KeyCode::Enter));
+    open_manual(&mut app);
     step(&mut app, Some(KeyCode::ArrowUp));
     assert_eq!(app.world().resource::<SaveFiles>().navigation.index, 14);
     step(&mut app, Some(KeyCode::Enter));
@@ -87,8 +103,8 @@ fn selecting_the_last_slot_saves_only_that_slot_after_confirmation() {
     }
     assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 0);
     step(&mut app, Some(KeyCode::Enter));
-    assert!(!app.world().resource::<SaveFiles>().active());
-    assert!(app.world().resource::<SaveRequest>().0);
+    assert!(app.world().resource::<SaveFiles>().active());
+    assert_eq!(app.world().resource::<SaveFiles>().decision(), Some(true));
     step(&mut app, None);
     assert_eq!(
         *app.world().resource::<ActiveSlot>(),
@@ -96,6 +112,8 @@ fn selecting_the_last_slot_saves_only_that_slot_after_confirmation() {
     );
     assert!(directory.join("slot15.ron").is_file());
     assert!(!directory.join("slot1.ron").exists());
+    advance(&mut app, 12);
+    assert!(!app.world().resource::<SaveFiles>().active());
     assert!(app.world().resource::<MenuOpen>().0);
     std::fs::remove_file(directory.join("slot15.ron")).unwrap();
     std::fs::remove_dir(directory).unwrap();
@@ -104,3 +122,4 @@ fn selecting_the_last_slot_saves_only_that_slot_after_confirmation() {
 mod clocks;
 mod events;
 mod navigation;
+mod transitions;

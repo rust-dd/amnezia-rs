@@ -53,13 +53,14 @@ fn every_original_crystal_can_be_cancelled_or_saved_then_resumes_exactly_once() 
     for (map, event, commands) in original_crystals() {
         for save in [false, true] {
             let (mut app, path) = super::storage::app(&format!("selector-{map}-{event}-{save}"));
+            app.add_plugins(crate::transitions::TransitionPlugin);
             register_flow(&mut app);
             let mut commands = commands.clone();
             commands.push(switch_cmd(9998, 2, 0));
             app.world_mut()
                 .resource_mut::<RunningEvent>()
                 .start(event, commands);
-            for _ in 0..5 {
+            for _ in 0..20 {
                 press(&mut app, None);
             }
             assert!(app.world().resource::<SaveFiles>().active());
@@ -80,6 +81,12 @@ fn every_original_crystal_can_be_cancelled_or_saved_then_resumes_exactly_once() 
             assert!(app.world().resource::<EventSaveRequest>().0);
             assert!(!path.exists());
             press(&mut app, None);
+            assert!(app.world().resource::<SaveFiles>().active());
+            assert!(!switch_on(&app, 9998));
+            assert_eq!(path.exists(), save);
+            for _ in 0..12 {
+                press(&mut app, None);
+            }
             assert!(!app.world().resource::<SaveFiles>().active());
             assert!(!app.world().resource::<MenuOpen>().0);
             assert!(!app.world().resource::<EventSaveRequest>().0);

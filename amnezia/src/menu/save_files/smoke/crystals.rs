@@ -49,7 +49,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         transition.hold_black();
         transition.event_erased = true;
     }
-    if matches!(frame, 820 | 920) {
+    if matches!(frame, 835 | 935) {
         assert!(world.resource::<SaveFiles>().event_menu.is_some());
         assert!(world.resource::<EventSaveRequest>().0);
         assert!(!world.resource::<SaveAccess>().0);
@@ -58,13 +58,13 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             std::fs::read(path(world, 15)).unwrap(),
             world.resource::<Probe>().before
         );
-        return Some(if frame == 820 {
+        return Some(if frame == 835 {
             "save-crystal-cancel"
         } else {
             "save-crystal-confirm"
         });
     }
-    if matches!(frame, 860 | 960) {
+    if matches!(frame, 880 | 980) {
         assert!(!world.resource::<SaveFiles>().active());
         assert!(!world.resource::<EventSaveRequest>().0);
         assert!(!world.resource::<RunningEvent>().active());
@@ -72,12 +72,12 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         assert!(!world.resource::<SaveAccess>().0);
         assert!(world.resource::<Switches>().get(9998));
         let bytes = std::fs::read(path(world, 15)).unwrap();
-        if frame == 860 {
+        if frame == 880 {
             assert_eq!(bytes, world.resource::<Probe>().before);
         } else {
             assert_ne!(bytes, world.resource::<Probe>().before);
         }
-        world.resource_mut::<Probe>().checks |= if frame == 860 { 1 } else { 2 };
+        world.resource_mut::<Probe>().checks |= if frame == 880 { 1 } else { 2 };
     }
     None
 }

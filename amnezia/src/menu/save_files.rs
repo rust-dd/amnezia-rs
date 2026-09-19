@@ -9,6 +9,7 @@ use bevy::prelude::*;
 mod events;
 mod input;
 mod navigation;
+mod scene;
 pub(crate) mod smoke;
 #[cfg(test)]
 mod tests;
@@ -31,6 +32,7 @@ pub(crate) struct SaveFiles {
     last_frame: u32,
     event_menu: Option<bool>,
     finished: Option<bool>,
+    stage: scene::Stage,
 }
 
 impl SaveFiles {
@@ -39,7 +41,12 @@ impl SaveFiles {
     }
 
     pub(crate) fn active(&self) -> bool {
-        !self.suspended && (self.requested || self.entries.is_some())
+        !self.suspended
+            && (self.requested || self.entries.is_some() || self.stage != scene::Stage::Inactive)
+    }
+
+    pub(crate) fn blocks_io(&self) -> bool {
+        self.active() && self.stage != scene::Stage::Writing
     }
 
     pub(crate) fn open_load(&mut self, location: &SaveLocation, data: &GameData, frame: u32) {
@@ -89,10 +96,17 @@ pub(crate) struct FileInput;
 
 pub(crate) fn register_flow(app: &mut App) {
     app.init_resource::<SaveFiles>()
-        .add_systems(PreUpdate, events::update.before(crate::save::SaveSet))
+        .init_resource::<crate::transitions::Transition>()
+        .add_systems(
+            PreUpdate,
+            (events::update, scene::authorize_write)
+                .chain()
+                .before(crate::save::SaveSet),
+        )
         .add_systems(
             Update,
-            input::update
+            (input::update, scene::update)
+                .chain()
                 .in_set(FileInput)
                 .after(super::MenuInput)
                 .before(super::view::clocks::update),

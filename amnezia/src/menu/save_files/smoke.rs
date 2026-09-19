@@ -11,6 +11,7 @@ use std::sync::{
 pub(crate) use super::view::pixels::snapshot;
 mod crystals;
 pub(crate) mod load;
+mod scenes;
 
 #[derive(Resource)]
 struct Fixture {
@@ -39,6 +40,7 @@ pub(crate) fn configure(app: &mut App) {
     app.insert_resource(SaveLocation(directory.join("slot1.ron")))
         .insert_resource(ActiveSlot::default())
         .init_resource::<Pixels>()
+        .init_resource::<scenes::Checks>()
         .insert_resource(Fixture {
             directory,
             original,
@@ -50,11 +52,11 @@ pub(crate) fn configure(app: &mut App) {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        310 | 400 | 420 | 450 | 560 | 580 | 600 | 950 => Some(KeyCode::Enter),
-        380 | 540 | 650 | 850 => Some(KeyCode::Escape),
-        405 => Some(KeyCode::ArrowDown),
-        480 => Some(KeyCode::PageUp),
-        510 => Some(KeyCode::ArrowUp),
+        310 | 410 | 440 | 480 | 620 | 640 | 670 | 950 => Some(KeyCode::Enter),
+        380 | 580 | 730 | 850 => Some(KeyCode::Escape),
+        430 => Some(KeyCode::ArrowDown),
+        520 => Some(KeyCode::PageUp),
+        550 => Some(KeyCode::ArrowUp),
         _ => None,
     }
 }
@@ -93,6 +95,9 @@ fn path(world: &World, number: u8) -> PathBuf {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if let Some(label) = scenes::drive(world, frame) {
+        return Some(label);
+    }
     if let Some(label) = crystals::drive(world, frame) {
         return Some(label);
     }
@@ -115,7 +120,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         world.resource_mut::<crate::vitals::Vitals>().set(1, 17, 12);
         world.resource_mut::<crate::text::HeroName>().0 = "Álmos".into();
     }
-    if frame == 390 {
+    if frame == 405 {
         assert!(!world.resource::<SaveFiles>().active());
         assert!(world.resource::<MenuOpen>().0);
         assert!(!world.resource::<SaveRequest>().0);
@@ -127,17 +132,17 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         );
         world.resource_mut::<Fixture>().checks |= 1;
     }
-    if frame == 430 {
+    if frame == 460 {
         seed_previews(world);
     }
-    if frame == 550 {
+    if frame == 610 {
         unchanged(world, false);
         assert!(!world.resource::<SaveFiles>().active());
         world.resource_mut::<crate::text::HeroName>().0 = "Áron".into();
         world.resource_mut::<crate::vitals::Vitals>().set(1, 23, 12);
         world.resource_mut::<Fixture>().checks |= 2;
     }
-    if frame == 700 {
+    if frame == 760 {
         unchanged(world, true);
         assert!(!world.resource::<SaveFiles>().active());
         assert!(world.resource::<MenuOpen>().0);
@@ -148,10 +153,10 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         world.resource_mut::<Fixture>().checks |= 4;
     }
     match frame {
-        470 => Some("save-slots-bottom"),
-        500 => Some("save-slots-corrupt"),
-        511 => Some("save-slots-moving"),
-        610 => Some("save-slots-updated"),
+        510 => Some("save-slots-bottom"),
+        540 => Some("save-slots-corrupt"),
+        551 => Some("save-slots-moving"),
+        700 => Some("save-slots-updated"),
         _ => None,
     }
 }
@@ -199,7 +204,8 @@ fn unchanged(world: &World, saved_last: bool) {
 
 pub(crate) fn verify_finished(world: &mut World) {
     crystals::verify_finished(world);
-    assert_eq!(world.resource::<Pixels>().0.load(Ordering::Relaxed), 7);
+    scenes::verify_finished(world);
+    assert_eq!(world.resource::<Pixels>().0.load(Ordering::Relaxed), 11);
     assert_eq!(world.resource::<Fixture>().checks, 7);
     unchanged(world, true);
     let fixture = world.remove_resource::<Fixture>().unwrap();

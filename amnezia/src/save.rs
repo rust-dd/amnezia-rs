@@ -251,7 +251,11 @@ fn save_or_load(
     if fade.busy() || save_io.transition.as_ref().is_some_and(|t| t.busy()) {
         return;
     }
-    if save_io.files.as_ref().is_some_and(|files| files.active()) {
+    if save_io
+        .files
+        .as_ref()
+        .is_some_and(|files| files.blocks_io())
+    {
         return;
     }
     let event_save = std::mem::take(&mut save_io.event_save.0);
