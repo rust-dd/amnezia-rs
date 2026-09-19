@@ -1,6 +1,6 @@
 use super::*;
 use crate::audio::SystemMusic;
-use crate::save::{LoadOutcome, LoadRequest, save_slot_exists};
+use crate::save::{LoadOutcome, LoadRequest, SaveLocation};
 use crate::session::NewGameRequest;
 use crate::teleport::{Fade, PendingTeleport};
 use crate::transitions::{Kind, TransitionIo};
@@ -17,16 +17,32 @@ pub(super) enum Stage {
     Ready,
     Leaving(TitleAction),
     Loading,
+    Files,
+    FileLeaving(bool),
+    FileLoading,
+    FileRetry,
+    FileReturning,
 }
 
 impl Stage {
     pub(super) fn visible(self) -> bool {
-        matches!(self, Self::Showing | Self::Ready | Self::Leaving(_))
+        matches!(
+            self,
+            Self::Showing | Self::Ready | Self::Leaving(_) | Self::FileReturning
+        )
+    }
+
+    pub(super) fn suspended(self) -> bool {
+        matches!(
+            self,
+            Self::Files | Self::FileLeaving(_) | Self::FileLoading | Self::FileRetry
+        )
     }
 }
 
 pub(super) fn entered(
     title: Res<TitleActive>,
+    location: Res<SaveLocation>,
     mut state: ResMut<TitleState>,
     mut transition: TransitionIo,
     mut was_active: Local<bool>,
@@ -37,7 +53,7 @@ pub(super) fn entered(
     if !entered {
         return;
     }
-    state.cursor = default_cursor(save_slot_exists());
+    state.cursor = default_cursor(location.has_saves());
     if !*visited {
         transition.state.hold_black();
         state.stage = Stage::Prepare;
@@ -51,6 +67,7 @@ pub(super) fn entered(
 
 pub(super) fn input(
     keys: Res<ButtonInput<KeyCode>>,
+    location: Res<SaveLocation>,
     title: Res<TitleActive>,
     mut state: ResMut<TitleState>,
     mut transition: TransitionIo,
@@ -70,7 +87,7 @@ pub(super) fn input(
         play_se(&mut audio, sounds, |s| &s.cursor);
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
-        let action = action_for(state.cursor, save_slot_exists());
+        let action = action_for(state.cursor, location.has_saves());
         if action == TitleAction::ContinueDisabled {
             play_se(&mut audio, sounds, |s| &s.buzzer);
             return;
@@ -97,7 +114,6 @@ pub(super) fn drive(
     title: Res<TitleActive>,
     mut state: ResMut<TitleState>,
     mut transition: TransitionIo,
-    mut load: ResMut<LoadRequest>,
     mut new_game: ResMut<NewGameRequest>,
     music: Option<Res<SystemMusic>>,
     mut audio: MessageWriter<AudioRequest>,
@@ -128,9 +144,7 @@ pub(super) fn drive(
             state.stage = Stage::Loading;
         }
         Stage::Leaving(TitleAction::Continue) => {
-            audio.write(AudioRequest::StopBgm);
-            load.0 = true;
-            state.stage = Stage::Loading;
+            state.stage = Stage::Files;
         }
         Stage::Leaving(TitleAction::Shutdown) => {
             exit.write(AppExit::Success);
@@ -151,14 +165,18 @@ pub(super) fn loaded(
     mut outcome: ResMut<LoadOutcome>,
     mut map_changed: MessageReader<MapChanged>,
 ) {
-    if state.stage != Stage::Loading {
+    if !matches!(state.stage, Stage::Loading | Stage::FileLoading) {
         map_changed.clear();
         return;
     }
     let swapped = !map_changed.is_empty();
     map_changed.clear();
     if outcome.0.take() == Some(false) {
-        state.stage = Stage::Prepare;
+        state.stage = if state.stage == Stage::FileLoading {
+            Stage::FileRetry
+        } else {
+            Stage::Prepare
+        };
         return;
     }
     let settled = !load_request.0 && !new_game.0 && !fade.busy() && pending.0.is_none();

@@ -30,6 +30,8 @@ impl Plugin for SmokePlugin {
         let scenario = scenarios::selected();
         if scenario == "save-slots" {
             crate::menu::save_files::smoke::configure(app);
+        } else if scenario == "load-slots" {
+            crate::menu::save_files::smoke::load::configure(app);
         } else if scenario == "save-music" {
             crate::save::music_smoke::configure(app);
         } else if scenario == "save-camera" {
@@ -91,6 +93,8 @@ fn input(world: &mut World) {
     }
     let requested = if scenario == "save-slots" {
         crate::menu::save_files::smoke::input(frame)
+    } else if scenario == "load-slots" {
+        crate::menu::save_files::smoke::load::input(frame)
     } else if matches!(scenario, "gameover" | "battle-defeat") {
         crate::gameover::smoke::input(world, frame, scenario == "battle-defeat")
     } else if scenario == "return-title" {
@@ -114,6 +118,7 @@ fn input(world: &mut World) {
         && !matches!(
             world.resource::<SmokeRun>().scenario,
             "return-title"
+                | "load-slots"
                 | "save-slots"
                 | "save-music"
                 | "save-camera"
@@ -178,11 +183,16 @@ fn drive(world: &mut World) {
     if frame == 60 {
         capture(world, "title");
     }
-    if frame == 90 {
+    if frame == 90 && world.resource::<SmokeRun>().scenario != "load-slots" {
         world.resource_mut::<crate::title::TitleActive>().0 = false;
         world.resource_mut::<crate::session::NewGameRequest>().0 = true;
     }
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario == "load-slots"
+        && let Some(label) = crate::menu::save_files::smoke::load::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "save-slots"
         && let Some(label) = crate::menu::save_files::smoke::drive(world, frame)
     {
@@ -196,7 +206,7 @@ fn drive(world: &mut World) {
             world.resource_mut::<SmokeRun>().finish_at = Some(frame + 45);
         }
     }
-    if frame == 150 && scenario != "intro" {
+    if frame == 150 && !matches!(scenario, "intro" | "load-slots") {
         scenarios::start(world, scenario);
     }
     if scenario == "looping" {
@@ -427,6 +437,8 @@ fn drive(world: &mut World) {
         }
         if scenario == "save-slots" {
             crate::menu::save_files::smoke::verify_finished(world);
+        } else if scenario == "load-slots" {
+            crate::menu::save_files::smoke::load::verify_finished(world);
         } else if scenario == "display" {
             crate::display::smoke::verify_finished(world);
         } else if scenario == "font" {

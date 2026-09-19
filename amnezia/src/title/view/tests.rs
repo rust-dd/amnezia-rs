@@ -16,6 +16,7 @@ fn app() -> App {
         .insert_resource(terms)
         .init_resource::<GameFrames>()
         .init_resource::<TitleActive>()
+        .init_resource::<crate::save::SaveLocation>()
         .insert_resource(TitleState {
             stage: flow::Stage::Showing,
             ..default()
@@ -54,7 +55,8 @@ fn title_commands_are_bitmap_terms_without_an_invented_text_arrow() {
         .collect::<Vec<_>>();
     assert_eq!(rows.len(), 3);
     for (row, text, node) in rows {
-        let enabled = row.0 != CONTINUE || crate::save::save_slot_exists();
+        let enabled =
+            row.0 != CONTINUE || world.resource::<crate::save::SaveLocation>().has_saves();
         assert_eq!(text.size, UVec2::new(48, 16));
         assert_eq!(
             text.runs,
@@ -79,6 +81,29 @@ fn only_continue_uses_the_disabled_palette_when_no_save_exists() {
             command_color(CONTINUE, has_save),
             if has_save { DEFAULT } else { DISABLED }
         );
+    }
+}
+
+#[test]
+fn load_browsing_hides_the_title_without_reopening_or_aging_its_command_window() {
+    let mut app = app();
+    let phase = app.world().resource::<clock::Clock>().source_x();
+    for (stage, frame, visible) in [
+        (flow::Stage::Files, 1000, false),
+        (flow::Stage::FileLeaving(false), 1006, false),
+        (flow::Stage::FileReturning, 1012, true),
+    ] {
+        app.world_mut().resource_mut::<TitleState>().stage = stage;
+        app.world_mut().resource_mut::<GameFrames>().frame = frame;
+        app.update();
+        let world = app.world_mut();
+        assert_eq!(world.resource::<clock::Clock>().opened, 8);
+        assert_eq!(world.resource::<clock::Clock>().source_x(), phase);
+        let visibility = world
+            .query_filtered::<&Visibility, With<TitleRoot>>()
+            .single(world)
+            .unwrap();
+        assert_eq!(*visibility == Visibility::Visible, visible);
     }
 }
 

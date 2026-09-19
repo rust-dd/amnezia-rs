@@ -53,7 +53,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         "title-open-first" | "title-reopen-first" => 1,
         "title-open-half" | "title-reopen-half" => 4,
         "title-open-last" | "title-reopen-last" => 7,
-        "title" | "title-open-ready" | "title-reopen-ready" | "title-return-ready" => 8,
+        "title" | "title-open-ready" | "title-reopen-ready" | "title-return-ready"
+        | "title-load-return" => 8,
         _ => return None,
     };
     world.init_resource::<Checks>();
@@ -91,4 +92,11 @@ pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
     assert_eq!(checks.requested, [15, 15]);
     assert_eq!(checks.verified.load(Ordering::Relaxed), 10);
+}
+
+pub(crate) fn verify_load_finished(world: &World) {
+    assert_eq!(
+        world.resource::<Checks>().verified.load(Ordering::Relaxed),
+        2
+    );
 }

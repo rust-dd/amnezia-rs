@@ -1,4 +1,4 @@
-use super::SaveFiles;
+use super::{Mode, SaveFiles};
 use crate::font::bitmap::{BitmapFont, PixelText, Run};
 use crate::save::preview::Contents;
 use crate::terms::Terms;
@@ -134,7 +134,7 @@ pub(super) fn update(
     server: Res<AssetServer>,
     mut drawing: Drawing,
 ) {
-    let entries = files.entries.as_deref();
+    let entries = files.entries.as_deref().filter(|_| !files.suspended);
     let nav = &files.navigation;
     for (mut node, mut visibility, root, row, cursor, arrow, face) in &mut drawing.nodes {
         if root.is_some() {
@@ -176,12 +176,18 @@ pub(super) fn update(
     for (kind, mut text) in &mut drawing.texts {
         let runs = match kind {
             Text::Help => vec![Run::new(
-                crate::i18n::tr(&terms.0.save_game_message),
+                crate::i18n::tr(if files.mode == Mode::Load {
+                    &terms.0.load_game_message
+                } else {
+                    &terms.0.save_game_message
+                }),
                 0,
                 2,
                 0,
             )],
-            Text::Slot(index) => text::row(*index, &entries[*index].contents, &terms, &font),
+            Text::Slot(index) => {
+                text::row(*index, &entries[*index].contents, files.mode, &terms, &font)
+            }
         };
         if text.runs != runs {
             text.runs = runs;

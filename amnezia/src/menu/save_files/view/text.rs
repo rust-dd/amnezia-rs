@@ -1,5 +1,5 @@
 use super::*;
-use crate::font::bitmap::{DEFAULT, KNOCKOUT};
+use crate::font::bitmap::{DEFAULT, DISABLED, KNOCKOUT};
 use crate::i18n;
 
 fn short(value: &str) -> String {
@@ -10,15 +10,26 @@ fn short(value: &str) -> String {
         .collect()
 }
 
-pub(super) fn row(index: usize, contents: &Contents, terms: &Terms, font: &BitmapFont) -> Vec<Run> {
+pub(super) fn row(
+    index: usize,
+    contents: &Contents,
+    mode: Mode,
+    terms: &Terms,
+    font: &BitmapFont,
+) -> Vec<Run> {
     let label = i18n::tr(&terms.0.file);
+    let color = if mode == Mode::Load && !matches!(contents, Contents::Party(_)) {
+        DISABLED
+    } else {
+        DEFAULT
+    };
     let mut runs = vec![
-        Run::new(&label, 4, 2, DEFAULT),
+        Run::new(&label, 4, 2, color),
         Run::new(
             format!("{:>2}", index + 1),
             4 + font.width(&label) + 3,
             2,
-            DEFAULT,
+            color,
         ),
     ];
     match contents {

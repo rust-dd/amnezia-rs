@@ -1,4 +1,4 @@
-use super::{SaveFiles, navigation::Navigation};
+use super::{Mode, SaveFiles};
 use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::gamedata::GameData;
 use crate::menu::MenuOpen;
@@ -20,16 +20,15 @@ pub(super) fn update(
     sounds: Option<Res<SystemSounds>>,
     mut audio: MessageWriter<AudioRequest>,
 ) {
+    if files.suspended {
+        return;
+    }
     if !open.0 {
         *files = default();
         return;
     }
     if files.requested {
-        let entries = preview::catalog(&location.0, &data);
-        files.navigation = Navigation::new(preview::latest(&entries));
-        files.entries = Some(entries);
-        files.requested = false;
-        files.last_frame = frames.frame;
+        files.prepare(&location, &data, frames.frame);
         return;
     }
     if files.entries.is_none() || files.finished.is_some() {
@@ -45,7 +44,7 @@ pub(super) fn update(
             if let Some(sounds) = sounds {
                 play_system_se(&mut audio, &sounds.cancel);
             }
-            if files.event_menu.is_some() {
+            if files.event_menu.is_some() || files.mode == Mode::Load {
                 files.finished = Some(false);
             } else {
                 *files = default();
@@ -53,11 +52,22 @@ pub(super) fn update(
             return;
         }
         if crate::menu::nav::confirm_pressed(&keys) {
+            if files.mode == Mode::Load
+                && !matches!(
+                    files.entries.as_ref().unwrap()[files.navigation.index].contents,
+                    preview::Contents::Party(_)
+                )
+            {
+                if let Some(sounds) = sounds {
+                    play_system_se(&mut audio, &sounds.buzzer);
+                }
+                return;
+            }
             if let Some(sounds) = sounds {
                 play_system_se(&mut audio, &sounds.decision);
             }
             *slot = ActiveSlot::new(files.navigation.index as u8 + 1).unwrap();
-            if files.event_menu.is_some() {
+            if files.event_menu.is_some() || files.mode == Mode::Load {
                 files.finished = Some(true);
             } else {
                 request.0 = true;

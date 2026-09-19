@@ -1,8 +1,13 @@
-pub(crate) use super::view::smoke::{snapshot, verify_finished};
+pub(crate) use super::view::smoke::{snapshot, verify_finished, verify_load_finished};
 use super::*;
 
 pub(crate) fn ready(world: &World) -> bool {
     world.resource::<TitleActive>().0 && world.resource::<TitleState>().stage == flow::Stage::Ready
+}
+
+pub(crate) fn assert_continue(world: &World) {
+    assert!(ready(world));
+    assert_eq!(world.resource::<TitleState>().cursor, CONTINUE);
 }
 
 pub(crate) fn select_new_game(world: &mut World) {

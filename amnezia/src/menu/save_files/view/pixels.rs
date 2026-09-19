@@ -18,12 +18,18 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         "save-slots-bottom"
         | "save-slots-updated"
         | "save-crystal-cancel"
-        | "save-crystal-confirm" => (12, 0, 14),
-        "save-slots-corrupt" => (11, 0, 11),
+        | "save-crystal-confirm"
+        | "load-slots-fade"
+        | "load-slots-bottom"
+        | "load-slots-reopened" => (12, 0, 14),
+        "save-slots-corrupt" | "load-slots-corrupt" => (11, 0, 11),
+        "load-slots-empty" => (10, 0, 10),
         "save-slots-moving" => (10, -55, 10),
         _ => return None,
     };
     let files = world.resource::<SaveFiles>();
+    let loading = label.starts_with("load-");
+    assert_eq!(files.mode == Mode::Load, loading);
     assert!(files.active());
     let nav = &files.navigation;
     assert_eq!((nav.top, nav.offset(), nav.index), (top, offset, selected));
@@ -61,7 +67,16 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         skin,
         (8, 8),
         (304, 16),
-        vec![Run::new("Hova mentesz?", 0, 2, 0)],
+        vec![Run::new(
+            if loading {
+                "Honnan töltesz?"
+            } else {
+                "Hova mentesz?"
+            },
+            0,
+            2,
+            0,
+        )],
     );
     for (index, entry) in entries.iter().enumerate() {
         let y = 40 + (index as i32 - top as i32) * 64 + offset;
@@ -77,9 +92,14 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
                 if nav.cursors[index] <= 10 { 64 } else { 96 },
             );
         }
+        let color = if loading && !matches!(entry.contents, Contents::Party(_)) {
+            crate::font::bitmap::DISABLED
+        } else {
+            0
+        };
         let mut runs = vec![
-            Run::new("File", 4, 2, 0),
-            Run::new(format!("{:>2}", index + 1), 31, 2, 0),
+            Run::new("File", 4, 2, color),
+            Run::new(format!("{:>2}", index + 1), 31, 2, color),
         ];
         match &entry.contents {
             Contents::Empty => {}
@@ -113,6 +133,14 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         add_text(&mut pixels, font, skin, (4, y + 8), (312, 48), runs);
     }
     arrows(&mut pixels, skin, top, nav.arrow < 20);
+    if label == "load-slots-fade" {
+        assert_eq!(world.resource::<crate::transitions::Transition>().age(), 1);
+        for (_, _, color) in &mut pixels {
+            for channel in &mut color[..3] {
+                *channel = ((u32::from(*channel) * 127 + 127) / 255) as u8;
+            }
+        }
+    }
     Some(Snapshot {
         pixels,
         checks: world.resource::<Pixels>().0.clone(),

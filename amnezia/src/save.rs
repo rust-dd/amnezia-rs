@@ -82,9 +82,13 @@ impl Default for SaveLocation {
     }
 }
 
-/// Whether the single save slot exists on disk, for the title's Continue gate.
-pub fn save_slot_exists() -> bool {
-    slot_exists(&save_path()) || storage::legacy_save_path().is_some_and(|p| slot_exists(&p))
+impl SaveLocation {
+    pub(crate) fn has_saves(&self) -> bool {
+        (1..=slots::COUNT).any(|number| {
+            let path = slots::ActiveSlot::new(number).unwrap().path(&self.0);
+            slot_exists(&storage::source_path(&path))
+        })
+    }
 }
 
 /// The RM2000 neutral screen tone (every channel 100), the [`SaveGame::tone`]

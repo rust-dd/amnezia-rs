@@ -39,7 +39,7 @@ pub(in crate::title) fn tick(
 ) {
     clock.advance(
         frames.frame,
-        title.0 && state.stage.visible(),
+        title.0 && (state.stage.visible() || state.stage.suspended()),
         state.stage == flow::Stage::Ready && !pause.paused(),
     );
 }

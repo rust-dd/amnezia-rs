@@ -1,5 +1,6 @@
 //! Title command selection and scene handoffs share the original transition clock.
 
+mod files;
 mod flow;
 pub(crate) mod smoke;
 mod view;
@@ -62,6 +63,8 @@ impl Plugin for TitlePlugin {
         view::register(app);
         app.init_resource::<TitleActive>()
             .init_resource::<TitleState>()
+            .init_resource::<crate::save::SaveLocation>()
+            .init_resource::<crate::menu::save_files::SaveFiles>()
             .add_systems(Startup, view::spawn)
             .add_systems(
                 Update,
@@ -71,10 +74,12 @@ impl Plugin for TitlePlugin {
                     view::clock::tick,
                     flow::input,
                     flow::drive,
+                    files::update,
                 )
                     .chain()
                     .in_set(TitleFlow)
                     .after(crate::menu::MenuInput)
+                    .after(crate::menu::save_files::FileInput)
                     .after(crate::gameover::GameOverFlowSet),
             );
     }

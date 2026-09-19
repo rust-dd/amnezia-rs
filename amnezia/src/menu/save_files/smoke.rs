@@ -10,6 +10,7 @@ use std::sync::{
 
 pub(crate) use super::view::pixels::snapshot;
 mod crystals;
+pub(crate) mod load;
 
 #[derive(Resource)]
 struct Fixture {

@@ -63,7 +63,7 @@ pub(super) fn expected(world: &World, opened: u32) -> Vec<[u8; 4]> {
                 );
             }
         }
-        let has_save = crate::save::save_slot_exists();
+        let has_save = world.resource::<crate::save::SaveLocation>().has_saves();
         for (row, label) in layout.labels.iter().enumerate() {
             let text = font.render(
                 &PixelText {

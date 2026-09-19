@@ -6,11 +6,17 @@ use crate::session::NewGameRequest;
 use crate::teleport::{Fade, PendingTeleport};
 use crate::world::MapChanged;
 
+mod loading;
+
 fn flow_app() -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, crate::transitions::TransitionPlugin))
+        .add_plugins(crate::gamedata::GameDataPlugin)
         .init_resource::<TitleActive>()
         .init_resource::<TitleState>()
+        .init_resource::<crate::save::SaveLocation>()
+        .init_resource::<crate::menu::MenuOpen>()
+        .init_resource::<crate::menu::save_files::SaveFiles>()
         .init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<LoadRequest>()
         .init_resource::<LoadOutcome>()
@@ -22,7 +28,14 @@ fn flow_app() -> App {
         .add_message::<MapChanged>()
         .add_systems(
             Update,
-            (flow::entered, flow::loaded, flow::input, flow::drive).chain(),
+            (
+                flow::entered,
+                flow::loaded,
+                flow::input,
+                flow::drive,
+                files::update,
+            )
+                .chain(),
         );
     app
 }
@@ -32,6 +45,29 @@ fn frame(app: &mut App, frame: u32) {
         .resource_mut::<crate::timing::GameFrames>()
         .frame = frame;
     app.update();
+}
+
+#[test]
+fn continue_waits_for_a_slot_choice_without_stopping_the_title_music() {
+    let mut app = flow_app();
+    frame(&mut app, 0);
+    frame(&mut app, 35);
+    app.world_mut().resource_mut::<TitleState>().stage = Stage::Leaving(TitleAction::Continue);
+    app.world_mut()
+        .resource_mut::<Messages<AudioRequest>>()
+        .clear();
+    frame(&mut app, 36);
+    assert!(
+        !app.world().resource::<LoadRequest>().0,
+        "Continue must open the file chooser before requesting a load"
+    );
+    assert!(app.world().resource::<TitleActive>().0);
+    assert!(
+        app.world_mut()
+            .resource_mut::<Messages<AudioRequest>>()
+            .drain()
+            .all(|request| !matches!(request, AudioRequest::StopBgm))
+    );
 }
 
 #[test]
@@ -178,6 +214,7 @@ fn selecting_shutdown_requests_app_exit_after_thirty_five_frames() {
             stage: Stage::Ready,
         })
         .init_resource::<LoadRequest>()
+        .init_resource::<crate::save::SaveLocation>()
         .add_systems(Update, (flow::input, flow::drive).chain());
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()

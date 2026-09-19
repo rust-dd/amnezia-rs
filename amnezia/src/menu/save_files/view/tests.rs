@@ -68,3 +68,42 @@ fn save_rows_keep_empty_slots_enabled_and_render_no_invented_completion_or_playt
         }
     }
 }
+
+#[test]
+fn load_uses_its_original_prompt_and_disables_empty_and_corrupt_file_labels() {
+    let mut app = app();
+    let mut entries = vec![
+        crate::save::preview::Entry {
+            contents: Contents::Empty,
+            modified: None,
+        };
+        15
+    ];
+    entries[14].contents = Contents::Corrupt;
+    let mut files = app.world_mut().resource_mut::<SaveFiles>();
+    files.mode = Mode::Load;
+    files.entries = Some(entries);
+    app.update();
+    let world = app.world_mut();
+    for (kind, text) in world.query::<(&Text, &PixelText)>().iter(world) {
+        match kind {
+            Text::Help => assert_eq!(text.runs, [Run::new("Honnan töltesz?", 0, 2, 0)]),
+            Text::Slot(index) => {
+                assert_eq!(
+                    text.runs[0],
+                    Run::new("File", 4, 2, crate::font::bitmap::DISABLED)
+                );
+                assert_eq!(
+                    text.runs[1],
+                    Run::new(
+                        format!("{:>2}", index + 1),
+                        31,
+                        2,
+                        crate::font::bitmap::DISABLED
+                    )
+                );
+                assert_eq!(text.runs.len(), if *index == 14 { 3 } else { 2 });
+            }
+        }
+    }
+}

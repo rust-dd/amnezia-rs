@@ -126,6 +126,7 @@ pub(super) fn spawn(mut commands: Commands, assets: Res<AssetServer>) {
 #[allow(clippy::too_many_arguments)]
 fn update(
     title: Res<TitleActive>,
+    location: Res<crate::save::SaveLocation>,
     state: Res<TitleState>,
     terms: Res<Terms>,
     font: Res<BitmapFont>,
@@ -165,7 +166,7 @@ fn update(
             opened: clock.opened,
         };
     }
-    let has_save = crate::save::save_slot_exists();
+    let has_save = location.has_saves();
     for (row, mut text, mut node, mut visibility) in &mut rows {
         *visibility = contents;
         node.width = Val::Px((layout.width - 16) as f32 * 3.0);
