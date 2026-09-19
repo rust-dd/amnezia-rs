@@ -8,7 +8,7 @@ use crate::state::{Inventory, Party};
 use crate::terms::Terms;
 use crate::vitals::Vitals;
 
-use super::{MenuScreen, derive, equip, items, skills, status, use_item};
+use super::{MenuScreen, derive, equip, skills, status, use_item};
 
 /// One party member's status-window figures: the FaceSet portrait, identity, and
 /// the numbers the status window prints beside the face. HP/SP are kept as raw
@@ -110,16 +110,13 @@ pub(super) fn content(
     terms: &Terms,
 ) -> ContentView {
     match screen {
-        MenuScreen::Command | MenuScreen::MemberSelect { .. } | MenuScreen::EndGame { .. } => {
-            ContentView {
-                text: String::new(),
-                cursor_line: None,
-            }
-        }
-        MenuScreen::ItemList { cursor } => {
-            let (text, cursor_line) = items::compose_list(cursor, data, inventory);
-            ContentView { text, cursor_line }
-        }
+        MenuScreen::Command
+        | MenuScreen::MemberSelect { .. }
+        | MenuScreen::EndGame { .. }
+        | MenuScreen::ItemList { .. } => ContentView {
+            text: String::new(),
+            cursor_line: None,
+        },
         MenuScreen::ItemTarget { item_id, cursor } => ContentView {
             text: use_item::compose_target(
                 hero_name,
@@ -280,7 +277,7 @@ mod tests {
     }
 
     #[test]
-    fn content_item_list_reports_the_cursor_line() {
+    fn item_list_does_not_compose_legacy_headers_gold_or_cursor_text() {
         let mut inv = Inventory::default();
         inv.add_item(testkit::ITEM_HERB, 3);
         let view = content(
@@ -294,8 +291,8 @@ mod tests {
             &Equipment::default(),
             &Terms::default(),
         );
-        assert!(view.text.contains("Gyógyfű ×3"), "item row: {}", view.text);
-        assert_eq!(view.cursor_line, Some(2), "windowskin cursor line");
+        assert!(view.text.is_empty());
+        assert_eq!(view.cursor_line, None);
     }
 
     #[test]

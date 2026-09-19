@@ -130,11 +130,21 @@ pub(super) fn menu_input(
     mut open: ResMut<MenuOpen>,
     mut state: ResMut<MenuState>,
     mut save_files: ResMut<SaveFiles>,
+    mut item_list: ResMut<items::List>,
     blockers: OpenBlockers,
     mut sfx: MenuSfx,
     mut skill_rng: Local<crate::interpreter::EventRng>,
 ) {
     if save_files.active() {
+        return;
+    }
+    if matches!(state.screen, MenuScreen::ItemList { .. })
+        && (blockers.fade.busy()
+            || blockers
+                .transition
+                .as_ref()
+                .is_some_and(|transition| transition.busy()))
+    {
         return;
     }
     // These guards block opening; an existing menu must remain usable and closable.
@@ -145,7 +155,11 @@ pub(super) fn menu_input(
     }
     if keys.just_pressed(KeyCode::Escape) {
         let was_open = open.0;
-        let (next_open, next_screen) = escape_transition(open.0, state.screen);
+        let (next_open, next_screen) = if matches!(state.screen, MenuScreen::ItemTarget { .. }) {
+            (open.0, item_list.return_to_list(&data, &inventory))
+        } else {
+            escape_transition(open.0, state.screen)
+        };
         if next_open && !was_open {
             sfx.decision();
         } else {
@@ -170,13 +184,13 @@ pub(super) fn menu_input(
     let up = keys.just_pressed(KeyCode::ArrowUp);
     let down = keys.just_pressed(KeyCode::ArrowDown);
     let members = party.snapshot().len().saturating_sub(1);
-    if up || down {
+    if (up || down) && !matches!(state.screen, MenuScreen::ItemList { .. }) {
         sfx.cursor();
     }
     if confirm
         && !matches!(
             state.screen,
-            MenuScreen::Command | MenuScreen::MemberSelect { .. }
+            MenuScreen::Command | MenuScreen::MemberSelect { .. } | MenuScreen::ItemList { .. }
         )
     {
         sfx.decision();
@@ -200,11 +214,13 @@ pub(super) fn menu_input(
             }
         }
         MenuScreen::ItemList { cursor } => {
-            let max = items::selectable(&data, &inventory).saturating_sub(1);
-            let cursor = step(cursor, up, down, max);
-            state.screen = MenuScreen::ItemList { cursor };
-            if confirm && let Some(next) = item_target(cursor, &data, &inventory) {
-                state.screen = next;
+            if confirm {
+                if let Some(next) = item_target(cursor, &data, &inventory) {
+                    sfx.decision();
+                    state.screen = next;
+                } else {
+                    sfx.buzzer();
+                }
             }
         }
         MenuScreen::ItemTarget { item_id, cursor } => {
@@ -221,7 +237,7 @@ pub(super) fn menu_input(
                     &mut vitals,
                 )
             {
-                state.screen = MenuScreen::ItemList { cursor: 0 };
+                state.screen = item_list.return_to_list(&data, &inventory);
             }
         }
         MenuScreen::MemberSelect { action, cursor } => {

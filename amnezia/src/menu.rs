@@ -34,6 +34,7 @@ mod status;
 mod use_item;
 mod view;
 
+pub(crate) use items::smoke as item_smoke;
 pub(crate) use view::end_game::smoke as end_smoke;
 pub(crate) use view::smoke as layout_smoke;
 pub(crate) use view::text_smoke as font_smoke;
@@ -131,17 +132,20 @@ pub(crate) struct MenuInput;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         save_files::register(app);
+        crate::windowskin::background::register(app);
         app.init_resource::<MenuOpen>()
             .init_resource::<MenuAccess>()
             .init_resource::<MenuState>()
+            .init_resource::<items::List>()
             .init_resource::<view::clocks::Clock>()
             .init_resource::<view::end_game::Clock>()
             .add_systems(Startup, view::spawn_ui)
             .add_systems(
                 Update,
                 (
-                    input::menu_input.in_set(MenuInput),
+                    (items::update, input::menu_input).chain().in_set(MenuInput),
                     view::update_ui.after(MenuInput),
+                    view::item_list::update.after(MenuInput),
                     view::clocks::update.after(MenuInput),
                     view::end_game::update.after(MenuInput),
                 ),

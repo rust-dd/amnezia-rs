@@ -13,6 +13,7 @@ pub(super) fn start(world: &mut World, scenario: &str) {
     let commands = if matches!(
         scenario,
         "message-options"
+            | "items"
             | "save-slots"
             | "dialogue-timing"
             | "world-tones"
@@ -259,6 +260,8 @@ pub(super) fn selected() -> &'static str {
         "escape"
     } else if std::env::args().any(|arg| arg == "--smoke-font") {
         "font"
+    } else if std::env::args().any(|arg| arg == "--smoke-item-menu") {
+        "items"
     } else if std::env::args().any(|arg| arg == "--smoke-menu") {
         "menu"
     } else {

@@ -37,6 +37,7 @@ Native smoke scenarios require a graphical desktop. Each supplies its own input,
 cargo run -p amnezia --locked -- --smoke-test
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle-menus
 cargo run -p amnezia --locked -- --smoke-test --smoke-menu
+cargo run -p amnezia --locked -- --smoke-test --smoke-item-menu
 cargo run -p amnezia --locked -- --smoke-test --smoke-actor-names
 cargo run -p amnezia --locked -- --smoke-test --smoke-actor-graphics
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle
@@ -74,6 +75,8 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-dialogue-timing
 ```
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
+
+The `item-menu` scenario drives the original two-column field inventory with actual keys. Eleven complete captures compare 844,800 reference pixels: empty inventory, original descriptions and disabled colors, both directions of four-frame scrolling, clipped rows, cursor/arrow phases, and selection retained after using an item. It checks recovery against Ron's real 63 HP maximum, item counts, and return navigation. The background uses the reference renderer's fixed-point sampling; it is cached independently of the original system image. Item/skill target-window layout and general menu scene fades remain separate restoration tasks.
 
 The `save-npcs` scenario uses an isolated temporary save to check NPC position, appearance, in-progress movement and route continuation through a real map rebuild. It compares three rendered poses with the original character sheet against an isolated black background and verifies legacy NPC defaults without rewriting the old file.
 

@@ -1,5 +1,20 @@
 use bevy::prelude::*;
 
+pub(crate) mod background;
+
+pub(crate) fn fixed_frame(parent: &mut ChildSpawnerCommands, system: &Handle<Image>, size: UVec2) {
+    parent.spawn((
+        Node {
+            position_type: PositionType::Absolute,
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            ..default()
+        },
+        background::Pixels(size),
+    ));
+    border(parent, system, 32.0);
+}
+
 fn skin_piece(system: &Handle<Image>, rect: Rect) -> ImageNode {
     ImageNode {
         image: system.clone(),

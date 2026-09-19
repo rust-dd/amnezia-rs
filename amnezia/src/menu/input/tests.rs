@@ -3,6 +3,7 @@ use crate::menu::testkit;
 use crate::save::SaveRequest;
 
 mod guards;
+mod item_list;
 mod message_frames;
 
 /// A headless app with just the menu input system and the resources it reads,
@@ -24,6 +25,8 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
         .insert_resource(MenuState { cursor, screen })
         .init_resource::<SaveRequest>()
         .init_resource::<SaveFiles>()
+        .init_resource::<items::List>()
+        .init_resource::<crate::timing::GameFrames>()
         .init_resource::<Dialogue>()
         .init_resource::<RunningEvent>()
         .init_resource::<Choice>()
@@ -32,7 +35,7 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
         .init_resource::<GameOverActive>()
         .init_resource::<ButtonInput<KeyCode>>()
         .add_message::<AudioRequest>()
-        .add_systems(Update, menu_input);
+        .add_systems(Update, (items::update, menu_input).chain());
     app
 }
 

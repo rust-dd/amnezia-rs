@@ -30,9 +30,7 @@ pub(super) fn field_usable(item: &ItemDef) -> bool {
         || item.only_field
 }
 
-/// The ids of the held items in the order the item list shows them, so a
-/// item-list cursor row index maps back to the item id under it. Rows past the end
-/// of this list are the blank spacer and the gold line, which select nothing.
+/// Held item IDs in database order, mapping the two-column cursor to its item.
 pub(super) fn held_item_ids(data: &GameData, inventory: &Inventory) -> Vec<u32> {
     data.items
         .iter()

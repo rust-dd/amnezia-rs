@@ -45,6 +45,18 @@ fn end_game_does_not_use_the_legacy_full_screen_text_panel() {
 }
 
 #[test]
+fn item_list_does_not_use_the_legacy_full_screen_text_panel() {
+    let mut app = viewing(MenuScreen::ItemList { cursor: 0 });
+    let world = app.world_mut();
+    let (_, visibility) = world
+        .query::<(&MenuWindow, &Visibility)>()
+        .iter(world)
+        .find(|(window, _)| window.0 == WindowId::Content)
+        .unwrap();
+    assert_eq!(*visibility, Visibility::Hidden);
+}
+
+#[test]
 fn inactive_command_cursor_remains_visible_during_member_selection() {
     let mut app = viewing(MenuScreen::MemberSelect {
         action: crate::menu::MemberAction::Skill,

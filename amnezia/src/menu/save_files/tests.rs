@@ -32,6 +32,7 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
     })
     .insert_resource(SaveAccess(true))
     .init_resource::<SaveFiles>()
+    .init_resource::<crate::menu::items::List>()
     .add_message::<crate::audio::AudioRequest>()
     .add_systems(
         Update,
