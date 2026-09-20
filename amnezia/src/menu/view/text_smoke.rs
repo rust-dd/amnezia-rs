@@ -1,5 +1,4 @@
 use super::*;
-use crate::font::bitmap::BitmapFont;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -75,8 +74,6 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         world.resource::<Progression>(),
         world.resource::<Vitals>(),
     );
-    let font = world.resource::<BitmapFont>();
-    let terms = world.resource::<Terms>();
     let data = world.resource::<GameData>();
     for (index, member) in members.iter().enumerate() {
         if let Some((_, threshold)) = member.exp {
@@ -86,63 +83,6 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             assert_eq!(progression.level(actor), member.level);
             progression.add(actor, 1);
             assert!(progression.level(actor) > member.level);
-        }
-    }
-    let handle = world
-        .resource::<AssetServer>()
-        .load("graphics/System/System.png");
-    let skin = world.resource::<Assets<Image>>().get(&handle).unwrap();
-    let mut pixels = Vec::new();
-    let mut add = |left, top, width, runs| {
-        let text = PixelText {
-            size: UVec2::new(width, 16),
-            runs,
-        };
-        let image = font.render(&text, skin);
-        for y in 0..16 {
-            for x in 0..width {
-                let color = image.get_color_at(x, y).unwrap().to_srgba().to_u8_array();
-                if color[3] == 255 {
-                    pixels.push((left + x, top + y, color));
-                }
-            }
-        }
-    };
-    for (index, &command) in command::COMMANDS.iter().enumerate() {
-        add(
-            8,
-            10 + index as u32 * 16,
-            72,
-            vec![Run::new(
-                command::label(command, terms),
-                0,
-                0,
-                main_text::command_color(index, members.len(), save),
-            )],
-        );
-    }
-    add(
-        8,
-        218,
-        72,
-        main_text::gold(world.resource::<Inventory>().gold(), terms, font),
-    );
-    for (slot, member) in members.iter().enumerate() {
-        for (field, left, top, width) in [
-            (MemberField::Name, 152, 10, 160),
-            (MemberField::Title, 240, 10, 72),
-            (MemberField::Level, 152, 26, 160),
-            (MemberField::Condition, 194, 26, 118),
-            (MemberField::Hp, 258, 26, 54),
-            (MemberField::Exp, 152, 42, 160),
-            (MemberField::Sp, 258, 42, 54),
-        ] {
-            add(
-                left,
-                top + slot as u32 * 58,
-                width,
-                main_text::member(member, field, terms, font),
-            );
         }
     }
     if empty {
@@ -155,7 +95,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             }
         }
     }
-    assert!(pixels.len() > 200);
+    let pixels = super::main_pixels::compose(world);
+    assert_eq!(pixels.len(), 320 * 240);
     Some(Snapshot {
         pixels,
         checks: world.resource::<Checks>().0.clone(),
@@ -173,7 +114,7 @@ impl Snapshot {
         }
         self.checks.fetch_add(1, Ordering::Relaxed);
         info!(
-            "field text: {} original glyph and shadow pixels verified",
+            "field text: {} original full-canvas pixels verified",
             self.pixels.len()
         );
     }

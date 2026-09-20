@@ -286,7 +286,12 @@ fn main_menu_frame_layers_background_below_eight_native_pixel_corners() {
         .unwrap()
         .1;
     let background = world.get::<ImageNode>(children[0]).unwrap();
-    assert_eq!(background.rect, Some(Rect::new(0.0, 0.0, 32.0, 32.0)));
+    assert_eq!(background.rect, None);
+    assert!(
+        world
+            .get::<crate::windowskin::background::Pixels>(children[0])
+            .is_some()
+    );
     let corners = children
         .iter()
         .filter_map(|entity| Some((world.get::<Node>(entity)?, world.get::<ImageNode>(entity)?)))
@@ -300,6 +305,36 @@ fn main_menu_frame_layers_background_below_eight_native_pixel_corners() {
     for (node, _) in corners {
         assert_eq!((node.width, node.height), (Val::Px(24.0), Val::Px(24.0)));
     }
+}
+
+#[test]
+fn main_windows_rasterize_backgrounds_at_the_original_native_dimensions() {
+    let mut app = scaffold();
+    let world = app.world_mut();
+    let mut count = 0;
+    for (window, children) in world.query::<(&MenuWindow, &Children)>().iter(world) {
+        let expected = match window.0 {
+            WindowId::Command => UVec2::new(88, 96),
+            WindowId::Gold => UVec2::new(88, 32),
+            WindowId::Status => UVec2::new(232, 240),
+            _ => continue,
+        };
+        let background = world
+            .get::<crate::windowskin::background::Pixels>(children[0])
+            .expect("main windows need a native background raster below their border");
+        assert_eq!(background.0, expected);
+        assert_eq!(
+            children
+                .iter()
+                .filter(|child| world
+                    .get::<crate::windowskin::background::Pixels>(*child)
+                    .is_some())
+                .count(),
+            1
+        );
+        count += 1;
+    }
+    assert_eq!(count, 3);
 }
 
 #[test]

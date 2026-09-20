@@ -78,32 +78,6 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     };
     assert_eq!(world.resource::<MenuState>().screen, expected);
     assert_eq!(world.resource::<Party>().snapshot(), [1, 2, 3, 4]);
-    let background = world
-        .query::<(&MenuWindow, &Children)>()
-        .iter(world)
-        .find(|(window, _)| window.0 == WindowId::Status)
-        .unwrap()
-        .1[0];
-    let system = world.get::<ImageNode>(background).unwrap().image.clone();
-    assert_eq!(
-        system,
-        world
-            .resource::<AssetServer>()
-            .load("graphics/System/System.png")
-    );
-    let images = world.resource::<Assets<Image>>();
-    let skin = images.get(&system).unwrap();
-    let mut pixels = Vec::new();
-    let background = skin.get_color_at(0, 32).unwrap().to_srgba().to_u8_array();
-    assert_eq!(background[3], 255);
-    for y in 96..208 {
-        for x in 0..88 {
-            pixels.push((x, y, background));
-        }
-    }
-    for (x, y, w, h) in [(0, 0, 88, 96), (0, 208, 88, 32), (88, 0, 232, 240)] {
-        border(&mut pixels, skin, (x, y, w, h), 32, false);
-    }
     let command_source = if matches!(label, "menu-early" | "menu-layout-resized") {
         96
     } else {
@@ -115,17 +89,9 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         command_source,
         "{label}"
     );
-    border(
-        &mut pixels,
-        skin,
-        (4, 8 + u32::from(member) * 16, 80, 16),
-        command_source,
-        true,
-    );
     if member {
         let source = if label == "menu-member-blink" { 96 } else { 64 };
         assert_eq!(clock.source_x(CursorId::Status) as u32, source, "{label}");
-        border(&mut pixels, skin, (148, 182, 168, 48), source, true);
     }
     let faces = world
         .query::<(&MenuFace, &ImageNode, &InheritedVisibility)>()
@@ -140,7 +106,6 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         })
         .collect::<Vec<_>>();
     assert_eq!(faces.len(), 4);
-    let images = world.resource::<Assets<Image>>();
     let actors = world.resource::<GameData>();
     for (slot, image, rect, visible) in faces {
         assert!(visible);
@@ -158,19 +123,9 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
                 (actor.face_index / 4 * 48) as f32
             )
         );
-        let image = images.get(&image).unwrap();
-        for y in 0..48 {
-            for x in 0..48 {
-                sample(
-                    &mut pixels,
-                    image,
-                    (96 + x, 8 + slot as u32 * 58 + y),
-                    (rect.min.x as u32 + x, rect.min.y as u32 + y),
-                );
-            }
-        }
     }
-    assert!(pixels.len() > 9000);
+    let pixels = super::main_pixels::compose(world);
+    assert_eq!(pixels.len(), 320 * 240);
     Some(Snapshot {
         pixels,
         checks: world.resource::<Checks>().0.clone(),
@@ -240,7 +195,7 @@ impl Snapshot {
         }
         self.checks.fetch_add(1, Ordering::Relaxed);
         info!(
-            "field menu: {} original skin and portrait pixels verified",
+            "field menu: {} original reference pixels verified",
             self.pixels.len()
         );
     }
