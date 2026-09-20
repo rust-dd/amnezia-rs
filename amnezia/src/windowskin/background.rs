@@ -5,7 +5,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
 #[derive(Component, Clone, Copy, PartialEq, Eq)]
 #[require(ImageNode, Cached)]
-pub(super) struct Pixels(pub UVec2);
+pub(crate) struct Pixels(pub UVec2);
 
 #[derive(Component, Default)]
 struct Cached(Option<UVec2>);

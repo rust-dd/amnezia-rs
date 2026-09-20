@@ -79,7 +79,7 @@ pub(super) fn spawn(panel: &mut ChildSpawnerCommands, system: &Handle<Image>) {
         panel
             .spawn((Node::default(), kind, Visibility::Hidden))
             .with_children(|window| {
-                frame(window, system);
+                crate::windowskin::fixed_frame(window, system, UVec2::ONE);
                 if kind == EndWindow::Commands {
                     window
                         .spawn((Node::default(), EndCursor))
@@ -105,7 +105,8 @@ pub(in crate::menu) fn update(
     frames: Res<GameFrames>,
     pause: crate::transitions::TransitionPause,
     mut clock: ResMut<Clock>,
-    mut windows: Query<(&EndWindow, &mut Node, &mut Visibility)>,
+    mut windows: Query<(&EndWindow, &mut Node, &mut Visibility, &Children)>,
+    mut backgrounds: Query<&mut crate::windowskin::background::Pixels>,
     mut texts: Query<(&EndText, &mut PixelText, &mut Node), Without<EndWindow>>,
     mut cursor: Query<(&mut Node, &Children), CursorOnly>,
     mut images: Query<&mut ImageNode, Without<EndText>>,
@@ -115,13 +116,18 @@ pub(in crate::menu) fn update(
         _ => None,
     };
     clock.advance(frames.frame, selected.is_some(), pause.paused());
-    for (_, _, mut visibility) in &mut windows {
+    for (_, _, mut visibility, _) in &mut windows {
         *visibility = vis(selected.is_some());
     }
     let Some(selected) = selected else { return };
     let layout = Layout::new(&terms, &font);
-    for (kind, mut node, _) in &mut windows {
+    for (kind, mut node, _, children) in &mut windows {
         let (x, y, width, height) = layout.rect(*kind);
+        for child in children {
+            if let Ok(mut background) = backgrounds.get_mut(*child) {
+                background.0 = UVec2::new(width, height);
+            }
+        }
         *node = window_node(
             x as f32 * 3.0,
             y as f32 * 3.0,

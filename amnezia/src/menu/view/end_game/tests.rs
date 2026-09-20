@@ -156,3 +156,42 @@ fn end_game_windows_disappear_when_cancelled_or_when_the_menu_closes() {
         );
     }
 }
+
+#[test]
+fn both_end_windows_use_native_background_dimensions_and_update_without_replacing_entities() {
+    let mut app = app();
+    let mut original = Vec::new();
+    for changed in [false, true] {
+        if changed {
+            app.world_mut().resource_mut::<Terms>().0.yes = "Folytasd".into();
+            app.update();
+        }
+        let world = app.world_mut();
+        let backgrounds = world
+            .query::<(Entity, &EndWindow, &Children)>()
+            .iter(world)
+            .map(|(entity, kind, children)| {
+                let pixels = children
+                    .iter()
+                    .filter_map(|child| {
+                        world
+                            .get::<crate::windowskin::background::Pixels>(child)
+                            .map(|pixels| (child, pixels))
+                    })
+                    .collect::<Vec<_>>();
+                assert_eq!(pixels.len(), 1);
+                let expected = match kind {
+                    EndWindow::Help => UVec2::new(82, 32),
+                    EndWindow::Commands => UVec2::new(if changed { 64 } else { 40 }, 48),
+                };
+                assert_eq!(pixels[0].1.0, expected);
+                (entity, pixels[0].0)
+            })
+            .collect::<Vec<_>>();
+        if changed {
+            assert_eq!(backgrounds, original);
+        } else {
+            original = backgrounds;
+        }
+    }
+}
