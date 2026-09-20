@@ -4,11 +4,15 @@
 //! each page letter by letter and [`view`] draws it. Decision or Cancel advances
 //! a completed page or releases an explicit key-wait.
 
+pub(crate) mod async_smoke;
+#[cfg(test)]
+mod async_tests;
 mod embedded;
 mod input_prompts;
 #[cfg(test)]
 mod interaction_tests;
 mod options;
+mod pause;
 pub(crate) mod saved;
 #[cfg(test)]
 pub(crate) mod testing;
@@ -27,6 +31,7 @@ pub(crate) use embedded::MessagePrompt;
 pub(crate) use embedded::smoke as embedded_smoke;
 pub(crate) use input_prompts::{InputPrompts, PromptFrame};
 pub use options::MessageOptions;
+pub(crate) use pause::MessagePause;
 use typewriter::Typewriter;
 pub(crate) use typewriter::smoke as timing_smoke;
 pub(crate) use view::prompts::Clock as PromptClock;
@@ -198,6 +203,7 @@ fn interact(
     keys: Res<ButtonInput<KeyCode>>,
     prompts: InputPrompts,
     scene: crate::world::ScenePause,
+    pause: MessagePause,
     data: Res<MapData>,
     map_events: Res<MapEvents>,
     switches: Res<Switches>,
@@ -210,7 +216,7 @@ fn interact(
 ) {
     let decision = keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter);
     if (!decision && !keys.just_pressed(KeyCode::Escape))
-        || scene.screen_effects_paused()
+        || pause.paused()
         || prompts.nested_active()
     {
         return;

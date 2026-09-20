@@ -12,7 +12,8 @@ mod prompts;
 pub(crate) use arrows::snapshot as arrow_snapshot;
 
 pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
-    crate::dialogue::embedded_smoke::input(world, frame)
+    crate::dialogue::async_smoke::input(world, frame)
+        || crate::dialogue::embedded_smoke::input(world, frame)
         || crate::choice::smoke::held_input(world, frame)
         || crate::inputnumber::smoke::held_input(world, frame)
         || key_queries::input(world, frame)
@@ -77,6 +78,9 @@ fn start(world: &mut World, case: u32, message: EventCommand, fps: f64) {
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     assert!(!world.resource::<crate::menu::MenuOpen>().0);
+    if frame >= 2520 {
+        return crate::dialogue::async_smoke::drive(world, frame);
+    }
     if frame >= 1900 {
         return crate::dialogue::embedded_smoke::drive(world, frame);
     }
@@ -205,6 +209,7 @@ fn verify_view(world: &mut World, expected: &str, arrow: bool) {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    crate::dialogue::async_smoke::verify_finished(world);
     crate::dialogue::embedded_smoke::verify_finished(world);
     crate::dialogue::prompt_smoke::verify_finished(world);
     crate::choice::smoke::verify_finished(world);

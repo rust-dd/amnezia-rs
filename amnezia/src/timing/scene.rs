@@ -7,6 +7,10 @@ pub(crate) struct SceneFrames {
     pub frame: u32,
 }
 
+/// The frame began in an asynchronous wait, even if its handoff has since ended.
+#[derive(Resource, Default)]
+pub(crate) struct SceneWait(pub bool);
+
 #[derive(SystemParam)]
 pub(super) struct Waiting<'w> {
     transition: crate::transitions::TransitionPause<'w>,

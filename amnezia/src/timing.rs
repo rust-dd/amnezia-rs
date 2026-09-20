@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
 mod scene;
-pub(crate) use scene::SceneFrames;
+pub(crate) use scene::{SceneFrames, SceneWait};
 
 /// Raw 60 Hz clock for input and transitions, including asynchronous waits.
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -40,6 +40,7 @@ impl Plugin for TimingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameFrames>()
             .init_resource::<SceneFrames>()
+            .init_resource::<SceneWait>()
             .add_systems(
                 PreUpdate,
                 tick.in_set(FrameClockSet).after(crate::save::SaveSet),
@@ -51,11 +52,13 @@ fn tick(
     time: Res<Time>,
     mut frames: ResMut<GameFrames>,
     mut scene: ResMut<SceneFrames>,
+    mut wait: ResMut<SceneWait>,
     waiting: scene::Waiting,
 ) {
     let before = frames.frame;
     frames.advance(time.delta_secs_f64());
-    if !waiting.pending() {
+    wait.0 = waiting.pending();
+    if !wait.0 {
         scene.frame = scene.frame.wrapping_add(frames.frame.wrapping_sub(before));
     }
 }

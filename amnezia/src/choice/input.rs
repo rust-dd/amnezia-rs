@@ -1,16 +1,13 @@
 use super::Choice;
 use crate::audio::{AudioRequest, SystemSounds, play_system_se};
-use crate::menu::{DirectionInput, MenuOpen};
-use crate::teleport::Fade;
-use crate::transitions::TransitionPause;
+use crate::dialogue::MessagePause;
+use crate::menu::DirectionInput;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 #[derive(SystemParam)]
 pub(super) struct Gates<'w> {
-    pause: TransitionPause<'w>,
-    menu: Option<Res<'w, MenuOpen>>,
-    fade: Option<Res<'w, Fade>>,
+    pause: MessagePause<'w>,
     dialogue: Option<Res<'w, crate::dialogue::Dialogue>>,
 }
 
@@ -26,8 +23,6 @@ pub(super) fn update(
     if !choice.active
         || count == 0
         || gates.pause.paused()
-        || gates.menu.is_some_and(|v| v.0)
-        || gates.fade.is_some_and(|v| v.busy())
         || gates
             .dialogue
             .is_some_and(|dialogue| !dialogue.prompt_input_ready())

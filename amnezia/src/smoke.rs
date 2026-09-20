@@ -371,7 +371,7 @@ fn drive(world: &mut World) {
         } else if scenario == "menu" {
             1520
         } else if scenario == "dialogue-timing" {
-            2520
+            3000
         } else {
             1260
         },

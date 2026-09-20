@@ -97,12 +97,12 @@ pub(super) fn update(
     mut number: Option<ResMut<InputNumber>>,
     hero: Res<crate::text::HeroName>,
     variables: Res<crate::state::Variables>,
-    scene: crate::world::ScenePause,
+    pause: super::MessagePause,
 ) {
     let Some(prompt) = dialogue.embedded_prompt() else {
         return;
     };
-    if scene.screen_effects_paused() {
+    if pause.paused() {
         return;
     }
     if prompt.started {

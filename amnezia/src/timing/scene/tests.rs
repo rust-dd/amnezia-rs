@@ -32,11 +32,13 @@ fn only_scene_ticks_stop_through_the_final_async_frame_at_every_render_rate() {
             renders += 1;
             assert!(renders < fps, "transition must finish on the raw clock");
             assert_eq!(app.world().resource::<SceneFrames>().frame, u32::MAX - 2);
+            assert!(app.world().resource::<SceneWait>().0);
         }
         let start = app.world().resource::<GameFrames>().frame;
         assert!(start >= 35);
         for _ in 0..fps {
             app.update();
+            assert!(!app.world().resource::<SceneWait>().0);
             let elapsed = app.world().resource::<GameFrames>().frame - start;
             assert_eq!(
                 app.world().resource::<SceneFrames>().frame,

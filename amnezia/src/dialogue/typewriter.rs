@@ -166,7 +166,7 @@ pub(in crate::dialogue) fn drive_reveal(
     hero: Res<crate::text::HeroName>,
     variables: Res<Variables>,
     frames: Res<crate::timing::GameFrames>,
-    scene: crate::world::ScenePause,
+    pause: super::MessagePause,
 ) {
     if !dialogue.active {
         return;
@@ -175,7 +175,7 @@ pub(in crate::dialogue) fn drive_reveal(
         let previous = reveal.last_frame.replace(frames.frame);
         previous.map_or(1, |previous| frames.frame.wrapping_sub(previous))
     });
-    if scene.screen_effects_paused() {
+    if pause.paused() {
         return;
     }
     for tick in 0..ticks {
