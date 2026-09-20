@@ -4,6 +4,7 @@ use crate::menu::testkit;
 use crate::save::SaveRequest;
 use amnezia_data::SoundDef;
 
+mod command_navigation;
 mod equip_fades;
 mod equip_navigation;
 mod equip_selection;
@@ -59,6 +60,7 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
                 skills::update,
                 equip::update,
                 crate::menu::targets::update,
+                crate::menu::command_navigation::update,
                 menu_input,
                 equip::refresh_actor,
             )

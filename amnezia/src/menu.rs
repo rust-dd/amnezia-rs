@@ -21,6 +21,7 @@
 //! shared screen types.
 
 mod command;
+mod command_navigation;
 mod derive;
 mod equip;
 mod input;
@@ -36,6 +37,7 @@ mod targets;
 mod use_item;
 mod view;
 
+pub(crate) use command_navigation::smoke as navigation_smoke;
 pub(crate) use equip::Switch as EquipmentSwitch;
 pub(crate) use equip::layout_smoke as equipment_smoke;
 pub(crate) use items::smoke as item_smoke;
@@ -162,6 +164,7 @@ impl Plugin for MenuPlugin {
                         skills::update,
                         equip::update,
                         targets::update,
+                        command_navigation::update,
                         input::menu_input,
                         equip::refresh_actor,
                     )

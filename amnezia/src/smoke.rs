@@ -368,6 +368,8 @@ fn drive(world: &mut World) {
             2400
         } else if scenario == "items" {
             1480
+        } else if scenario == "menu" {
+            1520
         } else {
             1260
         },

@@ -22,6 +22,9 @@ pub(super) fn input(world: &mut World) {
     if scenario == "equipment" && crate::menu::equipment_smoke::held_input(world, frame) {
         return;
     }
+    if scenario == "menu" && crate::menu::navigation_smoke::held_input(world, frame) {
+        return;
+    }
     let requested = if scenario == "save-slots" {
         crate::menu::save_files::smoke::input(frame)
     } else if scenario == "items" {

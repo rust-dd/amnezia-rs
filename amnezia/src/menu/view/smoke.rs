@@ -5,6 +5,8 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+mod navigation;
+
 #[derive(Resource, Default)]
 struct Checks(Arc<AtomicUsize>);
 
@@ -15,12 +17,13 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
         620 | 760 | 780 => Some(KeyCode::Escape),
         640 => Some(KeyCode::ArrowUp),
         1050 => Some(KeyCode::ArrowRight),
-        _ => equip_selection::input(frame),
+        _ => equip_selection::input(frame).or_else(|| crate::menu::navigation_smoke::input(frame)),
     }
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     equip_selection::drive(world, frame);
+    let navigation = crate::menu::navigation_smoke::drive(world, frame);
     if frame == 300 {
         world.init_resource::<Checks>();
         world.resource_mut::<MenuOpen>().0 = true;
@@ -40,7 +43,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         580 => Some("menu-layout-member"),
         740 => Some("menu-layout-resized"),
         786 => Some("menu-cursor-reopen"),
-        _ => super::text_smoke::drive(world, frame),
+        _ => super::text_smoke::drive(world, frame).or(navigation),
     }
 }
 
@@ -50,6 +53,9 @@ pub(crate) struct Snapshot {
 }
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
+    if let Some(snapshot) = navigation::snapshot(world, label) {
+        return Some(snapshot);
+    }
     if !matches!(
         label,
         "menu-early"
@@ -242,5 +248,6 @@ impl Snapshot {
 
 pub(crate) fn verify_finished(world: &World) {
     equip_selection::verify_finished(world);
+    crate::menu::navigation_smoke::verify_finished(world);
     assert_eq!(world.resource::<Checks>().0.load(Ordering::Relaxed), 6);
 }

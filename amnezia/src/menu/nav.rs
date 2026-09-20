@@ -1,4 +1,4 @@
-//! The menu's pure navigation logic: cursor stepping, the Escape back-out map,
+//! The menu's pure navigation logic: the Escape back-out map,
 //! the End Game return-to-title decision, and the item/skill confirm targets. All
 //! of it is side-effect-free so the [`super::input`] systems stay thin and these
 //! transitions are unit-tested without an app.
@@ -16,12 +16,6 @@ use super::{MemberAction, MenuScreen, items, skills, use_item};
 /// Whether a confirm key (Space or Enter) was pressed this frame.
 pub(super) fn confirm_pressed(keys: &ButtonInput<KeyCode>) -> bool {
     keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter)
-}
-
-/// A list cursor after this frame's Up/Down within `0..=max`, clamped at both ends.
-pub(super) fn step(cursor: usize, up: bool, down: bool, max: usize) -> usize {
-    let cursor = if down { (cursor + 1).min(max) } else { cursor };
-    if up { cursor.saturating_sub(1) } else { cursor }
 }
 
 /// The `(open, screen)` after Escape. From a sub-screen, back out to its parent
@@ -265,13 +259,5 @@ mod tests {
             ),
             None
         );
-    }
-
-    #[test]
-    fn step_clamps_at_both_ends() {
-        assert_eq!(step(0, false, true, 3), 1);
-        assert_eq!(step(3, false, true, 3), 3);
-        assert_eq!(step(0, true, false, 3), 0);
-        assert_eq!(step(2, true, false, 3), 1);
     }
 }

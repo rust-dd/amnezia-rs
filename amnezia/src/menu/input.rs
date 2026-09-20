@@ -23,7 +23,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 use super::nav::{
-    confirm_pressed, end_game_transition, escape_transition, item_target, skill_target, step,
+    confirm_pressed, end_game_transition, escape_transition, item_target, skill_target,
 };
 use super::{MenuAccess, MenuOpen, MenuScreen, MenuState, command, equip, items, skills, use_item};
 
@@ -102,18 +102,11 @@ pub(super) fn menu_input(
     if save_files.active() || gates.switch.as_ref().is_some_and(|switch| switch.active()) {
         return;
     }
-    if matches!(
-        state.screen,
-        MenuScreen::ItemList { .. }
-            | MenuScreen::ItemTarget { .. }
-            | MenuScreen::SkillList { .. }
-            | MenuScreen::SkillTarget { .. }
-            | MenuScreen::Equip { .. }
-    ) && (blockers.fade.busy()
+    if blockers.fade.busy()
         || blockers
             .transition
             .as_ref()
-            .is_some_and(|transition| transition.busy()))
+            .is_some_and(|transition| transition.busy())
     {
         return;
     }
@@ -157,21 +150,7 @@ pub(super) fn menu_input(
         return;
     }
     let confirm = confirm_pressed(&keys);
-    let up = keys.just_pressed(KeyCode::ArrowUp);
-    let down = keys.just_pressed(KeyCode::ArrowDown);
     let members = party.snapshot().len().saturating_sub(1);
-    if (up || down)
-        && !matches!(
-            state.screen,
-            MenuScreen::ItemList { .. }
-                | MenuScreen::ItemTarget { .. }
-                | MenuScreen::SkillList { .. }
-                | MenuScreen::SkillTarget { .. }
-                | MenuScreen::Equip { .. }
-        )
-    {
-        sfx.cursor();
-    }
     if confirm
         && !matches!(
             state.screen,
@@ -188,7 +167,6 @@ pub(super) fn menu_input(
     }
     match state.screen {
         MenuScreen::Command => {
-            state.cursor = step(state.cursor, up, down, command::COMMANDS.len() - 1);
             if confirm {
                 let command = command::COMMANDS[state.cursor];
                 if !command::enabled(command, party.snapshot().len(), gates.save_access.0) {
@@ -236,8 +214,6 @@ pub(super) fn menu_input(
             }
         }
         MenuScreen::MemberSelect { action, cursor } => {
-            let cursor = step(cursor, up, down, members);
-            state.screen = MenuScreen::MemberSelect { action, cursor };
             if confirm {
                 if command::member_enabled(action, cursor, &party, &vitals) {
                     sfx.decision();
@@ -358,8 +334,6 @@ pub(super) fn menu_input(
         }
         MenuScreen::Status { .. } => {}
         MenuScreen::EndGame { cursor } => {
-            let cursor = step(cursor, up, down, 1);
-            state.screen = MenuScreen::EndGame { cursor };
             if confirm {
                 let (next_open, next_title) = end_game_transition(cursor, title.0);
                 open.0 = next_open;
