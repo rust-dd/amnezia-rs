@@ -96,7 +96,7 @@ Run `cargo run -p amnezia --locked -- --debug-tools` to enable development short
 
 Implemented systems include event interpretation, map rendering and movement, dialogue, music, menus, shops/inns, turn-based battles, progression, and save/load. The native canvas is 320×240 with whole-pixel scaling and letterboxing.
 
-Remaining work includes choice/number-input presentation, message-window lifecycle and transitions, shop/inn presentation, battle text timing, full English localization, and end-to-end campaign and release verification. Original-data regression tests and focused native checks are not a substitute for those checks.
+Choice and number input now share the original bitmap message window, including prompts embedded below preceding dialogue. Remaining work includes standalone choice typing, message-window lifecycle and transitions, shop/inn presentation, battle text timing, full English localization, and end-to-end campaign and release verification. Original-data regression tests and focused native checks are not a substitute for those checks.
 
 ## Credits and third-party materials
 

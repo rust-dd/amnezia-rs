@@ -20,7 +20,6 @@ use crate::appearance::SpriteChange;
 use crate::audio::AudioRequest;
 use crate::battle::{BattleOutcome, BattleRequest};
 use crate::dialogue::MessagePosition;
-use crate::events::message_boxes;
 use crate::screenfx::Weather;
 use crate::shop::ShopRequest;
 use crate::text;
@@ -31,32 +30,7 @@ use bevy::prelude::*;
 /// Handle one event command against `frame`, returning how the run continues.
 pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -> Flow {
     match command.code {
-        SHOW_MESSAGE | SHOW_MESSAGE_2 | CHANGE_FACE => {
-            let run_len = frame.commands[frame.ip..]
-                .iter()
-                .take_while(|c| is_message(c.code))
-                .count();
-            let mut boxes = message_boxes(
-                &frame.commands[frame.ip..frame.ip + run_len],
-                &mut x.dialogue.face,
-            );
-            frame.ip += run_len;
-            if boxes.is_empty() {
-                Flow::Advance
-            } else {
-                // Translate each line but keep its RM2000 control codes intact: the
-                // dialogue typewriter expands `\N`/`\V` and acts on the reveal-timing
-                // codes (`\s`, `\|`, `\^`, …) as it types the page.
-                for message in &mut boxes {
-                    for line in &mut message.lines {
-                        *line = crate::i18n::tr(line);
-                    }
-                }
-                x.dialogue.open(boxes);
-                frame.message_pending = true;
-                Flow::Yield
-            }
-        }
+        SHOW_MESSAGE | SHOW_MESSAGE_2 | CHANGE_FACE => super::messages::show(frame, x),
         CONTROL_SWITCHES => {
             apply_control_switches(&mut x.switches, &command.params);
             frame.ip += 1;
@@ -498,8 +472,4 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
     }
-}
-
-fn is_message(code: u32) -> bool {
-    matches!(code, SHOW_MESSAGE | SHOW_MESSAGE_2 | CHANGE_FACE)
 }

@@ -4,6 +4,7 @@
 //! each page letter by letter and [`view`] draws it. Decision or Cancel advances
 //! a completed page or releases an explicit key-wait.
 
+mod embedded;
 mod input_prompts;
 #[cfg(test)]
 mod interaction_tests;
@@ -20,6 +21,8 @@ use crate::player::{Player, facing_tile};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::world::{MapData, MapEvents};
 use bevy::prelude::*;
+pub(crate) use embedded::MessagePrompt;
+pub(crate) use embedded::smoke as embedded_smoke;
 pub(crate) use input_prompts::{InputPrompts, PromptFrame};
 pub use options::MessageOptions;
 use typewriter::Typewriter;
@@ -38,6 +41,7 @@ pub struct Dialogue {
     pub active: bool,
     generation: u64,
     reveal: Option<Typewriter>,
+    prompt: Option<embedded::Embedded>,
 }
 
 impl Dialogue {
@@ -46,6 +50,7 @@ impl Dialogue {
         self.boxes.clear();
         self.index = 0;
         self.reveal = None;
+        self.prompt = None;
     }
 
     /// Show `boxes` from the first one. Called by the event interpreter, which
@@ -55,6 +60,7 @@ impl Dialogue {
         self.index = 0;
         self.active = true;
         self.reveal = None;
+        self.prompt = None;
         self.generation = self.generation.wrapping_add(1);
     }
 
@@ -168,6 +174,7 @@ impl Plugin for DialoguePlugin {
                 (
                     interact.in_set(DialogueInput).after(PromptInput),
                     typewriter::drive_reveal,
+                    embedded::update,
                     view::render_box,
                     view::target_camera,
                     view::render_reveal,

@@ -3,6 +3,8 @@ use crate::choice::Choice;
 use crate::dialogue::view::prompts as presentation;
 use crate::inputnumber::InputNumber;
 
+mod embedded;
+
 fn prompt_app() -> App {
     let mut app = app();
     app.init_resource::<Choice>()

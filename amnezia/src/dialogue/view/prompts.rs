@@ -68,6 +68,30 @@ impl Presentation<'_> {
         }
     }
 
+    pub(super) fn embedded_runs(&self, dialogue: &Dialogue, face: bool) -> Vec<Run> {
+        let prompt = dialogue.embedded_prompt().unwrap();
+        let left = if face { 72 } else { 0 };
+        let mut runs = dialogue
+            .reveal
+            .as_ref()
+            .map_or("", |reveal| reveal.text())
+            .split('\n')
+            .enumerate()
+            .filter(|(_, text)| !text.is_empty())
+            .map(|(row, text)| {
+                let indent = i32::from(!prompt.number() && row >= prompt.line) * 12;
+                Run::new(text, left + indent, 2 + row as i32 * 16, DEFAULT)
+            })
+            .collect::<Vec<_>>();
+        if prompt.number() && self.active() {
+            runs.extend(self.runs(face).into_iter().map(|mut run| {
+                run.position.y += prompt.line as i32 * 16;
+                run
+            }));
+        }
+        runs
+    }
+
     fn cursor(&self, face: bool) -> Option<(u32, u32, u32, bool)> {
         let left = if face { 72 } else { 0 };
         if let Some(choice) = self.choice.as_deref().filter(|choice| choice.active()) {
@@ -107,9 +131,12 @@ pub(in crate::dialogue) fn render_cursor(
     let bank = usize::from(battle.is_some_and(|battle| battle.0));
     for (mut node, mut visibility, children) in &mut cursors {
         *visibility = visible_if(cursor.is_some());
-        let Some((left, top, width, number)) = cursor else {
+        let Some((left, mut top, width, number)) = cursor else {
             continue;
         };
+        if let Some(prompt) = dialogue.embedded_prompt() {
+            top += prompt.line as u32 * 16;
+        }
         *node = Node {
             position_type: PositionType::Absolute,
             left: Val::Px(left as f32 * 3.0),

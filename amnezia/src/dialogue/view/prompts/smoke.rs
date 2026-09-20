@@ -6,7 +6,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-mod pixels;
+pub(in crate::dialogue) mod pixels;
 
 const LABELS: [&str; 12] = [
     "prompt-choice-bottom-a",
@@ -175,14 +175,25 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         },
         skin,
     );
+    let offset = if case.face { 72 } else { 0 };
+    let selection = if case.digits == 0 {
+        (
+            10 + offset,
+            8 + if index == 2 { 32 } else { 48 },
+            300 - offset,
+            origin,
+        )
+    } else {
+        (16 + offset + (case.digits - 1) * 12, 8, 14, origin)
+    };
     Some(Snapshot {
         pixels: pixels::reference(
             skin,
             &glyphs,
-            case.face.then(|| images.get(&face).unwrap()),
-            &case,
-            index,
-            origin,
+            case.face.then(|| (images.get(&face).unwrap(), 6)),
+            case.top,
+            case.transparent,
+            Some(selection),
         ),
         checks: world.resource::<Probe>().pixels.clone(),
     })

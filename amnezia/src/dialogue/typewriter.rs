@@ -33,6 +33,7 @@ pub(super) struct Typewriter {
     finishing: bool,
     waiting_key: bool,
     kill_page: bool,
+    end_prompt: bool,
     done: bool,
 }
 
@@ -70,6 +71,14 @@ impl Typewriter {
         self.pause.visible()
     }
 
+    pub(super) fn expect_prompt(&mut self) {
+        self.end_prompt = true;
+    }
+
+    pub(super) fn page_finished(&self) -> bool {
+        self.finishing
+    }
+
     /// Spend one logical tick, consuming segments until a delay or key-wait.
     pub(super) fn tick(&mut self) {
         self.pause.advance(1);
@@ -90,7 +99,7 @@ impl Typewriter {
                     return;
                 }
                 self.finishing = true;
-                self.pause.set(!self.kill_page);
+                self.pause.set(!self.kill_page && !self.end_prompt);
                 self.wait = self.cadence.newline(true);
                 continue;
             };
@@ -100,7 +109,7 @@ impl Typewriter {
                     self.revealed.push('\n');
                     self.finishing = self.cursor == self.segments.len();
                     if self.finishing {
-                        self.pause.set(!self.kill_page);
+                        self.pause.set(!self.kill_page && !self.end_prompt);
                     }
                     self.wait = self.cadence.newline(self.finishing);
                 }
@@ -152,7 +161,7 @@ impl Typewriter {
 }
 
 /// Consume logical ticks without charging a new page for time before it opened.
-pub(super) fn drive_reveal(
+pub(in crate::dialogue) fn drive_reveal(
     mut dialogue: ResMut<super::Dialogue>,
     hero: Res<crate::text::HeroName>,
     variables: Res<Variables>,
@@ -180,12 +189,15 @@ pub(super) fn drive_reveal(
                 break;
             };
             let mut reveal = Typewriter::new(&raw, &hero.0, &variables);
+            if dialogue.embedded_prompt().is_some() {
+                reveal.expect_prompt();
+            }
             reveal.last_frame = Some(frames.frame);
             dialogue.reveal = Some(reveal);
         }
         let reveal = dialogue.reveal.as_mut().unwrap();
         reveal.tick();
-        if reveal.is_complete() && reveal.kill_page() {
+        if reveal.is_complete() && reveal.kill_page() && !reveal.end_prompt {
             dialogue.advance();
             if !dialogue.active {
                 break;

@@ -11,6 +11,7 @@ pub(super) struct Gates<'w> {
     pause: TransitionPause<'w>,
     menu: Option<Res<'w, MenuOpen>>,
     fade: Option<Res<'w, Fade>>,
+    dialogue: Option<Res<'w, crate::dialogue::Dialogue>>,
 }
 
 pub(super) fn update(
@@ -27,6 +28,9 @@ pub(super) fn update(
         || gates.pause.paused()
         || gates.menu.is_some_and(|v| v.0)
         || gates.fade.is_some_and(|v| v.busy())
+        || gates
+            .dialogue
+            .is_some_and(|dialogue| !dialogue.prompt_input_ready())
     {
         return;
     }

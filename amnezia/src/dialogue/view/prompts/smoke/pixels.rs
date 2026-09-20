@@ -1,16 +1,15 @@
-use super::Case;
 use bevy::prelude::*;
 
-pub(super) fn reference(
+pub(in crate::dialogue) fn reference(
     skin: &Image,
     glyphs: &Image,
-    portrait: Option<&Image>,
-    case: &Case,
-    index: usize,
-    origin: u32,
+    portrait: Option<(&Image, u32)>,
+    top: u32,
+    transparent: bool,
+    selection: Option<(u32, u32, u32, u32)>,
 ) -> Vec<[u8; 4]> {
     let mut pixels = vec![[0, 0, 0, 255]; 320 * 240];
-    if !case.transparent {
+    if !transparent {
         for y in 0..80 {
             for x in 0..320 {
                 let mut pixel = rgba(skin, background(x, 320), background(y, 80));
@@ -20,38 +19,33 @@ pub(super) fn reference(
                         pixel,
                     );
                 }
-                pixels[((case.top + y) * 320 + x) as usize] = pixel;
+                pixels[((top + y) * 320 + x) as usize] = pixel;
             }
         }
     }
-    let offset = if case.face { 72 } else { 0 };
-    let (left, top, width) = if case.digits == 0 {
-        (
-            10 + offset,
-            8 + if index == 2 { 32 } else { 48 },
-            300 - offset,
-        )
-    } else {
-        (16 + offset + (case.digits - 1) * 12, 8, 14)
-    };
-    let cursor = cursor(skin, width, origin);
-    for y in 0..16 {
-        for x in 0..width {
-            let pixel = &mut pixels[((case.top + top + y) * 320 + left + x) as usize];
-            *pixel = over(cursor[(y * width + x) as usize], *pixel);
+    if let Some((left, cursor_top, width, origin)) = selection {
+        let cursor = cursor(skin, width, origin);
+        for y in 0..16 {
+            for x in 0..width {
+                let pixel = &mut pixels[((top + cursor_top + y) * 320 + left + x) as usize];
+                *pixel = over(cursor[(y * width + x) as usize], *pixel);
+            }
         }
     }
-    if let Some(portrait) = portrait {
+    if let Some((portrait, index)) = portrait {
         for y in 0..48 {
             for x in 0..48 {
-                let pixel = &mut pixels[((case.top + 16 + y) * 320 + 16 + x) as usize];
-                *pixel = over(rgba(portrait, 96 + x, 48 + y), *pixel);
+                let pixel = &mut pixels[((top + 16 + y) * 320 + 16 + x) as usize];
+                *pixel = over(
+                    rgba(portrait, index % 4 * 48 + x, index / 4 * 48 + y),
+                    *pixel,
+                );
             }
         }
     }
     for y in 0..64 {
         for x in 0..304 {
-            let pixel = &mut pixels[((case.top + 8 + y) * 320 + 8 + x) as usize];
+            let pixel = &mut pixels[((top + 8 + y) * 320 + 8 + x) as usize];
             *pixel = over(rgba(glyphs, x, y), *pixel);
         }
     }

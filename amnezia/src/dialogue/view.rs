@@ -252,7 +252,9 @@ pub(super) fn render_reveal(
         let face = prompts.face(&dialogue).is_some();
         let next = PixelText {
             size: UVec2::new(CONTENTS_WIDTH, CONTENTS_HEIGHT),
-            runs: if prompts.active() {
+            runs: if dialogue.embedded_prompt().is_some() {
+                prompts.embedded_runs(&dialogue, face)
+            } else if prompts.active() {
                 prompts.runs(face)
             } else {
                 reveal.map_or_else(Vec::new, |reveal| {
@@ -308,7 +310,11 @@ pub(super) fn update_position(
         *position,
         *options,
         battle,
-        prompts.key(),
+        if dialogue.active {
+            (0, 0)
+        } else {
+            prompts.key()
+        },
     );
     if *previous == Some(snapshot) {
         return;

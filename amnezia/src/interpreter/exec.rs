@@ -11,6 +11,7 @@ mod dispatch;
 mod handlers;
 mod key_input;
 mod message_gate;
+mod messages;
 mod vehicles;
 
 use super::frame::{Frame, MAX_STEPS_PER_FRAME};
