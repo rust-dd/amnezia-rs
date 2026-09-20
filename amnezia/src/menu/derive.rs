@@ -48,6 +48,34 @@ pub(super) fn stats_with_slots(
     out
 }
 
+/// Equipment-adjusted field stats, clamped before applying active state modifiers.
+pub(super) fn field_stats(
+    def: &ActorDef,
+    level: u32,
+    items: &[ItemDef],
+    slots: [u32; 5],
+    vitals: &crate::vitals::Vitals,
+) -> crate::battle::logic::Stats {
+    use crate::battle::logic::{Stats, state_stats};
+    let [attack, defense, spirit, agility] =
+        stats_with_slots(def, level, items, slots).map(|value| value.clamp(1, 999));
+    let states = vitals
+        .states(def.id)
+        .into_iter()
+        .map(|id| (id, 0))
+        .collect::<Vec<_>>();
+    state_stats(
+        Stats {
+            attack,
+            defense,
+            spirit,
+            agility,
+        },
+        &states,
+        crate::conditions::definitions(),
+    )
+}
+
 /// The experience still owed to reach the next level, or `None` at `max_level`.
 pub(super) fn exp_to_next(def: &ActorDef, total: u32, level: u32) -> Option<u32> {
     if level >= def.max_level {

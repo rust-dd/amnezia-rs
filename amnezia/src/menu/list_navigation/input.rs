@@ -1,21 +1,23 @@
 use crate::timing::GameFrames;
 use bevy::prelude::*;
 
-pub(super) const KEYS: [KeyCode; 4] = [
+pub(super) const KEYS: [KeyCode; 6] = [
     KeyCode::ArrowDown,
     KeyCode::ArrowUp,
     KeyCode::ArrowRight,
     KeyCode::ArrowLeft,
+    KeyCode::PageDown,
+    KeyCode::PageUp,
 ];
 
 #[derive(Resource, Default)]
 pub(in crate::menu) struct Input {
     last_frame: Option<u32>,
     elapsed: u32,
-    held: [u32; 4],
-    start: [u32; 4],
-    pressed: [bool; 4],
-    triggered: [bool; 4],
+    held: [u32; 6],
+    start: [u32; 6],
+    pressed: [bool; 6],
+    triggered: [bool; 6],
     pub rewound: bool,
 }
 
@@ -27,7 +29,7 @@ impl Input {
             .map_or(0, |last| now.wrapping_sub(last));
         self.rewound = self.elapsed > i32::MAX as u32;
         if self.rewound {
-            self.held = [0; 4];
+            self.held = [0; 6];
             self.elapsed = 0;
         }
         self.pressed = KEYS.map(|key| keys.pressed(key));
@@ -53,6 +55,14 @@ impl Input {
     }
 
     pub(in crate::menu) fn steps(&self) -> impl Iterator<Item = [bool; 4]> + '_ {
+        self.repeats()
+    }
+
+    pub(in crate::menu) fn slot_steps(&self) -> impl Iterator<Item = [bool; 6]> + '_ {
+        self.repeats()
+    }
+
+    fn repeats<const N: usize>(&self) -> impl Iterator<Item = [bool; N]> + '_ {
         (0..self.elapsed.max(1)).map(|step| {
             std::array::from_fn(|index| {
                 let held = self.start[index].saturating_add(step + 1);

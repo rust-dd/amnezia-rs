@@ -4,7 +4,7 @@ use bevy::prelude::*;
 type Navigation = WindowNavigation<12>;
 
 fn press<const ROWS: usize>(nav: &mut WindowNavigation<ROWS>, key: KeyCode) -> u32 {
-    nav.tick(KEYS.map(|candidate| candidate == key), true)
+    nav.tick(std::array::from_fn(|i| KEYS[i] == key), true)
 }
 
 #[test]

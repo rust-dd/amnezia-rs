@@ -4,6 +4,7 @@ use crate::menu::testkit;
 use crate::save::SaveRequest;
 use amnezia_data::SoundDef;
 
+mod equip_navigation;
 mod equip_selection;
 mod guards;
 mod item_list;
@@ -36,6 +37,7 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
         .init_resource::<crate::menu::list_navigation::Input>()
         .init_resource::<items::List>()
         .init_resource::<skills::List>()
+        .init_resource::<equip::Scene>()
         .init_resource::<crate::menu::targets::Navigation>()
         .init_resource::<crate::timing::GameFrames>()
         .init_resource::<Dialogue>()
@@ -52,6 +54,7 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
                 crate::menu::list_navigation::update_input,
                 items::update,
                 skills::update,
+                equip::update,
                 crate::menu::targets::update,
                 menu_input,
             )

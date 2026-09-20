@@ -24,10 +24,19 @@ impl<const ROWS: usize> Navigation<ROWS> {
     }
 
     pub(super) fn refresh(&mut self, index: usize, count: usize) {
+        self.movement = None;
+        self.select(index, count);
+    }
+
+    pub(super) fn select(&mut self, index: usize, count: usize) {
         self.count = count.max(1);
         self.index = index.min(self.count - 1);
-        self.movement = None;
         self.update_cursor();
+    }
+
+    pub(super) fn idle(&mut self, count: usize, timed: bool) {
+        self.count = count.max(1);
+        self.update_arrows(timed);
     }
 
     pub(super) fn count(&self) -> usize {

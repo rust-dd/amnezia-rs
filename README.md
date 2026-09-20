@@ -37,6 +37,7 @@ Native smoke scenarios require a graphical desktop. Each supplies its own input,
 cargo run -p amnezia --locked -- --smoke-test
 cargo run -p amnezia --locked -- --smoke-test --smoke-battle-menus
 cargo run -p amnezia --locked -- --smoke-test --smoke-menu
+cargo run -p amnezia --locked -- --smoke-test --smoke-equipment
 cargo run -p amnezia --locked -- --smoke-test --smoke-item-menu
 cargo run -p amnezia --locked -- --smoke-test --smoke-skill-menu
 cargo run -p amnezia --locked -- --smoke-test --smoke-actor-names
@@ -77,7 +78,9 @@ cargo run -p amnezia --locked -- --smoke-test --smoke-dialogue-timing
 
 Run them one at a time. These are focused regression scenarios, not a full campaign playthrough. The battle-menu fixture adds party members, skills, and items for coverage but keeps the actors' real HP/SP.
 
-The `menu` scenario also checks equipment selection over 92 states and 11 exact sounds: swapping the original Ton-Kard for Karpenge, removing equipment with an empty bag, cancellation, and actor 9's original equipment lock. Candidate items retain database id order with the empty removal entry last. This verifies selection and inventory changes; the original four-window equipment layout is still a restoration task.
+The `menu` scenario also checks equipment selection over 92 states and 11 exact sounds: swapping the original Ton-Kard for Karpenge, removing equipment with an empty bag, cancellation, and actor 9's original equipment lock. Candidate items retain database id order with the empty removal entry last.
+
+The `equipment` scenario verifies the original four-window layout, native bitmap text, original labels, current and preview stats, two-column candidates, six visible rows and separate slot/item cursors. Eighteen full captures compare 1,382,400 reference pixels; 402 state/audio frames check 33 exact sounds, a real weapon swap, the four-frame scroll, blank unequip preview, inactive-list offsets, page keys, slot wrapping, fixed equipment and long text. Stats clamp before state modifiers, and comparison updates precede item navigation as in the reference. Both native-window and offscreen runs pass. Actor switching, scene fades and the main-command return path remain separate restoration tasks.
 
 The `item-menu` scenario drives the original two-column field inventory with actual keys. Eleven complete captures compare 844,800 reference pixels: empty inventory, original descriptions and disabled colors, both directions of four-frame scrolling, clipped rows, cursor/arrow phases, and selection retained after using an item. It checks recovery against Ron's real 63 HP maximum, item counts, and return navigation. The target must stay open after consuming the last item; another confirmation fails without changing HP or inventory. It also verifies the exact item-use and buzzer requests. The background uses the reference renderer's fixed-point sampling; it is cached independently of the original system image. Eighteen further full captures verify 1,382,400 item/skill target-window pixels: original three-window layout, four portraits, native bitmap text and colors, fixed/self/whole-party cursors, half SP cost, item depletion, and long-name clipping. Successful field skills keep the target open and play only the animation's first enabled sound immediately; ineffective casts buzz without spending SP. Enter/Space, live HP/SP refresh and returning to the same skill are checked. A further 207 input states and 18 exact sound requests cover held-arrow wrapping, 24/4-frame repetition, page keys, and immovable self/party targets. General menu scene fades and the separate original scene-frame counter remain restoration tasks.
 

@@ -36,6 +36,7 @@ mod targets;
 mod use_item;
 mod view;
 
+pub(crate) use equip::layout_smoke as equipment_smoke;
 pub(crate) use items::smoke as item_smoke;
 pub(crate) use skills::smoke as skill_smoke;
 pub(crate) use targets::smoke as target_navigation_smoke;
@@ -144,6 +145,7 @@ impl Plugin for MenuPlugin {
             .init_resource::<list_navigation::Input>()
             .init_resource::<items::List>()
             .init_resource::<skills::List>()
+            .init_resource::<equip::Scene>()
             .init_resource::<targets::Navigation>()
             .init_resource::<view::clocks::Clock>()
             .init_resource::<view::end_game::Clock>()
@@ -156,6 +158,7 @@ impl Plugin for MenuPlugin {
                         list_navigation::update_input,
                         items::update,
                         skills::update,
+                        equip::update,
                         targets::update,
                         input::menu_input,
                     )
@@ -164,6 +167,7 @@ impl Plugin for MenuPlugin {
                     view::update_ui.after(MenuInput),
                     view::item_list::update.after(MenuInput),
                     view::skill_list::update.after(MenuInput),
+                    view::equipment::update.after(MenuInput),
                     view::target::update.after(MenuInput),
                     view::clocks::update.after(MenuInput),
                     view::end_game::update.after(MenuInput),

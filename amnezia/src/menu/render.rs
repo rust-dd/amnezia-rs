@@ -4,11 +4,11 @@ use crate::equipment::Equipment;
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::progression::Progression;
-use crate::state::{Inventory, Party};
+use crate::state::Party;
 use crate::terms::Terms;
 use crate::vitals::Vitals;
 
-use super::{MenuScreen, derive, equip, status};
+use super::{MenuScreen, derive, status};
 
 /// One party member's status-window figures: the FaceSet portrait, identity, and
 /// the numbers the status window prints beside the face. HP/SP are kept as raw
@@ -94,7 +94,7 @@ pub(super) struct ContentView {
     pub cursor_line: Option<usize>,
 }
 
-/// Compose the remaining equipment and compatibility status text.
+/// Compose the internal compatibility status view.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn content(
     hero_name: &crate::text::HeroName,
@@ -102,7 +102,6 @@ pub(super) fn content(
     data: &GameData,
     party: &Party,
     progression: &Progression,
-    inventory: &Inventory,
     vitals: &Vitals,
     equipment: &Equipment,
     terms: &Terms,
@@ -114,28 +113,11 @@ pub(super) fn content(
         | MenuScreen::ItemList { .. }
         | MenuScreen::ItemTarget { .. }
         | MenuScreen::SkillList { .. }
-        | MenuScreen::SkillTarget { .. } => ContentView {
+        | MenuScreen::SkillTarget { .. }
+        | MenuScreen::Equip { .. } => ContentView {
             text: String::new(),
             cursor_line: None,
         },
-        MenuScreen::Equip {
-            member,
-            slot,
-            picking,
-        } => {
-            let (text, cursor_line) = equip::compose(
-                hero_name,
-                member,
-                slot,
-                picking,
-                data,
-                party,
-                progression,
-                inventory,
-                equipment,
-            );
-            ContentView { text, cursor_line }
-        }
         MenuScreen::Status { member } => ContentView {
             text: status::compose_status(
                 hero_name,
@@ -238,15 +220,12 @@ mod tests {
 
     #[test]
     fn item_list_does_not_compose_legacy_headers_gold_or_cursor_text() {
-        let mut inv = Inventory::default();
-        inv.add_item(testkit::ITEM_HERB, 3);
         let view = content(
             &crate::text::HeroName("Ron".into()),
             MenuScreen::ItemList { cursor: 0 },
             &testkit::data(),
             &Party::default(),
             &Progression::default(),
-            &inv,
             &Vitals::default(),
             &Equipment::default(),
             &Terms::default(),
@@ -274,7 +253,6 @@ mod tests {
                 &testkit::data(),
                 &Party::default(),
                 &Progression::default(),
-                &Inventory::default(),
                 &Vitals::default(),
                 &Equipment::default(),
                 &Terms::default(),
@@ -292,7 +270,6 @@ mod tests {
             &testkit::data(),
             &Party::default(),
             &Progression::default(),
-            &Inventory::default(),
             &Vitals::default(),
             &Equipment::default(),
             &Terms::default(),

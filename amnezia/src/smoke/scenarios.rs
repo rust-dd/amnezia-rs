@@ -15,6 +15,7 @@ pub(super) fn start(world: &mut World, scenario: &str) {
         "message-options"
             | "items"
             | "skills"
+            | "equipment"
             | "save-slots"
             | "dialogue-timing"
             | "world-tones"
@@ -267,6 +268,8 @@ pub(super) fn selected() -> &'static str {
         "skills"
     } else if std::env::args().any(|arg| arg == "--smoke-menu") {
         "menu"
+    } else if std::env::args().any(|arg| arg == "--smoke-equipment") {
+        "equipment"
     } else {
         "intro"
     }

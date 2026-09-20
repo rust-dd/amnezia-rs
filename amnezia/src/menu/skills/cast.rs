@@ -14,27 +14,12 @@ struct CastContext<'a> {
 
 impl CastContext<'_> {
     fn stats(&self, actor: &ActorDef, vitals: &Vitals) -> Stats {
-        let [attack, defense, spirit, agility] = derive::stats_with_slots(
+        derive::field_stats(
             actor,
             self.progression.level(actor),
             &self.data.items,
             self.equipment.slots(actor),
-        )
-        .map(|value| value.clamp(1, 999));
-        let active = vitals
-            .states(actor.id)
-            .into_iter()
-            .map(|id| (id, 0))
-            .collect::<Vec<_>>();
-        logic::state_stats(
-            Stats {
-                attack,
-                defense,
-                spirit,
-                agility,
-            },
-            &active,
-            crate::conditions::definitions(),
+            vitals,
         )
     }
 

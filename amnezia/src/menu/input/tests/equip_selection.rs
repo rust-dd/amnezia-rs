@@ -1,5 +1,35 @@
 use super::*;
 
+fn screen(picking: Option<usize>) -> MenuScreen {
+    MenuScreen::Equip {
+        member: 0,
+        slot: 0,
+        picking,
+    }
+}
+
+#[test]
+fn equipment_candidates_move_in_two_columns_without_wrapping() {
+    let mut app = app_on(2, screen(Some(0)));
+    for id in 10..15 {
+        app.world_mut()
+            .resource_mut::<GameData>()
+            .items
+            .push(testkit::weapon(id, "Kard", 1));
+        app.world_mut().resource_mut::<Inventory>().add_item(id, 1);
+    }
+    press_frame(&mut app, KeyCode::ArrowDown);
+    assert_eq!(app.world().resource::<MenuState>().screen, screen(Some(2)));
+    press_frame(&mut app, KeyCode::ArrowRight);
+    assert_eq!(app.world().resource::<MenuState>().screen, screen(Some(3)));
+    press_frame(&mut app, KeyCode::ArrowUp);
+    assert_eq!(app.world().resource::<MenuState>().screen, screen(Some(1)));
+    press_frame(&mut app, KeyCode::ArrowUp);
+    assert_eq!(app.world().resource::<MenuState>().screen, screen(Some(1)));
+    press_frame(&mut app, KeyCode::ArrowLeft);
+    assert_eq!(app.world().resource::<MenuState>().screen, screen(Some(0)));
+}
+
 fn equipped(fixed: bool) -> App {
     let mut app = app_on(
         2,

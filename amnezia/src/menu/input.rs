@@ -66,9 +66,8 @@ impl OpenBlockers<'_> {
 
 /// The resources that gate *opening* the menu and its save entry: a live shop or
 /// battle, the title screen, and the cutscene menu/save access flags. Bundled into
-/// one `SystemParam` so [`menu_input`] stays within Bevy's 16-parameter cap (the
-/// interactive equip screen added the runtime [`Equipment`] store). `title` stays a
-/// separate parameter because End Game mutates it.
+/// one `SystemParam` so [`menu_input`] stays within Bevy's 16-parameter cap.
+/// `title` stays separate because End Game mutates it.
 #[derive(SystemParam)]
 pub(super) struct MenuGates<'w> {
     shop: Res<'w, ShopOpen>,
@@ -108,6 +107,7 @@ pub(super) fn menu_input(
             | MenuScreen::ItemTarget { .. }
             | MenuScreen::SkillList { .. }
             | MenuScreen::SkillTarget { .. }
+            | MenuScreen::Equip { .. }
     ) && (blockers.fade.busy()
         || blockers
             .transition
@@ -166,6 +166,7 @@ pub(super) fn menu_input(
                 | MenuScreen::ItemTarget { .. }
                 | MenuScreen::SkillList { .. }
                 | MenuScreen::SkillTarget { .. }
+                | MenuScreen::Equip { .. }
         )
     {
         sfx.cursor();
@@ -299,12 +300,6 @@ pub(super) fn menu_input(
             slot,
             picking: None,
         } => {
-            let slot = step(slot, up, down, 4);
-            state.screen = MenuScreen::Equip {
-                member,
-                slot,
-                picking: None,
-            };
             if confirm {
                 if equip::can_change(member, &data, &party) {
                     sfx.decision();
@@ -323,13 +318,6 @@ pub(super) fn menu_input(
             slot,
             picking: Some(cursor),
         } => {
-            let count = equip::candidates(member, slot, &data, &party, &inventory).len();
-            let cursor = step(cursor, up, down, count.saturating_sub(1));
-            state.screen = MenuScreen::Equip {
-                member,
-                slot,
-                picking: Some(cursor),
-            };
             if confirm {
                 sfx.decision();
                 equip::apply(

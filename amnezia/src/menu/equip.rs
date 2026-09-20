@@ -1,24 +1,20 @@
-//! Equipment candidates, inventory swaps, and the legacy composed-text view.
+//! Equipment candidates, inventory swaps, and the original scene navigation.
 //! Selection lives in [`super::MenuScreen::Equip`]; actual changes use [`Equipment::equip`].
 
 use crate::equipment::{self, Equipment};
 use crate::gamedata::GameData;
-use crate::i18n;
-use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 
-use super::derive;
-
+pub(crate) mod layout_smoke;
+mod scene;
 pub(crate) mod smoke;
+
+pub(super) use scene::{Scene, stats, update};
 
 #[cfg(test)]
 mod selection_tests;
-
-/// The five equipment slot labels, in `ActorDef` slot order.
-const SLOT_LABELS: [&str; 5] = ["Fegyver", "Pajzs", "Vért", "Sisak", "Kiegészítő"];
-
-/// The four battle-stat labels the equipment screen previews, in derive order.
-const STAT_LABELS: [&str; 4] = ["Támadás", "Védelem", "Szellem", "Gyorsaság"];
+#[cfg(test)]
+mod stat_tests;
 
 /// Whether the `member`-th actor may change gear at all (RM2000 `fix_equipment`
 /// actors can't). The input layer gates opening the item picker on this.
@@ -84,110 +80,10 @@ pub(super) fn apply(
     equipment.equip(def, slot, new_id, &data.items, inventory)
 }
 
-/// The display name of item `id` (`—` for the empty id `0`, `#id` for an unknown
-/// one), routed through `i18n::tr` for English.
-fn item_name(id: u32, data: &GameData) -> String {
-    if id == 0 {
-        "—".to_string()
-    } else {
-        data.item(id)
-            .map(|item| i18n::tr(&item.name))
-            .unwrap_or_else(|| format!("#{id}"))
-    }
-}
-
-/// Compose the equipment screen for the `member`-th roster entry and the
-/// composed-text line its windowskin cursor sits on. When `picking` is `None` the
-/// five slots are listed with the current stats and the cursor sits on `slot`;
-/// when it is `Some(cursor)` the candidate list for `slot` follows, the cursor
-/// sits on the hovered candidate, and the stats read `current → new`.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn compose(
-    hero_name: &crate::text::HeroName,
-    member: usize,
-    slot: usize,
-    picking: Option<usize>,
-    data: &GameData,
-    party: &Party,
-    progression: &Progression,
-    inventory: &Inventory,
-    equipment: &Equipment,
-) -> (String, Option<usize>) {
-    let roster = party.snapshot();
-    let Some(&id) = roster.get(member) else {
-        return ("(nincs karakter)\n".to_string(), None);
-    };
-    let Some(def) = data.actor(id) else {
-        return (format!("#{id} (ismeretlen)\n"), None);
-    };
-
-    let level = progression.level(def);
-    let slots = equipment.slots(def);
-    let current = derive::stats_with_slots(def, level, &data.items, slots);
-
-    let mut lines = vec![
-        format!("- Felszerelés -  {}", i18n::tr(hero_name.actor(def))),
-        String::new(),
-    ];
-    let mut cursor_line = None;
-
-    match picking {
-        None => {
-            for (i, (label, &sid)) in SLOT_LABELS.iter().zip(slots.iter()).enumerate() {
-                if i == slot {
-                    cursor_line = Some(lines.len());
-                }
-                lines.push(format!("{label}: {}", item_name(sid, data)));
-            }
-            lines.push(String::new());
-            stat_rows(&mut lines, current, None);
-            if def.fix_equipment {
-                lines.push("(a felszerelés rögzített)".to_string());
-            }
-        }
-        Some(cursor) => {
-            let cands = candidates(member, slot, data, party, inventory);
-            lines.push(format!("{} cseréje:", SLOT_LABELS[slot.min(4)]));
-            let start = super::items::viewport_start(cursor, cands.len(), 6);
-            for (i, &cid) in cands.iter().enumerate().skip(start).take(6) {
-                if i == cursor {
-                    cursor_line = Some(lines.len());
-                }
-                let row = if cid == 0 {
-                    "— (levesz)".to_string()
-                } else {
-                    format!("{} ×{}", item_name(cid, data), inventory.count(cid))
-                };
-                lines.push(row);
-            }
-            lines.push(String::new());
-            let new_id = cands.get(cursor).copied().unwrap_or(0);
-            let after = equipment::preview_slots(slots, slot, new_id, &data.items);
-            let preview = derive::stats_with_slots(def, level, &data.items, after);
-            stat_rows(&mut lines, current, Some(preview));
-        }
-    }
-
-    lines.push("[Esc] vissza".to_string());
-    (lines.join("\n"), cursor_line)
-}
-
-fn stat_rows(lines: &mut Vec<String>, current: [u32; 4], preview: Option<[u32; 4]>) {
-    for pair in [0..2, 2..4] {
-        let row = pair
-            .map(|i| match preview {
-                Some(after) => format!("{} {} → {}", STAT_LABELS[i], current[i], after[i]),
-                None => format!("{} {}", STAT_LABELS[i], current[i]),
-            })
-            .collect::<Vec<_>>();
-        lines.push(row.join("   "));
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::menu::testkit;
+    use crate::menu::{derive, testkit};
 
     /// A database with the hero, a starting short-sword (id 10) in the weapon
     /// slot, and a stronger long-sword (id 12) available to swap in.
@@ -197,57 +93,6 @@ mod tests {
         d.items.push(testkit::weapon(10, "Rövidkard", 4));
         d.items.push(testkit::weapon(12, "Hosszúkard", 12));
         d
-    }
-
-    #[test]
-    fn slot_view_lists_gear_and_current_stats() {
-        let d = armed_data();
-        let (text, cursor_line) = compose(
-            &crate::text::HeroName("Ron".into()),
-            0,
-            0,
-            None,
-            &d,
-            &Party::default(),
-            &Progression::default(),
-            &Inventory::default(),
-            &Equipment::default(),
-        );
-        assert!(text.contains("Fegyver: Rövidkard"), "weapon slot: {text}");
-        assert!(text.contains("Pajzs: —"), "empty shield slot: {text}");
-        // Level-2 linear fallback attack 16 + 2*6 = 28, plus the +4 weapon = 32.
-        assert!(text.contains("Támadás 32"), "current attack: {text}");
-        assert_eq!(cursor_line, Some(2), "cursor on the weapon row: {text}");
-    }
-
-    #[test]
-    fn item_picker_lists_matching_gear_and_previews_the_stat_change() {
-        let d = armed_data();
-        let mut inv = Inventory::default();
-        inv.add_item(12, 1);
-        let (text, cursor_line) = compose(
-            &crate::text::HeroName("Ron".into()),
-            0,
-            0,
-            Some(0),
-            &d,
-            &Party::default(),
-            &Progression::default(),
-            &inv,
-            &Equipment::default(),
-        );
-        assert!(text.contains("Fegyver cseréje:"), "picker header: {text}");
-        assert!(text.contains("— (levesz)"), "unequip option: {text}");
-        assert!(
-            text.contains("Hosszúkard ×1"),
-            "candidate with count: {text}"
-        );
-        // Current 32 (short-sword +4) previews to 40 (long-sword +12).
-        assert!(text.contains("Támadás 32 → 40"), "stat preview: {text}");
-        assert!(
-            cursor_line.is_some(),
-            "the candidate cursor is placed: {text}"
-        );
     }
 
     #[test]
@@ -302,17 +147,5 @@ mod tests {
         let mut d = armed_data();
         d.actors[0].fix_equipment = true;
         assert!(!can_change(0, &d, &Party::default()));
-        let (text, _) = compose(
-            &crate::text::HeroName("Ron".into()),
-            0,
-            0,
-            None,
-            &d,
-            &Party::default(),
-            &Progression::default(),
-            &Inventory::default(),
-            &Equipment::default(),
-        );
-        assert!(text.contains("rögzített"), "fixed-equipment note: {text}");
     }
 }

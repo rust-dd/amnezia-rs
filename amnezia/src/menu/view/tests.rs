@@ -33,6 +33,22 @@ fn viewing(screen: MenuScreen) -> App {
 }
 
 #[test]
+fn equipment_does_not_use_the_legacy_full_screen_text_panel() {
+    let mut app = viewing(MenuScreen::Equip {
+        member: 0,
+        slot: 0,
+        picking: None,
+    });
+    let world = app.world_mut();
+    let (_, visibility) = world
+        .query::<(&MenuWindow, &Visibility)>()
+        .iter(world)
+        .find(|(window, _)| window.0 == WindowId::Content)
+        .unwrap();
+    assert_eq!(*visibility, Visibility::Hidden);
+}
+
+#[test]
 fn end_game_does_not_use_the_legacy_full_screen_text_panel() {
     let mut app = viewing(MenuScreen::EndGame { cursor: 1 });
     let world = app.world_mut();

@@ -1,7 +1,7 @@
 use super::*;
 use crate::equipment::Equipment;
 use crate::progression::Progression;
-use crate::state::{Inventory, Party};
+use crate::state::Party;
 use crate::terms::Terms;
 use crate::text::HeroName;
 use crate::vitals::Vitals;
@@ -17,7 +17,6 @@ fn renamed_hero_appears_in_every_menu_and_target_view() {
     party.restore(vec![2, 1, 999]);
     let progression = Progression::default();
     let vitals = Vitals::default();
-    let inventory = Inventory::default();
     let equipment = Equipment::default();
     let terms = Terms::default();
     for renamed in ["Áron", "", "Tiffany"] {
@@ -58,7 +57,6 @@ fn renamed_hero_appears_in_every_menu_and_target_view() {
                 &data,
                 &party,
                 &progression,
-                &inventory,
                 &vitals,
                 &equipment,
                 &terms,
@@ -80,6 +78,19 @@ fn renamed_hero_appears_in_every_menu_and_target_view() {
             } else if matches!(screen, MenuScreen::SkillList { .. }) {
                 view::skill_list::status(
                     &rows[1],
+                    &terms,
+                    &crate::font::bitmap::BitmapFont::from_id(0),
+                )
+                .runs
+                .into_iter()
+                .map(|run| run.text)
+                .collect::<Vec<_>>()
+                .join("\n")
+            } else if matches!(screen, MenuScreen::Equip { .. }) {
+                view::equipment::status(
+                    renamed,
+                    [1; 4],
+                    None,
                     &terms,
                     &crate::font::bitmap::BitmapFont::from_id(0),
                 )

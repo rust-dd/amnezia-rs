@@ -33,6 +33,7 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let menu_snapshot = crate::menu::layout_smoke::snapshot(world, label);
     let item_snapshot = crate::menu::item_smoke::snapshot(world, label);
     let skill_snapshot = crate::menu::skill_smoke::snapshot(world, label);
+    let equipment_snapshot = crate::menu::equipment_smoke::snapshot(world, label);
     let target_snapshot = crate::menu::target_smoke::snapshot(world, label);
     let save_selector_snapshot = crate::menu::save_files::smoke::snapshot(world, label);
     let menu_font_snapshot = crate::menu::font_smoke::snapshot(world, label);
@@ -130,6 +131,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &skill_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &equipment_snapshot {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &target_snapshot {

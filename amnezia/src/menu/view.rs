@@ -1,5 +1,4 @@
 //! Field-menu windows use native coordinates scaled threefold for Bevy UI.
-//! Equipment subscreens still share a legacy content panel.
 
 use crate::assets::resolve_png;
 use crate::equipment::Equipment;
@@ -18,6 +17,7 @@ use super::{MenuOpen, MenuScreen, MenuState, command, render};
 
 pub(super) mod clocks;
 pub(super) mod end_game;
+pub(super) mod equipment;
 pub(super) mod item_list;
 mod main_text;
 pub(super) mod skill_list;
@@ -134,6 +134,7 @@ pub(super) fn spawn_ui(
             spawn_content_window(panel, &system, &font);
             item_list::spawn(panel, &system);
             skill_list::spawn(panel, &system);
+            equipment::spawn(panel, &system);
             target::spawn(panel, &system);
             end_game::spawn(panel, &system);
         });
@@ -373,6 +374,7 @@ pub(super) fn update_ui(
                             | MenuScreen::ItemTarget { .. }
                             | MenuScreen::SkillList { .. }
                             | MenuScreen::SkillTarget { .. }
+                            | MenuScreen::Equip { .. }
                     )
             }
         };
@@ -386,7 +388,6 @@ pub(super) fn update_ui(
         &data,
         &party,
         &progression,
-        &inventory,
         &vitals,
         &equipment,
         &terms,
