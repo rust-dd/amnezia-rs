@@ -4,6 +4,7 @@ use crate::gamedata::{GameData, GameDataPlugin};
 use crate::state::Inventory;
 use crate::timing::{GameFrames, SceneFrames, SceneWait};
 
+mod navigation;
 mod quantity;
 
 fn app(phase: Phase) -> App {
@@ -32,13 +33,14 @@ fn app(phase: Phase) -> App {
             buzzer: sound("BUZZER"),
             ..default()
         })
-        .insert_resource(Screen::Shop(ShopState {
+        .insert_resource(Screen::Shop(Box::new(ShopState {
             items: vec![1, 2, 3, 4],
             allow_buy: true,
             allow_sell: true,
             shop_type: 0,
             phase,
-        }))
+            scene: default(),
+        })))
         .add_message::<AudioRequest>()
         .add_systems(
             Update,

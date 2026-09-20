@@ -1,16 +1,11 @@
-//! The merchant vocabulary sourced from the real RM2000 Terms: the shopkeeper's
-//! greeting / prompts / confirmations (one of three per-type term sets, chosen by
-//! the shop's RM2000 `shop_type` exactly as EasyRPG `Window_ShopParty` does), the
-//! inn's Yes/No prompt, and the currency term. Each routes through
-//! [`crate::i18n::tr`] and falls back to a faithful Hungarian placeholder when the
-//! original database left the term blank.
+//! Original shop vocabulary and the remaining legacy inn labels.
 
 use crate::terms::Terms;
 
 /// The localised currency word (RM2000 `gold` term), shown after an amount as in
 /// `Window_Gold::DrawCurrencyValue`.
 pub fn currency(terms: &Terms) -> String {
-    terms.label(&terms.0.gold, "arany")
+    crate::i18n::tr(&terms.0.gold)
 }
 
 /// The shopkeeper's lines for one shop, chosen by the RM2000 `shop_type` (0/1/2):
@@ -28,25 +23,26 @@ pub struct ShopVocab {
     pub sell_select: String,
     /// Prompt over the quantity window.
     pub number: String,
+    pub sell_number: String,
     pub purchased: String,
     pub sold: String,
 }
 
-/// The vocabulary for `shop_type`, resolved from the real per-type Terms with a
-/// Hungarian placeholder fallback for any blank term.
+/// Empty database terms stay empty, as in the original merchant window.
 pub fn shop_vocab(shop_type: u32, terms: &Terms) -> ShopVocab {
     let s = terms.0.shop_set(shop_type);
     ShopVocab {
-        greeting: terms.label(s.greeting, "Üdvözöllek! Mit szeretnél?"),
-        regreeting: terms.label(s.regreeting, "Van még valami?"),
-        buy: terms.label(s.buy, "Vásárlás"),
-        sell: terms.label(s.sell, "Eladás"),
-        leave: terms.label(s.leave, "Távozás"),
-        buy_select: terms.label(s.buy_select, "Mit szeretnél venni?"),
-        sell_select: terms.label(s.sell_select, "Mit adsz el?"),
-        number: terms.label(s.number, "Hányat?"),
-        purchased: terms.label(s.purchased, "Köszönöm a vásárlást!"),
-        sold: terms.label(s.sold, "Megvettem, tessék a pénzed."),
+        greeting: crate::i18n::tr(s.greeting),
+        regreeting: crate::i18n::tr(s.regreeting),
+        buy: crate::i18n::tr(s.buy),
+        sell: crate::i18n::tr(s.sell),
+        leave: crate::i18n::tr(s.leave),
+        buy_select: crate::i18n::tr(s.buy_select),
+        sell_select: crate::i18n::tr(s.sell_select),
+        number: crate::i18n::tr(s.number),
+        sell_number: crate::i18n::tr(s.sell_number),
+        purchased: crate::i18n::tr(s.purchased),
+        sold: crate::i18n::tr(s.sold),
     }
 }
 
@@ -77,7 +73,6 @@ mod tests {
 
     #[test]
     fn shop_vocab_resolves_the_per_type_terms() {
-        // Two distinct merchant styles pick their own parsed term sets.
         let mut terms = Terms::default();
         terms.0.shop_greeting1 = "Miben segíthetek?".into();
         terms.0.shop_greeting2 = "Har!".into();
@@ -88,12 +83,12 @@ mod tests {
     }
 
     #[test]
-    fn blank_terms_fall_back_to_the_hungarian_placeholders() {
+    fn empty_shop_terms_are_not_replaced_with_invented_labels() {
         let terms = Terms::default();
         let vocab = shop_vocab(0, &terms);
-        assert_eq!(vocab.buy, "Vásárlás");
-        assert_eq!(vocab.sell, "Eladás");
+        assert_eq!(vocab.buy, "");
+        assert_eq!(vocab.sell, "");
         assert_eq!(inn_vocab(&terms).accept, "Igen");
-        assert_eq!(currency(&terms), "arany");
+        assert_eq!(currency(&terms), "");
     }
 }

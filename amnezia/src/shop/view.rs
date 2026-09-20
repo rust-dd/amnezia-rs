@@ -1,248 +1,241 @@
-//! The merchant panel: the RM2000 windowskin overlay and the text it shows for
-//! the current [`Screen`] phase — the shopkeeper's line, the buy/sell list or
-//! quantity window, and the party's gold — plus the inn's Yes/No prompt.
-
-use crate::font::GameFont;
+use super::{Phase, Screen, ShopState, logic};
+use crate::font::bitmap::{BitmapFont, PixelText};
 use crate::gamedata::GameData;
-use crate::i18n;
-use crate::state::Inventory;
+use crate::state::{Inventory, Party};
 use crate::terms::Terms;
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
-use bevy::text::FontSource;
 
-use super::logic;
-use super::messages;
-use super::{Mode, Phase, Screen, ShopState};
+pub(super) mod inn;
+mod layout;
+pub(super) mod party;
+pub(in crate::shop) mod pixels;
+#[cfg(test)]
+mod tests;
+mod text;
 
-#[derive(Component)]
-pub struct ShopPanel;
-
-#[derive(Component)]
-pub struct ShopText;
-
-/// Reflect the screen state into the panel whenever it changes.
-pub fn update_ui(
-    screen: Res<Screen>,
-    data: Res<GameData>,
-    inventory: Res<Inventory>,
-    terms: Res<Terms>,
-    mut panels: Query<&mut Visibility, With<ShopPanel>>,
-    mut texts: Query<&mut Text, With<ShopText>>,
-) {
-    if !screen.is_changed() {
-        return;
-    }
-    let showing = !matches!(*screen, Screen::Closed);
-    if let Ok(mut visibility) = panels.single_mut() {
-        *visibility = if showing {
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        };
-    }
-    if showing && let Ok(mut text) = texts.single_mut() {
-        **text = render(&screen, &data, &inventory, &terms);
-    }
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(in crate::shop) enum Window {
+    Help,
+    Buy,
+    Sell,
+    Number,
+    Party,
+    Status,
+    Gold,
+    Message,
+    EmptyCenter,
+    EmptyLeft,
 }
 
-/// Compose the panel text for the current screen.
-fn render(screen: &Screen, data: &GameData, inventory: &Inventory, terms: &Terms) -> String {
-    match screen {
-        Screen::Closed => String::new(),
-        Screen::Shop(state) => render_shop(state, data, inventory, terms),
-        Screen::Inn { cost, yes, done } => render_inn(*cost, *yes, *done, inventory, terms),
-    }
+#[derive(Component, Clone, Copy)]
+pub(in crate::shop) enum Part {
+    Root,
+    Window(Window),
+    Text(Window),
+    Cursor(Window),
+    Arrow(Window, bool),
+    Face,
+    Character(usize),
+    Indicator(usize),
 }
 
-fn render_shop(state: &ShopState, data: &GameData, inventory: &Inventory, terms: &Terms) -> String {
-    let vocab = messages::shop_vocab(state.shop_type, terms);
-    let unit = messages::currency(terms);
-    // RM2000 `Window_Gold` shows the amount then the currency term.
-    let gold = format!("{} {unit}", inventory.gold());
-    let mut out = String::new();
-    match &state.phase {
-        Phase::Command { cursor, regreet } => {
-            let header = if *regreet {
-                &vocab.regreeting
-            } else {
-                &vocab.greeting
-            };
-            out.push_str(header);
-            out.push_str("\n\n");
-            for (i, label) in [&vocab.buy, &vocab.sell, &vocab.leave].iter().enumerate() {
-                out.push_str(cursor_mark(i == *cursor));
-                out.push_str(label);
-                out.push('\n');
-            }
-        }
-        Phase::Buy { cursor } => {
-            out.push_str(&vocab.buy_select);
-            out.push_str("\n\n");
-            let ids = logic::buyable_ids(data, &state.items);
-            list_rows(&mut out, &ids, *cursor, data, inventory, Mode::Buy, &unit);
-        }
-        Phase::Sell { cursor } => {
-            out.push_str(&vocab.sell_select);
-            out.push_str("\n\n");
-            let ids = logic::sell_ids(data, inventory);
-            list_rows(&mut out, &ids, *cursor, data, inventory, Mode::Sell, &unit);
-        }
-        Phase::Number(num) => {
-            out.push_str(&vocab.number);
-            out.push_str("\n\n");
-            let name = data
-                .item(num.item_id)
-                .map(|i| i18n::tr(&i.name))
-                .unwrap_or_default();
-            let total = num.unit_price * num.count as i32;
-            out.push_str(&format!(
-                "{name}   × {}\n\nÖsszesen: {total} {unit}\n",
-                num.count
-            ));
-        }
-        Phase::Bought { .. } => {
-            out.push_str(&vocab.purchased);
-            out.push('\n');
-        }
-        Phase::Sold { .. } => {
-            out.push_str(&vocab.sold);
-            out.push('\n');
-        }
-    }
-    out.push('\n');
-    out.push_str(&gold);
-    out
-}
-
-/// Append the buy or sell list rows (item name, unit price, and — when selling —
-/// the owned count), marking the cursor row.
-fn list_rows(
-    out: &mut String,
-    ids: &[u32],
-    cursor: usize,
-    data: &GameData,
-    inventory: &Inventory,
-    mode: Mode,
-    unit: &str,
-) {
-    if ids.is_empty() {
-        out.push_str("  (nincs áru)\n");
-        return;
-    }
-    let start = cursor.saturating_sub(6);
-    for (i, &id) in ids.iter().enumerate().skip(start).take(7) {
-        let Some(item) = data.item(id) else {
-            continue;
-        };
-        let name = i18n::tr(&item.name);
-        let row = match mode {
-            Mode::Buy => format!("{name}   {} {unit}", item.price),
-            Mode::Sell => format!(
-                "{name}   {} {unit}   ×{}",
-                logic::sell_price(item.price),
-                inventory.count(id)
-            ),
-        };
-        out.push_str(cursor_mark(i == cursor));
-        out.push_str(&row);
-        out.push('\n');
-    }
-}
-
-fn render_inn(cost: i32, yes: bool, done: bool, inventory: &Inventory, terms: &Terms) -> String {
-    let inn = messages::inn_vocab(terms);
-    let unit = messages::currency(terms);
-    let cost = cost.max(0);
-    let gold = format!("{} {unit}", inventory.gold());
-    if done {
-        return format!("{}\n\n(-{cost} {unit})\n\n{gold}", inn.rested);
-    }
-    let affordable = logic::inn_afford(cost, inventory.gold()).is_some();
-    let accept = if affordable {
-        inn.accept.clone()
-    } else {
-        format!("{} {}", inn.accept, inn.broke)
-    };
-    format!(
-        "Egy szoba {cost} {unit}.\nKipihened magad?\n\n{}{accept}\n{}{}\n\n{gold}",
-        cursor_mark(yes),
-        cursor_mark(!yes),
-        inn.cancel,
-    )
-}
-
-/// The cursor prefix for a selected / unselected row.
-fn cursor_mark(selected: bool) -> &'static str {
-    if selected { "▶ " } else { "  " }
-}
-
-/// Spawn the initially hidden, centred merchant panel, styled with the same
-/// RM2000 windowskin (`System.png`) as the dialogue box and sitting above it.
-pub fn spawn_ui(mut commands: Commands, font: Res<GameFont>, asset_server: Res<AssetServer>) {
-    let system: Handle<Image> = asset_server.load("graphics/System/System.png");
-    commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                left: Val::Px(40.0),
-                right: Val::Px(40.0),
-                top: Val::Px(40.0),
-                bottom: Val::Px(40.0),
-                padding: UiRect::all(Val::Px(16.0)),
-                overflow: Overflow::clip(),
-                ..default()
-            },
-            Visibility::Hidden,
-            GlobalZIndex(110),
-            ShopPanel,
-        ))
-        .with_children(|panel| {
-            panel.spawn((
-                inset_node(0.0),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(32.0, 0.0, 64.0, 32.0)),
-                    image_mode: NodeImageMode::Sliced(TextureSlicer {
-                        border: BorderRect::all(8.0),
-                        center_scale_mode: SliceScaleMode::Stretch,
-                        sides_scale_mode: SliceScaleMode::Stretch,
-                        max_corner_scale: 1.0,
-                    }),
-                    ..default()
-                },
-            ));
-            panel.spawn((
-                inset_node(4.0),
-                ImageNode {
-                    image: system.clone(),
-                    rect: Some(Rect::new(0.0, 0.0, 32.0, 32.0)),
-                    image_mode: NodeImageMode::Stretch,
-                    ..default()
-                },
-            ));
-            panel.spawn((
-                Text::new(String::new()),
-                TextFont {
-                    font: FontSource::Handle(font.0.clone()),
-                    font_size: FontSize::Px(crate::font::UI_FONT_PX),
-                    ..default()
-                },
-                TextColor(Color::WHITE),
-                bevy::text::LineHeight::Px(crate::font::UI_LINE_PX),
-                TextLayout::no_wrap(),
-                ShopText,
-            ));
-        });
-}
-
-/// An absolutely-positioned node inset by `px` on every side of its parent.
-fn inset_node(px: f32) -> Node {
+fn node(x: i32, y: i32, width: u32, height: u32) -> Node {
     Node {
         position_type: PositionType::Absolute,
-        left: Val::Px(px),
-        right: Val::Px(px),
-        top: Val::Px(px),
-        bottom: Val::Px(px),
+        left: Val::Px(x as f32 * 3.0),
+        top: Val::Px(y as f32 * 3.0),
+        width: Val::Px(width as f32 * 3.0),
+        height: Val::Px(height as f32 * 3.0),
         ..default()
+    }
+}
+
+fn visible(show: bool) -> Visibility {
+    if show {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    }
+}
+
+pub(super) fn spawn_ui(mut commands: Commands, server: Res<AssetServer>) {
+    layout::spawn(&mut commands, &server.load("graphics/System/System.png"));
+}
+
+#[derive(SystemParam)]
+pub(super) struct Drawing<'w, 's> {
+    parts: Query<
+        'w,
+        's,
+        (
+            &'static Part,
+            &'static mut Node,
+            &'static mut Visibility,
+            Option<&'static Children>,
+        ),
+    >,
+    texts: Query<'w, 's, (&'static Part, &'static mut PixelText)>,
+    images: Query<'w, 's, &'static mut ImageNode>,
+}
+
+#[derive(SystemParam)]
+pub(super) struct Presentation<'w> {
+    screen: Res<'w, Screen>,
+    data: Res<'w, GameData>,
+    inventory: Res<'w, Inventory>,
+    terms: Res<'w, Terms>,
+    font: Res<'w, BitmapFont>,
+    dialogue: Res<'w, crate::dialogue::Dialogue>,
+    party: Res<'w, Party>,
+    equipment: Res<'w, crate::equipment::Equipment>,
+    server: Res<'w, AssetServer>,
+}
+
+pub(super) fn update_ui(p: Presentation, mut drawing: Drawing) {
+    for (part, _, mut visibility, _) in &mut drawing.parts {
+        if matches!(part, Part::Root) {
+            *visibility = visible(matches!(*p.screen, Screen::Shop(_)));
+        }
+    }
+    let Screen::Shop(state) = &*p.screen else {
+        return;
+    };
+    let face = p.dialogue.face.graphic();
+    for (part, mut node, mut visibility, children) in &mut drawing.parts {
+        match *part {
+            Part::Window(window) => *visibility = visible(layout::shown(window, &state.phase)),
+            Part::Text(window @ (Window::Buy | Window::Sell)) => {
+                let (offset, height) = if window == Window::Buy {
+                    (
+                        state.scene.buy.offset,
+                        logic::buyable_ids(&p.data, &state.items).len().max(7) * 16,
+                    )
+                } else {
+                    (
+                        state.scene.sell.offset,
+                        logic::sell_ids(&p.data, &p.inventory)
+                            .len()
+                            .div_ceil(2)
+                            .max(7)
+                            * 16,
+                    )
+                };
+                node.top = Val::Px(-offset as f32 * 3.0);
+                node.height = Val::Px(height as f32 * 3.0);
+            }
+            Part::Cursor(window) => {
+                let (x, y, width, phase) = match window {
+                    Window::Buy => (
+                        4,
+                        8 + state.scene.buy.cursor_y,
+                        176,
+                        state.scene.buy.cursor_frame,
+                    ),
+                    Window::Sell => (
+                        4 + state.scene.sell.cursor_index as i32 % 2 * 160,
+                        8 + state.scene.sell.cursor_y,
+                        152,
+                        state.scene.sell.cursor_frame,
+                    ),
+                    Window::Number => (154, 40, 20, state.scene.number_frame),
+                    Window::Message => {
+                        let Phase::Command { cursor, .. } = state.phase else {
+                            *visibility = Visibility::Hidden;
+                            continue;
+                        };
+                        let indent = if face.is_some() { 72 } else { 0 };
+                        (
+                            12 + indent,
+                            24 + cursor as i32 * 16,
+                            296 - indent as u32,
+                            state.scene.command_frame,
+                        )
+                    }
+                    _ => unreachable!(),
+                };
+                *visibility = Visibility::Inherited;
+                node.left = Val::Px(x as f32 * 3.0);
+                node.top = Val::Px(y as f32 * 3.0);
+                node.width = Val::Px(width as f32 * 3.0);
+                for child in children.into_iter().flatten() {
+                    if let Ok(mut image) = drawing.images.get_mut(*child) {
+                        crate::windowskin::cursor_phase(
+                            &mut image,
+                            if phase <= 10 { 64.0 } else { 96.0 },
+                        );
+                    }
+                }
+            }
+            Part::Arrow(window, up) => {
+                let arrows = if window == Window::Buy {
+                    state.scene.buy.arrows
+                } else {
+                    state.scene.sell.arrows
+                };
+                *visibility = visible(arrows[usize::from(!up)]);
+            }
+            Part::Face => *visibility = visible(face.is_some()),
+            _ => {}
+        }
+    }
+    let equipped = p
+        .party
+        .snapshot()
+        .iter()
+        .filter_map(|id| p.data.actor(*id))
+        .flat_map(|actor| p.equipment.slots(actor))
+        .filter(|id| *id != 0 && *id == state.scene.item_id)
+        .count();
+    for (part, mut label) in &mut drawing.texts {
+        let Part::Text(window) = part else { continue };
+        let content = match window {
+            Window::Help => text::help(state.scene.help_id, &p.data),
+            Window::Buy => text::entries(
+                &logic::buyable_ids(&p.data, &state.items),
+                true,
+                &p.data,
+                &p.inventory,
+                &p.font,
+            ),
+            Window::Sell => text::entries(
+                &logic::sell_ids(&p.data, &p.inventory),
+                false,
+                &p.data,
+                &p.inventory,
+                &p.font,
+            ),
+            Window::Number => match &state.phase {
+                Phase::Number(number) => text::quantity(number, &p.data, &p.terms, &p.font),
+                _ => PixelText::default(),
+            },
+            Window::Gold => text::gold(p.inventory.gold(), &p.terms, &p.font),
+            Window::Status => text::status(
+                p.inventory.count(state.scene.item_id),
+                equipped,
+                &p.terms,
+                &p.font,
+            ),
+            Window::Message => text::message(state, face.is_some(), &p.terms),
+            _ => unreachable!(),
+        };
+        label.set_if_neq(content);
+    }
+    if let Some((name, index)) = face {
+        for (part, _, _, children) in &drawing.parts {
+            if matches!(part, Part::Face) {
+                for child in children.into_iter().flatten() {
+                    if let Ok(mut image) = drawing.images.get_mut(*child) {
+                        image.image = p.server.load(crate::assets::resolve_png("FaceSet", name));
+                        image.rect = Some(Rect::new(
+                            (index % 4 * 48) as f32,
+                            (index / 4 * 48) as f32,
+                            (index % 4 * 48 + 48) as f32,
+                            (index / 4 * 48 + 48) as f32,
+                        ));
+                    }
+                }
+            }
+        }
     }
 }

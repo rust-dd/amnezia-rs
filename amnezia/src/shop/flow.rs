@@ -72,13 +72,14 @@ pub fn open_requests(
                 allow_buy,
                 allow_sell,
                 shop_type,
-            } => Screen::Shop(ShopState {
+            } => Screen::Shop(Box::new(ShopState {
                 items: items.clone(),
                 allow_buy: *allow_buy,
                 allow_sell: *allow_sell,
                 shop_type: *shop_type,
                 phase: initial_phase(*allow_buy, *allow_sell),
-            }),
+                scene: default(),
+            })),
             ShopRequest::ShowInn { cost } => Screen::Inn {
                 cost: *cost,
                 yes: true,
@@ -112,6 +113,18 @@ pub fn shop_input(
         return;
     }
     if let Screen::Shop(state) = &mut *screen {
+        let moves = super::scene::update(state, &directions, &keys, ticks, &data, &inventory);
+        if let Some(sounds) = sounds.as_deref() {
+            for _ in 0..moves {
+                play_system_se(&mut audio, &sounds.cursor);
+            }
+            if matches!(state.phase, Phase::Command { .. })
+                && confirm(&keys)
+                && keys.just_pressed(KeyCode::Escape)
+            {
+                play_system_se(&mut audio, &sounds.decision);
+            }
+        }
         if clock::confirmation(state, ticks, &data, &inventory) {
             return;
         }
@@ -171,7 +184,9 @@ fn shop_step(
     state: &mut ShopState,
 ) -> StepResult {
     let transition = match &mut state.phase {
-        Phase::Command { cursor, .. } => steps::command_step(keys, cursor),
+        Phase::Command { cursor, .. } => {
+            steps::command_step(keys, cursor, state.scene.buy.index, state.scene.sell.index)
+        }
         Phase::Buy { cursor } => steps::buy_step(
             keys,
             data,
@@ -187,7 +202,7 @@ fn shop_step(
     match transition {
         Transition::Stay(se) => StepResult::stay(se),
         Transition::To(phase, se) => {
-            state.phase = phase;
+            state.set_phase(phase, data, inventory);
             StepResult::stay(se)
         }
         Transition::Leave(se) => StepResult::leave(se),

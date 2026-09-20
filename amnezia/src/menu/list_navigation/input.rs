@@ -50,7 +50,7 @@ impl Input {
         });
     }
 
-    pub(in crate::menu) fn timed(&self) -> bool {
+    pub(crate) fn timed(&self) -> bool {
         self.elapsed > 0
     }
 

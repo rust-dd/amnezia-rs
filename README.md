@@ -26,7 +26,7 @@ Hungarian is the original language and the default at startup. **English support
 
 The English catalog currently contains 6,173 entries: 2,917 differ from the source, while 3,256 are identical. Identical entries include legitimate names and symbols, but also many untranslated Hungarian dialogue lines. All 6,131 keys in the existing Hungarian catalog have an English entry; that is not proof of translation completeness.
 
-The runtime vocabulary has additional gaps: 48 of its 110 nonblank term fields have no English lookup, including the New Game, Load, save/load prompt, and End Game labels. Some shop/inn strings also bypass localization. Translation quality, text fitting, text embedded in graphics, and a complete English playthrough still need verification.
+The runtime vocabulary has additional gaps: 48 of its 110 nonblank term fields have no English lookup, including the New Game, Load, save/load prompt, and End Game labels. Some inn strings also bypass localization. Translation quality, text fitting, text embedded in graphics, and a complete English playthrough still need verification.
 
 The catalogs are in [assets/i18n](assets/i18n); the runtime lookup is in [amnezia/src/i18n.rs](amnezia/src/i18n.rs).
 

@@ -13,23 +13,19 @@ use crate::gamedata::GameData;
 use crate::state::Inventory;
 
 /// The Buy/Sell/Leave command menu (shown only for a full buy+sell shop).
-pub(super) fn command_step(keys: &ButtonInput<KeyCode>, cursor: &mut usize) -> Transition {
-    const OPTIONS: usize = 3;
+pub(super) fn command_step(
+    keys: &ButtonInput<KeyCode>,
+    cursor: &mut usize,
+    buy: usize,
+    sell: usize,
+) -> Transition {
     if keys.just_pressed(KeyCode::Escape) {
         return Transition::Leave(Se::Cancel);
     }
-    if keys.just_pressed(KeyCode::ArrowDown) {
-        *cursor = (*cursor + 1) % OPTIONS;
-        return Transition::Stay(Se::Cursor);
-    }
-    if keys.just_pressed(KeyCode::ArrowUp) {
-        *cursor = (*cursor + OPTIONS - 1) % OPTIONS;
-        return Transition::Stay(Se::Cursor);
-    }
     if confirm(keys) {
         return match *cursor {
-            0 => Transition::To(Phase::Buy { cursor: 0 }, Se::Decision),
-            1 => Transition::To(Phase::Sell { cursor: 0 }, Se::Decision),
+            0 => Transition::To(Phase::Buy { cursor: buy }, Se::Decision),
+            1 => Transition::To(Phase::Sell { cursor: sell }, Se::Decision),
             _ => Transition::Leave(Se::Decision),
         };
     }
@@ -50,9 +46,6 @@ pub(super) fn buy_step(
     let ids = logic::buyable_ids(data, items);
     if keys.just_pressed(KeyCode::Escape) {
         return back_or_leave(allow_sell, Se::Cancel);
-    }
-    if let Some(t) = list_move(keys, ids.len(), cursor) {
-        return t;
     }
     if confirm(keys) {
         let Some(item) = ids.get(*cursor).and_then(|&id| data.item(id)) else {
@@ -86,9 +79,6 @@ pub(super) fn sell_step(
     let ids = logic::sell_ids(data, inventory);
     if keys.just_pressed(KeyCode::Escape) {
         return back_or_leave(allow_buy, Se::Cancel);
-    }
-    if let Some(t) = list_move(keys, ids.len(), cursor) {
-        return t;
     }
     if confirm(keys) {
         let Some(item) = ids.get(*cursor).and_then(|&id| data.item(id)) else {
@@ -141,10 +131,12 @@ pub(super) fn number_step(
             Mode::Buy => Phase::Bought {
                 remaining: super::clock::CONFIRM_FRAMES,
                 cursor: num.origin,
+                item_id: num.item_id,
             },
             Mode::Sell => Phase::Sold {
                 remaining: super::clock::CONFIRM_FRAMES,
                 cursor: num.origin,
+                item_id: num.item_id,
             },
         };
         return Transition::To(done, Se::Decision);
@@ -166,18 +158,4 @@ fn back_or_leave(other_allowed: bool, se: Se) -> Transition {
     } else {
         Transition::Leave(se)
     }
-}
-
-/// Move a list cursor with up/down within `0..len` (clamped), returning the
-/// cursor transition, or `None` when no move key was pressed.
-fn list_move(keys: &ButtonInput<KeyCode>, len: usize, cursor: &mut usize) -> Option<Transition> {
-    if keys.just_pressed(KeyCode::ArrowDown) {
-        *cursor = (*cursor + 1).min(len.saturating_sub(1));
-        return Some(Transition::Stay(Se::Cursor));
-    }
-    if keys.just_pressed(KeyCode::ArrowUp) {
-        *cursor = cursor.saturating_sub(1);
-        return Some(Transition::Stay(Se::Cursor));
-    }
-    None
 }

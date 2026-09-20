@@ -18,7 +18,9 @@ mod flow;
 mod inn_music;
 mod logic;
 mod messages;
+mod navigation;
 mod quantity;
+mod scene;
 pub(crate) mod smoke;
 mod steps;
 #[cfg(test)]
@@ -62,7 +64,7 @@ pub struct ShopOutcome {
 enum Screen {
     #[default]
     Closed,
-    Shop(ShopState),
+    Shop(Box<ShopState>),
     Inn {
         cost: i32,
         yes: bool,
@@ -78,34 +80,30 @@ struct ShopState {
     allow_sell: bool,
     shop_type: u32,
     phase: Phase,
+    scene: scene::State,
 }
 
 /// The step a shop interaction is on, mirroring EasyRPG's `Scene_Shop` modes.
 enum Phase {
     /// The Buy/Sell/Leave command menu (shown only for a full buy+sell shop).
     /// `regreet` swaps the greeting for the "anything else?" line after a trade.
-    Command {
-        cursor: usize,
-        regreet: bool,
-    },
+    Command { cursor: usize, regreet: bool },
     /// Choosing an item to buy.
-    Buy {
-        cursor: usize,
-    },
+    Buy { cursor: usize },
     /// Choosing a held item to sell.
-    Sell {
-        cursor: usize,
-    },
+    Sell { cursor: usize },
     /// The "how many?" quantity window.
     Number(NumberState),
     /// The post-trade hold retains the list selection for its return.
     Bought {
         remaining: u32,
         cursor: usize,
+        item_id: u32,
     },
     Sold {
         remaining: u32,
         cursor: usize,
+        item_id: u32,
     },
 }
 
@@ -121,7 +119,7 @@ struct NumberState {
     origin: usize,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Mode {
     Buy,
     Sell,
@@ -135,7 +133,8 @@ impl Plugin for ShopPlugin {
             .init_resource::<ShopOpen>()
             .init_resource::<ShopOutcome>()
             .init_resource::<Screen>()
-            .add_systems(Startup, view::spawn_ui)
+            .init_resource::<view::party::Cache>()
+            .add_systems(Startup, (view::spawn_ui, view::inn::spawn_ui))
             .add_systems(
                 Update,
                 (
@@ -143,6 +142,8 @@ impl Plugin for ShopPlugin {
                     flow::shop_input,
                     flow::debug_triggers,
                     view::update_ui,
+                    view::party::update,
+                    view::inn::update,
                 )
                     .chain()
                     .after(crate::menu::MenuInput),

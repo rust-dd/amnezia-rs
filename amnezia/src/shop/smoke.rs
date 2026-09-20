@@ -7,7 +7,9 @@ use crate::timing::{GameFrames, SceneFrames};
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 
+pub(in crate::shop) mod layout;
 mod source;
+pub(crate) use super::view::pixels::snapshot;
 
 #[derive(Resource, Default)]
 struct Probe {
@@ -35,14 +37,14 @@ pub(crate) fn input(world: &mut World, frame: u32) -> bool {
     keys.reset_all();
     for key in match frame {
         310 | 330 | 510 | 520 | 540 | 580 => vec![KeyCode::Enter],
-        320 | 355 | 500 | 530 => vec![KeyCode::ArrowDown],
+        320 | 355 | 500 => vec![KeyCode::ArrowDown],
         340 | 550 => vec![KeyCode::ArrowUp],
-        345 | 555 | 560 | 565 | 570 => vec![KeyCode::ArrowRight],
+        345 | 530 | 555 | 560 | 565 | 570 => vec![KeyCode::ArrowRight],
         350 => vec![KeyCode::ArrowLeft],
         400 => vec![KeyCode::ArrowUp, KeyCode::Enter],
         420..=426 => vec![KeyCode::ArrowDown, KeyCode::Enter],
         490 | 650 | 660 | 710 => vec![KeyCode::Escape],
-        _ => vec![],
+        _ => layout::input(frame),
     } {
         keys.press(key);
     }
@@ -57,6 +59,8 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         inventory.add_item(1, 1);
         assert_eq!(world.resource::<GameData>().item(1).unwrap().price, 0);
         world.insert_resource(inventory);
+        world.resource_mut::<crate::dialogue::Dialogue>().face = default();
+        world.init_resource::<layout::Checks>();
         let mut probe = Probe::default();
         probe
             .audio
@@ -86,6 +90,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         );
     }
     match frame {
+        305 => Some("shop-command"),
         342 => {
             assert_number(world, 11);
             Some("shop-buy-quantity")
@@ -141,10 +146,12 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             assert!(!world.resource::<Switches>().get(9022));
             assert!(!world.resource::<ShopOpen>().0);
             assert!(!world.resource::<RunningEvent>().active());
+            assert_eq!(world.resource::<Inventory>().count(1), 1);
+            assert_eq!(world.resource::<Inventory>().count(7), 0);
             world.resource_mut::<Probe>().finished = true;
             None
         }
-        _ => None,
+        _ => layout::drive(world, frame),
     }
 }
 
@@ -229,6 +236,7 @@ fn verify_sounds(world: &mut World, frame: u32) {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    layout::verify_finished(world);
     let probe = world.resource::<Probe>();
     assert!(probe.finished);
     assert_eq!(probe.sounds, 28);
@@ -236,7 +244,7 @@ pub(crate) fn verify_finished(world: &World) {
     assert_eq!(probe.returned, [true; 2]);
     assert_eq!(world.resource::<Inventory>().count(1), 1);
     info!(
-        "shop trade checks: {} confirmation states, {} exact sounds, six captures and transaction/cancel branches",
+        "shop trade checks: {} confirmation states, {} exact sounds and transaction/cancel branches",
         probe.held_checks, probe.sounds
     );
 }

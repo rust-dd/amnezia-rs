@@ -42,11 +42,15 @@ pub(super) fn confirmation(
     inventory: &Inventory,
 ) -> bool {
     let phase = match &mut state.phase {
-        Phase::Bought { remaining, cursor } => {
+        Phase::Bought {
+            remaining, cursor, ..
+        } => {
             *remaining = remaining.saturating_sub(ticks);
             (*remaining == 0).then_some(Phase::Buy { cursor: *cursor })
         }
-        Phase::Sold { remaining, cursor } => {
+        Phase::Sold {
+            remaining, cursor, ..
+        } => {
             *remaining = remaining.saturating_sub(ticks);
             (*remaining == 0).then(|| Phase::Sell {
                 cursor: (*cursor).min(logic::sell_ids(data, inventory).len().saturating_sub(1)),
@@ -55,7 +59,7 @@ pub(super) fn confirmation(
         _ => return false,
     };
     if let Some(phase) = phase {
-        state.phase = phase;
+        state.set_phase(phase, data, inventory);
     }
     true
 }
