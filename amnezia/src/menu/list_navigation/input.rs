@@ -58,7 +58,7 @@ impl Input {
         self.repeats()
     }
 
-    pub(in crate::menu) fn slot_steps(&self) -> impl Iterator<Item = [bool; 6]> + '_ {
+    pub(crate) fn slot_steps(&self) -> impl Iterator<Item = [bool; 6]> + '_ {
         self.repeats()
     }
 

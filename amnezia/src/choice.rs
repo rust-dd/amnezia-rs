@@ -5,10 +5,13 @@
 //! cancel option (or is refused when the choice disallows cancelling). The
 //! interpreter reads the chosen index back and runs the matching branch.
 
-use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::font::GameFont;
 use bevy::prelude::*;
 use bevy::text::FontSource;
+
+mod input;
+pub(crate) mod smoke;
+use input::update as choice_input;
 
 /// The active choice menu: the option labels, the cursor row, which event
 /// `indent` this choice belongs to, its RM2000 cancel type, whether it's showing,
@@ -58,7 +61,12 @@ impl Plugin for ChoicePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Choice>()
             .add_systems(Startup, spawn_ui)
-            .add_systems(Update, (choice_input, update_ui));
+            .add_systems(
+                Update,
+                (choice_input, update_ui)
+                    .chain()
+                    .after(crate::menu::MenuInput),
+            );
     }
 }
 
@@ -137,55 +145,6 @@ fn inset_node(px: f32) -> Node {
     }
 }
 
-/// Move the cursor with the arrow keys (wrapping, cursor SE); confirm with the
-/// action key (decision SE) storing the chosen index; or cancel with the cancel
-/// key, which — unless the choice disallows it (`cancel_type == 0`) — picks the
-/// configured cancel option (cancel SE). Each closes the menu with a `result`.
-fn choice_input(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut choice: ResMut<Choice>,
-    mut audio: MessageWriter<AudioRequest>,
-    sounds: Option<Res<SystemSounds>>,
-) {
-    if !choice.active {
-        return;
-    }
-    let count = choice.options.len();
-    if count == 0 {
-        return;
-    }
-    let sounds = sounds.as_deref();
-    if keys.just_pressed(KeyCode::ArrowDown) {
-        choice.cursor = (choice.cursor + 1) % count;
-        if let Some(s) = sounds {
-            play_system_se(&mut audio, &s.cursor);
-        }
-    }
-    if keys.just_pressed(KeyCode::ArrowUp) {
-        choice.cursor = (choice.cursor + count - 1) % count;
-        if let Some(s) = sounds {
-            play_system_se(&mut audio, &s.cursor);
-        }
-    }
-    if keys.just_pressed(KeyCode::Escape) {
-        if choice.cancel_type > 0 {
-            if let Some(s) = sounds {
-                play_system_se(&mut audio, &s.cancel);
-            }
-            choice.result = Some(choice.cancel_type - 1);
-            choice.active = false;
-        }
-        return;
-    }
-    if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) {
-        if let Some(s) = sounds {
-            play_system_se(&mut audio, &s.decision);
-        }
-        choice.result = Some(choice.cursor as i32);
-        choice.active = false;
-    }
-}
-
 fn update_ui(
     choice: Res<Choice>,
     mut panels: Query<&mut Visibility, With<ChoicePanel>>,
@@ -215,3 +174,6 @@ fn update_ui(
         **text = rendered;
     }
 }
+
+#[cfg(test)]
+mod tests;
