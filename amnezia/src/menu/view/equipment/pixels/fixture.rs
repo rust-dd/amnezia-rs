@@ -43,7 +43,10 @@ impl Fixture {
             "equipment-reopened" => (2, Some(0), 0, 0, 0, 64, Some([45, 37, 20, 25])),
             "equipment-accessory" | "equipment-wrap" => (4, None, 0, 0, 0, 0, None),
             "equipment-fixed" => (0, None, 0, 0, 0, 41, None),
-            "equipment-switch-tiffany" | "equipment-switch-held" => (2, None, 0, 0, 0, 65, None),
+            "equipment-switch-tiffany" | "equipment-switch-held" | "equipment-switch-fade-in" => {
+                (2, None, 0, 0, 0, 65, None)
+            }
+            "equipment-switch-fade-out" => (2, None, 48, 17, 80, 64, None),
             "equipment-switch-fixed" => (2, None, 0, 0, 0, 81, None),
             "equipment-switch-wrapped" => (2, None, 0, 0, 0, 64, None),
             "equipment-switch-tiffany-weapon" => (0, None, 0, 0, 0, 6, None),
@@ -67,6 +70,7 @@ impl Fixture {
         let tiffany = matches!(
             label,
             "equipment-switch-tiffany"
+                | "equipment-switch-fade-in"
                 | "equipment-switch-held"
                 | "equipment-switch-tiffany-weapon"
                 | "equipment-switch-shield"

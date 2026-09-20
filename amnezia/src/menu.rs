@@ -36,6 +36,7 @@ mod targets;
 mod use_item;
 mod view;
 
+pub(crate) use equip::Switch as EquipmentSwitch;
 pub(crate) use equip::layout_smoke as equipment_smoke;
 pub(crate) use items::smoke as item_smoke;
 pub(crate) use skills::smoke as skill_smoke;
@@ -138,6 +139,7 @@ pub(crate) struct MenuInput;
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         save_files::register(app);
+        equip::register_switching(app);
         crate::windowskin::background::register(app);
         app.init_resource::<MenuOpen>()
             .init_resource::<MenuAccess>()

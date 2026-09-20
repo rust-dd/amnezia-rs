@@ -122,6 +122,22 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             pixels.push(pixel);
         }
     }
+    if matches!(
+        label,
+        "equipment-switch-fade-in" | "equipment-switch-fade-out"
+    ) {
+        assert_eq!(world.resource::<crate::transitions::Transition>().age(), 1);
+        let factor = if label == "equipment-switch-fade-in" {
+            127
+        } else {
+            128
+        };
+        for color in &mut pixels {
+            for channel in &mut color[..3] {
+                *channel = ((u32::from(*channel) * factor + 127) / 255) as u8;
+            }
+        }
+    }
     Some(Snapshot {
         pixels,
         checks: world.resource::<Checks>().pixels.clone(),

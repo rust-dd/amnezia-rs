@@ -4,6 +4,7 @@ use crate::menu::testkit;
 use crate::save::SaveRequest;
 use amnezia_data::SoundDef;
 
+mod equip_fades;
 mod equip_navigation;
 mod equip_selection;
 mod equip_switching;

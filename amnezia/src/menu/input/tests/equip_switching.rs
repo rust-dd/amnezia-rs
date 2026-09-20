@@ -2,7 +2,7 @@ use super::*;
 use crate::menu::equip::Scene;
 use crate::timing::GameFrames;
 
-fn screen(member: usize, slot: usize, picking: Option<usize>) -> MenuScreen {
+pub(super) fn screen(member: usize, slot: usize, picking: Option<usize>) -> MenuScreen {
     MenuScreen::Equip {
         member,
         slot,
@@ -10,7 +10,7 @@ fn screen(member: usize, slot: usize, picking: Option<usize>) -> MenuScreen {
     }
 }
 
-fn prepared(slot: usize) -> App {
+pub(super) fn prepared(slot: usize) -> App {
     let mut app = app_on(2, screen(0, slot, None));
     let mut data = app.world_mut().resource_mut::<GameData>();
     data.actors = (1..=3)

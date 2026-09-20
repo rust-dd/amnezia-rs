@@ -70,6 +70,7 @@ impl OpenBlockers<'_> {
 /// `title` stays separate because End Game mutates it.
 #[derive(SystemParam)]
 pub(super) struct MenuGates<'w> {
+    switch: Option<ResMut<'w, equip::Switch>>,
     shop: Res<'w, ShopOpen>,
     battle: Res<'w, BattleActive>,
     menu_access: Res<'w, MenuAccess>,
@@ -88,7 +89,7 @@ pub(super) fn menu_input(
     mut inventory: ResMut<Inventory>,
     mut vitals: ResMut<Vitals>,
     mut equipment: ResMut<Equipment>,
-    gates: MenuGates,
+    mut gates: MenuGates,
     mut title: ResMut<TitleActive>,
     mut open: ResMut<MenuOpen>,
     mut state: ResMut<MenuState>,
@@ -98,7 +99,7 @@ pub(super) fn menu_input(
     mut sfx: MenuSfx,
     mut skill_rng: Local<crate::interpreter::EventRng>,
 ) {
-    if save_files.active() {
+    if save_files.active() || gates.switch.as_ref().is_some_and(|switch| switch.active()) {
         return;
     }
     if matches!(
@@ -320,11 +321,16 @@ pub(super) fn menu_input(
                     (member + members) % (members + 1)
                 };
                 sfx.cursor();
-                state.screen = MenuScreen::Equip {
+                let next = MenuScreen::Equip {
                     member,
                     slot,
                     picking: None,
                 };
+                if let Some(switch) = &mut gates.switch {
+                    switch.request(next);
+                } else {
+                    state.screen = next;
+                }
             }
         }
         MenuScreen::Equip {

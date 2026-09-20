@@ -95,6 +95,9 @@ pub(in crate::menu) fn update(
         *scene = Scene::default();
         return;
     }
+    if pause.paused() || fade.busy() || files.active() {
+        return;
+    }
     let MenuScreen::Equip {
         member,
         mut slot,
@@ -113,9 +116,6 @@ pub(in crate::menu) fn update(
             actor: actor.id,
             ..default()
         };
-    }
-    if pause.paused() || fade.busy() || files.active() {
-        return;
     }
     let entries =
         std::array::from_fn::<_, 5, _>(|slot| candidates(member, slot, &data, &party, &inventory));

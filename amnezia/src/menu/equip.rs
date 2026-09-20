@@ -8,8 +8,11 @@ use crate::state::{Inventory, Party};
 pub(crate) mod layout_smoke;
 mod scene;
 pub(crate) mod smoke;
+mod switching;
 
 pub(super) use scene::{Scene, refresh_actor, stats, update};
+pub(crate) use switching::Switch;
+pub(super) use switching::register as register_switching;
 
 #[cfg(test)]
 mod selection_tests;

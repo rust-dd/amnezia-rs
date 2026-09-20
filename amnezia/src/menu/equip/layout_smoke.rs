@@ -191,12 +191,12 @@ fn verify_state(world: &mut World, frame: u32) {
 
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!(checks.pixels.load(Ordering::Relaxed), 29);
+    assert_eq!(checks.pixels.load(Ordering::Relaxed), 31);
     assert_eq!((checks.frames, checks.sounds), (412, 34));
     assert!(!world.resource::<MenuOpen>().0);
     assert_eq!(world.resource::<MenuState>().screen, MenuScreen::Command);
     info!(
-        "equipment menu: 29 full-canvas references, 412 state/audio frames and 34 exact sounds verified"
+        "equipment menu: 31 full-canvas references, 412 state/audio frames and 34 exact sounds verified"
     );
     actors::verify_finished(world);
     cells::verify_finished(world);
