@@ -63,7 +63,9 @@ pub(super) fn spawn_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
         .with_children(|panel| {
             panel
                 .spawn((fill_node(), DialogueFrame))
-                .with_children(|frame| crate::windowskin::frame(frame, &system));
+                .with_children(|frame| {
+                    crate::windowskin::fixed_frame(frame, &system, UVec2::new(320, 80))
+                });
             panel.spawn((
                 Node {
                     position_type: PositionType::Absolute,

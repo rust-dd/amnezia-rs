@@ -42,11 +42,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let mut pixels = Vec::new();
     for y in 0..8 {
         for x in 0..16 {
-            let background = rgba(
-                skin,
-                (2 * (152 + x) + 1) * 16 / 320,
-                (2 * (72 + y) + 1) * 16 / 80,
-            );
+            let background = rgba(skin, background(152 + x, 320), background(72 + y, 80));
             let frame = over(rgba(skin, 40 + x, 24 + y), background);
             let pixel = if visible {
                 over(rgba(skin, 40 + x, 16 + y), frame)
@@ -82,6 +78,11 @@ pub(super) fn verify_finished(world: &World) {
 
 fn rgba(image: &Image, x: u32, y: u32) -> [u8; 4] {
     image.get_color_at(x, y).unwrap().to_srgba().to_u8_array()
+}
+
+fn background(position: u32, length: u32) -> u32 {
+    let scale = (32 << 16) / length;
+    ((2 * position + 1) * scale / 2).saturating_sub(1) >> 16
 }
 
 fn over(foreground: [u8; 4], background: [u8; 4]) -> [u8; 4] {

@@ -14,7 +14,7 @@ pub(super) fn reference(
             let mut pixel = if case.transparent {
                 (!(4..316).contains(&x)).then_some([0, 0, 0, 255])
             } else {
-                let background = rgba(skin, (2 * x + 1) * 16 / 320, (2 * y + 1) * 16 / 80);
+                let background = rgba(skin, background(x, 320), background(y, 80));
                 let border = !(8..312).contains(&x) || !(8..72).contains(&y);
                 Some(if border {
                     over(
@@ -53,6 +53,11 @@ fn coordinate(position: u32, length: u32) -> u32 {
     } else {
         8 + (position - 8) % 16
     }
+}
+
+fn background(position: u32, length: u32) -> u32 {
+    let scale = (32 << 16) / length;
+    ((2 * position + 1) * scale / 2).saturating_sub(1) >> 16
 }
 
 fn rgba(image: &Image, x: u32, y: u32) -> [u8; 4] {

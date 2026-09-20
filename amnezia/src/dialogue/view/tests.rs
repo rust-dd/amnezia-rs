@@ -33,6 +33,36 @@ fn dialogue_uses_the_original_bitmap_contents_instead_of_font_metrics() {
 }
 
 #[test]
+fn dialogue_background_is_a_single_native_320_by_80_raster_below_the_frame() {
+    let mut app = app();
+    let world = app.world_mut();
+    let frame = world
+        .query_filtered::<Entity, With<DialogueFrame>>()
+        .single(world)
+        .unwrap();
+    let children = world.get::<Children>(frame).unwrap();
+    let backgrounds = children
+        .iter()
+        .filter(|&entity| {
+            world
+                .get::<crate::windowskin::background::Pixels>(entity)
+                .is_some()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(backgrounds, vec![children[0]]);
+    let background = world
+        .get::<crate::windowskin::background::Pixels>(children[0])
+        .unwrap();
+    assert_eq!(background.0, UVec2::new(320, 80));
+    assert_eq!(world.get::<ImageNode>(children[0]).unwrap().rect, None);
+    let node = world.get::<Node>(children[0]).unwrap();
+    assert_eq!(
+        (node.width, node.height),
+        (Val::Percent(100.0), Val::Percent(100.0))
+    );
+}
+
+#[test]
 fn dialogue_frame_has_one_full_background_and_eight_fixed_border_pieces() {
     let mut app = app();
     let world = app.world_mut();
@@ -45,9 +75,9 @@ fn dialogue_frame_has_one_full_background_and_eight_fixed_border_pieces() {
     assert_eq!(children.len(), 9);
     let rects = children
         .iter()
-        .map(|child| world.get::<ImageNode>(child).unwrap().rect.unwrap())
+        .filter_map(|child| world.get::<ImageNode>(child).unwrap().rect)
         .collect::<Vec<_>>();
-    assert_eq!(rects[0], Rect::new(0.0, 0.0, 32.0, 32.0));
+    assert_eq!(rects.len(), 8);
     assert_eq!(
         rects
             .iter()
