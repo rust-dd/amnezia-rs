@@ -15,6 +15,8 @@ use bevy::text::{FontSource, LineHeight, TextLayout};
 
 use super::{MenuOpen, MenuScreen, MenuState, command, render};
 
+#[cfg(test)]
+mod cell_tests;
 pub(super) mod clocks;
 pub(super) mod end_game;
 pub(super) mod equipment;

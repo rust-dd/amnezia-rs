@@ -19,6 +19,7 @@ pub(crate) struct Run {
     pub text: String,
     pub position: IVec2,
     pub color: u32,
+    clear: Option<UVec2>,
 }
 
 impl Run {
@@ -27,6 +28,14 @@ impl Run {
             text: text.into(),
             position: IVec2::new(x, y),
             color,
+            clear: None,
+        }
+    }
+
+    pub fn clear(x: i32, y: i32, width: u32, height: u32) -> Self {
+        Self {
+            clear: Some(UVec2::new(width, height)),
+            ..Self::new("", x, y, DEFAULT)
         }
     }
 }
@@ -91,6 +100,9 @@ impl BitmapFont {
         );
         image.sampler = ImageSampler::nearest();
         for run in &text.runs {
+            if let Some(size) = run.clear {
+                clear_rect(&mut image, run.position, size);
+            }
             let mut pen = run.position;
             for ch in run.text.chars() {
                 if ch == '\n' {
@@ -130,6 +142,21 @@ impl BitmapFont {
             }
         }
         image
+    }
+}
+
+fn clear_rect(image: &mut Image, position: IVec2, size: UVec2) {
+    let bounds = |position: i32, size: u32, limit: u32| {
+        let start = i64::from(position);
+        let end = start + i64::from(size);
+        start.clamp(0, i64::from(limit)) as usize..end.clamp(0, i64::from(limit)) as usize
+    };
+    let xs = bounds(position.x, size.x, image.width());
+    let ys = bounds(position.y, size.y, image.height());
+    let width = image.width() as usize;
+    let pixels = image.data.as_mut().unwrap();
+    for y in ys {
+        pixels[(y * width + xs.start) * 4..(y * width + xs.end) * 4].fill(0);
     }
 }
 

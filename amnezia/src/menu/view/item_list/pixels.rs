@@ -68,6 +68,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         let color = if *id == 105 { DEFAULT } else { DISABLED };
         let x = (index % 2 * 160) as i32;
         let y = (index / 2 * 16 + 2) as i32;
+        runs.push(Run::clear(x, y, 144, 12));
         runs.push(Run::new(&item.name, x, y, color));
         runs.push(Run::new(format!(":{count:>3}"), x + 120, y, color));
     }

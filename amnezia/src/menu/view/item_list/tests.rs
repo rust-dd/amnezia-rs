@@ -2,6 +2,37 @@ use super::*;
 use crate::menu::testkit;
 
 #[test]
+fn clear_rect_removes_left_name_overlap_only_when_a_right_item_exists() {
+    let name = "g".repeat(60);
+    let mut data = testkit::data();
+    data.items[0].name = name.clone();
+    let mut second = testkit::herb();
+    second.id = 6;
+    second.name.clear();
+    data.items.push(second);
+    for right in [false, true] {
+        let mut inventory = Inventory::default();
+        inventory.add_item(5, 1);
+        if right {
+            inventory.add_item(6, 1);
+        }
+        super::super::cell_tests::assert_row(
+            &entries(&data, &inventory),
+            vec![
+                Run::new(&name, 0, 2, DEFAULT),
+                Run::new(":  1", 120, 2, DEFAULT),
+            ],
+            if right {
+                vec![Run::new(":  1", 280, 2, DEFAULT)]
+            } else {
+                Vec::new()
+            },
+            right,
+        );
+    }
+}
+
+#[test]
 fn original_inventory_windows_use_a_thirty_two_pixel_help_and_two_column_list() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
@@ -60,10 +91,13 @@ fn item_text_uses_original_count_separator_grid_and_disabled_palette() {
     assert_eq!(
         text.runs,
         [
+            Run::clear(0, 2, 144, 12),
             Run::new("Gyógyfű", 0, 2, DEFAULT),
             Run::new(":  1", 120, 2, DEFAULT),
+            Run::clear(160, 2, 144, 12),
             Run::new("Kard", 160, 2, DISABLED),
             Run::new(": 12", 280, 2, DISABLED),
+            Run::clear(0, 18, 144, 12),
             Run::new("Másik", 0, 18, DISABLED),
             Run::new(": 99", 120, 18, DISABLED),
         ]
@@ -95,9 +129,9 @@ fn every_original_item_retains_its_name_description_count_and_field_color() {
         inventory.add_item(item.id, 1);
     }
     let text = entries(&data, &inventory);
-    assert_eq!(text.runs.len(), 404);
+    assert_eq!(text.runs.len(), 606);
     for (index, item) in data.items.iter().enumerate() {
-        let run = &text.runs[index * 2];
+        let run = &text.runs[index * 3 + 1];
         assert_eq!(run.text, item.name);
         assert_eq!(
             run.color,

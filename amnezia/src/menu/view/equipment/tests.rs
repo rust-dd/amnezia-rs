@@ -3,6 +3,23 @@ use crate::font::bitmap::Run;
 use crate::menu::testkit;
 
 #[test]
+fn clear_rect_also_erases_the_empty_unequip_cell_without_drawing_a_label() {
+    let name = "g".repeat(60);
+    let mut data = testkit::data();
+    data.items = vec![testkit::weapon(10, &name, 4)];
+    let mut inventory = Inventory::default();
+    inventory.add_item(10, 1);
+    for ids in [vec![10], vec![10, 0]] {
+        super::super::cell_tests::assert_row(
+            &text::entries(&ids, &data, &inventory),
+            vec![Run::new(&name, 0, 2, 0), Run::new(":  1", 120, 2, 0)],
+            Vec::new(),
+            ids.len() == 2,
+        );
+    }
+}
+
+#[test]
 fn original_equipment_scene_has_four_windows_and_only_bitmap_text() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
@@ -97,15 +114,22 @@ fn candidate_rows_draw_names_then_counts_and_leave_unequip_blank() {
     assert_eq!(
         text.runs,
         [
+            Run::clear(0, 2, 144, 12),
             Run::new("Kard", 0, 2, 0),
             Run::new(":  1", 120, 2, 0),
+            Run::clear(160, 2, 144, 12),
             Run::new("Másik kard", 160, 2, 0),
             Run::new(": 99", 280, 2, 0),
+            Run::clear(0, 18, 144, 12),
             Run::new("Hosszú név a számláló alatt", 0, 18, 0),
             Run::new(":  2", 120, 18, 0),
+            Run::clear(160, 18, 144, 12),
         ]
     );
-    assert!(text::entries(&[0], &data, &inventory).runs.is_empty());
+    assert_eq!(
+        text::entries(&[0], &data, &inventory).runs,
+        [Run::clear(0, 2, 144, 12)]
+    );
     assert!(text::entries(&[], &data, &inventory).runs.is_empty());
 }
 

@@ -45,6 +45,7 @@ pub(super) fn text(world: &World, fixture: &Fixture) -> [PixelText; 3] {
         };
         let x = (index % 2 * 160) as i32;
         let y = (index / 2 * 16 + 2) as i32;
+        entries.push(Run::clear(x, y, 144, 12));
         entries.push(Run::new(format!("-{cost:>3}"), x + 120, y, color));
         entries.push(Run::new(&skill.name, x, y, color));
     }

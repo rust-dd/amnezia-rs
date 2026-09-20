@@ -22,6 +22,7 @@ pub(super) fn entries(
                 };
             let x = (index % 2 * 160) as i32;
             let y = (index / 2 * 16 + 2) as i32;
+            runs.push(Run::clear(x, y, 144, 12));
             runs.push(Run::new(
                 format!("-{:>3}", skills::cost(actor, skill, data, equipment)),
                 x + 120,

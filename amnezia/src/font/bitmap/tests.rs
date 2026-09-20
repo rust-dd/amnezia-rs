@@ -1,5 +1,7 @@
 use super::*;
 
+mod clear;
+
 fn system() -> Image {
     let mut image = Image::new_fill(
         Extent3d {

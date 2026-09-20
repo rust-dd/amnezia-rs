@@ -18,6 +18,7 @@ pub(super) struct Fixture {
     fixed: bool,
     tiffany: bool,
     long: bool,
+    cell: Option<u8>,
 }
 
 impl Fixture {
@@ -48,6 +49,10 @@ impl Fixture {
             "equipment-switch-tiffany-weapon" => (0, None, 0, 0, 0, 6, None),
             "equipment-switch-picker" => (0, Some(1), 0, 1, 0, 2, Some([45, 37, 20, 25])),
             "equipment-switch-shield" => (1, None, 0, 0, 0, 0, None),
+            "equipment-cell-overlap" | "equipment-cell-empty" => {
+                (0, Some(0), 0, 0, 0, 1, Some([25, 32, 20, 25]))
+            }
+            "equipment-cell-cleared" => (0, Some(0), 0, 0, 0, 0, Some([15, 27, 20, 25])),
             _ => return None,
         };
         let before_swap = matches!(
@@ -95,6 +100,12 @@ impl Fixture {
             fixed,
             tiffany,
             long: label == "equipment-long",
+            cell: match label {
+                "equipment-cell-overlap" => Some(0),
+                "equipment-cell-empty" => Some(1),
+                "equipment-cell-cleared" => Some(2),
+                _ => None,
+            },
         })
     }
 
@@ -158,6 +169,12 @@ impl Fixture {
         }
         let ids = if self.fixed {
             Vec::new()
+        } else if let Some(cell) = self.cell {
+            match cell {
+                0 => vec![1, 2, 3, 0],
+                1 => vec![1, 0],
+                _ => vec![0],
+            }
         } else if self.slot == 2 {
             ARMOR.into_iter().chain([0]).collect::<Vec<_>>()
         } else if self.slot == 4 || self.tiffany {
@@ -169,11 +186,12 @@ impl Fixture {
         };
         let mut entries = Vec::new();
         for (i, id) in ids.iter().enumerate() {
+            let x = i as i32 % 2 * 160;
+            let y = i as i32 / 2 * 16 + 2;
+            entries.push(Run::clear(x, y, 144, 12));
             if *id == 0 {
                 continue;
             }
-            let x = i as i32 % 2 * 160;
-            let y = i as i32 / 2 * 16 + 2;
             entries.push(Run::new(&data.item(*id).unwrap().name, x, y, 0));
             entries.push(Run::new(
                 if *id == 2 && self.before_swap {

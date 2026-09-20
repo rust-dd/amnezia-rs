@@ -74,6 +74,7 @@ fn entries(data: &GameData, inventory: &Inventory) -> PixelText {
         };
         let x = (index % 2 * 160) as i32;
         let y = (index / 2 * 16 + 2) as i32;
+        runs.push(Run::clear(x, y, 144, 12));
         runs.push(Run::new(crate::i18n::tr(&item.name), x, y, color));
         runs.push(Run::new(
             format!(":{:>3}", inventory.count(*id)),

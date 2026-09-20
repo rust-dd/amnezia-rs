@@ -4,6 +4,41 @@ use crate::menu::testkit;
 use amnezia_data::Learning;
 
 #[test]
+fn clear_rect_removes_left_skill_overlap_without_clipping_the_missing_next_cell() {
+    let name = "g".repeat(60);
+    let mut data = testkit::data();
+    data.skills = vec![
+        testkit::heal_skill(2, &name, 1, 1),
+        testkit::heal_skill(3, "", 1, 1),
+    ];
+    for right in [false, true] {
+        data.actors[0].learnings = (2..=if right { 3 } else { 2 })
+            .map(|skill_id| Learning { level: 1, skill_id })
+            .collect();
+        super::super::cell_tests::assert_row(
+            &text::entries(
+                0,
+                &data,
+                &Party::default(),
+                &Progression::default(),
+                &Vitals::default(),
+                &Equipment::default(),
+            ),
+            vec![
+                Run::new("-  1", 120, 2, DEFAULT),
+                Run::new(&name, 0, 2, DEFAULT),
+            ],
+            if right {
+                vec![Run::new("-  1", 280, 2, DEFAULT)]
+            } else {
+                Vec::new()
+            },
+            right,
+        );
+    }
+}
+
+#[test]
 fn original_skill_scene_has_help_status_and_a_ten_row_list() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
@@ -70,10 +105,13 @@ fn skill_rows_use_the_original_cost_grid_palette_and_draw_order() {
     assert_eq!(
         text.runs,
         [
+            Run::clear(0, 2, 144, 12),
             Run::new("-  8", 120, 2, DEFAULT),
             Run::new("Gyógyítás", 0, 2, DEFAULT),
+            Run::clear(160, 2, 144, 12),
             Run::new("- 12", 280, 2, DISABLED),
             Run::new("Csapás", 160, 2, DISABLED),
+            Run::clear(0, 18, 144, 12),
             Run::new("- 40", 120, 18, DISABLED),
             Run::new("Nagy gyógyítás", 0, 18, DISABLED),
         ]
@@ -102,8 +140,8 @@ fn half_cost_updates_both_the_printed_number_and_availability() {
             &vitals,
             &equipment,
         );
-        assert_eq!(text.runs[0], Run::new("-  5", 120, 2, color));
-        assert_eq!(text.runs[1].color, color);
+        assert_eq!(text.runs[1], Run::new("-  5", 120, 2, color));
+        assert_eq!(text.runs[2].color, color);
     }
 }
 
@@ -203,7 +241,7 @@ fn every_original_skill_keeps_its_name_cost_description_and_field_palette() {
         &vitals,
         &Equipment::default(),
     );
-    assert_eq!(entries.runs.len(), 140);
+    assert_eq!(entries.runs.len(), 210);
     for (index, skill) in known.iter().enumerate() {
         let color = if [
             7, 8, 9, 10, 11, 33, 34, 35, 37, 38, 39, 40, 46, 47, 49, 52, 53,
@@ -215,11 +253,11 @@ fn every_original_skill_keeps_its_name_cost_description_and_field_palette() {
             DISABLED
         };
         assert_eq!(
-            entries.runs[index * 2].text,
+            entries.runs[index * 3 + 1].text,
             format!("-{:>3}", skill.sp_cost)
         );
-        assert_eq!(entries.runs[index * 2 + 1].text, skill.name);
-        assert_eq!(entries.runs[index * 2 + 1].color, color, "{}", skill.id);
+        assert_eq!(entries.runs[index * 3 + 2].text, skill.name);
+        assert_eq!(entries.runs[index * 3 + 2].color, color, "{}", skill.id);
         assert_eq!(
             text::help(0, index, &data, &party, &progression).runs[0].text,
             skill.description

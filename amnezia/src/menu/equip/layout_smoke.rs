@@ -16,6 +16,7 @@ use std::sync::{
 pub(crate) use crate::menu::view::equipment::pixels::snapshot;
 
 mod actors;
+mod cells;
 pub(crate) use actors::held_input;
 
 pub(crate) const ARMOR: [u32; 18] = [
@@ -45,7 +46,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
         390 | 580 => Some(KeyCode::PageDown),
         590 => Some(KeyCode::PageUp),
         395 | 530 | 570 | 680 | 700 | 710 => Some(KeyCode::Escape),
-        _ => actors::input(frame),
+        _ => actors::input(frame).or_else(|| cells::input(frame)),
     }
 }
 
@@ -108,7 +109,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         670 => Some("equipment-long"),
         685 => Some("equipment-main-return"),
         695 => Some("equipment-member-reopen"),
-        _ => actors::drive(world, frame),
+        _ => actors::drive(world, frame).or_else(|| cells::drive(world, frame)),
     }
 }
 
@@ -190,12 +191,13 @@ fn verify_state(world: &mut World, frame: u32) {
 
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!(checks.pixels.load(Ordering::Relaxed), 26);
+    assert_eq!(checks.pixels.load(Ordering::Relaxed), 29);
     assert_eq!((checks.frames, checks.sounds), (412, 34));
     assert!(!world.resource::<MenuOpen>().0);
     assert_eq!(world.resource::<MenuState>().screen, MenuScreen::Command);
     info!(
-        "equipment menu: 26 full-canvas references, 412 state/audio frames and 34 exact sounds verified"
+        "equipment menu: 29 full-canvas references, 412 state/audio frames and 34 exact sounds verified"
     );
     actors::verify_finished(world);
+    cells::verify_finished(world);
 }

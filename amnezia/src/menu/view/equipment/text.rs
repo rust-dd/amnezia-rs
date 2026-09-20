@@ -50,9 +50,10 @@ pub(super) fn slots(
 pub(super) fn entries(ids: &[u32], data: &GameData, inventory: &Inventory) -> PixelText {
     let mut runs = Vec::new();
     for (index, id) in ids.iter().enumerate() {
-        let Some(item) = data.item(*id) else { continue };
         let x = index as i32 % 2 * 160;
         let y = index as i32 / 2 * 16 + 2;
+        runs.push(Run::clear(x, y, 144, 12));
+        let Some(item) = data.item(*id) else { continue };
         runs.push(Run::new(tr(&item.name), x, y, DEFAULT));
         runs.push(Run::new(
             format!(":{:>3}", inventory.count(*id)),
