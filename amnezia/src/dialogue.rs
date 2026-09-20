@@ -24,6 +24,8 @@ pub(crate) use input_prompts::{InputPrompts, PromptFrame};
 pub use options::MessageOptions;
 use typewriter::Typewriter;
 pub(crate) use typewriter::smoke as timing_smoke;
+pub(crate) use view::prompts::Clock as PromptClock;
+pub(crate) use view::prompts::smoke as prompt_smoke;
 pub(crate) use view::smoke as font_smoke;
 
 /// The active dialogue: the sequence of boxes, which one is showing, and the
@@ -91,6 +93,9 @@ pub struct DialoguePlugin;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct DialogueInput;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct PromptInput;
+
 pub(crate) fn verify_placement(world: &mut World, top: bool) {
     let node = world
         .query_filtered::<&Node, With<view::DialoguePanel>>()
@@ -151,6 +156,7 @@ pub(crate) fn verify_saved_presentation(
 impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
         InputPrompts::register(app);
+        view::prompts::register(app);
         app.init_resource::<Dialogue>()
             .init_resource::<crate::timing::GameFrames>()
             .init_resource::<MessageOptions>()
@@ -160,11 +166,12 @@ impl Plugin for DialoguePlugin {
             .add_systems(
                 Update,
                 (
-                    interact.in_set(DialogueInput),
+                    interact.in_set(DialogueInput).after(PromptInput),
                     typewriter::drive_reveal,
                     view::render_box,
                     view::target_camera,
                     view::render_reveal,
+                    view::prompts::render_cursor,
                     view::update_position,
                 )
                     .chain(),

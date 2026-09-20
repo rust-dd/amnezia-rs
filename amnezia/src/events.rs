@@ -23,6 +23,12 @@ pub struct MessageFace {
     index: u32,
 }
 
+impl MessageFace {
+    pub(crate) fn graphic(&self) -> Option<(&str, u32)> {
+        self.name.as_deref().map(|name| (name, self.index))
+    }
+}
+
 /// Collect the sequence of message boxes a command run displays, in order.
 /// `ShowMessage` starts a new box; `ShowMessage_2` appends a line to the
 /// current box; `ChangeFaceGraphic` sets the face (name + `params[0]` index)

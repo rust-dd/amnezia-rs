@@ -1,6 +1,8 @@
 use super::*;
 use crate::font::bitmap::{DEFAULT, PixelText, Run};
 
+mod prompts;
+
 fn app() -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default()))

@@ -9,7 +9,7 @@ const LABELS: [&str; 6] = [
     "ui-layer-number-base",
     "ui-layer-number-effect",
 ];
-const RECTS: [(u32, u32, u32, u32); 3] = [(8, 168, 304, 56), (20, 214, 280, 8), (150, 116, 20, 8)];
+const RECT: (u32, u32, u32, u32) = (0, 160, 320, 80);
 const COVER: [u8; 3] = [180, 48, 16];
 
 #[derive(Component)]
@@ -25,6 +25,12 @@ struct Results {
 struct Captures(Arc<Mutex<Results>>);
 
 pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if matches!(frame, 320 | 620 | 920) {
+        // Hold cursor and arrow phases while changing only the effect layer.
+        world.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+            std::time::Duration::ZERO,
+        ));
+    }
     if frame == 260 {
         world.init_resource::<Captures>();
         world
@@ -62,6 +68,9 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         ));
     }
     if matches!(frame, 420 | 720 | 1020) {
+        world.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+            std::time::Duration::from_secs_f64(1.0 / 60.0),
+        ));
         world.resource_mut::<crate::dialogue::Dialogue>().close();
         world.resource_mut::<crate::choice::Choice>().active = false;
         world
@@ -101,7 +110,7 @@ pub(super) fn snapshot(world: &World, label: &str) -> Option<Snapshot> {
 
 impl Snapshot {
     pub(super) fn verify(&self, image: &Image) {
-        let (left, top, width, height) = RECTS[self.index / 2];
+        let (left, top, width, height) = RECT;
         let pixels = (top..top + height)
             .flat_map(|y| (left..left + width).map(move |x| (x, y)))
             .map(|(x, y)| crate::display::smoke::pixel_at(image, x, y))

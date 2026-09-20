@@ -8,6 +8,7 @@ use bevy::prelude::*;
 
 #[cfg(test)]
 mod arrow_tests;
+pub(super) mod prompts;
 pub(crate) mod smoke;
 #[cfg(test)]
 mod tests;
@@ -66,6 +67,7 @@ pub(super) fn spawn_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                 .with_children(|frame| {
                     crate::windowskin::fixed_frame(frame, &system, UVec2::new(320, 80))
                 });
+            prompts::spawn(panel, &system);
             panel.spawn((
                 Node {
                     position_type: PositionType::Absolute,
@@ -157,9 +159,10 @@ fn inset_node(px: f32) -> Node {
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub(super) fn render_box(
     dialogue: Res<Dialogue>,
+    prompts: prompts::Presentation,
     transparent: Res<MessageTransparent>,
     asset_server: Res<AssetServer>,
-    mut last: Local<Option<(bool, u64, usize, bool)>>,
+    mut last: Local<Option<(bool, u64, usize, bool, Option<(String, u32)>)>>,
     mut panels: Query<
         &mut Visibility,
         (
@@ -185,9 +188,16 @@ pub(super) fn render_box(
         ),
     >,
 ) {
-    let showing = dialogue.active && dialogue.index < dialogue.boxes.len();
-    let snapshot = (showing, dialogue.generation, dialogue.index, transparent.0);
-    if *last == Some(snapshot) {
+    let showing = (dialogue.active && dialogue.index < dialogue.boxes.len()) || prompts.active();
+    let face = prompts.face(&dialogue);
+    let snapshot = (
+        showing,
+        dialogue.generation,
+        dialogue.index,
+        transparent.0,
+        face.map(|(name, index)| (name.to_string(), index)),
+    );
+    if last.as_ref() == Some(&snapshot) {
         return;
     }
     *last = Some(snapshot);
@@ -200,12 +210,8 @@ pub(super) fn render_box(
         *visibility = visible_if(frame_shown);
     }
 
-    let current = showing
-        .then(|| dialogue.boxes.get(dialogue.index))
-        .flatten();
-    let face = current.and_then(|b| b.face.as_ref().map(|name| (name.clone(), b.face_index)));
     if let Ok((mut image, mut visibility)) = faces.single_mut() {
-        match &face {
+        match face {
             Some((name, index)) => {
                 image.image = asset_server.load(resolve_png("FaceSet", name));
                 let (col, row) = ((index % 4) as f32, (index / 4) as f32);
@@ -226,6 +232,7 @@ pub(super) fn render_box(
 #[allow(clippy::type_complexity)]
 pub(super) fn render_reveal(
     dialogue: Res<Dialogue>,
+    prompts: prompts::Presentation,
     mut texts: Query<&mut PixelText, With<DialogueText>>,
     mut arrows: Query<
         &mut Visibility,
@@ -242,20 +249,21 @@ pub(super) fn render_reveal(
         .then_some(dialogue.reveal.as_ref())
         .flatten();
     if let Ok(mut text) = texts.single_mut() {
-        let face = dialogue
-            .boxes
-            .get(dialogue.index)
-            .is_some_and(|page| page.face.is_some());
+        let face = prompts.face(&dialogue).is_some();
         let next = PixelText {
             size: UVec2::new(CONTENTS_WIDTH, CONTENTS_HEIGHT),
-            runs: reveal.map_or_else(Vec::new, |reveal| {
-                vec![Run::new(
-                    reveal.text(),
-                    if face { 72 } else { 0 },
-                    2,
-                    DEFAULT,
-                )]
-            }),
+            runs: if prompts.active() {
+                prompts.runs(face)
+            } else {
+                reveal.map_or_else(Vec::new, |reveal| {
+                    vec![Run::new(
+                        reveal.text(),
+                        if face { 72 } else { 0 },
+                        2,
+                        DEFAULT,
+                    )]
+                })
+            },
         };
         if *text != next {
             *text = next;
@@ -263,7 +271,8 @@ pub(super) fn render_reveal(
     }
 
     if let Ok(mut visibility) = arrows.single_mut() {
-        *visibility = visible_if(reveal.is_some_and(|reveal| reveal.arrow_visible()));
+        *visibility =
+            visible_if(!prompts.active() && reveal.is_some_and(|reveal| reveal.arrow_visible()));
     }
 }
 
@@ -272,13 +281,23 @@ pub(super) fn update_position(
     position: Res<MessagePosition>,
     options: Res<super::MessageOptions>,
     dialogue: Res<Dialogue>,
+    prompts: prompts::Presentation,
     map: Option<Res<crate::world::MapData>>,
     screen: crate::world::MapScreen,
     battle: Option<Res<crate::battle::BattleActive>>,
-    mut previous: Local<Option<(u64, usize, MessagePosition, super::MessageOptions, bool)>>,
+    mut previous: Local<
+        Option<(
+            u64,
+            usize,
+            MessagePosition,
+            super::MessageOptions,
+            bool,
+            (u8, u64),
+        )>,
+    >,
     mut panels: Query<&mut Node, With<DialoguePanel>>,
 ) {
-    if !dialogue.active {
+    if !dialogue.active && !prompts.active() {
         *previous = None;
         return;
     }
@@ -289,6 +308,7 @@ pub(super) fn update_position(
         *position,
         *options,
         battle,
+        prompts.key(),
     );
     if *previous == Some(snapshot) {
         return;

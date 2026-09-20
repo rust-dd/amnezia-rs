@@ -76,6 +76,9 @@ fn start(world: &mut World, case: u32, message: EventCommand, fps: f64) {
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     assert!(!world.resource::<crate::menu::MenuOpen>().0);
+    if let Some(label) = crate::dialogue::prompt_smoke::drive(world, frame) {
+        return Some(label);
+    }
     key_queries::drive(world, frame);
     if let Some(label) = crate::choice::smoke::drive(world, frame) {
         return Some(label);
@@ -195,6 +198,7 @@ fn verify_view(world: &mut World, expected: &str, arrow: bool) {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    crate::dialogue::prompt_smoke::verify_finished(world);
     crate::choice::smoke::verify_finished(world);
     crate::inputnumber::smoke::verify_finished(world);
     arrows::verify_finished(world);
