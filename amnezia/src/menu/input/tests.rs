@@ -11,6 +11,7 @@ mod item_list;
 mod item_target;
 mod list_repeat;
 mod message_frames;
+mod scene_return;
 mod skill_list;
 mod skill_target;
 mod target_navigation;

@@ -24,7 +24,7 @@ pub(crate) struct Checks {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        310 | 570 | 640 | 950 | 970 | 1160 | 1170 | 1180 | 1190 => Some(KeyCode::Escape),
+        310 | 570 | 640 | 950 | 970 | 1160 | 1170 | 1190 => Some(KeyCode::Escape),
         320 | 380 | 530 | 550 | 600 | 620 | 625 | 1131 | 1135 | 1145 => Some(KeyCode::Enter),
         1140 => Some(KeyCode::Space),
         370 => Some(KeyCode::ArrowRight),

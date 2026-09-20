@@ -176,10 +176,7 @@ fn list_navigation_precedes_cancel_and_cancel_precedes_confirmation() {
     app.update();
     assert_eq!(
         app.world().resource::<MenuState>().screen,
-        MenuScreen::MemberSelect {
-            action: crate::menu::MemberAction::Skill,
-            cursor: 0
-        }
+        MenuScreen::Command
     );
     assert_eq!(
         heard(&mut app),

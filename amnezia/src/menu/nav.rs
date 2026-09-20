@@ -33,13 +33,7 @@ pub(super) fn escape_transition(open: bool, screen: MenuScreen) -> (bool, MenuSc
         MenuScreen::ItemList { .. } => (open, MenuScreen::Command),
         MenuScreen::ItemTarget { .. } => (open, MenuScreen::ItemList { cursor: 0 }),
         MenuScreen::MemberSelect { .. } => (open, MenuScreen::Command),
-        MenuScreen::SkillList { member, .. } => (
-            open,
-            MenuScreen::MemberSelect {
-                action: MemberAction::Skill,
-                cursor: member,
-            },
-        ),
+        MenuScreen::SkillList { .. } => (open, MenuScreen::Command),
         MenuScreen::SkillTarget { member, .. } => {
             (open, MenuScreen::SkillList { member, cursor: 0 })
         }
@@ -55,13 +49,7 @@ pub(super) fn escape_transition(open: bool, screen: MenuScreen) -> (bool, MenuSc
                 picking: None,
             },
         ),
-        MenuScreen::Equip { member, .. } => (
-            open,
-            MenuScreen::MemberSelect {
-                action: MemberAction::Equip,
-                cursor: member,
-            },
-        ),
+        MenuScreen::Equip { .. } => (open, MenuScreen::Command),
         MenuScreen::Status { member } => (
             open,
             MenuScreen::MemberSelect {
@@ -157,13 +145,7 @@ mod tests {
                     cursor: 4
                 }
             ),
-            (
-                true,
-                MenuScreen::MemberSelect {
-                    action: MemberAction::Skill,
-                    cursor: 2
-                }
-            )
+            (true, MenuScreen::Command)
         );
         assert_eq!(
             escape_transition(
@@ -174,13 +156,7 @@ mod tests {
                     picking: None
                 }
             ),
-            (
-                true,
-                MenuScreen::MemberSelect {
-                    action: MemberAction::Equip,
-                    cursor: 1
-                }
-            )
+            (true, MenuScreen::Command)
         );
         assert_eq!(
             escape_transition(

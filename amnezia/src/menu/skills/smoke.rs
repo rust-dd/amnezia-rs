@@ -30,12 +30,12 @@ pub(crate) struct Checks {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        310 | 380 | 430 | 460 | 480 | 710 | 980 | 990 | 1000 => Some(KeyCode::Escape),
-        320 | 390 | 550 | 560 | 570 | 580 | 590 | 600 | 610 | 620 | 630 | 640 | 650 => {
+        310 | 380 | 430 | 460 | 480 | 710 | 980 | 1000 => Some(KeyCode::Escape),
+        320 | 395 | 550 | 560 | 570 | 580 | 590 | 600 | 610 | 620 | 630 | 640 | 650 => {
             Some(KeyCode::ArrowDown)
         }
-        490 | 750 => Some(KeyCode::ArrowUp),
-        330 | 340 | 350 | 400 | 420 | 425 | 450 | 455 | 500 | 530 | 690 | 800 => {
+        750 => Some(KeyCode::ArrowUp),
+        330 | 340 | 350 | 390 | 400 | 420 | 425 | 450 | 455 | 490 | 500 | 530 | 690 | 800 => {
             Some(KeyCode::Enter)
         }
         540 | 660 => Some(KeyCode::ArrowRight),
@@ -58,6 +58,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     }
     if (301..=1002).contains(&frame) {
         verify_sounds(world, frame);
+        verify_returns(world, frame);
     }
     if matches!(frame, 440 | 470) {
         assert_eq!(
@@ -133,6 +134,25 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     }
 }
 
+fn verify_returns(world: &World, frame: u32) {
+    let expected = match frame {
+        381..=390 | 481..=490 | 981..=1002 => MenuScreen::Command,
+        391..=395 | 491..=500 => MenuScreen::MemberSelect {
+            action: crate::menu::MemberAction::Skill,
+            cursor: 0,
+        },
+        396..=400 => MenuScreen::MemberSelect {
+            action: crate::menu::MemberAction::Skill,
+            cursor: 1,
+        },
+        _ => return,
+    };
+    let state = world.resource::<MenuState>();
+    assert_eq!(state.screen, expected, "skill return at {frame}");
+    assert_eq!(state.cursor, 1);
+    assert_eq!(world.resource::<MenuOpen>().0, frame <= 1000);
+}
+
 fn verify_sounds(world: &mut World, frame: u32) {
     world.resource_scope(|world, mut checks: Mut<Checks>| {
         let actual = checks
@@ -144,10 +164,10 @@ fn verify_sounds(world: &mut World, frame: u32) {
         let sounds = world.resource::<SystemSounds>();
         let expected = match frame - 1 {
             350 | 530 | 800 => Some(&sounds.buzzer),
-            310 | 330 | 340 | 400 | 420 | 450 | 500 | 690 => Some(&sounds.decision),
-            380 | 430 | 460 | 480 | 710 | 980 | 990 | 1000 => Some(&sounds.cancel),
-            320 | 390 | 490 | 540 | 550 | 560 | 570 | 580 | 590 | 600 | 610 | 620 | 630 | 640
-            | 650 | 660 | 750 => Some(&sounds.cursor),
+            310 | 330 | 340 | 390 | 400 | 420 | 450 | 490 | 500 | 690 => Some(&sounds.decision),
+            380 | 430 | 460 | 480 | 710 | 980 | 1000 => Some(&sounds.cancel),
+            320 | 395 | 540 | 550 | 560 | 570 | 580 | 590 | 600 | 610 | 620 | 630 | 640 | 650
+            | 660 | 750 => Some(&sounds.cursor),
             _ => None,
         };
         let expected = if matches!(frame - 1, 425 | 455) {

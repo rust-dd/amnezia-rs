@@ -30,7 +30,7 @@ pub(crate) struct Checks {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        320 | 370 | 380 | 420 | 560 | 640 => Some(KeyCode::Enter),
+        320 | 370 | 380 | 420 | 560 | 640 | 690 => Some(KeyCode::Enter),
         650 => Some(KeyCode::Space),
         330 | 430 | 520 => Some(KeyCode::ArrowRight),
         350 => Some(KeyCode::ArrowLeft),
@@ -40,7 +40,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
         540 | 600 => Some(KeyCode::ArrowUp),
         390 | 580 => Some(KeyCode::PageDown),
         590 => Some(KeyCode::PageUp),
-        395 | 530 | 570 | 680 | 690 | 700 => Some(KeyCode::Escape),
+        395 | 530 | 570 | 680 | 700 | 710 => Some(KeyCode::Escape),
         _ => None,
     }
 }
@@ -67,7 +67,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             screen: screen(0, None),
         });
     }
-    if (301..=702).contains(&frame) {
+    if (301..=712).contains(&frame) {
         verify_state(world, frame);
     }
     if frame == 620 {
@@ -99,6 +99,8 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         605 => Some("equipment-wrap"),
         630 => Some("equipment-fixed"),
         670 => Some("equipment-long"),
+        685 => Some("equipment-main-return"),
+        695 => Some("equipment-member-reopen"),
         _ => None,
     }
 }
@@ -122,7 +124,7 @@ fn expected(frame: u32) -> MenuScreen {
         431..=520 => screen(2, Some(1 + 2 * ((frame - 431) / 10) as usize)),
         521..=530 => screen(2, Some(18)),
         581..=590 | 601..=610 => screen(4, None),
-        681..=690 => MenuScreen::MemberSelect {
+        691..=700 => MenuScreen::MemberSelect {
             action: MemberAction::Equip,
             cursor: 0,
         },
@@ -136,7 +138,8 @@ fn verify_state(world: &mut World, frame: u32) {
         expected(frame),
         "equipment frame {frame}"
     );
-    assert_eq!(world.resource::<MenuOpen>().0, frame <= 700);
+    assert_eq!(world.resource::<MenuOpen>().0, frame <= 710);
+    assert_eq!(world.resource::<MenuState>().cursor, 2);
     let data = world.resource::<GameData>();
     let worn = world.resource::<Equipment>();
     assert_eq!(
@@ -159,10 +162,10 @@ fn verify_state(world: &mut World, frame: u32) {
             .collect::<Vec<_>>();
         let sounds = world.resource::<SystemSounds>();
         let sound = match frame - 1 {
-            320 | 370 | 380 | 420 | 560 => Some(&sounds.decision),
+            320 | 370 | 380 | 420 | 560 | 690 => Some(&sounds.decision),
             330 | 350 | 400 | 410 | 430 | 440 | 450 | 460 | 470 | 480 | 490 | 500 | 510 | 520
             | 540 | 550 | 580 | 590 | 600 | 610 => Some(&sounds.cursor),
-            395 | 530 | 570 | 680 | 690 | 700 => Some(&sounds.cancel),
+            395 | 530 | 570 | 680 | 700 | 710 => Some(&sounds.cancel),
             640 | 650 => Some(&sounds.buzzer),
             _ => None,
         };
@@ -181,10 +184,10 @@ fn verify_state(world: &mut World, frame: u32) {
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
     assert_eq!(checks.pixels.load(Ordering::Relaxed), 18);
-    assert_eq!((checks.frames, checks.sounds), (402, 33));
+    assert_eq!((checks.frames, checks.sounds), (412, 34));
     assert!(!world.resource::<MenuOpen>().0);
     assert_eq!(world.resource::<MenuState>().screen, MenuScreen::Command);
     info!(
-        "equipment menu: 18 full-canvas references, 402 state/audio frames and 33 exact sounds verified"
+        "equipment menu: 18 full-canvas references, 412 state/audio frames and 34 exact sounds verified"
     );
 }

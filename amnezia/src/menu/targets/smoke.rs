@@ -18,7 +18,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
         1225 | 1308 | 1347 | 1388 => Some(KeyCode::PageUp),
         1309 | 1349 => Some(KeyCode::ArrowLeft),
         1310 | 1350 => Some(KeyCode::ArrowRight),
-        1395 | 1400 | 1405 | 1410 => Some(KeyCode::Escape),
+        1395 | 1400 | 1410 => Some(KeyCode::Escape),
         _ => None,
     }
 }
@@ -138,7 +138,7 @@ fn verify_frame(world: &mut World, frame: u32) {
             1211 | 1216 | 1221 | 1226 | 1231 | 1254 | 1258 | 1262 | 1266 | 1270 | 1386..=1389 => {
                 Some(&sounds.cursor)
             }
-            1396 | 1401 | 1406 | 1411 => Some(&sounds.cancel),
+            1396 | 1401 | 1411 => Some(&sounds.cancel),
             _ => None,
         };
         let expected = expected
@@ -153,9 +153,9 @@ fn verify_frame(world: &mut World, frame: u32) {
 
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!((checks.frames, checks.sounds), (207, 18));
+    assert_eq!((checks.frames, checks.sounds), (207, 17));
     assert!(!world.resource::<MenuOpen>().0);
     info!(
-        "target navigation: 207 input frames, 18 exact sounds, held wrapping and fixed scopes verified"
+        "target navigation: 207 input frames, 17 exact sounds, held wrapping and fixed scopes verified"
     );
 }
