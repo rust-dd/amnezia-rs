@@ -24,6 +24,44 @@ pub(in crate::menu) struct Scene {
     pub picking: Option<usize>,
 }
 
+#[allow(clippy::too_many_arguments)]
+pub(in crate::menu) fn refresh_actor(
+    open: Res<MenuOpen>,
+    state: Res<MenuState>,
+    data: Res<GameData>,
+    party: Res<Party>,
+    progression: Res<Progression>,
+    inventory: Res<Inventory>,
+    equipment: Res<Equipment>,
+    vitals: Res<Vitals>,
+    mut scene: ResMut<Scene>,
+) {
+    if !open.0 {
+        return;
+    }
+    let MenuScreen::Equip { member, slot, .. } = state.screen else {
+        return;
+    };
+    let Some(actor) = party.snapshot().get(member).and_then(|id| data.actor(*id)) else {
+        return;
+    };
+    if scene.member == Some(member) && scene.actor == actor.id {
+        return;
+    }
+    let worn = equipment.slots(actor);
+    // Actor switching replaces Scene_Equip; no previous window state survives its first draw.
+    *scene = Scene {
+        member: Some(member),
+        actor: actor.id,
+        current: stats(actor, &data, &progression, &vitals, worn),
+        help_id: worn[slot.min(4)],
+        lists: std::array::from_fn(|slot| {
+            Navigation::new(0, candidates(member, slot, &data, &party, &inventory).len())
+        }),
+        ..default()
+    };
+}
+
 pub(in crate::menu) fn stats(
     actor: &amnezia_data::ActorDef,
     data: &GameData,

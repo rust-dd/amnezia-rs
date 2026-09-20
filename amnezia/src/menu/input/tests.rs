@@ -6,6 +6,7 @@ use amnezia_data::SoundDef;
 
 mod equip_navigation;
 mod equip_selection;
+mod equip_switching;
 mod guards;
 mod item_list;
 mod item_target;
@@ -58,6 +59,7 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
                 equip::update,
                 crate::menu::targets::update,
                 menu_input,
+                equip::refresh_actor,
             )
                 .chain(),
         );

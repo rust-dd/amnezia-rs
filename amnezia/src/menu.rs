@@ -161,6 +161,7 @@ impl Plugin for MenuPlugin {
                         equip::update,
                         targets::update,
                         input::menu_input,
+                        equip::refresh_actor,
                     )
                         .chain()
                         .in_set(MenuInput),

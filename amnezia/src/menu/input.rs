@@ -311,6 +311,20 @@ pub(super) fn menu_input(
                 } else {
                     sfx.buzzer();
                 }
+            } else if members > 0
+                && (keys.just_pressed(KeyCode::ArrowRight) || keys.just_pressed(KeyCode::ArrowLeft))
+            {
+                let member = if keys.just_pressed(KeyCode::ArrowRight) {
+                    (member + 1) % (members + 1)
+                } else {
+                    (member + members) % (members + 1)
+                };
+                sfx.cursor();
+                state.screen = MenuScreen::Equip {
+                    member,
+                    slot,
+                    picking: None,
+                };
             }
         }
         MenuScreen::Equip {

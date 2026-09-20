@@ -24,7 +24,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     assert_eq!(
         world.resource::<MenuState>().screen,
         MenuScreen::Equip {
-            member: 0,
+            member: expected.member,
             slot: expected.slot,
             picking: expected.picking
         }

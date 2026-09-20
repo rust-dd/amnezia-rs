@@ -5,6 +5,7 @@ use crate::terms::Terms;
 use bevy::prelude::*;
 
 pub(super) struct Fixture {
+    pub member: usize,
     pub slot: usize,
     pub picking: Option<usize>,
     pub offset: u32,
@@ -15,6 +16,7 @@ pub(super) struct Fixture {
     pub preview: Option<[u32; 4]>,
     before_swap: bool,
     fixed: bool,
+    tiffany: bool,
     long: bool,
 }
 
@@ -32,12 +34,20 @@ impl Fixture {
             "equipment-armor" => (2, None, 0, 0, 0, 64, None),
             "equipment-scroll-first" => (2, Some(13), 4, 11, 80, 79, Some([45, 117, 20, 25])),
             "equipment-scroll-half" => (2, Some(13), 8, 11, 80, 79, Some([45, 117, 20, 25])),
-            "equipment-scroll-done" => (2, Some(13), 16, 13, 80, 153, Some([45, 117, 20, 25])),
+            "equipment-scroll-done" | "equipment-switch-scrolled" => {
+                (2, Some(13), 16, 13, 80, 153, Some([45, 117, 20, 25]))
+            }
             "equipment-unequip" => (2, Some(18), 64, 18, 80, 0, Some([45, 32, 20, 25])),
             "equipment-inactive" => (2, None, 64, 18, 80, 64, None),
             "equipment-reopened" => (2, Some(0), 0, 0, 0, 64, Some([45, 37, 20, 25])),
             "equipment-accessory" | "equipment-wrap" => (4, None, 0, 0, 0, 0, None),
             "equipment-fixed" => (0, None, 0, 0, 0, 41, None),
+            "equipment-switch-tiffany" | "equipment-switch-held" => (2, None, 0, 0, 0, 65, None),
+            "equipment-switch-fixed" => (2, None, 0, 0, 0, 81, None),
+            "equipment-switch-wrapped" => (2, None, 0, 0, 0, 64, None),
+            "equipment-switch-tiffany-weapon" => (0, None, 0, 0, 0, 6, None),
+            "equipment-switch-picker" => (0, Some(1), 0, 1, 0, 2, Some([45, 37, 20, 25])),
+            "equipment-switch-shield" => (1, None, 0, 0, 0, 0, None),
             _ => return None,
         };
         let before_swap = matches!(
@@ -48,15 +58,31 @@ impl Fixture {
                 | "equipment-preview-changed"
                 | "equipment-early"
         );
-        let fixed = label == "equipment-fixed";
+        let fixed = matches!(label, "equipment-fixed" | "equipment-switch-fixed");
+        let tiffany = matches!(
+            label,
+            "equipment-switch-tiffany"
+                | "equipment-switch-held"
+                | "equipment-switch-tiffany-weapon"
+                | "equipment-switch-shield"
+        );
         let current = if fixed {
             [262, 312, 188, 240]
+        } else if tiffany {
+            [23, 27, 25, 26]
         } else if before_swap {
             [25, 32, 20, 25]
         } else {
             [45, 37, 20, 25]
         };
         Some(Self {
+            member: if tiffany {
+                1
+            } else if label == "equipment-switch-fixed" {
+                2
+            } else {
+                0
+            },
             slot,
             picking,
             offset,
@@ -67,6 +93,7 @@ impl Fixture {
             preview,
             before_swap,
             fixed,
+            tiffany,
             long: label == "equipment-long",
         })
     }
@@ -76,6 +103,8 @@ impl Fixture {
         let terms = &world.resource::<Terms>().0;
         let name = if self.fixed {
             "Dianos"
+        } else if self.tiffany {
+            "Tiffany"
         } else if self.long {
             LONG_NAME
         } else {
@@ -105,6 +134,8 @@ impl Fixture {
         }
         let worn = if self.fixed {
             [41, 62, 81, 103, 0]
+        } else if self.tiffany {
+            [6, 0, 65, 83, 0]
         } else {
             [if self.before_swap { 1 } else { 2 }, 0, 64, 83, 0]
         };
@@ -129,7 +160,7 @@ impl Fixture {
             Vec::new()
         } else if self.slot == 2 {
             ARMOR.into_iter().chain([0]).collect::<Vec<_>>()
-        } else if self.slot == 4 {
+        } else if self.slot == 4 || self.tiffany {
             vec![0]
         } else if self.before_swap {
             vec![2, 3, 0]

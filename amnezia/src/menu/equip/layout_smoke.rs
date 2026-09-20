@@ -15,6 +15,9 @@ use std::sync::{
 
 pub(crate) use crate::menu::view::equipment::pixels::snapshot;
 
+mod actors;
+pub(crate) use actors::held_input;
+
 pub(crate) const ARMOR: [u32; 18] = [
     64, 65, 68, 69, 70, 71, 74, 75, 76, 77, 78, 79, 80, 153, 154, 155, 156, 157,
 ];
@@ -26,6 +29,7 @@ pub(crate) struct Checks {
     audio: MessageCursor<AudioRequest>,
     frames: u32,
     sounds: u32,
+    original_item: Option<amnezia_data::ItemDef>,
 }
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
@@ -41,14 +45,17 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
         390 | 580 => Some(KeyCode::PageDown),
         590 => Some(KeyCode::PageUp),
         395 | 530 | 570 | 680 | 700 | 710 => Some(KeyCode::Escape),
-        _ => None,
+        _ => actors::input(frame),
     }
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 300 {
         crate::session::clear_transient(world);
-        world.insert_resource(Checks::default());
+        world.insert_resource(Checks {
+            original_item: world.resource::<GameData>().item(2).cloned(),
+            ..default()
+        });
         world.insert_resource(Progression::default());
         world.insert_resource(Equipment::default());
         world.insert_resource(Vitals::default());
@@ -101,7 +108,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         670 => Some("equipment-long"),
         685 => Some("equipment-main-return"),
         695 => Some("equipment-member-reopen"),
-        _ => None,
+        _ => actors::drive(world, frame),
     }
 }
 
@@ -183,11 +190,12 @@ fn verify_state(world: &mut World, frame: u32) {
 
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!(checks.pixels.load(Ordering::Relaxed), 18);
+    assert_eq!(checks.pixels.load(Ordering::Relaxed), 26);
     assert_eq!((checks.frames, checks.sounds), (412, 34));
     assert!(!world.resource::<MenuOpen>().0);
     assert_eq!(world.resource::<MenuState>().screen, MenuScreen::Command);
     info!(
-        "equipment menu: 18 full-canvas references, 412 state/audio frames and 34 exact sounds verified"
+        "equipment menu: 26 full-canvas references, 412 state/audio frames and 34 exact sounds verified"
     );
+    actors::verify_finished(world);
 }

@@ -9,7 +9,7 @@ pub(crate) mod layout_smoke;
 mod scene;
 pub(crate) mod smoke;
 
-pub(super) use scene::{Scene, stats, update};
+pub(super) use scene::{Scene, refresh_actor, stats, update};
 
 #[cfg(test)]
 mod selection_tests;
