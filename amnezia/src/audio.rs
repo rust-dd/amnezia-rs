@@ -272,7 +272,9 @@ fn start_bgm(
     fade_in: f32,
 ) {
     current.fade_in = fade_in;
-    match current.action_for(name, volume, speed) {
+    let action = current.action_for(name, volume, speed);
+    eprintln!("[BGM] request '{name}' vol={volume:.3} fade_in={fade_in}s -> {action:?}");
+    match action {
         // A plain replay is a no-op, so any in-progress fade-in keeps running.
         BgmAction::Ignore => {}
         BgmAction::UpdateParams => {
@@ -310,7 +312,10 @@ fn start_bgm(
                         current.fade = Some(BgmFade::fade_in(volume, fade_in));
                     }
                 }
-                None => debug!("bgm '{name}' has no playable audio (MIDI only); skipping"),
+                None => {
+                    eprintln!("[BGM] '{name}' has NO playable file (MIDI only) — silent");
+                    debug!("bgm '{name}' has no playable audio (MIDI only); skipping");
+                }
             }
         }
     }

@@ -75,7 +75,12 @@ fn play_map_bgm(
         return;
     }
     *pending = false;
-    if let MapBgm::Play(music) = map_info.resolve(map_data.map_id) {
+    let resolved = map_info.resolve(map_data.map_id);
+    match &resolved {
+        MapBgm::Play(m) => eprintln!("[MAPBGM] map {} -> play '{}'", map_data.map_id, m.name),
+        _ => eprintln!("[MAPBGM] map {} -> leave current BGM", map_data.map_id),
+    }
+    if let MapBgm::Play(music) = resolved {
         audio.write(AudioRequest::from_music(&music));
     }
 }
