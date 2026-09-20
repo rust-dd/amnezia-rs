@@ -14,6 +14,9 @@ use std::sync::{
 };
 
 pub(crate) use crate::menu::view::skill_list::pixels::snapshot;
+pub(crate) use repeat::held_input;
+
+mod repeat;
 
 pub(crate) const LONG_NAME: &str = "Árvíztűrő tükörfúrógép rendkívül hosszú név";
 
@@ -41,6 +44,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    repeat::drive(world, frame);
     if frame == 300 {
         crate::session::clear_transient(world);
         world.insert_resource(Checks::default());
@@ -162,6 +166,7 @@ fn verify_sounds(world: &mut World, frame: u32) {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    repeat::verify_finished(world);
     let checks = world.resource::<Checks>();
     assert_eq!(checks.pixels.load(Ordering::Relaxed), 17);
     assert_eq!(checks.frames, 702);

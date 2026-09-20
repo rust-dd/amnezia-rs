@@ -1,11 +1,6 @@
-use bevy::prelude::*;
+mod input;
 
-const KEYS: [KeyCode; 4] = [
-    KeyCode::ArrowDown,
-    KeyCode::ArrowUp,
-    KeyCode::ArrowRight,
-    KeyCode::ArrowLeft,
-];
+pub(super) use input::{Input, update as update_input};
 
 #[derive(Default)]
 pub(super) struct Navigation<const ROWS: usize> {
@@ -19,7 +14,6 @@ pub(super) struct Navigation<const ROWS: usize> {
     pub arrows: [bool; 2],
     count: usize,
     movement: Option<(i32, u32)>,
-    held: [u32; 4],
 }
 
 impl<const ROWS: usize> Navigation<ROWS> {
@@ -40,26 +34,8 @@ impl<const ROWS: usize> Navigation<ROWS> {
         self.count
     }
 
-    pub(super) fn suspend(&mut self) {
-        self.held = [0; 4];
-    }
-
-    pub(super) fn tick(
-        &mut self,
-        keys: &ButtonInput<KeyCode>,
-        triggered: bool,
-        timed: bool,
-    ) -> u32 {
+    pub(super) fn tick(&mut self, repeated: [bool; 4], timed: bool) -> u32 {
         self.cursor_frame = (self.cursor_frame + u32::from(timed)) % 21;
-        let repeated = std::array::from_fn::<_, 4, _>(|i| {
-            self.held[i] = if keys.pressed(KEYS[i]) {
-                self.held[i].saturating_add(u32::from(timed))
-            } else {
-                0
-            };
-            (triggered && keys.just_pressed(KEYS[i]))
-                || (timed && self.held[i] >= 24 && self.held[i].is_multiple_of(4))
-        });
         if let Some((direction, age)) = self.movement {
             if !timed {
                 return 0;

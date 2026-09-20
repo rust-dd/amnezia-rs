@@ -7,6 +7,7 @@ use amnezia_data::SoundDef;
 mod guards;
 mod item_list;
 mod item_target;
+mod list_repeat;
 mod message_frames;
 mod skill_list;
 mod skill_target;
@@ -31,6 +32,7 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
         .insert_resource(MenuState { cursor, screen })
         .init_resource::<SaveRequest>()
         .init_resource::<SaveFiles>()
+        .init_resource::<crate::menu::list_navigation::Input>()
         .init_resource::<items::List>()
         .init_resource::<skills::List>()
         .init_resource::<crate::menu::targets::Navigation>()
@@ -46,6 +48,7 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
         .add_systems(
             Update,
             (
+                crate::menu::list_navigation::update_input,
                 items::update,
                 skills::update,
                 crate::menu::targets::update,

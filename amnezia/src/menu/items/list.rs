@@ -2,16 +2,16 @@ use super::selectable;
 use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::gamedata::GameData;
 use crate::menu::{
-    MenuOpen, MenuScreen, MenuState, list_navigation::Navigation, save_files::SaveFiles,
+    MenuOpen, MenuScreen, MenuState,
+    list_navigation::{Input, Navigation},
+    save_files::SaveFiles,
 };
 use crate::state::Inventory;
-use crate::timing::GameFrames;
 use bevy::prelude::*;
 
 #[derive(Resource, Default)]
 pub(in crate::menu) struct List {
     pub navigation: Navigation<12>,
-    last_frame: Option<u32>,
     initialized: bool,
     visible: bool,
 }
@@ -32,8 +32,7 @@ impl List {
 
 #[allow(clippy::too_many_arguments)]
 pub(in crate::menu) fn update(
-    frames: Res<GameFrames>,
-    keys: Res<ButtonInput<KeyCode>>,
+    input: Res<Input>,
     open: Res<MenuOpen>,
     mut state: ResMut<MenuState>,
     data: Res<GameData>,
@@ -45,25 +44,18 @@ pub(in crate::menu) fn update(
     sounds: Option<Res<SystemSounds>>,
     mut audio: MessageWriter<AudioRequest>,
 ) {
-    let elapsed = list
-        .last_frame
-        .replace(frames.frame)
-        .map_or(0, |last| frames.frame.wrapping_sub(last));
     if !open.0
+        || input.rewound
         || !matches!(
             state.screen,
             MenuScreen::ItemList { .. } | MenuScreen::ItemTarget { .. }
         )
     {
-        *list = List {
-            last_frame: Some(frames.frame),
-            ..default()
-        };
+        *list = List::default();
         return;
     }
     let MenuScreen::ItemList { cursor } = state.screen else {
         list.visible = false;
-        list.navigation.suspend();
         return;
     };
     let count = selectable(&data, &inventory);
@@ -78,11 +70,10 @@ pub(in crate::menu) fn update(
     }
     list.visible = true;
     if pause.paused() || fade.busy() || files.active() {
-        list.navigation.suspend();
         return;
     }
-    for tick in 0..elapsed.max(1) {
-        let moves = list.navigation.tick(&keys, tick == 0, elapsed > 0);
+    for repeated in input.steps() {
+        let moves = list.navigation.tick(repeated, input.timed());
         if let Some(sounds) = &sounds {
             for _ in 0..moves {
                 play_system_se(&mut audio, &sounds.cursor);

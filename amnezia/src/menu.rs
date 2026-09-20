@@ -141,6 +141,7 @@ impl Plugin for MenuPlugin {
         app.init_resource::<MenuOpen>()
             .init_resource::<MenuAccess>()
             .init_resource::<MenuState>()
+            .init_resource::<list_navigation::Input>()
             .init_resource::<items::List>()
             .init_resource::<skills::List>()
             .init_resource::<targets::Navigation>()
@@ -152,6 +153,7 @@ impl Plugin for MenuPlugin {
                 Update,
                 (
                     (
+                        list_navigation::update_input,
                         items::update,
                         skills::update,
                         targets::update,
