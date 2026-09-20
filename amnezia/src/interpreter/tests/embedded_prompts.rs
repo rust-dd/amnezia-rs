@@ -1,6 +1,7 @@
 use super::*;
 
 mod gameplay;
+mod standalone;
 
 fn message(text: &str, continuation: bool) -> EventCommand {
     EventCommand {

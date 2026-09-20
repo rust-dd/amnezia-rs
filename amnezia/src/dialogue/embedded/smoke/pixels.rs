@@ -13,29 +13,39 @@ pub(crate) struct Snapshot {
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let capture = LABELS.iter().position(|candidate| *candidate == label)?;
-    let case = capture.saturating_sub(1) / 2;
-    let partial = capture == 0;
-    let phase = if capture % 2 == 0 { 96 } else { 64 };
+    let case = if capture >= 7 {
+        3
+    } else {
+        capture.saturating_sub(1) / 2
+    };
+    let partial = capture == 0 || capture == 7;
+    let phase = if matches!(capture, 2 | 4 | 6 | 9) {
+        96
+    } else {
+        64
+    };
     let lines = match case {
         0 if partial => vec!["Ron", "(S"],
         0 => vec!["Ron", "(Segítek neki!)", "(...)"],
         1 => vec!["Daren", "\"Hány csipet Terra-só legyen?\""],
+        3 if partial => vec!["(S"],
+        3 => vec!["(Segítek neki!)", "(...)"],
         _ => vec!["Első sor", "Második sor", "Harmadik sor"],
     };
-    let left = if case < 2 { 72 } else { 0 };
+    let left = if case != 2 { 72 } else { 0 };
     let mut runs = lines
         .into_iter()
         .enumerate()
         .map(|(row, text)| {
             Run::new(
                 text,
-                left + i32::from(case == 0 && row > 0) * 12,
+                left + i32::from((case == 0 && row > 0) || case == 3) * 12,
                 2 + row as i32 * 16,
                 DEFAULT,
             )
         })
         .collect::<Vec<_>>();
-    if case > 0 {
+    if case == 1 || case == 2 {
         runs.extend((0..if case == 1 { 1 } else { 4 }).map(|digit| {
             Run::new(
                 "0",
@@ -51,15 +61,16 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         Some(match case {
             0 => (82, 24, 228, phase),
             1 => (88, 40, 14, phase),
+            3 => (82, 8, 228, phase),
             _ => (52, 56, 14, phase),
         })
     };
     let server = world.resource::<AssetServer>();
     let skin = server.load::<Image>("graphics/System/System.png");
-    let face = (case < 2).then(|| {
+    let face = (case != 2).then(|| {
         server.load::<Image>(crate::assets::resolve_png(
             "FaceSet",
-            if case == 0 { "Ron" } else { "Daren" },
+            if case == 1 { "Daren" } else { "Ron" },
         ))
     });
     let images = world.resource::<Assets<Image>>();
@@ -75,8 +86,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         pixels: crate::dialogue::view::prompts::smoke::pixels::reference(
             skin,
             &glyphs,
-            face.map(|face| (images.get(&face).unwrap(), if case == 0 { 6 } else { 0 })),
-            [160, 0, 80][case],
+            face.map(|face| (images.get(&face).unwrap(), if case == 1 { 0 } else { 6 })),
+            [160, 0, 80, 160][case],
             case == 2,
             selection,
         ),

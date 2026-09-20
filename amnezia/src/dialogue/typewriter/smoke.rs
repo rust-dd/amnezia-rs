@@ -93,6 +93,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if let Some(label) = prompts::drive(world, frame) {
         return Some(label);
     }
+    if frame > 700 {
+        return None;
+    }
     match frame {
         260 => start(world, 1, original(183, "\\S[5]Tiffany"), 60.0),
         350 => start(world, 2, original(220, "\\S[5]\\N[1]"), 144.0),

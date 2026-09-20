@@ -33,6 +33,22 @@ impl Embedded {
 }
 
 impl Dialogue {
+    pub(crate) fn open_prompt(&mut self, kind: MessagePrompt) -> bool {
+        let face = self.face.graphic();
+        let page = crate::events::MessageBox {
+            face: face.map(|(name, _)| name.to_string()),
+            face_index: face.map_or(0, |(_, index)| index),
+            lines: Vec::new(),
+        };
+        self.open(vec![page]);
+        if self.append_prompt(kind) {
+            true
+        } else {
+            self.close();
+            false
+        }
+    }
+
     pub(crate) fn append_prompt(&mut self, mut kind: MessagePrompt) -> bool {
         let Some(page) = self.boxes.last_mut() else {
             return false;

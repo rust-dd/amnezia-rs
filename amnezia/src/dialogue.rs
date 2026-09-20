@@ -11,6 +11,8 @@ mod interaction_tests;
 mod options;
 pub(crate) mod saved;
 #[cfg(test)]
+pub(crate) mod testing;
+#[cfg(test)]
 mod tests;
 mod typewriter;
 mod view;

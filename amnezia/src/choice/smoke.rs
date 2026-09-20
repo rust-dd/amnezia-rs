@@ -71,12 +71,12 @@ fn start(world: &mut World, count: usize, cancel: i32) {
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     match frame {
-        1250 => {
+        1236 => {
             world.init_resource::<Checks>();
             start(world, 4, 0);
         }
-        1370 => start(world, 2, 2),
-        1390 => start(world, 1, 0),
+        1363 => start(world, 2, 2),
+        1386 => start(world, 1, 0),
         _ => {}
     }
     if (1255..=1362).contains(&frame)

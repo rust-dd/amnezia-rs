@@ -1,8 +1,9 @@
-use super::super::flow::choice_labels;
+use super::super::flow::{choice_labels, skip_to_terminator};
 use super::super::frame::Frame;
 use super::super::opcodes::*;
 use super::{Exec, Flow};
 use crate::dialogue::MessagePrompt;
+use amnezia_data::EventCommand;
 
 pub(super) fn show(frame: &mut Frame, x: &mut Exec) -> Flow {
     let run_len = frame.commands[frame.ip..]
@@ -54,5 +55,29 @@ fn append_prompt(frame: &mut Frame, x: &mut Exec) {
             });
         }
         _ => {}
+    }
+}
+
+pub(super) fn choice(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -> Flow {
+    if frame.choices.contains_key(&command.indent) {
+        frame.ip += 1;
+        return Flow::Advance;
+    }
+    let labels = choice_labels(&frame.commands, frame.ip, command.indent)
+        .iter()
+        .take(4)
+        .map(|label| crate::i18n::tr(label))
+        .collect();
+    if x.dialogue.open_prompt(MessagePrompt::Choice {
+        labels,
+        indent: command.indent,
+        cancel: command.params.first().copied().unwrap_or(0),
+    }) {
+        frame.message_pending = true;
+        frame.choice_pending = true;
+        Flow::Yield
+    } else {
+        frame.ip = skip_to_terminator(&frame.commands, frame.ip, command.indent, SHOW_CHOICE_END);
+        Flow::Advance
     }
 }

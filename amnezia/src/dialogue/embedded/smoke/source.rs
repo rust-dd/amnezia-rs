@@ -31,12 +31,15 @@ fn original(map_id: u32, code: u32, variable: i32) -> Vec<EventCommand> {
 }
 
 pub(super) fn commands(case: usize) -> Vec<EventCommand> {
-    let mut commands = if case == 0 {
+    let mut commands = if case == 0 || case == 3 {
         let mut commands = original(1, 10140, 0);
         assert_eq!(commands.len(), 2);
         assert_eq!(commands[0].string, "\\N[1]");
         assert_eq!(commands[1].string, "(Segítek neki!)/(...)");
         assert_eq!(commands[1].params, [2]);
+        if case == 3 {
+            commands.remove(0);
+        }
         for (index, label) in ["(Segítek neki!)", "(...)"].into_iter().enumerate() {
             commands.push(command(20140, 0, label, vec![index as i32]));
             commands.push(command(
@@ -67,7 +70,7 @@ pub(super) fn commands(case: usize) -> Vec<EventCommand> {
         ]
     };
     let (face, index) = match case {
-        0 => ("Ron", 6),
+        0 | 3 => ("Ron", 6),
         1 => ("Daren", 0),
         _ => ("", 0),
     };

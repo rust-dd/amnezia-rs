@@ -9,8 +9,7 @@ use super::super::commands::{
     apply_control_switches,
 };
 use super::super::flow::{
-    after_loop_end, call_event_page, choice_labels, find_label, loop_start, skip_else_body,
-    skip_option_body, skip_to_terminator,
+    after_loop_end, call_event_page, find_label, loop_start, skip_else_body, skip_option_body,
 };
 use super::super::frame::Frame;
 use super::super::opcodes::*;
@@ -22,10 +21,8 @@ use crate::battle::{BattleOutcome, BattleRequest};
 use crate::dialogue::MessagePosition;
 use crate::screenfx::Weather;
 use crate::shop::ShopRequest;
-use crate::text;
 use crate::world::{MoveQueue, RouteStepper};
 use amnezia_data::EventCommand;
-use bevy::prelude::*;
 
 /// Handle one event command against `frame`, returning how the run continues.
 pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -> Flow {
@@ -181,38 +178,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             frame.ip = after_loop_end(&frame.commands, frame.ip, command.indent);
             Flow::Advance
         }
-        SHOW_CHOICE => {
-            if frame.choices.contains_key(&command.indent) {
-                frame.ip += 1;
-                Flow::Advance
-            } else {
-                let labels = choice_labels(&frame.commands, frame.ip, command.indent)
-                    .iter()
-                    .map(|l| {
-                        text::substitute(
-                            &crate::i18n::tr(l),
-                            &x.subsystems.actor_edits.hero_name.0,
-                            &x.variables,
-                        )
-                    })
-                    .collect::<Vec<_>>();
-                if labels.is_empty() {
-                    frame.ip = skip_to_terminator(
-                        &frame.commands,
-                        frame.ip,
-                        command.indent,
-                        SHOW_CHOICE_END,
-                    );
-                    Flow::Advance
-                } else {
-                    // RM2000 `ShowChoices` cancel type is `parameters[0]`.
-                    let cancel_type = command.params.first().copied().unwrap_or(0);
-                    x.choice.open(labels, command.indent, cancel_type);
-                    frame.choice_pending = true;
-                    Flow::Yield
-                }
-            }
-        }
+        SHOW_CHOICE => super::messages::choice(frame, &command, x),
         SHOW_CHOICE_OPTION => {
             let want = frame.choices.get(&command.indent).copied().unwrap_or(-1);
             if command.params.first().copied() == Some(want) {

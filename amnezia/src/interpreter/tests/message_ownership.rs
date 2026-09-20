@@ -69,6 +69,7 @@ fn choice_result_belongs_only_to_its_interpreter_even_when_foreground_runs_first
         ],
     });
     app.update();
+    crate::dialogue::testing::finish_prompt_text(app.world_mut());
     assert!(app.world().resource::<Choice>().active());
     app.update();
     assert!(!switch_on(&app, 42));
@@ -77,6 +78,7 @@ fn choice_result_belongs_only_to_its_interpreter_even_when_foreground_runs_first
         choice.active = false;
         choice.result = Some(0);
     }
+    crate::dialogue::testing::update_prompt(app.world_mut());
     app.world_mut()
         .resource_mut::<RunningEvent>()
         .start(3, vec![switch_cmd(43, 0, 0)]);
@@ -97,11 +99,13 @@ fn pending_choice_result_is_not_overwritten_by_an_earlier_parallel_prompt() {
         ],
     });
     app.update();
+    crate::dialogue::testing::finish_prompt_text(app.world_mut());
     {
         let mut choice = app.world_mut().resource_mut::<Choice>();
         choice.active = false;
         choice.result = Some(0);
     }
+    crate::dialogue::testing::update_prompt(app.world_mut());
     app.update();
     assert!(switch_on(&app, 42));
     assert!(!app.world().resource::<Dialogue>().active);
@@ -125,6 +129,7 @@ fn a_removed_parallel_page_cannot_leave_an_orphaned_result_blocking_future_messa
             )],
         });
         app.update();
+        crate::dialogue::testing::finish_prompt_text(app.world_mut());
         app.world_mut().resource_mut::<MapEvents>().events.clear();
         app.update();
         if numeric {
@@ -136,10 +141,15 @@ fn a_removed_parallel_page_cannot_leave_an_orphaned_result_blocking_future_messa
             choice.active = false;
             choice.result = Some(0);
         }
+        crate::dialogue::testing::update_prompt(app.world_mut());
         app.world_mut().resource_mut::<MapEvents>().events =
             vec![map_event(2, 4, vec![message("Új esemény")])];
         app.update();
         assert!(app.world().resource::<Dialogue>().active);
+        assert_eq!(
+            app.world().resource::<Dialogue>().boxes[0].lines,
+            ["Új esemény"]
+        );
         assert_eq!(
             app.world().resource::<Variables>().get(50),
             if numeric { 123 } else { 0 }

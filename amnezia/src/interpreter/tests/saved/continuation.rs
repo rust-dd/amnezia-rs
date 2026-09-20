@@ -89,9 +89,11 @@ fn a_save_inside_a_chosen_option_keeps_the_selection_until_its_end_marker() {
         ],
     );
     app.update();
+    crate::dialogue::testing::finish_prompt_text(app.world_mut());
     assert!(app.world().resource::<Choice>().active());
     app.world_mut().resource_mut::<Choice>().active = false;
     app.world_mut().resource_mut::<Choice>().result = Some(0);
+    crate::dialogue::testing::update_prompt(app.world_mut());
     app.update();
     let before = app.world().resource::<RunningEvent>().frame.clone();
     assert_eq!(before.choices.get(&0), Some(&0));

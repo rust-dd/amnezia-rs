@@ -11,11 +11,14 @@ fn option(index: i32, label: &str) -> EventCommand {
 }
 
 fn select(app: &mut App, index: i32) {
+    crate::dialogue::testing::finish_prompt_text(app.world_mut());
     assert!(app.world().resource::<Choice>().active());
     let mut choice = app.world_mut().resource_mut::<Choice>();
     choice.active = false;
     choice.result = Some(index);
+    crate::dialogue::testing::update_prompt(app.world_mut());
     app.update();
+    crate::dialogue::testing::finish_prompt_text(app.world_mut());
 }
 
 #[test]

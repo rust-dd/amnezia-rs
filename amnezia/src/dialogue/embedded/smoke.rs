@@ -12,7 +12,7 @@ mod source;
 
 pub(crate) use pixels::snapshot;
 
-const LABELS: [&str; 7] = [
+const LABELS: [&str; 10] = [
     "embedded-choice-typing",
     "embedded-choice-a",
     "embedded-choice-b",
@@ -20,12 +20,15 @@ const LABELS: [&str; 7] = [
     "embedded-number-b",
     "embedded-three-lines-a",
     "embedded-three-lines-b",
+    "standalone-choice-typing",
+    "standalone-choice-a",
+    "standalone-choice-b",
 ];
 
 #[derive(Resource)]
 struct Probe {
     black: Entity,
-    captured: u8,
+    captured: u16,
     pixels: Arc<AtomicUsize>,
     checked: u32,
 }
@@ -37,8 +40,10 @@ pub(crate) fn input(world: &mut World, frame: u32) -> bool {
     let mut keys = world.resource_mut::<ButtonInput<KeyCode>>();
     *keys = default();
     let pressed = match frame {
-        1902 | 1903 | 2032 | 2033 | 2162 | 2163 | 2140 | 2270 => &[KeyCode::Enter][..],
-        2010 => &[KeyCode::ArrowDown, KeyCode::Enter],
+        1902 | 1903 | 2032 | 2033 | 2162 | 2163 | 2140 | 2270 | 2322 | 2323 => {
+            &[KeyCode::Enter][..]
+        }
+        2010 | 2430 => &[KeyCode::ArrowDown, KeyCode::Enter],
         2130 => &[KeyCode::ArrowDown],
         2260 => &[KeyCode::ArrowUp],
         _ => &[],
@@ -73,7 +78,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             std::time::Duration::from_secs_f64(1.0 / 60.0),
         ));
     }
-    if frame == 2320 {
+    if frame == 2490 {
         let black = world.resource::<Probe>().black;
         world.despawn(black);
     }
@@ -81,9 +86,10 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         1900..=2020 => 0,
         2030..=2150 => 1,
         2160..=2280 => 2,
+        2320..=2440 => 3,
         _ => return None,
     };
-    let age = frame - [1900, 2030, 2160][case];
+    let age = frame - [1900, 2030, 2160, 2320][case];
     if age == 0 {
         assert!(!world.resource::<Dialogue>().active);
         assert!(!world.resource::<RunningEvent>().active());
@@ -92,10 +98,14 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
                 MessagePosition::Bottom,
                 MessagePosition::Top,
                 MessagePosition::Middle,
+                MessagePosition::Bottom,
             ][case],
         );
         world.insert_resource(MessageTransparent(case == 2));
         world.resource_mut::<MessageOptions>().fixed = true;
+        if case == 0 || case == 3 {
+            world.resource_mut::<Variables>().set(9013, -1);
+        }
         world
             .resource_mut::<RunningEvent>()
             .start(0, source::commands(case));
@@ -105,7 +115,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         assert!(!world.resource::<Dialogue>().active);
         assert!(!world.resource::<RunningEvent>().active());
         assert!(world.resource::<Switches>().get(9015 + case as u32));
-        let (variable, expected) = [(9013, 1), (24, 9), (9014, 1)][case];
+        let (variable, expected) = [(9013, 1), (24, 9), (9014, 1), (9013, 1)][case];
         assert_eq!(world.resource::<Variables>().get(variable), expected);
     }
     if age >= 100 {
@@ -116,12 +126,17 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     assert!(!world.resource::<Switches>().get(9015 + case as u32));
     let reveal = dialogue.reveal.as_ref()?;
     assert!(!reveal.arrow_visible());
-    let partial = case == 0 && reveal.text() == "Ron\n(S";
+    let partial = (case == 0 && reveal.text() == "Ron\n(S") || (case == 3 && reveal.text() == "(S");
     let capture = if partial {
-        0
+        if case == 0 { 0 } else { 7 }
     } else if dialogue.prompt_input_ready() {
-        let phase = usize::from(world.resource::<PromptClock>().source_x(0, case > 0) == 96.0);
-        1 + case * 2 + phase
+        let numeric = case == 1 || case == 2;
+        let phase = usize::from(world.resource::<PromptClock>().source_x(0, numeric) == 96.0);
+        if case == 3 {
+            8 + phase
+        } else {
+            1 + case * 2 + phase
+        }
     } else {
         assert!(!world.resource::<Choice>().active());
         assert!(!world.resource::<InputNumber>().active());
@@ -139,13 +154,13 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 
 pub(crate) fn verify_finished(world: &World) {
     let probe = world.resource::<Probe>();
-    assert_eq!(probe.captured, 127);
-    assert_eq!(probe.pixels.load(Ordering::Relaxed), 7);
-    assert!(probe.checked > 200);
+    assert_eq!(probe.captured, 1023);
+    assert_eq!(probe.pixels.load(Ordering::Relaxed), 10);
+    assert!(probe.checked > 300);
     assert!(!world.resource::<Dialogue>().active);
     assert!(!world.resource::<RunningEvent>().active());
     info!(
-        "embedded prompts: {} typed/ready states, 537600 reference pixels and three exact result handoffs",
+        "typed prompts: {} typed/ready states, 768000 reference pixels and four exact result handoffs",
         probe.checked
     );
 }

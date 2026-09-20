@@ -1,6 +1,6 @@
 use super::*;
 
-fn app() -> App {
+pub(super) fn app() -> App {
     let mut app = interp_app();
     app.add_plugins(AssetPlugin::default())
         .init_asset::<Image>()
@@ -19,7 +19,7 @@ fn app() -> App {
     app
 }
 
-fn step(app: &mut App, keys: &[KeyCode]) {
+pub(super) fn step(app: &mut App, keys: &[KeyCode]) {
     let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
     *input = default();
     for key in keys {
