@@ -47,14 +47,14 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         950 => {
             let number = world.resource::<crate::inputnumber::InputNumber>();
             assert!(number.active());
-            assert_eq!(number.value, 10);
+            assert_eq!(number.value, 1);
             world.resource_mut::<Probe>().0 |= 4;
             return Some("message-number-input");
         }
         980 => {
             assert!(!world.resource::<crate::inputnumber::InputNumber>().active());
             assert!(!world.resource::<RunningEvent>().active());
-            assert_eq!(world.resource::<crate::state::Variables>().get(9005), 10);
+            assert_eq!(world.resource::<crate::state::Variables>().get(9005), 1);
             world.resource_mut::<Probe>().0 |= 8;
         }
         _ => {}

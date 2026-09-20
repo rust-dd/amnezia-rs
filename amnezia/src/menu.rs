@@ -41,6 +41,9 @@ pub(crate) use command_navigation::smoke as navigation_smoke;
 pub(crate) use equip::Switch as EquipmentSwitch;
 pub(crate) use equip::layout_smoke as equipment_smoke;
 pub(crate) use items::smoke as item_smoke;
+pub(crate) use list_navigation::Input as DirectionInput;
+#[cfg(test)]
+pub(crate) use list_navigation::update_input as update_directions;
 pub(crate) use skills::smoke as skill_smoke;
 pub(crate) use targets::smoke as target_navigation_smoke;
 pub(crate) use view::end_game::smoke as end_smoke;

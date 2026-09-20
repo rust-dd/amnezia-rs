@@ -11,7 +11,7 @@ pub(super) const KEYS: [KeyCode; 6] = [
 ];
 
 #[derive(Resource, Default)]
-pub(in crate::menu) struct Input {
+pub(crate) struct Input {
     last_frame: Option<u32>,
     elapsed: u32,
     held: [u32; 6],
@@ -54,7 +54,7 @@ impl Input {
         self.elapsed > 0
     }
 
-    pub(in crate::menu) fn steps(&self) -> impl Iterator<Item = [bool; 4]> + '_ {
+    pub(crate) fn steps(&self) -> impl Iterator<Item = [bool; 4]> + '_ {
         self.repeats()
     }
 
@@ -73,7 +73,7 @@ impl Input {
     }
 }
 
-pub(in crate::menu) fn update(
+pub(crate) fn update(
     frames: Res<GameFrames>,
     keys: Res<ButtonInput<KeyCode>>,
     mut input: ResMut<Input>,

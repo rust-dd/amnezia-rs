@@ -12,7 +12,7 @@ mod prompts;
 pub(crate) use arrows::snapshot as arrow_snapshot;
 
 pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
-    key_queries::input(world, frame)
+    crate::inputnumber::smoke::held_input(world, frame) || key_queries::input(world, frame)
 }
 
 #[derive(Resource, Default)]
@@ -75,6 +75,9 @@ fn start(world: &mut World, case: u32, message: EventCommand, fps: f64) {
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     assert!(!world.resource::<crate::menu::MenuOpen>().0);
     key_queries::drive(world, frame);
+    if let Some(label) = crate::inputnumber::smoke::drive(world, frame) {
+        return Some(label);
+    }
     if let Some(label) = prompts::drive(world, frame) {
         return Some(label);
     }
@@ -187,6 +190,7 @@ fn verify_view(world: &mut World, expected: &str, arrow: bool) {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    crate::inputnumber::smoke::verify_finished(world);
     arrows::verify_finished(world);
     key_queries::verify_finished(world);
     prompts::verify_finished(world);

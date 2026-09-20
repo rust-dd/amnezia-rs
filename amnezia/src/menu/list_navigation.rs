@@ -1,6 +1,6 @@
 mod input;
 
-pub(super) use input::{Input, update as update_input};
+pub(crate) use input::{Input, update as update_input};
 
 #[derive(Default)]
 pub(super) struct Navigation<const ROWS: usize> {
