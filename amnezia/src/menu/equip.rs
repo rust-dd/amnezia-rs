@@ -1,18 +1,5 @@
-//! The Equipment command's interactive screen for one party member: the RM2000
-//! `Scene_Equip`. It first lists the five gear slots (weapon / shield / armor /
-//! helmet / accessory) with the equipped item names and the four battle stats
-//! that gear produces; picking a slot opens a list of the inventory items that
-//! fit it (plus "— (levesz)" to unequip), with a live stat-change preview as the
-//! cursor moves. Confirming swaps the gear through the runtime
-//! [`crate::equipment::Equipment`] store — the new item leaves the inventory, the
-//! displaced item returns to it — and the battle reads that store, so a change
-//! here is felt in the next fight. A `fix_equipment` actor can't change anything;
-//! a two-handed weapon clears the shield slot (see [`Equipment::equip`]).
-//!
-//! State (which slot, and whether a slot or an item is being picked) lives in the
-//! parent module's [`MenuScreen::Equip`]; this module owns the candidate list, the
-//! swap glue over the resource, and the composed text plus the windowskin cursor
-//! line.
+//! Equipment candidates, inventory swaps, and the legacy composed-text view.
+//! Selection lives in [`super::MenuScreen::Equip`]; actual changes use [`Equipment::equip`].
 
 use crate::equipment::{self, Equipment};
 use crate::gamedata::GameData;
@@ -21,6 +8,11 @@ use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 
 use super::derive;
+
+pub(crate) mod smoke;
+
+#[cfg(test)]
+mod selection_tests;
 
 /// The five equipment slot labels, in `ActorDef` slot order.
 const SLOT_LABELS: [&str; 5] = ["Fegyver", "Pajzs", "Vért", "Sisak", "Kiegészítő"];
@@ -40,9 +32,8 @@ pub(super) fn can_change(member: usize, data: &GameData, party: &Party) -> bool 
 }
 
 /// The item ids the `member`-th actor may put in 0-based `slot`, in list order:
-/// `0` (unequip) first, then each held inventory item whose category fits the
-/// slot (EasyRPG `Window_EquipItem::CheckInclude`). A dual-wielder's shield slot
-/// lists weapons instead of shields.
+/// held items in database id order, followed by `0` (unequip). Fixed equipment
+/// has no candidates. A dual-wielder's shield slot lists weapons instead of shields.
 pub(super) fn candidates(
     member: usize,
     slot: usize,
@@ -53,12 +44,17 @@ pub(super) fn candidates(
     let Some(def) = party.snapshot().get(member).and_then(|&id| data.actor(id)) else {
         return Vec::new();
     };
-    let mut ids = vec![0u32];
+    if def.fix_equipment {
+        return Vec::new();
+    }
+    let mut ids = Vec::new();
     for item in &data.items {
         if equipment::can_equip(def, slot, item) && inventory.count(item.id) > 0 {
             ids.push(item.id);
         }
     }
+    ids.sort_unstable();
+    ids.push(0);
     ids
 }
 
@@ -221,7 +217,6 @@ mod tests {
         assert!(text.contains("Pajzs: —"), "empty shield slot: {text}");
         // Level-2 linear fallback attack 16 + 2*6 = 28, plus the +4 weapon = 32.
         assert!(text.contains("Támadás 32"), "current attack: {text}");
-        // The windowskin cursor sits on the selected slot row (slot 0 = line 2).
         assert_eq!(cursor_line, Some(2), "cursor on the weapon row: {text}");
     }
 
@@ -229,13 +224,12 @@ mod tests {
     fn item_picker_lists_matching_gear_and_previews_the_stat_change() {
         let d = armed_data();
         let mut inv = Inventory::default();
-        inv.add_item(12, 1); // the long-sword is in the bag
-        // Picking the weapon slot, cursor on the long-sword (row 1: 0 = unequip).
+        inv.add_item(12, 1);
         let (text, cursor_line) = compose(
             &crate::text::HeroName("Ron".into()),
             0,
             0,
-            Some(1),
+            Some(0),
             &d,
             &Party::default(),
             &Progression::default(),
@@ -257,21 +251,19 @@ mod tests {
     }
 
     #[test]
-    fn candidates_lead_with_unequip_and_only_hold_the_slot_type() {
+    fn candidates_end_with_unequip_and_only_hold_the_slot_type() {
         let mut d = testkit::data();
         d.items.push(testkit::weapon(10, "Kard", 4));
-        let mut shield = testkit::blank_item(20, 2); // a shield the party holds
+        let mut shield = testkit::blank_item(20, 2);
         shield.name = "Pajzs".into();
         d.items.push(shield);
         let mut inv = Inventory::default();
         inv.add_item(10, 1);
         inv.add_item(20, 1);
-        // The weapon slot lists only the held weapon, behind the unequip option.
         let weapon_slot = candidates(0, 0, &d, &Party::default(), &inv);
-        assert_eq!(weapon_slot, vec![0, 10]);
-        // The shield slot lists only the held shield.
+        assert_eq!(weapon_slot, vec![10, 0]);
         let shield_slot = candidates(0, 1, &d, &Party::default(), &inv);
-        assert_eq!(shield_slot, vec![0, 20]);
+        assert_eq!(shield_slot, vec![20, 0]);
         d.items
             .iter_mut()
             .find(|item| item.id == 10)
@@ -285,14 +277,13 @@ mod tests {
         let d = armed_data();
         let party = Party::default();
         let mut inv = Inventory::default();
-        inv.add_item(12, 1); // long-sword in the bag
+        inv.add_item(12, 1);
         let mut eq = Equipment::default();
 
         let def = d.actor(1).unwrap();
         let before = derive::stats_with_slots(def, 2, &d.items, eq.slots(def));
 
-        // Candidate row 1 in the weapon slot is the long-sword (row 0 = unequip).
-        let changed = apply(0, 0, 1, &d, &party, &mut inv, &mut eq);
+        let changed = apply(0, 0, 0, &d, &party, &mut inv, &mut eq);
         assert!(changed, "equipping an available weapon applies");
         assert_eq!(eq.slots(def)[0], 12, "the long-sword is now worn");
         assert_eq!(inv.count(12), 0, "it left the inventory");
@@ -311,7 +302,6 @@ mod tests {
         let mut d = armed_data();
         d.actors[0].fix_equipment = true;
         assert!(!can_change(0, &d, &Party::default()));
-        // Its slot view flags the locked gear.
         let (text, _) = compose(
             &crate::text::HeroName("Ron".into()),
             0,

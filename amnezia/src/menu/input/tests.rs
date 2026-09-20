@@ -4,6 +4,7 @@ use crate::menu::testkit;
 use crate::save::SaveRequest;
 use amnezia_data::SoundDef;
 
+mod equip_selection;
 mod guards;
 mod item_list;
 mod item_target;
@@ -184,7 +185,6 @@ fn the_equip_screen_swaps_gear_through_the_runtime_store() {
         ),
         "confirming a slot opens the item picker"
     );
-    press_frame(&mut app, KeyCode::ArrowDown);
     press_frame(&mut app, KeyCode::Enter);
 
     assert!(matches!(

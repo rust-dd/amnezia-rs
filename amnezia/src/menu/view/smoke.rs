@@ -1,4 +1,5 @@
 use super::*;
+use crate::menu::equip::smoke as equip_selection;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -14,11 +15,12 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
         620 | 760 | 780 => Some(KeyCode::Escape),
         640 => Some(KeyCode::ArrowUp),
         1050 => Some(KeyCode::ArrowRight),
-        _ => None,
+        _ => equip_selection::input(frame),
     }
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    equip_selection::drive(world, frame);
     if frame == 300 {
         world.init_resource::<Checks>();
         world.resource_mut::<MenuOpen>().0 = true;
@@ -239,5 +241,6 @@ impl Snapshot {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    equip_selection::verify_finished(world);
     assert_eq!(world.resource::<Checks>().0.load(Ordering::Relaxed), 6);
 }

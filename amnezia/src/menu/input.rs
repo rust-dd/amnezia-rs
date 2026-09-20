@@ -179,6 +179,7 @@ pub(super) fn menu_input(
                 | MenuScreen::ItemTarget { .. }
                 | MenuScreen::SkillList { .. }
                 | MenuScreen::SkillTarget { .. }
+                | MenuScreen::Equip { .. }
         )
     {
         sfx.decision();
@@ -304,12 +305,17 @@ pub(super) fn menu_input(
                 slot,
                 picking: None,
             };
-            if confirm && equip::can_change(member, &data, &party) {
-                state.screen = MenuScreen::Equip {
-                    member,
-                    slot,
-                    picking: Some(0),
-                };
+            if confirm {
+                if equip::can_change(member, &data, &party) {
+                    sfx.decision();
+                    state.screen = MenuScreen::Equip {
+                        member,
+                        slot,
+                        picking: Some(0),
+                    };
+                } else {
+                    sfx.buzzer();
+                }
             }
         }
         MenuScreen::Equip {
@@ -325,6 +331,7 @@ pub(super) fn menu_input(
                 picking: Some(cursor),
             };
             if confirm {
+                sfx.decision();
                 equip::apply(
                     member,
                     slot,
