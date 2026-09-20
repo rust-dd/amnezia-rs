@@ -1,5 +1,5 @@
 use crate::tiles;
-use crate::timing::GameFrames;
+use crate::timing::SceneFrames;
 use bevy::prelude::*;
 
 pub(crate) mod smoke;
@@ -44,7 +44,7 @@ impl WaterStyle {
 }
 
 pub(super) fn animate_water(
-    time: Res<GameFrames>,
+    time: Res<SceneFrames>,
     style: Res<WaterStyle>,
     mut quarters: Query<(&WaterQuarter, &mut Sprite), Without<WaterCell>>,
     mut cells: Query<(&WaterCell, &mut Sprite), Without<WaterQuarter>>,

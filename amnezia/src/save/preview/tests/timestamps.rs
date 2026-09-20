@@ -76,7 +76,12 @@ fn equal_saved_seconds_keep_the_first_valid_slot_regardless_of_file_times() {
     let data = database();
     slots.write(4, 15, Some(20), Duration::from_secs(4));
     slots.write(15, 15, Some(20), Duration::from_secs(15));
-    slots.write(2, 16, Some(100), Duration::from_secs(100));
+    slots.write(
+        2,
+        crate::save::SAVE_FORMAT_VERSION + 1,
+        Some(100),
+        Duration::from_secs(100),
+    );
     assert_eq!(slots.selected(&data), 3);
 }
 

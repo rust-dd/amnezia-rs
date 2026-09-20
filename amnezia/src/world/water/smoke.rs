@@ -4,7 +4,9 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-const CASES: [(bool, u32, u16, u16); 8] = [
+mod clock;
+
+const CASES: [(bool, u32, u16, u16); 10] = [
     (false, 0, 0, 0),
     (false, 6, 0, 1),
     (false, 12, 0, 2),
@@ -13,8 +15,10 @@ const CASES: [(bool, u32, u16, u16); 8] = [
     (true, 12, 1, 2),
     (true, 24, 2, 0),
     (true, 36, 1, 2),
+    (true, 0, 0, 0),
+    (true, 12, 1, 2),
 ];
-const LABELS: [&str; 8] = [
+const LABELS: [&str; 10] = [
     "water-slow-0",
     "water-slow-6",
     "water-slow-12",
@@ -23,6 +27,8 @@ const LABELS: [&str; 8] = [
     "water-fast-12",
     "water-fast-24",
     "water-fast-36",
+    "water-clock-paused",
+    "water-clock-resumed",
 ];
 
 #[derive(Resource)]
@@ -75,12 +81,12 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if (260..=960).contains(&frame) && (frame - 260).is_multiple_of(100) {
         let (fast, time, _, _) = CASES[((frame - 260) / 100) as usize];
         world.insert_resource(WaterStyle { fast, cycle: false });
-        world.resource_mut::<GameFrames>().frame = time;
+        world.resource_mut::<SceneFrames>().frame = time;
     }
     if (290..=990).contains(&frame) && (frame - 290).is_multiple_of(100) {
         Some(LABELS[((frame - 290) / 100) as usize])
     } else {
-        None
+        clock::drive(world, frame)
     }
 }
 
@@ -140,6 +146,7 @@ impl Snapshot {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    clock::verify_finished(world);
     assert_eq!(
         world.resource::<Fixture>().complete.load(Ordering::SeqCst),
         CASES.len()

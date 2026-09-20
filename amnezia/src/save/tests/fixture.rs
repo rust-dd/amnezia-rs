@@ -23,7 +23,8 @@ pub(crate) fn save_resources(location: PathBuf) -> App {
         .init_resource::<TintState>()
         .init_resource::<PlayTime>()
         .init_resource::<GameClock>()
-        .init_resource::<crate::timing::GameFrames>();
+        .init_resource::<crate::timing::GameFrames>()
+        .init_resource::<crate::timing::SceneFrames>();
     app.insert_resource(SaveLocation(location));
     app.insert_resource(HeroName("Ron".into()));
     app

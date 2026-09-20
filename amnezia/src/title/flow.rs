@@ -73,6 +73,7 @@ pub(super) fn input(
     mut state: ResMut<TitleState>,
     mut transition: ResMut<Transition>,
     mut frames: ResMut<crate::timing::GameFrames>,
+    mut scene_frames: Option<ResMut<crate::timing::SceneFrames>>,
     mut new_game: ResMut<NewGameRequest>,
     mut audio: MessageWriter<AudioRequest>,
     sounds: Option<Res<SystemSounds>>,
@@ -99,6 +100,9 @@ pub(super) fn input(
         if action == TitleAction::NewGame {
             audio.write(AudioRequest::FadeOutBgm { duration: 0.8 });
             new_game.prepare_clock(&mut frames);
+            if let Some(scene_frames) = scene_frames.as_deref_mut() {
+                *scene_frames = default();
+            }
         }
         let duration = if action == TitleAction::Shutdown {
             35

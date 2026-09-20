@@ -202,6 +202,7 @@ impl Plugin for WorldPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<water::WaterStyle>()
             .init_resource::<crate::timing::GameFrames>()
+            .init_resource::<crate::timing::SceneFrames>()
             .init_resource::<TouchEvents>()
             .add_message::<RelocateEvent>()
             .add_message::<MapChanged>()

@@ -39,7 +39,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-pub(crate) const SAVE_FORMAT_VERSION: u32 = 15;
+pub(crate) const SAVE_FORMAT_VERSION: u32 = 16;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -170,6 +170,7 @@ struct SceneState<'w, 's> {
     music: crate::audio::saved::Capture<'w>,
     transitions: Option<ResMut<'w, crate::transitions::Settings>>,
     game_frames: Option<ResMut<'w, crate::timing::GameFrames>>,
+    scene_frames: Option<ResMut<'w, crate::timing::SceneFrames>>,
     appearance: Option<ResMut<'w, crate::appearance::Appearance>>,
     menu_access: Option<ResMut<'w, crate::menu::MenuAccess>>,
     save_access: Option<ResMut<'w, SaveAccess>>,
@@ -295,6 +296,7 @@ fn save_or_load(
                 music: scene.music.snapshot(),
                 format_version: SAVE_FORMAT_VERSION,
                 game_frames: scene.game_frames.as_deref().copied().unwrap_or_default(),
+                scene_frame: Some(scene.scene_frames.as_ref().map_or(0, |clock| clock.frame)),
                 transitions: scene.transitions.as_deref().cloned().unwrap_or_default(),
                 map_id: map_data.map_id,
                 x: player.tile_x.max(0) as u32,
@@ -400,6 +402,9 @@ fn save_or_load(
             if let Some(frames) = scene.game_frames.as_deref_mut() {
                 *frames = game.game_frames;
                 frames.sanitize();
+            }
+            if let Some(frames) = scene.scene_frames.as_deref_mut() {
+                frames.frame = game.scene_frame.unwrap_or(game.game_frames.frame);
             }
             if let Some(transitions) = scene.transitions.as_deref_mut() {
                 *transitions = game.transitions;

@@ -1,4 +1,47 @@
 use super::*;
+use crate::timing::GameFrames;
+
+#[test]
+fn water_phase_stays_frozen_until_the_frame_after_an_async_transition() {
+    use crate::timing::TimingPlugin;
+    use crate::transitions::{Kind, Transition, TransitionPlugin};
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, TimingPlugin, TransitionPlugin))
+        .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+            std::time::Duration::from_secs_f64(1.0 / 60.0),
+        ))
+        .insert_resource(WaterStyle {
+            fast: true,
+            cycle: false,
+        })
+        .add_systems(PostUpdate, animate_water);
+    let entity = app
+        .world_mut()
+        .spawn((WaterQuarter { id: 0, quarter: 0 }, Sprite::default()))
+        .id();
+    app.update();
+    let first = app.world().get::<Sprite>(entity).unwrap().rect;
+    app.world_mut().resource_mut::<Transition>().start_for(
+        Kind::Fade,
+        true,
+        0,
+        IVec2::new(160, 120),
+        36,
+    );
+    for frame in 1..=36 {
+        app.update();
+        assert_eq!(
+            app.world().get::<Sprite>(entity).unwrap().rect,
+            first,
+            "transition frame {frame}"
+        );
+    }
+    assert!(!app.world().resource::<Transition>().busy());
+    for _ in 0..12 {
+        app.update();
+    }
+    assert_ne!(app.world().get::<Sprite>(entity).unwrap().rect, first);
+}
 
 #[test]
 fn original_chipsets_keep_both_animation_speeds_and_the_ping_pong_cycle() {
@@ -67,10 +110,10 @@ fn animation_phase_is_independent_of_render_rate_and_large_time_steps() {
 #[test]
 fn new_tiles_and_chipset_changes_immediately_use_the_current_global_phase() {
     let mut app = App::new();
-    app.init_resource::<GameFrames>()
+    app.init_resource::<SceneFrames>()
         .init_resource::<WaterStyle>()
         .add_systems(PostUpdate, animate_water);
-    app.world_mut().resource_mut::<GameFrames>().frame = 30;
+    app.world_mut().resource_mut::<SceneFrames>().frame = 30;
     let quarter = app
         .world_mut()
         .spawn((WaterQuarter { id: 0, quarter: 0 }, Sprite::default()))
@@ -111,7 +154,7 @@ fn new_tiles_and_chipset_changes_immediately_use_the_current_global_phase() {
             rect(tiles::water_quarters(0, 2)[0].src, 8.0)
         );
     }
-    assert_eq!(app.world().resource::<GameFrames>().frame, 30);
+    assert_eq!(app.world().resource::<SceneFrames>().frame, 30);
 }
 
 #[test]
@@ -120,8 +163,8 @@ fn loading_original_maps_changes_style_without_resetting_animation_phase() {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default()))
         .init_asset::<Image>()
-        .init_resource::<GameFrames>();
-    app.world_mut().resource_mut::<GameFrames>().advance(0.5);
+        .init_resource::<SceneFrames>();
+    app.world_mut().resource_mut::<SceneFrames>().frame = 30;
     for (map_id, expected) in [(213, (2, 1)), (3, (1, 1))] {
         app.world_mut()
             .run_system_once(move |mut commands: Commands, server: Res<AssetServer>| {
@@ -136,7 +179,7 @@ fn loading_original_maps_changes_style_without_resetting_animation_phase() {
                 );
             })
             .unwrap();
-        assert_eq!(app.world().resource::<GameFrames>().frame, 30);
+        assert_eq!(app.world().resource::<SceneFrames>().frame, 30);
         assert_eq!(app.world().resource::<WaterStyle>().frames(30), expected);
     }
 }

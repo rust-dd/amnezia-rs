@@ -22,7 +22,7 @@ impl Switch {
         self.stage = Stage::Requested(screen);
     }
 
-    pub(in crate::menu) fn active(&self) -> bool {
+    pub(crate) fn active(&self) -> bool {
         !matches!(self.stage, Stage::Idle)
     }
 }

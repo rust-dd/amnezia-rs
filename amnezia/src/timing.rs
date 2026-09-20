@@ -1,7 +1,10 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
-/// Global 60 Hz frame count, including menus, battles and screen transitions.
+mod scene;
+pub(crate) use scene::SceneFrames;
+
+/// Raw 60 Hz clock for input and transitions, including asynchronous waits.
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub(crate) struct GameFrames {
     pub frame: u32,
@@ -35,15 +38,26 @@ pub(crate) struct FrameClockSet;
 
 impl Plugin for TimingPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<GameFrames>().add_systems(
-            PreUpdate,
-            tick.in_set(FrameClockSet).after(crate::save::SaveSet),
-        );
+        app.init_resource::<GameFrames>()
+            .init_resource::<SceneFrames>()
+            .add_systems(
+                PreUpdate,
+                tick.in_set(FrameClockSet).after(crate::save::SaveSet),
+            );
     }
 }
 
-fn tick(time: Res<Time>, mut frames: ResMut<GameFrames>) {
+fn tick(
+    time: Res<Time>,
+    mut frames: ResMut<GameFrames>,
+    mut scene: ResMut<SceneFrames>,
+    waiting: scene::Waiting,
+) {
+    let before = frames.frame;
     frames.advance(time.delta_secs_f64());
+    if !waiting.pending() {
+        scene.frame = scene.frame.wrapping_add(frames.frame.wrapping_sub(before));
+    }
 }
 
 #[cfg(test)]

@@ -22,9 +22,15 @@ impl Default for TitleActive {
 }
 
 #[derive(Resource, Default)]
-struct TitleState {
+pub(crate) struct TitleState {
     cursor: usize,
     stage: flow::Stage,
+}
+
+impl TitleState {
+    pub(crate) fn waiting_for_scene(&self) -> bool {
+        !matches!(self.stage, flow::Stage::Ready | flow::Stage::Files)
+    }
 }
 
 const ROWS: [&str; 3] = ["Új játék", "Betöltés", "Kilépés"];

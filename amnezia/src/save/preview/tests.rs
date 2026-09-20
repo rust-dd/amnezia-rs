@@ -48,7 +48,11 @@ fn previews_distinguish_empty_corrupt_future_and_repairable_legacy_slots() {
     let path = super::super::tests::temp_slot("preview_status");
     let data = database();
     assert_eq!(read(&path, &data).contents, Contents::Empty);
-    for (version, hp, expected) in [(16, 63, false), (15, 2301, false), (0, 2301, true)] {
+    for (version, hp, expected) in [
+        (crate::save::SAVE_FORMAT_VERSION + 1, 63, false),
+        (15, 2301, false),
+        (0, 2301, true),
+    ] {
         let original = format!(
             "(format_version:{version},map_id:2,x:3,y:4,dir:2,switches:[],variables:[],party:[1],items:[],gold:0,vitals:[(1,({hp},0))])"
         );

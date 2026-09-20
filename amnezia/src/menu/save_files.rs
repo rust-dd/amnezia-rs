@@ -36,6 +36,12 @@ pub(crate) struct SaveFiles {
 }
 
 impl SaveFiles {
+    pub(crate) fn waiting_for_scene(&self) -> bool {
+        self.active()
+            && self.mode == Mode::Save
+            && !matches!(self.stage, scene::Stage::Inactive | scene::Stage::Ready)
+    }
+
     pub(super) fn request(&mut self) {
         self.requested = true;
     }

@@ -5,9 +5,12 @@ use amnezia_data::{EventCommand, Map};
 struct Probe {
     before: Option<Vec<u8>>,
     saved: Option<crate::interpreter::saved::State>,
+    scene_frame: u32,
+    raw_frame: u32,
     slot_bytes: Vec<u8>,
     held: u32,
     checked: u8,
+    resumed: u8,
 }
 
 fn switch(id: i32, operation: i32) -> EventCommand {
@@ -69,6 +72,8 @@ pub(super) fn drive(world: &mut World, frame: u32) {
             assert!(!world.resource::<RunningEvent>().active());
             let mut probe = world.resource_mut::<Probe>();
             probe.saved = saved.foreground;
+            probe.scene_frame = saved.scene_frame.unwrap();
+            probe.raw_frame = saved.game_frames.frame;
             probe.slot_bytes = std::fs::read(&path).unwrap();
             probe.held = 0;
             probe.checked |= if frame == 303 { 2 } else { 8 };
@@ -80,7 +85,9 @@ pub(super) fn drive(world: &mut World, frame: u32) {
 }
 
 pub(super) fn verify_finished(world: &mut World) {
-    assert_eq!(world.remove_resource::<Probe>().unwrap().checked, 63);
+    let probe = world.remove_resource::<Probe>().unwrap();
+    assert_eq!(probe.checked, 63);
+    assert_eq!(probe.resumed, 3);
 }
 
 fn check_restore(world: &mut World, frame: u32) {
@@ -95,6 +102,16 @@ fn check_restore(world: &mut World, frame: u32) {
     assert!(!world.resource::<EventSaveRequest>().0);
     assert!(world.resource::<Switches>().get(9901));
     if world.resource::<Fade>().busy() {
+        assert_eq!(
+            world.resource::<crate::timing::SceneFrames>().frame,
+            world.resource::<Probe>().scene_frame,
+            "the saved scene counter must survive every load-transition frame"
+        );
+        assert_ne!(
+            world.resource::<crate::timing::GameFrames>().frame,
+            world.resource::<Probe>().raw_frame,
+            "the transition clock must keep running after loading"
+        );
         assert_eq!(
             world.resource::<RunningEvent>().snapshot(),
             world.resource::<Probe>().saved
@@ -112,5 +129,10 @@ fn check_restore(world: &mut World, frame: u32) {
             );
         }
         world.resource_mut::<Probe>().checked |= bit;
+        if world.resource::<crate::timing::SceneFrames>().frame
+            != world.resource::<Probe>().scene_frame
+        {
+            world.resource_mut::<Probe>().resumed |= if frame < 410 { 1 } else { 2 };
+        }
     }
 }

@@ -11,6 +11,8 @@ pub(super) struct SaveGame {
     #[serde(default)]
     pub(super) game_frames: crate::timing::GameFrames,
     #[serde(default)]
+    pub(super) scene_frame: Option<u32>,
+    #[serde(default)]
     pub(super) transitions: crate::transitions::Settings,
     pub(super) map_id: u32,
     pub(super) x: u32,

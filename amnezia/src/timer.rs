@@ -76,7 +76,7 @@ impl GameClock {
 }
 
 /// Supplementary whole-second playtime metadata kept by the port.
-/// The original logical frame counter lives in [`crate::timing::GameFrames`].
+/// The original logical frame counter lives in [`crate::timing::SceneFrames`].
 #[derive(Resource, Default)]
 pub struct PlayTime {
     pub seconds: u64,

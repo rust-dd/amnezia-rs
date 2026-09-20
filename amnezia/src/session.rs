@@ -56,9 +56,10 @@ fn start_new_game(world: &mut World) {
     reset::<crate::screenfx::WeatherStrength>(world);
     reset::<crate::timer::PlayTime>(world);
     reset::<crate::timer::GameClock>(world);
-    // Title selection already started the clock before its outgoing transition.
+    // Keep the reset anchored to title confirmation, not the delayed map rebuild.
     if !request.clock_prepared {
         reset::<crate::timing::GameFrames>(world);
+        reset::<crate::timing::SceneFrames>(world);
     }
     reset::<crate::menu::MenuAccess>(world);
     reset::<SaveAccess>(world);

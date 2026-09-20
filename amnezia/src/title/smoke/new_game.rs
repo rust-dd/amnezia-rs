@@ -1,5 +1,5 @@
 use super::*;
-use crate::timing::GameFrames;
+use crate::timing::{GameFrames, SceneFrames};
 use crate::transitions::Transition;
 
 #[derive(Resource, Default)]
@@ -19,6 +19,12 @@ pub(crate) fn observe(world: &mut World, frame: u32) -> Option<&'static str> {
     let first = checks.selected_at.unwrap_or(frame);
     assert_eq!(world.resource::<GameFrames>().frame, frame - first);
     let stage = world.resource::<TitleState>().stage;
+    if matches!(
+        stage,
+        flow::Stage::Leaving(TitleAction::NewGame) | flow::Stage::Loading
+    ) {
+        assert_eq!(world.resource::<SceneFrames>().frame, 0);
+    }
     let transition = world.resource::<Transition>();
     let age = transition.age();
     if checks.selected_at.is_none() {
@@ -48,5 +54,7 @@ pub(crate) fn verify_finished(world: &World) {
     assert_eq!(checks.fade_ages, 0b111111);
     assert!(checks.captured && checks.rebuilt);
     super::super::view::smoke::verify_new_game_finished(world);
-    info!("new game clock: decision reset, six-frame exit and continuous map rebuild verified");
+    info!(
+        "new game clock: decision reset, six-frame exit, frozen scene and continuous raw clock verified"
+    );
 }

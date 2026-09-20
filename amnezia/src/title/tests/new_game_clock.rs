@@ -1,5 +1,5 @@
 use super::*;
-use crate::timing::{GameFrames, TimingPlugin};
+use crate::timing::{GameFrames, SceneFrames, TimingPlugin};
 use crate::transitions::Transition;
 use bevy::time::TimeUpdateStrategy;
 use std::time::Duration;
@@ -35,8 +35,10 @@ fn confirm(app: &mut App, key: KeyCode) {
 fn new_game_resets_the_clock_on_the_decision_frame_before_its_six_frame_exit() {
     for key in [KeyCode::Enter, KeyCode::Space] {
         let mut app = app();
+        app.world_mut().resource_mut::<SceneFrames>().frame = 1234;
         confirm(&mut app, key);
         assert_eq!(*app.world().resource::<GameFrames>(), GameFrames::default());
+        assert_eq!(app.world().resource::<SceneFrames>().frame, 0);
         assert_eq!(
             app.world().resource::<TitleState>().stage,
             Stage::Leaving(TitleAction::NewGame)
@@ -54,6 +56,7 @@ fn new_game_resets_the_clock_on_the_decision_frame_before_its_six_frame_exit() {
         assert!(app.world().resource::<NewGameRequest>().requested);
         app.update();
         assert_eq!(app.world().resource::<GameFrames>().frame, 6);
+        assert_eq!(app.world().resource::<SceneFrames>().frame, 0);
         assert_eq!(app.world().resource::<crate::state::Inventory>().gold(), 0);
         assert_eq!(app.world().resource::<PendingTeleport>().0, Some((5, 0, 0)));
     }
@@ -76,6 +79,7 @@ fn session_rebuild_preserves_all_frames_and_fractions_counted_since_new_game_sel
                 expected,
                 "{fps} FPS, render {render}"
             );
+            assert_eq!(app.world().resource::<SceneFrames>().frame, 0);
         }
         assert_eq!(app.world().resource::<crate::state::Inventory>().gold(), 0);
         assert!(!app.world().resource::<NewGameRequest>().requested);
@@ -122,8 +126,27 @@ fn discarding_a_prepared_session_does_not_suppress_the_next_direct_new_game_rese
     crate::session::clear_transient(app.world_mut());
     app.world_mut().resource_mut::<TitleActive>().0 = false;
     app.world_mut().resource_mut::<GameFrames>().advance(10.25);
+    app.world_mut().resource_mut::<SceneFrames>().frame = 615;
     app.world_mut().resource_mut::<NewGameRequest>().requested = true;
     app.update();
     assert_eq!(*app.world().resource::<GameFrames>(), GameFrames::default());
+    assert_eq!(app.world().resource::<SceneFrames>().frame, 0);
     assert_eq!(app.world().resource::<PendingTeleport>().0, Some((5, 0, 0)));
+}
+
+#[test]
+fn title_delay_and_initial_fade_do_not_count_as_scene_frames() {
+    let mut app = app();
+    let now = app.world().resource::<GameFrames>().frame;
+    app.world_mut().resource_mut::<TitleState>().stage = Stage::Wait(now + 20);
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+        1.0 / 60.0,
+    )));
+    for _ in 0..55 {
+        app.update();
+        assert_eq!(app.world().resource::<SceneFrames>().frame, 0);
+    }
+    assert_eq!(app.world().resource::<TitleState>().stage, Stage::Ready);
+    app.update();
+    assert_eq!(app.world().resource::<SceneFrames>().frame, 1);
 }

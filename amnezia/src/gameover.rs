@@ -29,6 +29,10 @@ enum Stage {
 pub(crate) struct GameOverFlow(Stage);
 
 impl GameOverFlow {
+    pub(crate) fn waiting_for_scene(&self) -> bool {
+        self.0 != Stage::Showing
+    }
+
     pub(crate) fn prepare_from_battle(&mut self) {
         self.0 = Stage::Prepare;
     }
