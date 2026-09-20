@@ -57,6 +57,21 @@ fn item_list_does_not_use_the_legacy_full_screen_text_panel() {
 }
 
 #[test]
+fn skill_list_does_not_use_the_legacy_full_screen_text_panel() {
+    let mut app = viewing(MenuScreen::SkillList {
+        member: 0,
+        cursor: 0,
+    });
+    let world = app.world_mut();
+    let (_, visibility) = world
+        .query::<(&MenuWindow, &Visibility)>()
+        .iter(world)
+        .find(|(window, _)| window.0 == WindowId::Content)
+        .unwrap();
+    assert_eq!(*visibility, Visibility::Hidden);
+}
+
+#[test]
 fn target_screens_do_not_use_the_legacy_full_screen_text_panel() {
     for screen in [
         MenuScreen::ItemTarget {

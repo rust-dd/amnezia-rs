@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 
-pub(super) const ROWS: usize = 12;
 const KEYS: [KeyCode; 4] = [
     KeyCode::ArrowDown,
     KeyCode::ArrowUp,
@@ -9,7 +8,7 @@ const KEYS: [KeyCode; 4] = [
 ];
 
 #[derive(Default)]
-pub(in crate::menu) struct Navigation {
+pub(super) struct Navigation<const ROWS: usize> {
     pub index: usize,
     pub offset: i32,
     pub cursor_index: usize,
@@ -23,7 +22,7 @@ pub(in crate::menu) struct Navigation {
     held: [u32; 4],
 }
 
-impl Navigation {
+impl<const ROWS: usize> Navigation<ROWS> {
     pub(super) fn new(index: usize, count: usize) -> Self {
         let mut nav = Self::default();
         nav.refresh(index, count);

@@ -115,7 +115,7 @@ pub(super) fn vital_width(member: &render::MemberView) -> u32 {
     (18 + digits(member) * 12) as u32
 }
 
-fn vital(
+pub(super) fn vital(
     label: &str,
     current: i32,
     maximum: i32,

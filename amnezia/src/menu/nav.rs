@@ -3,9 +3,11 @@
 //! of it is side-effect-free so the [`super::input`] systems stay thin and these
 //! transitions are unit-tested without an app.
 
+use crate::equipment::Equipment;
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party};
+use crate::vitals::Vitals;
 use bevy::input::ButtonInput;
 use bevy::prelude::KeyCode;
 
@@ -98,20 +100,24 @@ pub(super) fn item_target(
 
 /// The screen a confirm on `member`'s skill list opens: the ally picker for a
 /// field-usable skill under `cursor` (indexed into the member's known skills), or
-/// `None` for a battle-only skill.
+/// `None` for an unknown, unavailable or unaffordable skill.
 pub(super) fn skill_target(
     member: usize,
     cursor: usize,
     data: &GameData,
     party: &Party,
     progression: &Progression,
+    vitals: &Vitals,
+    equipment: &Equipment,
 ) -> Option<MenuScreen> {
     let skill = skills::skill_at(member, cursor, data, party, progression)?;
-    skills::field_usable(skill).then_some(MenuScreen::SkillTarget {
-        member,
-        skill_id: skill.id,
-        cursor: 0,
-    })
+    skills::can_use(member, skill, data, party, progression, vitals, equipment).then_some(
+        MenuScreen::SkillTarget {
+            member,
+            skill_id: skill.id,
+            cursor: 0,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -256,14 +262,33 @@ mod tests {
         let party = Party::default();
         let prog = Progression::default();
         assert_eq!(
-            skill_target(0, 0, &d, &party, &prog),
+            skill_target(
+                0,
+                0,
+                &d,
+                &party,
+                &prog,
+                &Vitals::default(),
+                &Equipment::default()
+            ),
             Some(MenuScreen::SkillTarget {
                 member: 0,
                 skill_id: 2,
                 cursor: 0
             })
         );
-        assert_eq!(skill_target(0, 1, &d, &party, &prog), None);
+        assert_eq!(
+            skill_target(
+                0,
+                1,
+                &d,
+                &party,
+                &prog,
+                &Vitals::default(),
+                &Equipment::default()
+            ),
+            None
+        );
     }
 
     #[test]

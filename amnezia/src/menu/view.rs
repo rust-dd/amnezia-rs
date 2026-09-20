@@ -1,5 +1,5 @@
 //! Field-menu windows use native coordinates scaled threefold for Bevy UI.
-//! Skill-list and equipment subscreens still share a legacy content panel.
+//! Equipment subscreens still share a legacy content panel.
 
 use crate::assets::resolve_png;
 use crate::equipment::Equipment;
@@ -20,6 +20,7 @@ pub(super) mod clocks;
 pub(super) mod end_game;
 pub(super) mod item_list;
 mod main_text;
+pub(super) mod skill_list;
 pub(crate) mod smoke;
 pub(super) mod target;
 #[cfg(test)]
@@ -132,6 +133,7 @@ pub(super) fn spawn_ui(
             spawn_status_window(panel, &system);
             spawn_content_window(panel, &system, &font);
             item_list::spawn(panel, &system);
+            skill_list::spawn(panel, &system);
             target::spawn(panel, &system);
             end_game::spawn(panel, &system);
         });
@@ -369,6 +371,7 @@ pub(super) fn update_ui(
                         MenuScreen::EndGame { .. }
                             | MenuScreen::ItemList { .. }
                             | MenuScreen::ItemTarget { .. }
+                            | MenuScreen::SkillList { .. }
                             | MenuScreen::SkillTarget { .. }
                     )
             }

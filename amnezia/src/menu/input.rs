@@ -106,6 +106,7 @@ pub(super) fn menu_input(
         state.screen,
         MenuScreen::ItemList { .. }
             | MenuScreen::ItemTarget { .. }
+            | MenuScreen::SkillList { .. }
             | MenuScreen::SkillTarget { .. }
     ) && (blockers.fade.busy()
         || blockers
@@ -163,6 +164,7 @@ pub(super) fn menu_input(
             state.screen,
             MenuScreen::ItemList { .. }
                 | MenuScreen::ItemTarget { .. }
+                | MenuScreen::SkillList { .. }
                 | MenuScreen::SkillTarget { .. }
         )
     {
@@ -175,6 +177,7 @@ pub(super) fn menu_input(
                 | MenuScreen::MemberSelect { .. }
                 | MenuScreen::ItemList { .. }
                 | MenuScreen::ItemTarget { .. }
+                | MenuScreen::SkillList { .. }
                 | MenuScreen::SkillTarget { .. }
         )
     {
@@ -242,12 +245,21 @@ pub(super) fn menu_input(
             }
         }
         MenuScreen::SkillList { member, cursor } => {
-            let count = skills::known_skills(member, &data, &party, &progression).len();
-            let cursor = step(cursor, up, down, count.saturating_sub(1));
-            state.screen = MenuScreen::SkillList { member, cursor };
-            if confirm && let Some(next) = skill_target(member, cursor, &data, &party, &progression)
-            {
-                state.screen = next;
+            if confirm {
+                if let Some(next) = skill_target(
+                    member,
+                    cursor,
+                    &data,
+                    &party,
+                    &progression,
+                    &vitals,
+                    &equipment,
+                ) {
+                    sfx.decision();
+                    state.screen = next;
+                } else {
+                    sfx.buzzer();
+                }
             }
         }
         MenuScreen::SkillTarget {

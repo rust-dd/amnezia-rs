@@ -98,6 +98,8 @@ fn input(world: &mut World) {
         crate::menu::save_files::smoke::input(frame)
     } else if scenario == "items" {
         crate::menu::item_smoke::input(frame)
+    } else if scenario == "skills" {
+        crate::menu::skill_smoke::input(frame)
     } else if scenario == "load-slots" {
         crate::menu::save_files::smoke::load::input(frame)
     } else if matches!(scenario, "gameover" | "battle-defeat") {
@@ -126,6 +128,7 @@ fn input(world: &mut World) {
                 | "load-slots"
                 | "save-slots"
                 | "items"
+                | "skills"
                 | "save-music"
                 | "save-camera"
                 | "save-npcs"
@@ -198,6 +201,11 @@ fn drive(world: &mut World) {
     let scenario = world.resource::<SmokeRun>().scenario;
     if scenario == "items"
         && let Some(label) = crate::menu::item_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "skills"
+        && let Some(label) = crate::menu::skill_smoke::drive(world, frame)
     {
         capture(world, label);
     }
@@ -454,6 +462,8 @@ fn drive(world: &mut World) {
             crate::menu::save_files::smoke::verify_finished(world);
         } else if scenario == "items" {
             crate::menu::item_smoke::verify_finished(world);
+        } else if scenario == "skills" {
+            crate::menu::skill_smoke::verify_finished(world);
         } else if scenario == "load-slots" {
             crate::menu::save_files::smoke::load::verify_finished(world);
         } else if scenario == "display" {

@@ -97,38 +97,12 @@ pub(in crate::menu) fn apply_field_skill(
     let Some(skill) = data.skills.iter().find(|skill| skill.id == skill_id) else {
         return false;
     };
-    if !field_usable(skill) {
-        return false;
-    }
-    let weapon_attributes = equipment
-        .slots(caster_def)
-        .into_iter()
-        .filter_map(|id| data.item(id))
-        .filter(|item| item.item_type == 1)
-        .flat_map(|item| item.attribute_defense.iter().copied())
-        .collect::<Vec<_>>();
-    if !logic::weapon_allows_skill(
-        skill,
-        &weapon_attributes,
-        crate::gamedata::attribute_definitions(),
-    ) {
+    if !can_use(caster, skill, data, party, progression, vitals, equipment) {
         return false;
     }
     let full = derive::max_hp_sp(caster_def, progression.level(caster_def));
     let (caster_hp, caster_sp) = vitals.get_stored(caster_id).unwrap_or(full);
-    let cost = EquipmentEffects::from_slots(equipment.slots(caster_def), &data.items)
-        .skill_cost(skill.sp_cost) as i32;
-    let active = vitals
-        .states(caster_id)
-        .into_iter()
-        .map(|id| (id, 0))
-        .collect::<Vec<_>>();
-    if caster_hp <= 0
-        || caster_sp < cost
-        || !logic::states_allow_skill(&active, crate::conditions::definitions(), skill)
-    {
-        return false;
-    }
+    let cost = cost(caster_def, skill, data, equipment) as i32;
     let targets = match skill.scope {
         2 => vec![caster_id],
         4 => roster,

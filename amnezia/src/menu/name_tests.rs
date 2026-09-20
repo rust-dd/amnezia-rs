@@ -77,6 +77,17 @@ fn renamed_hero_appears_in_every_menu_and_target_view() {
                 .map(|run| run.text)
                 .collect::<Vec<_>>()
                 .join("\n")
+            } else if matches!(screen, MenuScreen::SkillList { .. }) {
+                view::skill_list::status(
+                    &rows[1],
+                    &terms,
+                    &crate::font::bitmap::BitmapFont::from_id(0),
+                )
+                .runs
+                .into_iter()
+                .map(|run| run.text)
+                .collect::<Vec<_>>()
+                .join("\n")
             } else {
                 view.text
             };

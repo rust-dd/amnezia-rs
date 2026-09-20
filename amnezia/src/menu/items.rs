@@ -1,7 +1,6 @@
 //! Inventory ordering and the original two-column field-item navigation.
 
 mod list;
-mod navigation;
 pub(crate) mod smoke;
 
 pub(super) use list::{List, update};
@@ -24,7 +23,7 @@ pub(super) fn selectable(data: &GameData, inventory: &Inventory) -> usize {
     use_item::held_item_ids(data, inventory).len()
 }
 
-/// The first row of the remaining legacy skill-list viewport.
+/// The first row of the remaining legacy equipment-list viewport.
 pub(super) fn viewport_start(cursor: usize, len: usize, visible: usize) -> usize {
     if len <= visible {
         0

@@ -1,4 +1,7 @@
-use super::*;
+use super::{KEYS, Navigation as WindowNavigation};
+use bevy::prelude::*;
+
+type Navigation = WindowNavigation<12>;
 
 fn press(nav: &mut Navigation, key: KeyCode) -> u32 {
     let mut keys = ButtonInput::default();
@@ -102,5 +105,52 @@ fn render_only_updates_do_not_advance_a_scroll_or_blink_cycle() {
         assert_eq!(nav.cursor_frame, 1);
         assert_eq!(nav.arrow_frame, 0);
         assert_eq!(nav.help_index, 22);
+    }
+}
+
+#[test]
+fn ten_row_skill_list_scrolls_four_pixels_per_tick_and_preserves_its_help_until_done() {
+    let mut nav = WindowNavigation::<10>::new(18, 25);
+    let mut keys = ButtonInput::default();
+    keys.press(KeyCode::ArrowDown);
+    assert_eq!(nav.tick(&keys, true, true), 1);
+    assert_eq!(
+        (nav.index, nav.offset, nav.help_index, nav.cursor_y),
+        (20, 0, 18, 144)
+    );
+    for step in 1..=4 {
+        nav.tick(&ButtonInput::default(), false, true);
+        assert_eq!(nav.offset, step * 4);
+        assert_eq!(nav.help_index, if step < 4 { 18 } else { 20 });
+    }
+    assert_eq!((nav.cursor_index, nav.cursor_y), (20, 144));
+    assert_eq!(nav.arrows, [true, true]);
+}
+
+#[test]
+fn skill_cursor_and_arrows_follow_logical_frames_at_all_render_rates() {
+    for fps in [15, 30, 60, 120, 144] {
+        let mut nav = WindowNavigation::<10>::new(0, 100);
+        let mut frames = crate::timing::GameFrames::default();
+        let mut keys = ButtonInput::default();
+        keys.press(KeyCode::ArrowDown);
+        for render in 0..fps {
+            let before = frames.frame;
+            frames.advance(1.0 / fps as f64);
+            let elapsed = frames.frame - before;
+            for tick in 0..elapsed.max(1) {
+                nav.tick(&keys, render == 0 && tick == 0, elapsed > 0);
+            }
+            keys.clear();
+        }
+        assert_eq!(
+            (nav.index, nav.cursor_frame, nav.offset),
+            (22, 18, 16),
+            "{fps} FPS"
+        );
+        for _ in 0..4 {
+            nav.tick(&ButtonInput::default(), false, true);
+        }
+        assert_eq!((nav.cursor_index, nav.offset, nav.help_index), (22, 32, 22));
     }
 }

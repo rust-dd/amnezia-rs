@@ -1,33 +1,20 @@
-use super::selectable;
+use super::known_skills;
 use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::gamedata::GameData;
 use crate::menu::{
     MenuOpen, MenuScreen, MenuState, list_navigation::Navigation, save_files::SaveFiles,
 };
-use crate::state::Inventory;
+use crate::progression::Progression;
+use crate::state::Party;
 use crate::timing::GameFrames;
 use bevy::prelude::*;
 
 #[derive(Resource, Default)]
 pub(in crate::menu) struct List {
-    pub navigation: Navigation<12>,
+    pub navigation: Navigation<10>,
     last_frame: Option<u32>,
-    initialized: bool,
+    member: Option<usize>,
     visible: bool,
-}
-
-impl List {
-    pub(in crate::menu) fn return_to_list(
-        &mut self,
-        data: &GameData,
-        inventory: &Inventory,
-    ) -> MenuScreen {
-        self.navigation
-            .refresh(self.navigation.index, selectable(data, inventory));
-        MenuScreen::ItemList {
-            cursor: self.navigation.index,
-        }
-    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -37,7 +24,8 @@ pub(in crate::menu) fn update(
     open: Res<MenuOpen>,
     mut state: ResMut<MenuState>,
     data: Res<GameData>,
-    inventory: Res<Inventory>,
+    party: Res<Party>,
+    progression: Res<Progression>,
     files: Res<SaveFiles>,
     pause: crate::transitions::TransitionPause,
     fade: Res<crate::teleport::Fade>,
@@ -50,9 +38,10 @@ pub(in crate::menu) fn update(
         .replace(frames.frame)
         .map_or(0, |last| frames.frame.wrapping_sub(last));
     if !open.0
+        || elapsed > i32::MAX as u32
         || !matches!(
             state.screen,
-            MenuScreen::ItemList { .. } | MenuScreen::ItemTarget { .. }
+            MenuScreen::SkillList { .. } | MenuScreen::SkillTarget { .. }
         )
     {
         *list = List {
@@ -61,15 +50,15 @@ pub(in crate::menu) fn update(
         };
         return;
     }
-    let MenuScreen::ItemList { cursor } = state.screen else {
+    let MenuScreen::SkillList { member, cursor } = state.screen else {
         list.visible = false;
         list.navigation.suspend();
         return;
     };
-    let count = selectable(&data, &inventory);
-    if !list.initialized {
+    let count = known_skills(member, &data, &party, &progression).len();
+    if list.member != Some(member) {
         list.navigation = Navigation::new(cursor, count);
-        list.initialized = true;
+        list.member = Some(member);
     } else if !list.visible
         || list.navigation.index != cursor
         || list.navigation.count() != count.max(1)
@@ -89,7 +78,8 @@ pub(in crate::menu) fn update(
             }
         }
     }
-    state.screen = MenuScreen::ItemList {
+    state.screen = MenuScreen::SkillList {
+        member,
         cursor: list.navigation.index,
     };
 }

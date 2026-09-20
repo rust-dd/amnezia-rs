@@ -8,7 +8,7 @@ use crate::state::{Inventory, Party};
 use crate::terms::Terms;
 use crate::vitals::Vitals;
 
-use super::{MenuScreen, derive, equip, skills, status};
+use super::{MenuScreen, derive, equip, status};
 
 /// One party member's status-window figures: the FaceSet portrait, identity, and
 /// the numbers the status window prints beside the face. HP/SP are kept as raw
@@ -94,7 +94,7 @@ pub(super) struct ContentView {
     pub cursor_line: Option<usize>,
 }
 
-/// Compose the remaining skill-list, equipment and compatibility status text.
+/// Compose the remaining equipment and compatibility status text.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn content(
     hero_name: &crate::text::HeroName,
@@ -113,22 +113,11 @@ pub(super) fn content(
         | MenuScreen::EndGame { .. }
         | MenuScreen::ItemList { .. }
         | MenuScreen::ItemTarget { .. }
+        | MenuScreen::SkillList { .. }
         | MenuScreen::SkillTarget { .. } => ContentView {
             text: String::new(),
             cursor_line: None,
         },
-        MenuScreen::SkillList { member, cursor } => {
-            let (text, cursor_line) = skills::compose_list(
-                hero_name,
-                member,
-                cursor,
-                data,
-                party,
-                progression,
-                equipment,
-            );
-            ContentView { text, cursor_line }
-        }
         MenuScreen::Equip {
             member,
             slot,

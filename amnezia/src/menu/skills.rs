@@ -9,20 +9,20 @@
 
 use crate::equipment::{Equipment, EquipmentEffects};
 use crate::gamedata::GameData;
-use crate::i18n;
 use crate::progression::Progression;
 use crate::state::Party;
 use crate::vitals::Vitals;
 use amnezia_data::SkillDef;
 
 use super::derive;
-use super::items::viewport_start;
 
+mod availability;
 mod cast;
+mod list;
+pub(crate) mod smoke;
+pub(super) use availability::{can_use, cost};
 pub(super) use cast::apply_field_skill;
-
-/// How many skill rows fit before the list scrolls with the cursor.
-const VISIBLE_ROWS: usize = 8;
+pub(super) use list::{List, update};
 
 /// Whether `skill` can be cast on an ally from the field menu: a normal
 /// recovery skill aimed at the caster or allies.
@@ -50,7 +50,13 @@ pub(super) fn known_skills<'a>(
         return Vec::new();
     };
     let ids = progression.known_skill_ids(def);
-    data.skills.iter().filter(|s| ids.contains(&s.id)).collect()
+    let mut known = data
+        .skills
+        .iter()
+        .filter(|skill| ids.contains(&skill.id))
+        .collect::<Vec<_>>();
+    known.sort_unstable_by_key(|skill| skill.id);
+    known
 }
 
 /// The skill under `cursor` in the `member`'s known-skill list.
@@ -64,57 +70,6 @@ pub(super) fn skill_at<'a>(
     known_skills(member, data, party, progression)
         .into_iter()
         .nth(cursor)
-}
-
-/// Compose the caster's skill list and the composed-text line its windowskin
-/// cursor sits on (`None` when the caster knows no skills). Battle-only skills are
-/// tagged "(harc)" to read as inert; the list scrolls within a viewport and the
-/// line indexes into the returned text so [`super::view`] can place the cursor.
-pub(super) fn compose_list(
-    hero_name: &crate::text::HeroName,
-    member: usize,
-    cursor: usize,
-    data: &GameData,
-    party: &Party,
-    progression: &Progression,
-    equipment: &Equipment,
-) -> (String, Option<usize>) {
-    let effects = party
-        .snapshot()
-        .get(member)
-        .and_then(|&id| data.actor(id))
-        .map(|def| EquipmentEffects::from_slots(equipment.slots(def), &data.items))
-        .unwrap_or_default();
-    let caster = party
-        .snapshot()
-        .get(member)
-        .and_then(|&id| data.actor(id))
-        .map(|def| i18n::tr(hero_name.actor(def)))
-        .unwrap_or_default();
-    let known = known_skills(member, data, party, progression);
-    let mut lines = vec![format!("- Képességek -  {caster}"), String::new()];
-    if known.is_empty() {
-        lines.push(String::from("(nincs képesség)"));
-        lines.push(String::new());
-        lines.push(String::from("[Esc] vissza"));
-        return (lines.join("\n"), None);
-    }
-    let start = viewport_start(cursor, known.len(), VISIBLE_ROWS);
-    let mut cursor_line = None;
-    for (i, &skill) in known.iter().enumerate().skip(start).take(VISIBLE_ROWS) {
-        if i == cursor {
-            cursor_line = Some(lines.len());
-        }
-        let tag = if field_usable(skill) { "" } else { "  (harc)" };
-        lines.push(format!(
-            "{}  SP {}{tag}",
-            i18n::tr(&skill.name),
-            effects.skill_cost(skill.sp_cost)
-        ));
-    }
-    lines.push(String::new());
-    lines.push(String::from("[Esc] vissza"));
-    (lines.join("\n"), cursor_line)
 }
 
 #[cfg(test)]
@@ -137,16 +92,7 @@ mod tests {
         equipment.set_slot(&data.actors[0], 2, 157);
         let party = Party::default();
         let progression = Progression::default();
-        let (text, _) = compose_list(
-            &crate::text::HeroName("Ron".into()),
-            0,
-            0,
-            &data,
-            &party,
-            &progression,
-            &equipment,
-        );
-        assert!(text.contains("SP 5"), "{text}");
+        assert_eq!(cost(&data.actors[0], &data.skills[0], &data, &equipment), 5);
         let mut vitals = Vitals::default();
         vitals.set(1, 20, 4);
         assert!(!apply_field_skill(
@@ -182,41 +128,6 @@ mod tests {
     }
 
     #[test]
-    fn skill_list_shows_costs_and_tags_battle_only_skills() {
-        use amnezia_data::Learning;
-        let mut d = testkit::data();
-        d.skills = vec![
-            testkit::heal_skill(2, "Gyógyítás", 8, 40),
-            testkit::skill(3, "Tűzgolyó", 12),
-        ];
-        d.actors[0].learnings = vec![
-            Learning {
-                level: 1,
-                skill_id: 2,
-            },
-            Learning {
-                level: 1,
-                skill_id: 3,
-            },
-        ];
-        let (text, cursor_line) = compose_list(
-            &crate::text::HeroName("Ron".into()),
-            0,
-            0,
-            &d,
-            &Party::default(),
-            &Progression::default(),
-            &Equipment::default(),
-        );
-        assert!(text.contains("Gyógyítás  SP 8"), "heal, no tag: {text}");
-        assert!(
-            text.contains("Tűzgolyó  SP 12  (harc)"),
-            "attack tagged battle-only: {text}"
-        );
-        assert_eq!(cursor_line, Some(2), "cursor over the first skill: {text}");
-    }
-
-    #[test]
     fn skill_list_hides_skills_the_member_has_not_learned() {
         use amnezia_data::Learning;
         let mut d = testkit::data();
@@ -234,17 +145,8 @@ mod tests {
                 skill_id: 3,
             },
         ];
-        let (text, _) = compose_list(
-            &crate::text::HeroName("Ron".into()),
-            0,
-            0,
-            &d,
-            &Party::default(),
-            &Progression::default(),
-            &Equipment::default(),
-        );
-        assert!(text.contains("Gyógyítás"), "learned skill shown: {text}");
-        assert!(!text.contains("Tűzgolyó"), "unlearned skill hidden: {text}");
+        let known = known_skills(0, &d, &Party::default(), &Progression::default());
+        assert_eq!(known.iter().map(|skill| skill.id).collect::<Vec<_>>(), [2]);
     }
 
     #[test]
