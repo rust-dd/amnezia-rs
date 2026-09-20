@@ -4,6 +4,9 @@ use bevy::prelude::*;
 pub(super) fn input(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario == "shop" && crate::shop::smoke::input(world, frame) {
+        return;
+    }
     if scenario.starts_with("save-")
         && scenario != "save-slots"
         && crate::menu::save_files::smoke::event_input(world)

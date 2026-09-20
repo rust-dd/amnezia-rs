@@ -13,6 +13,7 @@ pub(super) fn start(world: &mut World, scenario: &str) {
     let commands = if matches!(
         scenario,
         "message-options"
+            | "shop"
             | "items"
             | "skills"
             | "equipment"
@@ -178,7 +179,9 @@ pub(super) fn start(world: &mut World, scenario: &str) {
 }
 
 pub(super) fn selected() -> &'static str {
-    if std::env::args().any(|arg| arg == "--smoke-save-slots") {
+    if std::env::args().any(|arg| arg == "--smoke-shop") {
+        "shop"
+    } else if std::env::args().any(|arg| arg == "--smoke-save-slots") {
         "save-slots"
     } else if std::env::args().any(|arg| arg == "--smoke-load-slots") {
         "load-slots"

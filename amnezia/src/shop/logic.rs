@@ -63,7 +63,7 @@ pub fn apply_trade(mode: Mode, id: u32, data: &GameData, inventory: &mut Invento
             false
         }
         Mode::Sell => {
-            if inventory.count(id) > 0 {
+            if item.price > 0 && inventory.count(id) > 0 {
                 inventory.remove_item(id, 1);
                 inventory.add_gold(sell_price(item.price));
                 return true;
@@ -83,14 +83,11 @@ pub fn buyable_ids(data: &GameData, items: &[u32]) -> Vec<u32> {
         .collect()
 }
 
-/// The held item ids the party may sell, in database order: those it holds and
-/// whose price is above zero. A price-0 item is unsellable (RPG_RT
-/// `Window_ShopSell::CheckEnable`) and must not appear, or selling it would
-/// destroy it for no gold.
-pub fn sellable_ids(data: &GameData, inventory: &Inventory) -> Vec<u32> {
+/// All held rows in database order, including disabled zero-price items.
+pub fn sell_ids(data: &GameData, inventory: &Inventory) -> Vec<u32> {
     data.items
         .iter()
-        .filter(|i| i.price > 0 && inventory.count(i.id) > 0)
+        .filter(|i| inventory.count(i.id) > 0)
         .map(|i| i.id)
         .collect()
 }
@@ -241,14 +238,14 @@ mod tests {
     }
 
     #[test]
-    fn price_zero_item_is_never_sellable() {
+    fn zero_price_items_remain_in_the_sell_list_but_cannot_be_traded() {
         let data = data(vec![item(1, 0), item(2, 100)]);
         let mut inv = Inventory::default();
         inv.add_item(1, 3);
         inv.add_item(2, 2);
-        let sellable = sellable_ids(&data, &inv);
-        assert!(!sellable.contains(&1));
-        assert!(sellable.contains(&2));
+        assert_eq!(sell_ids(&data, &inv), [1, 2]);
+        assert!(!apply_trade(Mode::Sell, 1, &data, &mut inv));
+        assert_eq!(inv.count(1), 3);
     }
 
     #[test]

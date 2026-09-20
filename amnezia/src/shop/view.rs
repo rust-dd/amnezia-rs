@@ -84,7 +84,7 @@ fn render_shop(state: &ShopState, data: &GameData, inventory: &Inventory, terms:
         Phase::Sell { cursor } => {
             out.push_str(&vocab.sell_select);
             out.push_str("\n\n");
-            let ids = logic::sellable_ids(data, inventory);
+            let ids = logic::sell_ids(data, inventory);
             list_rows(&mut out, &ids, *cursor, data, inventory, Mode::Sell, &unit);
         }
         Phase::Number(num) => {

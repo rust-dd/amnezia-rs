@@ -56,7 +56,7 @@ pub(super) fn buy_step(
     }
     if confirm(keys) {
         let Some(item) = ids.get(*cursor).and_then(|&id| data.item(id)) else {
-            return Transition::Stay(Se::None);
+            return Transition::Stay(Se::Buzzer);
         };
         let owned = inventory.count(item.id);
         if logic::can_buy(item.price, inventory.gold(), owned) {
@@ -75,8 +75,7 @@ pub(super) fn buy_step(
     Transition::Stay(Se::None)
 }
 
-/// Choosing a held item to sell: cancel backs out; confirm opens the quantity
-/// window. `sellable_ids` already excludes price-0 (unsellable) items.
+/// Zero-price rows remain visible but cannot open the quantity window.
 pub(super) fn sell_step(
     keys: &ButtonInput<KeyCode>,
     data: &GameData,
@@ -84,7 +83,7 @@ pub(super) fn sell_step(
     allow_buy: bool,
     cursor: &mut usize,
 ) -> Transition {
-    let ids = logic::sellable_ids(data, inventory);
+    let ids = logic::sell_ids(data, inventory);
     if keys.just_pressed(KeyCode::Escape) {
         return back_or_leave(allow_buy, Se::Cancel);
     }
@@ -93,8 +92,11 @@ pub(super) fn sell_step(
     }
     if confirm(keys) {
         let Some(item) = ids.get(*cursor).and_then(|&id| data.item(id)) else {
-            return Transition::Stay(Se::None);
+            return Transition::Stay(Se::Buzzer);
         };
+        if item.price == 0 {
+            return Transition::Stay(Se::Buzzer);
+        }
         let num = NumberState {
             mode: Mode::Sell,
             item_id: item.id,
@@ -108,10 +110,7 @@ pub(super) fn sell_step(
     Transition::Stay(Se::None)
 }
 
-/// The "how many?" window: up/down step by 1, left/right by 10 (bounded to
-/// `1..=max`); confirm trades that many at once and shows the confirmation; cancel
-/// returns to the list restoring the cursor. (EasyRPG's `Window_ShopNumber` maps
-/// the axes the other way — this follows the remake's requested up/down = ±1.)
+/// Quantity navigation precedes this decision, including simultaneous cancel.
 pub(super) fn number_step(
     keys: &ButtonInput<KeyCode>,
     data: &GameData,
@@ -126,32 +125,26 @@ pub(super) fn number_step(
         };
         return Transition::To(back, Se::Cancel);
     }
-    let previous = num.count;
-    if keys.just_pressed(KeyCode::ArrowUp) {
-        num.count = (num.count + 1).min(num.max);
-    } else if keys.just_pressed(KeyCode::ArrowDown) {
-        num.count = num.count.saturating_sub(1).max(1);
-    } else if keys.just_pressed(KeyCode::ArrowRight) {
-        num.count = (num.count + 10).min(num.max);
-    } else if keys.just_pressed(KeyCode::ArrowLeft) {
-        num.count = num.count.saturating_sub(10).max(1);
-    }
-    if num.count != previous {
-        return Transition::Stay(Se::Cursor);
-    }
     if confirm(keys) {
+        let mut traded = false;
         for _ in 0..num.count {
             if !logic::apply_trade(num.mode, num.item_id, data, inventory) {
                 break;
             }
+            traded = true;
+        }
+        if !traded {
+            return Transition::Stay(Se::Buzzer);
         }
         outcome.transacted = true;
         let done = match num.mode {
             Mode::Buy => Phase::Bought {
-                timer: super::flow::CONFIRM_SECS,
+                remaining: super::clock::CONFIRM_FRAMES,
+                cursor: num.origin,
             },
             Mode::Sell => Phase::Sold {
-                timer: super::flow::CONFIRM_SECS,
+                remaining: super::clock::CONFIRM_FRAMES,
+                cursor: num.origin,
             },
         };
         return Transition::To(done, Se::Decision);

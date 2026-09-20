@@ -115,6 +115,11 @@ fn drive(world: &mut World) {
             .requested = true;
     }
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario == "shop"
+        && let Some(label) = crate::shop::smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "items"
         && let Some(label) = crate::menu::item_smoke::drive(world, frame)
     {
@@ -383,7 +388,9 @@ fn drive(world: &mut World) {
                 "airship escape never reached the next dream scene"
             );
         }
-        if scenario == "save-slots" {
+        if scenario == "shop" {
+            crate::shop::smoke::verify_finished(world);
+        } else if scenario == "save-slots" {
             crate::menu::save_files::smoke::verify_finished(world);
         } else if scenario == "items" {
             crate::menu::item_smoke::verify_finished(world);

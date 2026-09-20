@@ -10,12 +10,8 @@ use crate::vitals::Vitals;
 use amnezia_data::SoundDef;
 use bevy::prelude::*;
 
-use super::steps;
 use super::{Phase, Screen, ShopOpen, ShopOutcome, ShopRequest, ShopState, logic};
-
-/// How long the "purchased"/"sold" confirmation lingers before the shop returns
-/// to its list, matching RPG_RT's one-second (`DEFAULT_FPS`) hold.
-pub(super) const CONFIRM_SECS: f32 = 0.8;
+use super::{clock, quantity, steps};
 
 /// The RM2000 system sound a step asks the dispatcher to play.
 #[derive(Clone, Copy)]
@@ -98,6 +94,10 @@ pub fn open_requests(
 #[allow(clippy::too_many_arguments)]
 pub fn shop_input(
     keys: Res<ButtonInput<KeyCode>>,
+    directions: Res<crate::menu::DirectionInput>,
+    frames: Res<crate::timing::SceneFrames>,
+    pause: clock::Pause,
+    mut clock: Local<clock::Clock>,
     data: Res<GameData>,
     mut inventory: ResMut<Inventory>,
     mut vitals: ResMut<Vitals>,
@@ -107,7 +107,25 @@ pub fn shop_input(
     mut audio: MessageWriter<AudioRequest>,
     sounds: Option<Res<SystemSounds>>,
 ) {
-    if matches!(*screen, Screen::Closed) || !any_menu_key(&keys) {
+    let ticks = clock.advance(frames.frame);
+    if pause.paused() || matches!(*screen, Screen::Closed) {
+        return;
+    }
+    if let Screen::Shop(state) = &mut *screen {
+        if clock::confirmation(state, ticks, &data, &inventory) {
+            return;
+        }
+        if let Phase::Number(number) = &mut state.phase {
+            for step in directions.steps() {
+                if quantity::navigate(number, step)
+                    && let Some(sounds) = sounds.as_deref()
+                {
+                    play_system_se(&mut audio, &sounds.cursor);
+                }
+            }
+        }
+    }
+    if !any_menu_key(&keys) {
         return;
     }
     let mut current = std::mem::take(&mut *screen);
@@ -218,36 +236,6 @@ fn inn_step(
         return StepResult::stay(Se::Buzzer);
     }
     StepResult::stay(Se::None)
-}
-
-/// Count down the purchased/sold confirmation and return to the list when it
-/// lapses. Peeks immutably first so it only marks [`Screen`] changed while a
-/// confirmation is actually running.
-pub fn shop_tick(time: Res<Time>, mut screen: ResMut<Screen>) {
-    let confirming = matches!(
-        &*screen,
-        Screen::Shop(state) if matches!(state.phase, Phase::Bought { .. } | Phase::Sold { .. })
-    );
-    if !confirming {
-        return;
-    }
-    if let Screen::Shop(state) = &mut *screen {
-        let dt = time.delta_secs();
-        let next = match &mut state.phase {
-            Phase::Bought { timer } => {
-                *timer -= dt;
-                (*timer <= 0.0).then_some(Phase::Buy { cursor: 0 })
-            }
-            Phase::Sold { timer } => {
-                *timer -= dt;
-                (*timer <= 0.0).then_some(Phase::Sell { cursor: 0 })
-            }
-            _ => None,
-        };
-        if let Some(phase) = next {
-            state.phase = phase;
-        }
-    }
 }
 
 /// Debug-only triggers so the shop/inn UI can be exercised without the

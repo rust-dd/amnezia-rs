@@ -13,11 +13,16 @@
 
 use bevy::prelude::*;
 
+mod clock;
 mod flow;
 mod inn_music;
 mod logic;
 mod messages;
+mod quantity;
+pub(crate) mod smoke;
 mod steps;
+#[cfg(test)]
+mod tests;
 mod view;
 
 /// A request from the interpreter to open a merchant screen. The main session
@@ -93,12 +98,14 @@ enum Phase {
     },
     /// The "how many?" quantity window.
     Number(NumberState),
-    /// The brief post-purchase / post-sale confirmation, timed out in seconds.
+    /// The post-trade hold retains the list selection for its return.
     Bought {
-        timer: f32,
+        remaining: u32,
+        cursor: usize,
     },
     Sold {
-        timer: f32,
+        remaining: u32,
+        cursor: usize,
     },
 }
 
@@ -134,10 +141,11 @@ impl Plugin for ShopPlugin {
                 (
                     flow::open_requests,
                     flow::shop_input,
-                    flow::shop_tick,
                     flow::debug_triggers,
                     view::update_ui,
-                ),
+                )
+                    .chain()
+                    .after(crate::menu::MenuInput),
             );
         inn_music::register(app);
     }
