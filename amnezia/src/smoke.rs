@@ -61,6 +61,7 @@ impl Plugin for SmokePlugin {
             finish_at: None,
             save_menu_frames: 0,
         })
+        .init_resource::<input::ScriptedKeys>()
         .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
             std::time::Duration::from_secs_f64(1.0 / 60.0),
         ))

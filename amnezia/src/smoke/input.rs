@@ -1,7 +1,23 @@
 use super::SmokeRun;
 use bevy::prelude::*;
 
+#[cfg(test)]
+mod tests;
+
+/// Keeps scripted holds independent of native keyboard and focus events.
+#[derive(Resource, Default)]
+pub(super) struct ScriptedKeys(ButtonInput<KeyCode>);
+
 pub(super) fn input(world: &mut World) {
+    world.resource_scope(|world, mut scripted: Mut<ScriptedKeys>| {
+        scripted.0.clear();
+        *world.resource_mut::<ButtonInput<KeyCode>>() = scripted.0.clone();
+        run_script(world);
+        scripted.0 = world.resource::<ButtonInput<KeyCode>>().clone();
+    });
+}
+
+fn run_script(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let scenario = world.resource::<SmokeRun>().scenario;
     if scenario == "shop" && crate::shop::smoke::input(world, frame) {
