@@ -25,15 +25,28 @@ pub(in crate::shop) fn update(
             Visibility::Hidden
         };
     }
-    if let Screen::Inn { cost, yes, done } = *screen {
+    if let Screen::Inn {
+        cost,
+        inn_type,
+        yes,
+        done,
+    } = *screen
+    {
         for mut text in &mut texts {
-            **text = render_inn(cost, yes, done, &inventory, &terms);
+            **text = render_inn(cost, inn_type, yes, done, &inventory, &terms);
         }
     }
 }
 
-fn render_inn(cost: i32, yes: bool, done: bool, inventory: &Inventory, terms: &Terms) -> String {
-    let inn = messages::inn_vocab(terms);
+fn render_inn(
+    cost: i32,
+    inn_type: u32,
+    yes: bool,
+    done: bool,
+    inventory: &Inventory,
+    terms: &Terms,
+) -> String {
+    let inn = messages::inn_vocab(inn_type, cost, terms);
     let unit = messages::currency(terms);
     let cost = cost.max(0);
     let gold = format!("{} {unit}", inventory.gold());
@@ -47,7 +60,9 @@ fn render_inn(cost: i32, yes: bool, done: bool, inventory: &Inventory, terms: &T
         format!("{} {}", inn.accept, inn.broke)
     };
     format!(
-        "Egy szoba {cost} {unit}.\nKipihened magad?\n\n{}{accept}\n{}{}\n\n{gold}",
+        "{}\n{}\n\n{}{accept}\n{}{}\n\n{gold}",
+        inn.greetings[0],
+        inn.greetings[1],
         cursor_mark(yes),
         cursor_mark(!yes),
         inn.cancel,

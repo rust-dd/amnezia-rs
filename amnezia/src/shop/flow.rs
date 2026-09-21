@@ -80,8 +80,9 @@ pub fn open_requests(
                 phase: initial_phase(*allow_buy, *allow_sell),
                 scene: default(),
             })),
-            ShopRequest::ShowInn { cost } => Screen::Inn {
+            ShopRequest::ShowInn { cost, inn_type } => Screen::Inn {
                 cost: *cost,
+                inn_type: *inn_type,
                 yes: true,
                 done: false,
             },
@@ -145,7 +146,9 @@ pub fn shop_input(
     let result = match &mut current {
         Screen::Closed => StepResult::leave(Se::None),
         Screen::Shop(state) => shop_step(&keys, &data, &mut inventory, &mut outcome, state),
-        Screen::Inn { cost, yes, done } => inn_step(
+        Screen::Inn {
+            cost, yes, done, ..
+        } => inn_step(
             &keys,
             &mut inventory,
             &mut vitals,
@@ -278,7 +281,10 @@ pub fn debug_triggers(
         });
     }
     if keys.just_pressed(KeyCode::F8) {
-        requests.write(ShopRequest::ShowInn { cost: 10 });
+        requests.write(ShopRequest::ShowInn {
+            cost: 10,
+            inn_type: 1,
+        });
     }
 }
 
@@ -308,7 +314,6 @@ mod tests {
 
     #[test]
     fn shop_mode_selects_the_opening_phase() {
-        // Full shop opens on the Buy/Sell/Leave menu; a restricted shop skips it.
         assert!(matches!(initial_phase(true, true), Phase::Command { .. }));
         assert!(matches!(initial_phase(true, false), Phase::Buy { .. }));
         assert!(matches!(initial_phase(false, true), Phase::Sell { .. }));

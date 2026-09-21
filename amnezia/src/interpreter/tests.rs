@@ -33,6 +33,7 @@ mod actor_commands;
 mod call_scope;
 mod camera;
 mod embedded_prompts;
+mod inns;
 mod key_input;
 mod message_options;
 mod message_ownership;

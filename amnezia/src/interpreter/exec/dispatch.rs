@@ -263,10 +263,11 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         }
         SHOW_INN => {
             let cost = command.params.get(1).copied().unwrap_or(0);
+            let inn_type = command.params.first().copied().unwrap_or(0).max(0) as u32;
             x.subsystems
                 .merchant
                 .writer
-                .write(ShopRequest::ShowInn { cost });
+                .write(ShopRequest::ShowInn { cost, inn_type });
             frame.shop_pending = true;
             Flow::Yield
         }
