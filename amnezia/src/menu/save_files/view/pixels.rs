@@ -1,14 +1,13 @@
 use super::*;
 use crate::menu::save_files::smoke::Pixels;
+use crate::windowskin::reference::{Canvas, rgba};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
 
-type Sample = (u32, u32, [u8; 4]);
-
 pub(crate) struct Snapshot {
-    pixels: Vec<Sample>,
+    pixels: Vec<(u32, u32, [u8; 4])>,
     checks: Arc<AtomicUsize>,
 }
 
@@ -61,10 +60,10 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         (&*terms.0.file, &*terms.0.lvl_short, &*terms.0.hp_short),
         ("File", "Sz", "HP")
     );
-    let mut pixels = Vec::new();
-    border(&mut pixels, skin, 0, 320, 32, 32, false);
+    let mut canvas = Canvas::new(Some(rgba(skin, 0, 32)));
+    canvas.window(skin, (0, 0, 320, 32));
     add_text(
-        &mut pixels,
+        &mut canvas,
         font,
         skin,
         (8, 8),
@@ -80,17 +79,17 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             0,
         )],
     );
+    canvas.clip = IRect::new(0, 40, 320, 232);
     for (index, entry) in entries.iter().enumerate() {
         let y = 40 + (index as i32 - top as i32) * 64 + offset;
         if y >= 232 || y + 64 <= 40 {
             continue;
         }
-        border(&mut pixels, skin, y, 320, 64, 32, true);
+        canvas.window(skin, (0, y, 320, 64));
         if index == selected {
-            cursor(
-                &mut pixels,
+            canvas.cursor(
                 skin,
-                y + 8,
+                (4, y + 8, 47, 16),
                 if nav.cursors[index] <= 10 { 64 } else { 96 },
             );
         }
@@ -118,27 +117,32 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
                     let face = images
                         .get(&server.load(crate::assets::resolve_png("FaceSet", name)))
                         .unwrap();
-                    for cy in 0..48 {
-                        for cx in 0..48 {
-                            sample(
-                                &mut pixels,
-                                face,
-                                (96 + member as i32 * 56 + cx, y + 8 + cy),
-                                (index % 4 * 48 + cx as u32, index / 4 * 48 + cy as u32),
-                                true,
-                            );
-                        }
-                    }
+                    canvas.blit(
+                        face,
+                        (96 + member as i32 * 56, y + 8),
+                        (index % 4 * 48, index / 4 * 48, 48, 48),
+                    );
                 }
             }
         }
-        add_text(&mut pixels, font, skin, (4, y + 8), (312, 48), runs);
+        add_text(&mut canvas, font, skin, (4, y + 8), (312, 48), runs);
     }
+    canvas.clip = IRect::new(0, 0, 320, 240);
     let fading_in = matches!(
         label,
         "load-slots-fade" | "save-slots-fade" | "save-crystal-fade" | "save-crystal-erased-fade"
     );
-    arrows(&mut pixels, skin, top, !fading_in && nav.arrow < 20);
+    for up in [true, false] {
+        if !fading_in && nav.arrow < 20 && if up { top > 0 } else { top < 12 } {
+            canvas.blit(
+                skin,
+                (152, if up { 32 } else { 232 }),
+                (40, if up { 8 } else { 16 }, 16, 8),
+            );
+        }
+    }
+    let mut pixels = canvas.pixels();
+    assert_eq!(pixels.len(), 320 * 240);
     if fading_in || label == "save-slots-cancel-fade" {
         assert_eq!(world.resource::<crate::transitions::Transition>().age(), 1);
         let factor = if fading_in { 127 } else { 128 };
@@ -154,90 +158,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     })
 }
 
-fn sample(
-    pixels: &mut Vec<Sample>,
-    image: &Image,
-    target: (i32, i32),
-    source: (u32, u32),
-    clipped: bool,
-) {
-    if !(0..320).contains(&target.0)
-        || !(0..240).contains(&target.1)
-        || (clipped && !(40..232).contains(&target.1))
-    {
-        return;
-    }
-    let color = image
-        .get_color_at(source.0, source.1)
-        .unwrap()
-        .to_srgba()
-        .to_u8_array();
-    if color[3] == 255 {
-        pixels.push((target.0 as u32, target.1 as u32, color));
-    }
-}
-
-fn border(
-    pixels: &mut Vec<Sample>,
-    skin: &Image,
-    top: i32,
-    width: u32,
-    height: u32,
-    origin: u32,
-    clipped: bool,
-) {
-    let source = |position: u32, length: u32| {
-        if position < 8 {
-            position
-        } else if position >= length - 8 {
-            24 + position - (length - 8)
-        } else {
-            8 + (position - 8) % 16
-        }
-    };
-    for y in 0..height {
-        for x in 0..width {
-            if x >= 8 && y >= 8 && x + 8 < width && y + 8 < height {
-                continue;
-            }
-            sample(
-                pixels,
-                skin,
-                (x as i32, top + y as i32),
-                (origin + source(x, width), source(y, height)),
-                clipped,
-            );
-        }
-    }
-}
-
-fn cursor(pixels: &mut Vec<Sample>, skin: &Image, top: i32, origin: u32) {
-    for y in 0..16 {
-        for x in 0..47 {
-            if x != 0 && x != 46 && y != 0 && y != 15 {
-                continue;
-            }
-            let sx = if x < 8 {
-                x
-            } else if x >= 39 {
-                24 + x - 39
-            } else {
-                8 + (x - 8) % 16
-            };
-            let sy = if y < 8 { y } else { y + 16 };
-            sample(
-                pixels,
-                skin,
-                (4 + x, top + y),
-                (origin + sx as u32, sy as u32),
-                true,
-            );
-        }
-    }
-}
-
 fn add_text(
-    pixels: &mut Vec<Sample>,
+    canvas: &mut Canvas,
     font: &BitmapFont,
     skin: &Image,
     position: (i32, i32),
@@ -251,40 +173,7 @@ fn add_text(
         },
         skin,
     );
-    for y in 0..size.1 {
-        for x in 0..size.0 {
-            sample(
-                pixels,
-                &text,
-                (position.0 + x as i32, position.1 + y as i32),
-                (x, y),
-                size.1 == 48,
-            );
-        }
-    }
-}
-
-fn arrows(pixels: &mut Vec<Sample>, skin: &Image, top: usize, light: bool) {
-    let background = skin.get_color_at(0, 32).unwrap().to_srgba().to_u8_array();
-    for up in [true, false] {
-        let visible = light && if up { top > 0 } else { top < 12 };
-        for y in 0..8 {
-            for x in 0..320 {
-                let mut color = background;
-                if visible && (152..168).contains(&x) {
-                    let arrow = skin
-                        .get_color_at(40 + x - 152, if up { 8 + y } else { 16 + y })
-                        .unwrap()
-                        .to_srgba()
-                        .to_u8_array();
-                    if arrow[3] == 255 {
-                        color = arrow;
-                    }
-                }
-                pixels.push((x, if up { 32 + y } else { 232 + y }, color));
-            }
-        }
-    }
+    canvas.blit(&text, position, (0, 0, size.0, size.1));
 }
 
 impl Snapshot {
@@ -298,7 +187,7 @@ impl Snapshot {
         }
         self.checks.fetch_add(1, Ordering::Relaxed);
         info!(
-            "save selector: {} original skin, text and portrait pixels verified",
+            "save selector: {} complete native reference pixels verified",
             self.pixels.len()
         );
     }

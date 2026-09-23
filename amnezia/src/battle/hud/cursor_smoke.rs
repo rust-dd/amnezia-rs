@@ -4,10 +4,13 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-const LABELS: [&str; 5] = [
+const LABELS: [&str; 8] = [
+    "battle-encounter-two",
+    "battle-menus-early",
     "battle-commands",
     "battle-skills",
     "battle-skills-scrolled",
+    "battle-target",
     "battle-ally-target",
     "battle-resized",
 ];
@@ -39,7 +42,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         .resource::<AssetServer>()
         .load("graphics/System/System.png");
     let skin = world.resource::<Assets<Image>>().get(&handle).unwrap();
-    let mut pixels = Vec::new();
+    let mut pixels = super::pixels::compose(world);
+    let window_pixels = pixels.len();
     let native = |value| {
         if let Val::Px(value) = value {
             (value / 3.0) as i32
@@ -82,7 +86,16 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             }
         }
     }
-    assert!(pixels.len() > 100, "{label} has no visible cursor border");
+    assert!(
+        window_pixels >= 320 * 80,
+        "{label} has no complete lower window"
+    );
+    if active.is_some() {
+        assert!(
+            pixels.len() > window_pixels + 100,
+            "{label} has no visible cursor border"
+        );
+    }
     Some(Snapshot {
         pixels,
         checks: world.resource::<Checks>().0.clone(),
@@ -100,7 +113,7 @@ impl Snapshot {
         }
         self.checks.fetch_add(1, Ordering::Relaxed);
         info!(
-            "battle cursor: {} original border pixels verified",
+            "battle windows: {} native background, text and cursor pixels verified",
             self.pixels.len()
         );
     }

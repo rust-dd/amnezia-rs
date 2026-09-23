@@ -49,13 +49,9 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         };
         assert!((actual - (base + offset) as f32 / 320.0 * 100.0).abs() < 0.001);
     }
-    let background = world
-        .query::<(&Panel, &Children)>()
-        .iter(world)
-        .find(|(panel, _)| **panel == Panel::Option)
-        .unwrap()
-        .1[0];
-    let skin = world.get::<ImageNode>(background).unwrap().image.clone();
+    let skin = world
+        .resource::<AssetServer>()
+        .load("graphics/System/System.png");
     let skin = world.resource::<Assets<Image>>().get(&skin).unwrap();
     let mut pixels = Vec::new();
     for (base, width) in [(0, 76), (76, 244), (320, 76)] {

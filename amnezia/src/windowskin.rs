@@ -2,6 +2,7 @@ use bevy::prelude::*;
 
 pub(crate) mod background;
 pub(crate) mod motion;
+pub(crate) mod reference;
 
 pub(crate) fn fixed_frame(parent: &mut ChildSpawnerCommands, system: &Handle<Image>, size: UVec2) {
     parent.spawn((
@@ -23,20 +24,6 @@ fn skin_piece(system: &Handle<Image>, rect: Rect) -> ImageNode {
         image_mode: NodeImageMode::Stretch,
         ..default()
     }
-}
-
-pub(crate) fn frame(parent: &mut ChildSpawnerCommands, system: &Handle<Image>) {
-    parent.spawn((
-        Node {
-            position_type: PositionType::Absolute,
-            width: Val::Percent(100.0),
-            height: Val::Percent(100.0),
-            ..default()
-        },
-        skin_piece(system, Rect::new(0.0, 0.0, 32.0, 32.0)),
-    ));
-    // The frame's centre contains scroll arrows, not window background.
-    border(parent, system, 32.0);
 }
 
 pub(crate) fn cursor(parent: &mut ChildSpawnerCommands, system: &Handle<Image>) {

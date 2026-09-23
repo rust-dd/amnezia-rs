@@ -16,6 +16,26 @@ fn app() -> App {
 }
 
 #[test]
+fn save_and_load_windows_have_native_backgrounds_without_gpu_resampling() {
+    let mut app = app();
+    app.update();
+    let world = app.world_mut();
+    let mut sizes = world
+        .query::<&crate::windowskin::background::Pixels>()
+        .iter(world)
+        .map(|pixels| (pixels.0.x, pixels.0.y))
+        .collect::<Vec<_>>();
+    sizes.sort_unstable();
+    assert_eq!(
+        sizes,
+        [(320, 32)]
+            .into_iter()
+            .chain([(320, 64); 15])
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn layout_uses_fifteen_full_width_rows_and_original_header_and_portrait_offsets() {
     let mut app = app();
     app.update();

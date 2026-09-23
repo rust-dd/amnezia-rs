@@ -11,6 +11,23 @@ fn scaffold() -> App {
     app
 }
 
+#[test]
+fn remaining_content_panel_has_a_native_background() {
+    let mut app = scaffold();
+    let world = app.world_mut();
+    let (_, children) = world
+        .query::<(&MenuWindow, &Children)>()
+        .iter(world)
+        .find(|(window, _)| window.0 == WindowId::Content)
+        .unwrap();
+    let rasters = children
+        .iter()
+        .filter_map(|entity| world.get::<crate::windowskin::background::Pixels>(entity))
+        .collect::<Vec<_>>();
+    assert_eq!(rasters.len(), 1);
+    assert_eq!(rasters[0].0, UVec2::new(304, 224));
+}
+
 fn viewing(screen: MenuScreen) -> App {
     let mut app = scaffold();
     app.insert_resource(MenuOpen(true))

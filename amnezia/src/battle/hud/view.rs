@@ -3,7 +3,10 @@ use crate::font::bitmap::{BitmapFont, DEFAULT, DISABLED, PixelText, Run};
 use crate::gamedata::GameData;
 use crate::state::Inventory;
 use crate::terms::Terms;
-use crate::windowskin::frame;
+use crate::windowskin::fixed_frame;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Component)]
 pub(super) struct RowSlot(Panel, usize);
@@ -32,7 +35,7 @@ pub(super) fn spawn(
                 UiTargetCamera(camera),
             ))
             .with_children(|parent| {
-                frame(parent, &system);
+                fixed_frame(parent, &system, panel.size());
                 parent
                     .spawn((
                         Node {

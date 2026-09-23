@@ -68,7 +68,7 @@ pub(super) fn spawn(mut commands: Commands, server: Res<AssetServer>) {
         ))
         .with_children(|parent| {
             parent.spawn(node(0, 0, 320, 32)).with_children(|parent| {
-                windowskin::frame(parent, &system);
+                windowskin::fixed_frame(parent, &system, UVec2::new(320, 32));
                 parent.spawn((Text::Help, text_node(8, 8, 304, 16)));
             });
             parent
@@ -81,7 +81,7 @@ pub(super) fn spawn(mut commands: Commands, server: Res<AssetServer>) {
                         parent
                             .spawn((Row(index), node(0, index as i32 * 64, 320, 64)))
                             .with_children(|parent| {
-                                windowskin::frame(parent, &system);
+                                windowskin::fixed_frame(parent, &system, UVec2::new(320, 64));
                                 parent
                                     .spawn((Cursor(index), node(4, 8, 47, 16)))
                                     .with_children(|parent| windowskin::cursor(parent, &system));

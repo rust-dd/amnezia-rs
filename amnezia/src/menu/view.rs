@@ -9,7 +9,7 @@ use crate::progression::Progression;
 use crate::state::{Inventory, Party};
 use crate::terms::Terms;
 use crate::vitals::Vitals;
-use crate::windowskin::frame;
+use crate::windowskin::fixed_frame;
 use bevy::prelude::*;
 use bevy::text::{FontSource, LineHeight, TextLayout};
 
@@ -151,7 +151,7 @@ fn spawn_content_window(panel: &mut ChildSpawnerCommands, system: &Handle<Image>
             MenuWindow(WindowId::Content),
         ))
         .with_children(|w| {
-            frame(w, system);
+            fixed_frame(w, system, UVec2::new(304, 224));
             cursor_sprite(w, system, CursorId::Content, 10.0, 884.0, CONTENT_LINE);
             w.spawn((
                 Text::new(String::new()),

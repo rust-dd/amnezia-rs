@@ -6,6 +6,7 @@ mod content;
 mod cursor_smoke;
 mod layout;
 mod motion;
+mod pixels;
 mod status;
 mod view;
 
@@ -51,6 +52,17 @@ impl Panel {
         } else {
             1
         }
+    }
+
+    fn size(self) -> UVec2 {
+        let (width, height) = match self {
+            Self::Option | Self::Command => (76, 80),
+            Self::Help => (320, 32),
+            Self::Status => (244, 80),
+            Self::Target => (136, 80),
+            Self::Item | Self::Skill | Self::Message => (320, 80),
+        };
+        UVec2::new(width, height)
     }
 
     fn active(battle: &Battle) -> Option<Self> {
