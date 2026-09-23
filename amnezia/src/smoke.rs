@@ -401,6 +401,8 @@ fn drive(world: &mut World) {
             1520
         } else if scenario == "equipment" {
             1290
+        } else if scenario == "animation-colors" {
+            1340
         } else if scenario == "dialogue-timing" {
             3000
         } else if scenario == "inn" {

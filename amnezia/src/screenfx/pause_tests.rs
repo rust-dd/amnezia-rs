@@ -4,6 +4,7 @@ fn app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
         .init_resource::<Fx>()
+        .init_resource::<crate::screenfx::flash::channel::Inbox>()
         .init_resource::<TintState>()
         .init_resource::<crate::battle::Battle>()
         .init_resource::<crate::battle::BattleActive>()

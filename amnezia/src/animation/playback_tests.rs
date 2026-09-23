@@ -5,6 +5,7 @@ use crate::timing::{GameFrames, TimingPlugin};
 mod map_flashes;
 mod map_targets;
 mod scenes;
+mod screen_channel;
 mod slots;
 mod transfers;
 

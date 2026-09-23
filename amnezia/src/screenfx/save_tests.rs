@@ -8,6 +8,7 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
     let mut app = crate::save::tests::save_resources(path.clone());
     app.add_plugins(SavePlugin)
         .init_resource::<Fx>()
+        .init_resource::<crate::screenfx::flash::channel::Inbox>()
         .init_resource::<crate::interpreter::RunningEvent>()
         .add_message::<MapRebuilt>()
         .add_message::<ScreenEffect>()

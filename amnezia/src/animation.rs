@@ -10,7 +10,7 @@ mod playback;
 mod render;
 #[cfg(test)]
 mod save_tests;
-mod scene;
+pub(crate) mod scene;
 pub(crate) mod smoke;
 
 use crate::assets::{asset_root, load_ron};
@@ -34,6 +34,7 @@ pub(crate) use playback::AnimationSet;
 pub(crate) use playback::reset_transient;
 pub(crate) use playback::saved;
 pub(crate) use render::flash_power_level;
+pub(crate) use render::{FlashQuad as ScreenFlash, clear_screen_flash};
 pub use render::{overlay_layer, overlay_translation};
 
 /// Seconds each animation *data* frame is shown. RM2000 (and EasyRPG) advances
@@ -184,6 +185,7 @@ impl Plugin for AnimationPlugin {
                     )
                         .chain()
                         .in_set(AnimationSet::Advance)
+                        .before(crate::interpreter::InterpreterStep)
                         .after(crate::teleport::MapTransfer),
                     (
                         resolve_map_animation,
@@ -292,13 +294,7 @@ fn emit_sound(audio: &mut MessageWriter<AudioRequest>, timing: &AnimationTimingD
     }
 }
 
-/// Emit the timing's flash. A screen flash spawns a single full-screen decaying
-/// quad on the overlay (RM2000's animation screen flash is a full-screen tint),
-/// once for the cast. A target flash publishes a [`BattlerFlash`] per anchor for
-/// `battle::scene` to tint each target battler sprite — never a drawn box.
-/// `ScreenEffect::Flash` is deliberately unused here: it is a main-camera overlay
-/// that would hide behind the order-1 overlay backdrop during battle; it stays
-/// reserved for the interpreter's map `FlashScreen` opcode.
+/// Target flashes address battlers; screen flashes share the event flash plane.
 fn emit_flash(
     commands: &mut Commands,
     battler_flash: &mut MessageWriter<BattlerFlash>,

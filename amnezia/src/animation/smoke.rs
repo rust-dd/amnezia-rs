@@ -9,6 +9,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
 };
 
+mod screen_channel;
 mod timing;
 
 const LABELS: [&str; 8] = [
@@ -39,6 +40,9 @@ pub(crate) struct Snapshot {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if frame >= 1264 {
+        return screen_channel::drive(world, frame);
+    }
     if frame >= 1180 {
         return timing::drive(world, frame);
     }
@@ -125,6 +129,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 }
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
+    if let Some(pixels) = screen_channel::pixels(world, label) {
+        return Some(checked_snapshot(world, label, pixels));
+    }
     if let Some(pixels) = timing::pixels(world, label) {
         return Some(checked_snapshot(world, label, pixels));
     }
@@ -232,6 +239,9 @@ impl Snapshot {
 
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!(checks.0.len(), LABELS.len() + timing::COUNT);
+    assert_eq!(
+        checks.0.len(),
+        LABELS.len() + timing::COUNT + screen_channel::COUNT
+    );
     assert!(checks.0.iter().all(|done| done.load(Ordering::SeqCst)));
 }

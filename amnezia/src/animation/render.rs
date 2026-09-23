@@ -20,10 +20,6 @@ pub fn overlay_layer() -> RenderLayers {
 const SCREEN_W: f32 = 320.0;
 const SCREEN_H: f32 = 240.0;
 
-/// The screen plane is below animation cells, which apply the flash to their
-/// own pixels before opacity blending.
-const SCREEN_FLASH_Z: f32 = 300.0;
-
 /// The world translation of an overlay sprite at RM2000 screen offset `pos` from
 /// centre (y downward) with depth `z`. The overlay camera sits at the origin, so
 /// this is pure screen-space: `x` unchanged, `y` flipped for world y-up.
@@ -39,11 +35,13 @@ pub(super) struct FlashStamp {
 
 /// Screen flash age is measured in logical frames, including skipped render frames.
 #[derive(Component)]
-pub(super) struct FlashQuad {
+pub(crate) struct FlashQuad {
     elapsed: u32,
     last: u32,
     pub power: u32,
     rgb: [u8; 3],
+    /// Live casts refresh the channel every update; legacy snapshots can fade independently.
+    driven: bool,
 }
 
 /// The last 60 fps game-frame a flash is lit: EasyRPG shows it while
@@ -93,35 +91,63 @@ pub(super) fn spawn_screen_flash(
     power: u32,
     stamp: FlashStamp,
 ) {
-    // Game_Screen has one flash channel; later timings replace it, never stack.
+    write_screen_flash(commands, rgb, power, stamp, false);
+}
+
+pub(super) fn write_screen_flash(
+    commands: &mut Commands,
+    rgb: [u8; 3],
+    power: u32,
+    stamp: FlashStamp,
+    driven: bool,
+) {
     commands.queue(move |world: &mut World| {
-        let existing = world
-            .query_filtered::<Entity, With<FlashQuad>>()
-            .iter(world)
-            .next();
+        crate::screenfx::flash::channel::cancel_event_flash(world);
+        let entity = crate::screenfx::flash::channel::overlay(world);
         let Some(alpha) = flash_envelope(stamp.age, power) else {
-            if let Some(entity) = existing {
-                world.despawn(entity);
-            }
+            clear_screen_flash(world);
             return;
         };
-        let components = (
+        world.entity_mut(entity).insert((
             Sprite::from_color(flash_color(rgb, alpha), Vec2::new(SCREEN_W, SCREEN_H)),
-            Transform::from_translation(overlay_translation(Vec2::ZERO, SCREEN_FLASH_Z)),
-            overlay_layer(),
             FlashQuad {
                 elapsed: stamp.age,
                 last: stamp.frame,
                 power,
                 rgb,
+                driven,
             },
-        );
-        if let Some(entity) = existing {
-            world.entity_mut(entity).insert(components);
-        } else {
-            world.spawn(components);
-        }
+        ));
     });
+}
+
+pub(crate) fn clear_screen_flash(world: &mut World) {
+    let entities = world
+        .query_filtered::<Entity, With<FlashQuad>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    for entity in entities {
+        world.entity_mut(entity).remove::<FlashQuad>();
+        if let Some(mut sprite) = world.get_mut::<Sprite>(entity) {
+            sprite.color = Color::NONE;
+        }
+    }
+}
+
+pub(super) fn screen_timing(
+    def: &amnezia_data::AnimationDef,
+    tick: u32,
+) -> Option<(&amnezia_data::AnimationTimingDef, u32)> {
+    def.timings
+        .iter()
+        .enumerate()
+        .filter(|(_, timing)| {
+            timing.flash_scope == super::FLASH_SCOPE_SCREEN
+                && timing.frame > 0
+                && (timing.frame - 1) * 2 <= tick
+        })
+        .max_by_key(|(index, timing)| (timing.frame, *index))
+        .map(|(_, timing)| (timing, tick - (timing.frame - 1) * 2))
 }
 
 fn flash_color(rgb: [u8; 3], alpha: f32) -> Color {
@@ -129,8 +155,23 @@ fn flash_color(rgb: [u8; 3], alpha: f32) -> Color {
     Color::srgba(r, g, b, alpha)
 }
 
-/// Step each live flash quad's alpha along the RM2000 [`flash_envelope`],
-/// despawning it once the ~11-game-frame window has passed.
+pub(super) fn screen_color(def: &amnezia_data::AnimationDef, tick: u32, duration: u32) -> [u8; 4] {
+    if tick < duration
+        && let Some((timing, age)) = screen_timing(def, tick)
+        && age <= FLASH_LAST_FRAME
+    {
+        [
+            super::flash_channel(timing.flash_red),
+            super::flash_channel(timing.flash_green),
+            super::flash_channel(timing.flash_blue),
+            (flash_power_level(age, timing.flash_power) * 8) as u8,
+        ]
+    } else {
+        [0; 4]
+    }
+}
+
+/// Expire the previous cast update or advance a legacy standalone envelope.
 pub(super) fn fade_flashes(
     transition: crate::transitions::TransitionPause,
     scene: super::scene::Scenes,
@@ -144,13 +185,22 @@ pub(super) fn fade_flashes(
         if transition.paused() || scene.frozen() {
             continue;
         }
+        if delta == 0 {
+            continue;
+        }
+        if flash.driven {
+            sprite.color = Color::NONE;
+            commands.entity(entity).remove::<FlashQuad>();
+            continue;
+        }
         flash.elapsed = flash.elapsed.saturating_add(delta);
         match flash_envelope(flash.elapsed, flash.power) {
             Some(alpha) => {
                 sprite.color = flash_color(flash.rgb, alpha);
             }
             None => {
-                commands.entity(entity).despawn();
+                sprite.color = Color::NONE;
+                commands.entity(entity).remove::<FlashQuad>();
             }
         }
     }
@@ -208,7 +258,6 @@ mod tests {
         assert_eq!(flash_power_level(0, 18), 21);
         assert_eq!(flash_power_level(1, 18), 18);
         assert_eq!(flash_power_level(3, 18), 15);
-        // A zero-strength flash stays dark.
         assert_eq!(flash_power_level(0, 0), 0);
     }
 

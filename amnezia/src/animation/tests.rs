@@ -1,6 +1,6 @@
 use super::*;
 
-fn flash_timing(scope: u32) -> AnimationTimingDef {
+pub(super) fn flash_timing(scope: u32) -> AnimationTimingDef {
     AnimationTimingDef {
         frame: 1,
         se_name: String::new(),

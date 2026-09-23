@@ -7,14 +7,15 @@ fn app() -> App {
     transition.start(crate::transitions::Kind::Mosaic, true, 0, IVec2::ZERO);
     app.add_plugins(MinimalPlugins)
         .init_resource::<Fx>()
+        .init_resource::<crate::screenfx::flash::channel::Inbox>()
         .init_resource::<Battle>()
         .init_resource::<BattleActive>()
         .init_resource::<TintState>()
         .insert_resource(transition)
         .add_message::<ScreenEffect>()
-        .add_systems(Update, step_effects);
-    app.world_mut()
-        .spawn((FlashOverlay, BackgroundColor(Color::NONE)));
+        .add_systems(Update, step_effects)
+        .add_systems(PostUpdate, flash::channel::paint);
+    flash::channel::spawn_overlay(app.world_mut());
     flash(&mut app);
     app
 }
@@ -42,10 +43,10 @@ fn only_the_actual_battle_scene_clears_the_map_flash_and_its_overlay() {
     assert!(app.world().resource::<Fx>().flash.is_none());
     let color = app
         .world_mut()
-        .query_filtered::<&BackgroundColor, With<FlashOverlay>>()
+        .query_filtered::<&Sprite, With<FlashOverlay>>()
         .single(app.world())
         .unwrap()
-        .0;
+        .color;
     assert_eq!(color, Color::NONE);
 }
 
@@ -98,4 +99,37 @@ fn subsequent_battle_flashes_survive_phase_changes_and_the_return_to_the_map() {
     enter(&mut app, 2);
     app.update();
     assert!(app.world().resource::<Fx>().flash.is_none());
+}
+
+#[test]
+fn an_action_started_after_the_screen_update_does_not_spend_its_first_shake_tick_early() {
+    let mut app = app();
+    app.world_mut()
+        .resource_mut::<crate::transitions::Transition>()
+        .clear();
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f64(1.0 / 60.0),
+    ));
+    app.add_systems(
+        Update,
+        (
+            |mut once: Local<bool>, mut effects: MessageWriter<ScreenEffect>| {
+                if !*once {
+                    *once = true;
+                    effects.write(ScreenEffect::Shake {
+                        power: 3,
+                        speed: 5,
+                        secs: 8.0 / 60.0,
+                    });
+                }
+            },
+            flash::channel::receive,
+        )
+            .chain()
+            .after(step_effects),
+    );
+    for x in [0.0, 5.0, 5.0, 2.0, -2.0, -6.0, -6.0, -4.0, 0.0] {
+        app.update();
+        assert_eq!(app.world().resource::<Fx>().shake_offset, Vec2::new(x, 0.0));
+    }
 }

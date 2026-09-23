@@ -3,7 +3,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
 #[derive(SystemParam)]
-pub(super) struct Scenes<'w> {
+pub(crate) struct Scenes<'w> {
     fade: Option<Res<'w, crate::teleport::Fade>>,
     menu: Option<Res<'w, crate::menu::MenuOpen>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
@@ -18,7 +18,7 @@ impl Scenes<'_> {
         self.paused() || self.fade.as_ref().is_some_and(|fade| fade.busy())
     }
 
-    pub(super) fn paused(&self) -> bool {
+    pub(crate) fn paused(&self) -> bool {
         self.menu.as_ref().is_some_and(|v| v.0)
             || self.shop.as_ref().is_some_and(|v| v.0)
             || self.title.as_ref().is_some_and(|v| v.0)

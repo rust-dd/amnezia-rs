@@ -6,6 +6,8 @@ pub(crate) struct FlashState {
     elapsed: u32,
     power: u32,
     rgb: [u8; 3],
+    #[serde(default)]
+    driven: bool,
 }
 
 impl FlashQuad {
@@ -14,6 +16,7 @@ impl FlashQuad {
             elapsed: self.elapsed,
             power: self.power,
             rgb: self.rgb,
+            driven: self.driven,
         }
     }
 }
@@ -29,7 +32,7 @@ impl FlashState {
     }
 
     pub(in crate::animation) fn restore(self, commands: &mut Commands, frame: u32) {
-        spawn_screen_flash(
+        write_screen_flash(
             commands,
             self.rgb,
             self.power,
@@ -37,6 +40,7 @@ impl FlashState {
                 age: self.elapsed,
                 frame,
             },
+            self.driven,
         );
     }
 }

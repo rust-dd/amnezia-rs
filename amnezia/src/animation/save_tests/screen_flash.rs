@@ -16,7 +16,7 @@ fn start_flash(app: &mut App) {
 }
 
 #[test]
-fn screen_flash_age_restores_with_or_without_a_remaining_map_cast() {
+fn saved_flashes_restore_but_the_next_live_cast_update_owns_the_channel() {
     for active in [false, true] {
         let (mut app, path) = app(&format!("flash_{active}"));
         if active {
@@ -36,7 +36,7 @@ fn screen_flash_age_restores_with_or_without_a_remaining_map_cast() {
                 .query_filtered::<&Sprite, With<render::FlashQuad>>()
                 .iter(app.world())
                 .next();
-            if ticks < 5 {
+            if !active && ticks < 5 {
                 let actual = flash.unwrap().color.to_srgba().to_u8_array();
                 assert_eq!(
                     actual,

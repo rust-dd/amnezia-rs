@@ -16,7 +16,7 @@ use shake::ShakeState;
 pub(crate) mod battle_smoke;
 #[cfg(test)]
 mod battle_tests;
-mod flash;
+pub(crate) mod flash;
 #[cfg(test)]
 mod map_tests;
 #[cfg(test)]
@@ -139,11 +139,11 @@ impl ScreenShake<'_> {
 }
 
 #[derive(Component)]
-struct FlashOverlay;
+pub(crate) struct FlashOverlay;
 
 /// Flash and shake state. The tint lives in the [`tone`] submodule.
 #[derive(Resource, Default)]
-struct Fx {
+pub(crate) struct Fx {
     flash: Option<Flashing>,
     shake: ShakeState,
     shake_offset: Vec2,
@@ -161,21 +161,43 @@ impl Plugin for ScreenFxPlugin {
         app.add_message::<ScreenEffect>()
             .add_message::<crate::world::MapRebuilt>()
             .init_resource::<Fx>()
+            .init_resource::<flash::channel::Inbox>()
             .add_plugins(tone::ScreenTonePlugin)
             .add_plugins(weather::WeatherPlugin)
-            .add_systems(Startup, spawn_overlays.after(crate::world::setup_cameras))
+            .add_systems(Startup, flash::channel::spawn_overlay)
             .add_systems(
                 Update,
                 clear_map_flash
                     .in_set(MapScreenReset)
                     .after(crate::teleport::MapTransfer)
+                    .before(flash::channel::Advance)
                     .before(ScreenEffectsSet),
             )
             .add_systems(
                 Update,
                 step_effects
+                    .in_set(flash::channel::Advance)
+                    .after(crate::interpreter::ParallelStep)
+                    .before(crate::animation::AnimationSet::Advance),
+            )
+            .add_systems(
+                Update,
+                flash::channel::scene_entry
+                    .after(crate::battle::flow::BattleFlowSet)
+                    .before(ScreenEffectsSet)
+                    .before(crate::animation::AnimationSet::Start),
+            )
+            .add_systems(
+                Update,
+                flash::channel::receive
                     .in_set(ScreenEffectsSet)
-                    .after(crate::battle::flow::BattleFlowSet),
+                    .after(crate::interpreter::InterpreterStep)
+                    .after(crate::animation::AnimationSet::Advance),
+            )
+            .add_systems(
+                PostUpdate,
+                flash::channel::paint
+                    .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
             )
             .add_systems(
                 PostUpdate,
@@ -186,69 +208,27 @@ impl Plugin for ScreenFxPlugin {
     }
 }
 
-fn spawn_overlays(mut commands: Commands, cameras: Query<Entity, With<FrontCamera>>) {
-    let Ok(camera) = cameras.single() else {
-        return;
-    };
-    commands.spawn((
-        full_screen(),
-        transparent(),
-        GlobalZIndex(-10),
-        UiTargetCamera(camera),
-        FlashOverlay,
-    ));
-}
-
 fn clear_map_flash(mut rebuilt: MessageReader<crate::world::MapRebuilt>, mut fx: ResMut<Fx>) {
     if rebuilt.read().count() != 0 {
         fx.flash = None;
     }
 }
 
-/// An absolutely-positioned node filling the whole screen.
-fn full_screen() -> Node {
-    Node {
-        position_type: PositionType::Absolute,
-        left: Val::Px(0.0),
-        right: Val::Px(0.0),
-        top: Val::Px(0.0),
-        bottom: Val::Px(0.0),
-        ..default()
-    }
-}
-
-/// A fully transparent background, the resting state of every overlay.
-fn transparent() -> BackgroundColor {
-    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.0))
-}
-
-/// Ingest new effects, advance every running effect, and repaint the overlays.
+/// Advance the screen before animations and foreground event commands.
 fn step_effects(
     pause: EffectPause,
     time: Res<Time>,
     battle: Option<Res<crate::battle::Battle>>,
-    mut current_battle: Local<Option<u64>>,
-    mut effects: MessageReader<ScreenEffect>,
+    mut pending: flash::channel::PendingEffects,
+    mut commands: Commands,
     mut fx: ResMut<Fx>,
-    mut layers: Query<&mut BackgroundColor, With<FlashOverlay>>,
 ) {
-    for effect in effects.read() {
-        apply_effect(&mut fx, effect);
-    }
-    let generation = battle
-        .filter(|battle| battle.phase != crate::battle::Phase::Inactive)
-        .map(|battle| battle.generation);
-    if generation.is_some() && generation != *current_battle {
-        fx.flash = None;
-    }
-    *current_battle = generation;
+    pending.apply(&mut fx, &mut commands);
+    pending.scene_entry(battle.as_deref(), &mut fx, &mut commands);
     if !pause.paused() {
         let dt = time.delta_secs();
         step_flash(&mut fx, dt);
         step_shake(&mut fx, dt);
-    }
-    for mut background in &mut layers {
-        background.0 = fx.flash.as_ref().map_or(Color::NONE, |flash| flash.color());
     }
 }
 
@@ -298,22 +278,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn map_flash_overlay_keeps_its_picture_camera_target_below_windows() {
+    fn screen_flash_plane_covers_both_scenes_below_animation_cells_and_windows() {
         let mut app = App::new();
-        app.add_plugins(MinimalPlugins).add_systems(
-            Startup,
-            (crate::world::setup_cameras, spawn_overlays).chain(),
-        );
+        app.add_plugins(MinimalPlugins)
+            .add_systems(Startup, flash::channel::spawn_overlay);
         app.update();
-        let target = app
+        let (sprite, position, layers) = app
             .world_mut()
-            .query_filtered::<&UiTargetCamera, With<FlashOverlay>>()
+            .query_filtered::<(&Sprite, &Transform, &bevy::camera::visibility::RenderLayers), With<FlashOverlay>>()
             .single(app.world())
-            .unwrap()
-            .0;
-        assert!(app.world().get::<FrontCamera>(target).is_some());
-        assert!(app.world().get::<IsDefaultUiCamera>(target).is_none());
-        assert_eq!(app.world().get::<Camera>(target).unwrap().order, 1);
+            .unwrap();
+        assert_eq!(sprite.custom_size, Some(Vec2::new(320.0, 240.0)));
+        assert_eq!(position.translation, Vec3::new(0.0, 0.0, 300.0));
+        assert_eq!(*layers, crate::animation::overlay_layer());
     }
 
     #[test]
@@ -324,6 +301,7 @@ mod tests {
                 std::time::Duration::from_millis(100),
             ))
             .init_resource::<Fx>()
+            .init_resource::<crate::screenfx::flash::channel::Inbox>()
             .init_resource::<crate::transitions::Transition>()
             .add_message::<ScreenEffect>()
             .add_systems(Update, step_effects);

@@ -72,10 +72,26 @@ pub(in crate::battle) fn drive(world: &mut World, frame: u32) -> Option<&'static
         fixture.restored = true;
         world.insert_resource(fixture);
     }
+    if (884..=892).contains(&frame) {
+        let position = world
+            .query_filtered::<&Transform, (
+                With<crate::battle::scene::SceneEntity>,
+                With<crate::legacy_colors::hue::HueShift>,
+                Without<crate::battle::scene::Battler>,
+            )>()
+            .single(world)
+            .unwrap()
+            .translation
+            .x;
+        assert_eq!(
+            position,
+            [0.0, 5.0, 5.0, 2.0, -2.0, -6.0, -6.0, -4.0, 0.0][(frame - 884) as usize]
+        );
+    }
     match frame {
-        884 => Some("battle-shake-right"),
-        888 => Some("battle-shake-left"),
-        894 => Some("battle-shake-restored"),
+        885 => Some("battle-shake-right"),
+        889 => Some("battle-shake-left"),
+        895 => Some("battle-shake-restored"),
         _ => None,
     }
 }

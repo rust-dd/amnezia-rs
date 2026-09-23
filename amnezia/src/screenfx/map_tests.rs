@@ -44,8 +44,6 @@ fn app() -> App {
         MoveQueue::default(),
         RouteStepper::default(),
     ));
-    app.world_mut()
-        .spawn((FlashOverlay, BackgroundColor(Color::NONE)));
     app.update();
     app.world_mut()
         .resource_mut::<TintState>()
@@ -96,9 +94,9 @@ fn rebuilt_maps_clear_the_old_flash_but_keep_tone_and_shake() {
         assert_eq!(app.world().resource::<Fx>().shake, shake);
         let overlay = app
             .world_mut()
-            .query_filtered::<&BackgroundColor, With<FlashOverlay>>()
+            .query_filtered::<&Sprite, With<FlashOverlay>>()
             .single(app.world())
             .unwrap();
-        assert_eq!(overlay.0, Color::NONE);
+        assert_eq!(overlay.color, Color::NONE);
     }
 }

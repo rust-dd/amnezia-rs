@@ -51,8 +51,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         "battle-target-fade" => 96,
         "battle-action-flash" => 80,
         "battle-action-fade" => 64,
-        "battle-shake-right" => 80,
-        "battle-shake-left" => 48,
+        "battle-shake-right" => 72,
+        "battle-shake-left" => 40,
         _ => 0,
     };
     assert_eq!(enemies[0].4[3], expected_flash, "{label}");

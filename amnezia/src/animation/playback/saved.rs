@@ -165,6 +165,11 @@ fn restore(
     let draw_anchors = draw_anchors(def, &[anchor], MAP_SCREEN_CENTER, cast.global);
     let frame = cast.elapsed as usize / 2;
     let cells = spawn_cells_at(&mut commands, &mut renderer, def, frame, &draw_anchors);
+    let color = cast
+        .elapsed
+        .checked_sub(1)
+        .map_or([0; 4], |tick| render::screen_color(def, tick, duration));
+    cells::set_screen_flash(&mut commands, &cells, color);
     commands.spawn(LiveAnimation {
         slot: AnimationSlot::Map,
         map_target: Some(cast.target),

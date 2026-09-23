@@ -2,6 +2,7 @@
 
 use bevy::prelude::*;
 
+pub(crate) mod channel;
 pub(crate) mod smoke;
 
 /// The current level is fractional; only the rendered byte is truncated.

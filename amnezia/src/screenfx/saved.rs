@@ -94,6 +94,7 @@ pub(crate) fn register(app: &mut App) {
         restore
             .after(crate::teleport::MapTransfer)
             .after(super::MapScreenReset)
+            .before(super::flash::channel::Advance)
             .before(crate::interpreter::InterpreterStep)
             .before(super::ScreenEffectsSet),
     );

@@ -36,10 +36,10 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             assert!(world.resource::<Trace>().frozen > 60);
             assert!(
                 world
-                    .query_filtered::<&BackgroundColor, With<FlashOverlay>>()
+                    .query_filtered::<&Sprite, With<FlashOverlay>>()
                     .single(world)
                     .unwrap()
-                    .0
+                    .color
                     .alpha()
                     > 0.0
             );
@@ -55,10 +55,10 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             assert!(world.resource::<Fx>().flash.is_none());
             assert_eq!(
                 world
-                    .query_filtered::<&BackgroundColor, With<FlashOverlay>>()
+                    .query_filtered::<&Sprite, With<FlashOverlay>>()
                     .single(world)
                     .unwrap()
-                    .0,
+                    .color,
                 Color::NONE
             );
             world.resource_mut::<Trace>().checks |= 2;

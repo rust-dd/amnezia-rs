@@ -37,6 +37,15 @@ impl Material2d for CellMaterial {
 #[derive(Resource)]
 pub(super) struct CellMesh(Handle<Mesh>);
 
+#[derive(Component)]
+pub(super) struct ScreenFlash([u8; 4]);
+
+pub(super) fn set_screen_flash(commands: &mut Commands, cells: &[Entity], color: [u8; 4]) {
+    for &entity in cells {
+        commands.entity(entity).insert(ScreenFlash(color));
+    }
+}
+
 #[derive(SystemParam)]
 pub(super) struct CellRenderer<'w> {
     server: Res<'w, AssetServer>,
@@ -55,15 +64,21 @@ pub(super) fn register(app: &mut App) {
 
 pub(super) fn sync_flash(
     flashes: Query<&Sprite, With<super::render::FlashQuad>>,
-    cells: Query<&MeshMaterial2d<CellMaterial>>,
+    fx: Option<Res<crate::screenfx::Fx>>,
+    cells: Query<(&MeshMaterial2d<CellMaterial>, Option<&ScreenFlash>)>,
     mut materials: ResMut<Assets<CellMaterial>>,
 ) {
-    let color = flashes
-        .iter()
-        .next()
-        .map_or([0; 4], |sprite| sprite.color.to_srgba().to_u8_array());
-    let flash = Vec4::from_array(color.map(f32::from));
-    for handle in &cells {
+    let color = flashes.iter().next().map_or_else(
+        || {
+            crate::screenfx::flash::channel::event_color(fx.as_deref())
+                .to_srgba()
+                .to_u8_array()
+        },
+        |sprite| sprite.color.to_srgba().to_u8_array(),
+    );
+    for (handle, own) in &cells {
+        let color = own.map_or(color, |own| own.0);
+        let flash = Vec4::from_array(color.map(f32::from));
         let Some(material) = materials.get(&handle.0) else {
             continue;
         };

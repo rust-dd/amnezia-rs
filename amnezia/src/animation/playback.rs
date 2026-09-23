@@ -91,7 +91,20 @@ pub(super) fn step_animations(
     mut battler_flash: MessageWriter<BattlerFlash>,
     mut animations: Query<(Entity, &mut LiveAnimation)>,
 ) {
-    for (entity, mut anim) in &mut animations {
+    let mut order = animations
+        .iter()
+        .map(|(entity, anim)| {
+            let index = match anim.slot {
+                AnimationSlot::Map => 0,
+                AnimationSlot::Party => 1,
+                AnimationSlot::Enemies => 2,
+            };
+            (index, entity)
+        })
+        .collect::<Vec<_>>();
+    order.sort_unstable();
+    for (_, entity) in order {
+        let (_, mut anim) = animations.get_mut(entity).unwrap();
         let delta = frames.frame.wrapping_sub(anim.last);
         anim.last = frames.frame;
         if pause.paused() || scene.frozen() || delta == 0 {
@@ -120,14 +133,41 @@ pub(super) fn step_animations(
                 );
             }
         }
+        if !anim.sound_only {
+            let tick = anim.elapsed.saturating_add(delta) - 1;
+            let (rgb, power, age) = if tick < anim.duration
+                && let Some((timing, age)) = render::screen_timing(def, tick)
+            {
+                (
+                    [timing.flash_red, timing.flash_green, timing.flash_blue].map(flash_channel),
+                    timing.flash_power,
+                    age,
+                )
+            } else {
+                ([0; 3], 0, 11)
+            };
+            render::write_screen_flash(
+                &mut commands,
+                rgb,
+                power,
+                FlashStamp {
+                    age,
+                    frame: frames.frame,
+                },
+                true,
+            );
+        }
         if let Some(target) = anim.map_target {
             let tick = anim.elapsed.saturating_add(delta) - 1;
             let color = map::flash::color(def, tick, anim.duration);
             map::flash::write(&mut commands, target, color, frames.frame);
         }
+        let screen_color =
+            render::screen_color(def, anim.elapsed.saturating_add(delta) - 1, anim.duration);
         anim.elapsed = end;
         let frame = end as usize / 2;
         if frame == anim.frame && end < anim.duration {
+            cells::set_screen_flash(&mut commands, &anim.cells, screen_color);
             continue;
         }
         for cell in anim.cells.drain(..) {
@@ -139,6 +179,7 @@ pub(super) fn step_animations(
             anim.frame = frame;
             anim.cells =
                 spawn_cells_at(&mut commands, &mut renderer, def, frame, &anim.draw_anchors);
+            cells::set_screen_flash(&mut commands, &anim.cells, screen_color);
         }
     }
 }
@@ -154,6 +195,7 @@ fn spawn_cells_at(
     for &base in bases {
         cells.extend(renderer.spawn_frame(commands, def, frame, base));
     }
+    cells::set_screen_flash(commands, &cells, [0; 4]);
     cells
 }
 
@@ -168,7 +210,6 @@ pub(super) fn clear_map_animations(
     mut changes: MessageReader<crate::world::MapRebuilt>,
     mut commands: Commands,
     mut animations: Query<(Entity, &mut LiveAnimation)>,
-    flashes: Query<Entity, With<render::FlashQuad>>,
 ) {
     if changes.read().count() == 0 {
         return;
@@ -178,9 +219,7 @@ pub(super) fn clear_map_animations(
             cancel(&mut commands, entity, &mut animation);
         }
     }
-    for entity in &flashes {
-        commands.entity(entity).despawn();
-    }
+    commands.queue(render::clear_screen_flash);
 }
 
 pub(crate) fn reset_transient(world: &mut World) {
@@ -196,13 +235,7 @@ pub(crate) fn reset_transient(world: &mut World) {
     for entity in entities {
         world.despawn(entity);
     }
-    let flashes = world
-        .query_filtered::<Entity, With<render::FlashQuad>>()
-        .iter(world)
-        .collect::<Vec<_>>();
-    for entity in flashes {
-        world.despawn(entity);
-    }
+    render::clear_screen_flash(world);
     world.insert_resource(ActiveAnimations::default());
     if let Some(mut flashes) = world.get_resource_mut::<Messages<BattlerFlash>>() {
         flashes.clear();
