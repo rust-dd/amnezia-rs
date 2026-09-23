@@ -124,6 +124,10 @@ pub(super) fn update_ui(p: Presentation, mut drawing: Drawing) {
                 node.height = Val::Px(height as f32 * 3.0);
             }
             Part::Cursor(window) => {
+                if window == Window::Buy && !state.scene.updated {
+                    *visibility = Visibility::Hidden;
+                    continue;
+                }
                 let (x, y, width, phase) = match window {
                     Window::Buy => (
                         4,

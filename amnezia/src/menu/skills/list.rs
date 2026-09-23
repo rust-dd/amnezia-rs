@@ -26,7 +26,7 @@ pub(in crate::menu) fn update(
     party: Res<Party>,
     progression: Res<Progression>,
     files: Res<SaveFiles>,
-    pause: crate::transitions::TransitionPause,
+    pause: crate::menu::scene::Pause,
     fade: Res<crate::teleport::Fade>,
     mut list: ResMut<List>,
     sounds: Option<Res<SystemSounds>>,

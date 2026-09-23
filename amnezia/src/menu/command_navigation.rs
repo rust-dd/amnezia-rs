@@ -12,7 +12,7 @@ pub(super) fn update(
     mut state: ResMut<MenuState>,
     party: Res<Party>,
     files: Res<SaveFiles>,
-    pause: crate::transitions::TransitionPause,
+    pause: crate::menu::scene::Pause,
     fade: Res<crate::teleport::Fade>,
     sounds: Option<Res<SystemSounds>>,
     mut audio: MessageWriter<AudioRequest>,

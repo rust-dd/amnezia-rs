@@ -38,6 +38,7 @@ use sounds::MenuSfx;
 /// 16-parameter cap. A menu already up ignores these — only opening is gated.
 #[derive(SystemParam)]
 pub(super) struct OpenBlockers<'w> {
+    frame: Option<Res<'w, crate::timing::SceneWait>>,
     prompt_frame: Option<Res<'w, crate::dialogue::PromptFrame>>,
     transition: Option<Res<'w, crate::transitions::Transition>>,
     dialogue: Res<'w, Dialogue>,
@@ -70,6 +71,7 @@ impl OpenBlockers<'_> {
 /// `title` stays separate because End Game mutates it.
 #[derive(SystemParam)]
 pub(super) struct MenuGates<'w> {
+    scene: Option<Res<'w, super::SceneFlow>>,
     switch: Option<ResMut<'w, equip::Switch>>,
     shop: Res<'w, ShopOpen>,
     battle: Res<'w, BattleActive>,
@@ -99,7 +101,11 @@ pub(super) fn menu_input(
     mut sfx: MenuSfx,
     mut skill_rng: Local<crate::interpreter::EventRng>,
 ) {
-    if save_files.active() || gates.switch.as_ref().is_some_and(|switch| switch.active()) {
+    if save_files.active()
+        || gates.switch.as_ref().is_some_and(|switch| switch.active())
+        || gates.scene.as_ref().is_some_and(|scene| scene.active())
+        || blockers.frame.as_ref().is_some_and(|frame| frame.0)
+    {
         return;
     }
     if blockers.fade.busy()

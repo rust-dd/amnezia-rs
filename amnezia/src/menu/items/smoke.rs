@@ -24,9 +24,9 @@ pub(crate) struct Checks {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        310 | 570 | 640 | 950 | 970 | 1160 | 1170 | 1190 => Some(KeyCode::Escape),
-        320 | 380 | 530 | 550 | 600 | 620 | 625 | 1131 | 1135 | 1145 => Some(KeyCode::Enter),
-        1140 => Some(KeyCode::Space),
+        305 | 570 | 640 | 946 | 962 | 1164 | 1182 | 1198 => Some(KeyCode::Escape),
+        320 | 380 | 530 | 550 | 600 | 620 | 625 | 1131 | 1148 | 1158 => Some(KeyCode::Enter),
+        1153 => Some(KeyCode::Space),
         370 => Some(KeyCode::ArrowRight),
         390 | 670 => Some(KeyCode::ArrowLeft),
         400 | 410 | 420 | 430 | 440 | 450 | 460 | 470 | 480 | 490 | 500 | 510 => {
@@ -74,9 +74,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
                 621 => Some((4, &sounds.item)),
                 626 => Some((8, &sounds.buzzer)),
                 1132 => Some((16, &sounds.decision)),
-                1136 => Some((32, &song)),
-                1141 => Some((64, &song)),
-                1146 => Some((128, &sounds.buzzer)),
+                1149 => Some((32, &song)),
+                1154 => Some((64, &song)),
+                1159 => Some((128, &sounds.buzzer)),
                 _ => None,
             };
             if let Some((flag, sound)) = expected {
@@ -89,7 +89,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             }
         });
     }
-    if frame == 580 {
+    if frame == 587 {
         assert_eq!(
             world.resource::<MenuState>().screen,
             MenuScreen::ItemList { cursor: 24 }
@@ -101,7 +101,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         );
         world.resource_mut::<Checks>().returned = true;
     }
-    if frame == 650 {
+    if frame == 657 {
         assert_eq!(
             world.resource::<MenuState>().screen,
             MenuScreen::ItemList { cursor: 23 }
@@ -130,7 +130,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 900 {
         world.insert_resource(Inventory::default());
     }
-    if frame == 1165 {
+    if frame == 1180 {
         assert_eq!(
             world.resource::<MenuState>().screen,
             MenuScreen::SkillList {
@@ -155,13 +155,13 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         return Some(label);
     }
     match frame {
-        330 => Some("items-empty"),
+        338 => Some("items-empty"),
         385 => Some("items-disabled"),
         512 => Some("items-scroll-first"),
         513 => Some("items-scroll-half"),
         515 => Some("items-scroll-done"),
-        580 => Some("items-returned"),
-        650 => Some("items-depleted"),
+        587 => Some("items-returned"),
+        657 => Some("items-depleted"),
         803 => Some("items-up-half"),
         805 => Some("items-up-done"),
         910 => Some("items-cleared"),

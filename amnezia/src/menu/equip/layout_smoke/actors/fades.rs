@@ -116,7 +116,7 @@ pub(super) fn verify_frame(world: &mut World, frame: u32) -> (bool, Option<&'sta
         {
             assert!(now.wrapping_sub(started) >= 6);
             assert!(!world.resource::<Switch>().active());
-            assert_eq!(scene.slot_frame, 1);
+            assert_eq!(scene.slot_frame, 0);
             checks.pending = None;
             checks.completed += 1;
             return (true, None);

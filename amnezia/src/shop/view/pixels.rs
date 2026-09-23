@@ -53,7 +53,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             if face.is_some() { 224 } else { 296 },
             state.scene.command_frame,
         )),
-        Phase::Buy { .. } => Some((
+        Phase::Buy { .. } if state.scene.updated => Some((
             4,
             40 + state.scene.buy.cursor_y as u32,
             176,
@@ -116,6 +116,22 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
             state.scene.party_frame,
         );
     }
+    if matches!(
+        label,
+        "shop-scene-fade-in" | "shop-scene-fade-out" | "shop-buy-fade-in"
+    ) {
+        assert_eq!(world.resource::<crate::transitions::Transition>().age(), 1);
+        let factor = if label == "shop-scene-fade-out" {
+            128
+        } else {
+            127
+        };
+        for color in &mut canvas.0 {
+            for channel in &mut color[..3] {
+                *channel = ((u32::from(*channel) * factor + 127) / 255) as u8;
+            }
+        }
+    }
     Some(Snapshot {
         pixels: canvas.0,
         checks: world.resource::<Checks>().0.clone(),
@@ -127,6 +143,9 @@ fn selected(label: &str) -> bool {
     matches!(
         label,
         "shop-command"
+            | "shop-scene-fade-in"
+            | "shop-scene-fade-out"
+            | "shop-buy-fade-in"
             | "shop-buy-quantity"
             | "shop-bought"
             | "shop-buy-return"
@@ -156,8 +175,14 @@ fn selected(label: &str) -> bool {
 }
 
 fn verify_state(state: &ShopState, label: &str) {
+    if label == "shop-buy-fade-in" {
+        assert!(matches!(state.phase, Phase::Buy { cursor: 0 }));
+        assert!(!state.scene.updated);
+        assert_eq!((state.scene.help_id, state.scene.item_id), (0, 0));
+        return;
+    }
     let expected = match label {
-        "shop-command" | "shop-portrait-command" | "shop-third-style" => {
+        "shop-command" | "shop-portrait-command" | "shop-third-style" | "shop-scene-fade-in" => {
             assert!(matches!(
                 state.phase,
                 Phase::Command {
@@ -167,7 +192,7 @@ fn verify_state(state: &ShopState, label: &str) {
             ));
             return;
         }
-        "shop-portrait-regreeting" => {
+        "shop-portrait-regreeting" | "shop-scene-fade-out" => {
             assert!(matches!(
                 state.phase,
                 Phase::Command {

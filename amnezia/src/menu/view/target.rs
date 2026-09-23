@@ -103,7 +103,7 @@ pub(in crate::menu) fn update(
     open: Res<MenuOpen>,
     state: Res<MenuState>,
     frames: Res<crate::timing::GameFrames>,
-    pause: crate::transitions::TransitionPause,
+    pause: crate::menu::scene::Pause,
     fade: Res<crate::teleport::Fade>,
     files: Res<crate::menu::save_files::SaveFiles>,
     mut clock: ResMut<Clock>,

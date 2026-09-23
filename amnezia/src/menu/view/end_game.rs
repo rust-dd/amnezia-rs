@@ -103,7 +103,7 @@ pub(in crate::menu) fn update(
     terms: Res<Terms>,
     font: Res<BitmapFont>,
     frames: Res<GameFrames>,
-    pause: crate::transitions::TransitionPause,
+    pause: crate::menu::scene::Pause,
     mut clock: ResMut<Clock>,
     mut windows: Query<(&EndWindow, &mut Node, &mut Visibility, &Children)>,
     mut backgrounds: Query<&mut crate::windowskin::background::Pixels>,

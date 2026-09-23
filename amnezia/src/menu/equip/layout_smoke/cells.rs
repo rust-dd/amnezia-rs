@@ -15,7 +15,7 @@ struct Checks {
 }
 
 pub(super) fn input(frame: u32) -> Option<KeyCode> {
-    matches!(frame, 1230 | 1240 | 1250).then_some(KeyCode::Escape)
+    matches!(frame, 1230 | 1233 | 1250).then_some(KeyCode::Escape)
 }
 
 pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
@@ -36,7 +36,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             .unwrap()
             .name = LONG_NAME.into();
     }
-    if (1171..=1252).contains(&frame) {
+    if (1171..=1270).contains(&frame) {
         verify_frame(world, frame);
     }
     if frame == 1190 {
@@ -56,7 +56,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 }
 
 fn verify_frame(world: &mut World, frame: u32) {
-    let expected = if frame <= 1240 {
+    let expected = if frame <= 1233 {
         MenuScreen::Equip {
             member: 0,
             slot: 0,
@@ -65,8 +65,10 @@ fn verify_frame(world: &mut World, frame: u32) {
     } else {
         MenuScreen::Command
     };
-    assert_eq!(world.resource::<MenuState>().screen, expected);
-    assert_eq!(world.resource::<MenuOpen>().0, frame <= 1250);
+    if !world.resource::<crate::menu::SceneFlow>().active() {
+        assert_eq!(world.resource::<MenuState>().screen, expected);
+        assert_eq!(world.resource::<MenuOpen>().0, frame <= 1250);
+    }
     let data = world.resource::<GameData>();
     assert_eq!(
         world.resource::<Equipment>().slots(data.actor(1).unwrap()),
@@ -84,7 +86,7 @@ fn verify_frame(world: &mut World, frame: u32) {
             .filter(|request| matches!(request, AudioRequest::Sound { .. }))
             .cloned()
             .collect::<Vec<_>>();
-        let expected = if matches!(frame, 1231 | 1241 | 1251) {
+        let expected = if matches!(frame, 1231 | 1234 | 1251) {
             let sound = &world.resource::<SystemSounds>().cancel;
             AudioRequest::se(&sound.name, sound.volume, sound.tempo)
                 .into_iter()
@@ -100,6 +102,6 @@ fn verify_frame(world: &mut World, frame: u32) {
 
 pub(super) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!((checks.frames, checks.sounds), (82, 3));
-    info!("equipment list cells: 82 states and three exact sounds verified");
+    assert_eq!((checks.frames, checks.sounds), (100, 3));
+    info!("equipment list cells: 100 states and three exact sounds verified");
 }

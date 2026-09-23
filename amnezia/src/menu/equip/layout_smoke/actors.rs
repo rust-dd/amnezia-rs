@@ -24,7 +24,7 @@ pub(super) fn input(frame: u32) -> Option<KeyCode> {
         740 | 890 | 920 | 990 | 1010 | 1040 | 1110 => Some(KeyCode::ArrowRight),
         940 | 960 | 1120 => Some(KeyCode::ArrowLeft),
         750 | 760 | 770 | 780 | 790 | 800 | 810 | 820 => Some(KeyCode::ArrowDown),
-        830 | 1050 | 1080 | 1090 | 1130 | 1140 => Some(KeyCode::Escape),
+        830 | 1050 | 1078 | 1094 | 1123 | 1140 => Some(KeyCode::Escape),
         980 => Some(KeyCode::PageUp),
         _ => None,
     }
@@ -66,12 +66,12 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         world.resource_mut::<MenuOpen>().0 = true;
         world.resource_mut::<MenuState>().screen = screen(0, 2, None);
     }
-    let fade_label = if (721..=1142).contains(&frame) {
+    let fade_label = if (721..=1158).contains(&frame) {
         verify_frame(world, frame)
     } else {
         None
     };
-    if frame == 1100 {
+    if frame == 1110 {
         assert!(!world.resource::<MenuOpen>().0);
         world.resource_mut::<Party>().restore(vec![1]);
         world.resource_mut::<MenuOpen>().0 = true;
@@ -108,17 +108,18 @@ fn expected(frame: u32) -> MenuScreen {
         891..=920 | 941..=960 => screen(2, 2, None),
         981..=990 => screen(1, 0, None),
         991..=1010 => screen(2, 0, None),
-        1011..=1030 | 1051..=1060 | 1101..=1130 => screen(0, 0, None),
+        1011..=1030 | 1051..=1060 | 1111..=1123 => screen(0, 0, None),
         1031..=1040 => screen(0, 0, Some(0)),
         1041..=1050 => screen(0, 0, Some(1)),
-        1061..=1080 => screen(1, 1, None),
+        1061..=1078 => screen(1, 1, None),
         _ => MenuScreen::Command,
     }
 }
 
 fn verify_frame(world: &mut World, frame: u32) -> Option<&'static str> {
     let (switching, label) = fades::verify_frame(world, frame);
-    if !switching {
+    let fading = world.resource::<crate::menu::SceneFlow>().active();
+    if !switching && !fading {
         assert_eq!(
             world.resource::<MenuState>().screen,
             expected(frame),
@@ -126,10 +127,12 @@ fn verify_frame(world: &mut World, frame: u32) -> Option<&'static str> {
         );
     }
     assert_eq!(world.resource::<MenuState>().cursor, 2);
-    assert_eq!(
-        world.resource::<MenuOpen>().0,
-        frame <= 1090 || (1101..=1140).contains(&frame)
-    );
+    if !fading {
+        assert_eq!(
+            world.resource::<MenuOpen>().0,
+            frame <= 1094 || (1111..=1140).contains(&frame)
+        );
+    }
     let data = world.resource::<GameData>();
     let equipment = world.resource::<Equipment>();
     for (actor, worn) in [
@@ -154,7 +157,7 @@ fn verify_frame(world: &mut World, frame: u32) -> Option<&'static str> {
         let (sound, count) = match frame - 1 {
             730 | 1030 => (Some(&sounds.decision), 1),
             910 | 915 => (Some(&sounds.buzzer), 1),
-            830 | 1050 | 1080 | 1090 | 1130 | 1140 => (Some(&sounds.cancel), 1),
+            830 | 1050 | 1078 | 1094 | 1123 | 1140 => (Some(&sounds.cancel), 1),
             740 | 750 | 760 | 770 | 780 | 790 | 800 | 810 | 820 | 840 | 890 | 920 | 940 | 960
             | 980 | 990 | 1010 | 1040 => (Some(&sounds.cursor), 1),
             1060 => (Some(&sounds.cursor), 2),
@@ -173,8 +176,8 @@ fn verify_frame(world: &mut World, frame: u32) -> Option<&'static str> {
 
 pub(super) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!((checks.frames, checks.sounds), (422, 30));
+    assert_eq!((checks.frames, checks.sounds), (438, 30));
     assert!(!world.resource::<MenuOpen>().0);
     fades::verify_finished(world);
-    info!("equipment actor switching: 422 states and 30 exact sounds verified");
+    info!("equipment actor switching: 438 states and 30 exact sounds verified");
 }

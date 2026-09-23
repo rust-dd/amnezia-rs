@@ -176,6 +176,11 @@ pub(super) fn run_frame(
         if x.subsystems.merchant.open.0
             || x.subsystems
                 .merchant
+                .scene
+                .as_ref()
+                .is_some_and(|scene| scene.active())
+            || x.subsystems
+                .merchant
                 .inn
                 .as_ref()
                 .is_some_and(|inn| inn.active())

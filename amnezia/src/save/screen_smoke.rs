@@ -90,10 +90,17 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             world.resource_mut::<Fixture>().checks |= 2;
             return Some("save-screen-restored");
         }
-        455 => {
-            assert!(world.resource::<crate::menu::MenuOpen>().0);
+        451 => {
+            assert!(world.resource::<crate::menu::SceneFlow>().active());
             let paused = saved::snapshot(world);
             world.resource_mut::<Fixture>().paused = Some(paused);
+        }
+        470 => {
+            assert!(world.resource::<crate::menu::MenuOpen>().0);
+            assert_eq!(
+                Some(saved::snapshot(world)),
+                world.resource::<Fixture>().paused
+            );
             return Some("save-screen-menu");
         }
         500 => {

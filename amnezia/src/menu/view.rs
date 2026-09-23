@@ -67,7 +67,7 @@ pub(super) struct MenuWindow(WindowId);
 
 /// Cursors for the main windows and the legacy content panel.
 #[derive(Clone, Copy)]
-enum CursorId {
+pub(in crate::menu) enum CursorId {
     Command,
     Status,
     Content,

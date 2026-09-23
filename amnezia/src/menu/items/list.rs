@@ -38,7 +38,7 @@ pub(in crate::menu) fn update(
     data: Res<GameData>,
     inventory: Res<Inventory>,
     files: Res<SaveFiles>,
-    pause: crate::transitions::TransitionPause,
+    pause: crate::menu::scene::Pause,
     fade: Res<crate::teleport::Fade>,
     mut list: ResMut<List>,
     sounds: Option<Res<SystemSounds>>,

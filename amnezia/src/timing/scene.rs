@@ -23,12 +23,16 @@ pub(super) struct Waiting<'w> {
     gameover_flow: Option<Res<'w, crate::gameover::GameOverFlow>>,
     files: Option<Res<'w, crate::menu::save_files::SaveFiles>>,
     equipment: Option<Res<'w, crate::menu::EquipmentSwitch>>,
+    menu: Option<Res<'w, crate::menu::SceneFlow>>,
+    shop: Option<Res<'w, crate::shop::SceneFlow>>,
     inn: Option<Res<'w, crate::shop::inn::State>>,
 }
 
 impl Waiting<'_> {
     pub(super) fn pending(&self) -> bool {
         self.transition.paused()
+            || self.menu.as_ref().is_some_and(|menu| menu.active())
+            || self.shop.as_ref().is_some_and(|shop| shop.active())
             || self.inn.as_ref().is_some_and(|inn| inn.resting())
             || self.fade.as_ref().is_some_and(|fade| fade.busy())
             || self

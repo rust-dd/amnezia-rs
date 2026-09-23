@@ -85,7 +85,7 @@ pub(in crate::menu) fn update(
     equipment: Res<Equipment>,
     vitals: Res<Vitals>,
     files: Res<SaveFiles>,
-    pause: crate::transitions::TransitionPause,
+    pause: crate::menu::scene::Pause,
     fade: Res<crate::teleport::Fade>,
     mut scene: ResMut<Scene>,
     sounds: Option<Res<SystemSounds>>,

@@ -11,6 +11,7 @@ struct Checks {
 }
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
+    let frame = frame.saturating_sub(20);
     match frame {
         1210 | 1306 | 1345 | 1385 => Some(KeyCode::ArrowUp),
         1215 | 1305 | 1346 | 1386 => Some(KeyCode::ArrowDown),
@@ -18,12 +19,13 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
         1225 | 1308 | 1347 | 1388 => Some(KeyCode::PageUp),
         1309 | 1349 => Some(KeyCode::ArrowLeft),
         1310 | 1350 => Some(KeyCode::ArrowRight),
-        1395 | 1400 | 1410 => Some(KeyCode::Escape),
+        1390 | 1406 | 1422 => Some(KeyCode::Escape),
         _ => None,
     }
 }
 
 pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
+    let frame = frame.saturating_sub(20);
     if !(1230..=1270).contains(&frame) {
         return false;
     }
@@ -36,6 +38,7 @@ pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    let frame = frame.saturating_sub(20);
     if frame == 1205 {
         assert!(!world.resource::<MenuOpen>().0);
         world.insert_resource(Checks::default());
@@ -53,7 +56,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         vitals.set(1, 7, 5);
         vitals.set(2, 0, 0);
     }
-    if (1206..=1412).contains(&frame) {
+    if (1206..=1440).contains(&frame) {
         verify_frame(world, frame);
     }
     match frame {
@@ -113,7 +116,7 @@ fn verify_frame(world: &mut World, frame: u32) {
             skill_id: 49,
             cursor: 1,
         }),
-        1381..=1395 => Some(MenuScreen::SkillTarget {
+        1381..=1390 => Some(MenuScreen::SkillTarget {
             member: 1,
             skill_id: 7,
             cursor: if matches!(frame, 1386 | 1388) { 3 } else { 0 },
@@ -138,7 +141,7 @@ fn verify_frame(world: &mut World, frame: u32) {
             1211 | 1216 | 1221 | 1226 | 1231 | 1254 | 1258 | 1262 | 1266 | 1270 | 1386..=1389 => {
                 Some(&sounds.cursor)
             }
-            1396 | 1401 | 1411 => Some(&sounds.cancel),
+            1391 | 1407 | 1423 => Some(&sounds.cancel),
             _ => None,
         };
         let expected = expected
@@ -153,9 +156,9 @@ fn verify_frame(world: &mut World, frame: u32) {
 
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!((checks.frames, checks.sounds), (207, 17));
+    assert_eq!((checks.frames, checks.sounds), (235, 17));
     assert!(!world.resource::<MenuOpen>().0);
     info!(
-        "target navigation: 207 input frames, 17 exact sounds, held wrapping and fixed scopes verified"
+        "target navigation: 235 input frames, 17 exact sounds, held wrapping and fixed scopes verified"
     );
 }

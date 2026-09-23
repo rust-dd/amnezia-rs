@@ -20,10 +20,10 @@ pub(crate) fn select_new_game(world: &mut World) {
 
 pub(crate) fn return_input(frame: u32) -> Option<KeyCode> {
     match frame {
-        310 | 395 => Some(KeyCode::Escape),
+        305 | 414 => Some(KeyCode::Escape),
         320 | 330 | 340 | 350 => Some(KeyCode::ArrowDown),
-        410 => Some(KeyCode::ArrowUp),
-        360 | 380 | 390 | 400 | 420 => Some(KeyCode::Enter),
+        448 => Some(KeyCode::ArrowUp),
+        351 | 380 | 397 | 432 | 462 => Some(KeyCode::Enter),
         _ => None,
     }
 }
@@ -33,23 +33,23 @@ pub(crate) fn return_scene(world: &mut World, frame: u32) -> Option<&'static str
         return Some(label);
     }
     match frame {
-        365 => {
+        368 => {
             assert!(world.resource::<crate::menu::MenuOpen>().0);
             Some("title-return-menu")
         }
-        372 => Some("end-game-no-blink"),
-        385 | 397 => {
+        379 => Some("end-game-no-blink"),
+        396 | 430 => {
             crate::menu::end_smoke::assert_cancelled(world);
             None
         }
-        415 => Some("end-game-yes"),
-        421 => {
+        460 => Some("end-game-yes"),
+        463 => {
             assert!(world.resource::<TitleActive>().0);
             assert!(!world.resource::<crate::menu::MenuOpen>().0);
             assert!(world.resource::<crate::transitions::Transition>().busy());
             Some("title-return-fade")
         }
-        510 => {
+        552 => {
             assert!(ready(world));
             Some("title-return-ready")
         }

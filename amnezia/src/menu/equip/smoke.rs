@@ -17,7 +17,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
         1075 | 1080 | 1085 | 1095 | 1100 | 1125 => Some(KeyCode::Enter),
         1130 => Some(KeyCode::Space),
-        1110 | 1140 | 1160 => Some(KeyCode::Escape),
+        1110 | 1136 | 1152 => Some(KeyCode::Escape),
         _ => None,
     }
 }
@@ -32,7 +32,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) {
         world.resource_mut::<MenuState>().screen = equip(None);
         assert!(world.resource::<MenuOpen>().0);
     }
-    if (1071..=1162).contains(&frame) {
+    if (1071..=1168).contains(&frame) {
         verify_frame(world, frame);
     }
     if frame == 1084 {
@@ -56,15 +56,17 @@ fn equip(picking: Option<usize>) -> MenuScreen {
 fn verify_frame(world: &mut World, frame: u32) {
     let expected = match frame {
         1076..=1080 | 1086..=1095 | 1101..=1110 => equip(Some(0)),
-        1141..=1162 => MenuScreen::Command,
+        1137..=1168 => MenuScreen::Command,
         _ => equip(None),
     };
-    assert_eq!(
-        world.resource::<MenuState>().screen,
-        expected,
-        "equipment screen at {frame}"
-    );
-    assert_eq!(world.resource::<MenuOpen>().0, frame <= 1160);
+    if !world.resource::<crate::menu::SceneFlow>().active() {
+        assert_eq!(
+            world.resource::<MenuState>().screen,
+            expected,
+            "equipment screen at {frame}"
+        );
+        assert_eq!(world.resource::<MenuOpen>().0, frame <= 1152);
+    }
     let data = world.resource::<GameData>();
     let equipment = world.resource::<Equipment>();
     let weapon = equipment.slots(data.actor(1).unwrap())[0];
@@ -88,7 +90,7 @@ fn verify_frame(world: &mut World, frame: u32) {
         inventory.count(2),
         u32::from(!(1081..1096).contains(&frame))
     );
-    if (1121..=1140).contains(&frame) {
+    if (1121..=1136).contains(&frame) {
         assert!(super::candidates(0, 0, data, world.resource::<Party>(), inventory).is_empty());
     }
     world.resource_scope(|world, mut checks: Mut<Checks>| {
@@ -101,7 +103,7 @@ fn verify_frame(world: &mut World, frame: u32) {
         let sounds = world.resource::<SystemSounds>();
         let expected = match frame {
             1076 | 1081 | 1086 | 1096 | 1101 => Some(&sounds.decision),
-            1111 | 1141 | 1161 => Some(&sounds.cancel),
+            1111 | 1137 | 1153 => Some(&sounds.cancel),
             1126 | 1131 => Some(&sounds.buzzer),
             _ => None,
         };
@@ -117,8 +119,8 @@ fn verify_frame(world: &mut World, frame: u32) {
 
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!((checks.frames, checks.sounds), (92, 10));
+    assert_eq!((checks.frames, checks.sounds), (98, 10));
     info!(
-        "equipment selection: 92 states, 10 exact sounds, original Karpenge swap, empty removal, cancellation and actor 9 lock verified"
+        "equipment selection: 98 states, 10 exact sounds, original Karpenge swap, empty removal, cancellation and actor 9 lock verified"
     );
 }

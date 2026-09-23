@@ -26,8 +26,8 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
         1230 | 1440 => Some(KeyCode::ArrowUp),
         1240 | 1270 | 1280 | 1330 | 1460 => Some(KeyCode::ArrowDown),
         1250 | 1300 | 1390 | 1450 => Some(KeyCode::PageDown),
-        1260 | 1310 | 1340 => Some(KeyCode::Enter),
-        1410 | 1420 | 1470 | 1480 => Some(KeyCode::Escape),
+        1251 | 1304 | 1340 => Some(KeyCode::Enter),
+        1410 | 1412 | 1470 | 1480 => Some(KeyCode::Escape),
         _ => None,
     }
 }
@@ -57,7 +57,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         world.resource_mut::<MenuOpen>().0 = true;
         world.insert_resource(MenuState::default());
     }
-    if (1171..=1482).contains(&frame) {
+    if (1171..=1498).contains(&frame) {
         verify_frame(world, frame);
     }
     if frame == 1430 {
@@ -84,7 +84,7 @@ fn member(action: MemberAction, cursor: usize) -> MenuScreen {
 
 fn expected(frame: u32) -> (usize, MenuScreen) {
     let screen = match frame {
-        1261..=1270 | 1281..=1290 | 1301..=1310 => MenuScreen::EndGame { cursor: 1 },
+        1252..=1270 | 1281..=1290 | 1301..=1304 => MenuScreen::EndGame { cursor: 1 },
         1271..=1280 | 1291..=1300 => MenuScreen::EndGame { cursor: 0 },
         1341..=1350 | 1382..=1390 | 1401..=1410 => member(MemberAction::Skill, 0),
         1351..=1373 | 1391..=1400 => member(MemberAction::Skill, 3),
@@ -95,7 +95,7 @@ fn expected(frame: u32) -> (usize, MenuScreen) {
     };
     let cursor = match frame {
         1181..=1203 | 1331..=1430 => 1,
-        1204..=1207 | 1431..=1482 => 2,
+        1204..=1207 | 1431..=1498 => 2,
         1208..=1211 => 3,
         1212..=1220 | 1231..=1240 | 1251..=1320 => 4,
         _ => 0,
@@ -105,15 +105,17 @@ fn expected(frame: u32) -> (usize, MenuScreen) {
 
 fn verify_frame(world: &mut World, frame: u32) {
     let state = world.resource::<MenuState>();
-    assert_eq!(
-        (state.cursor, state.screen),
-        expected(frame),
-        "menu navigation at {frame}"
-    );
-    assert_eq!(
-        world.resource::<MenuOpen>().0,
-        frame <= 1420 || (1431..=1480).contains(&frame)
-    );
+    if !world.resource::<crate::menu::SceneFlow>().active() {
+        assert_eq!(
+            (state.cursor, state.screen),
+            expected(frame),
+            "menu navigation at {frame}"
+        );
+        assert_eq!(
+            world.resource::<MenuOpen>().0,
+            frame <= 1412 || (1431..=1480).contains(&frame)
+        );
+    }
     assert!(!world.resource::<crate::title::TitleActive>().0);
     assert!(
         !world
@@ -133,8 +135,8 @@ fn verify_frame(world: &mut World, frame: u32) {
             | 1320 | 1330 | 1350 | 1373 | 1377 | 1381 | 1390 | 1400 | 1440 | 1460 => {
                 Some(&sounds.cursor)
             }
-            1260 | 1310 | 1340 => Some(&sounds.decision),
-            1410 | 1420 | 1470 | 1480 => Some(&sounds.cancel),
+            1251 | 1304 | 1340 => Some(&sounds.decision),
+            1410 | 1412 | 1470 | 1480 => Some(&sounds.cancel),
             _ => None,
         };
         let expected = sound
@@ -149,8 +151,8 @@ fn verify_frame(world: &mut World, frame: u32) {
 
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
-    assert_eq!((checks.frames, checks.sounds), (312, 29));
+    assert_eq!((checks.frames, checks.sounds), (328, 29));
     assert_eq!(checks.pixels.load(Ordering::Relaxed), 4);
     assert!(!world.resource::<MenuOpen>().0);
-    info!("main menu navigation: 312 states, 29 exact sounds and four cursor images verified");
+    info!("main menu navigation: 328 states, 29 exact sounds and four cursor images verified");
 }

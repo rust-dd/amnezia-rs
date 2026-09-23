@@ -4,6 +4,9 @@ use bevy::prelude::*;
 #[derive(SystemParam)]
 pub(crate) struct ScenePause<'w> {
     transition: Option<Res<'w, crate::transitions::Transition>>,
+    frame: Option<Res<'w, crate::timing::SceneWait>>,
+    menu_flow: Option<Res<'w, crate::menu::SceneFlow>>,
+    shop_flow: Option<Res<'w, crate::shop::SceneFlow>>,
     fade: Option<Res<'w, crate::teleport::Fade>>,
     menu: Option<Res<'w, crate::menu::MenuOpen>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
@@ -20,6 +23,9 @@ impl ScenePause<'_> {
 
     pub(crate) fn screen_effects_paused(&self) -> bool {
         self.fade.as_ref().is_some_and(|v| v.busy())
+            || self.frame.as_ref().is_some_and(|v| v.0)
+            || self.menu_flow.as_ref().is_some_and(|v| v.active())
+            || self.shop_flow.as_ref().is_some_and(|v| v.active())
             || self.transition.as_ref().is_some_and(|v| v.busy())
             || self.menu.as_ref().is_some_and(|v| v.0)
             || self.shop.as_ref().is_some_and(|v| v.0)

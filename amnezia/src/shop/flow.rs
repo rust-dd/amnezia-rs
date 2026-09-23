@@ -60,25 +60,34 @@ pub fn open_requests(
     mut screen: ResMut<Screen>,
     mut open: ResMut<ShopOpen>,
     mut outcome: ResMut<ShopOutcome>,
+    mut fades: Option<ResMut<super::SceneFlow>>,
 ) {
     for request in requests.read() {
-        *screen = match request {
+        let state = match request {
             ShopRequest::OpenShop {
                 items,
                 allow_buy,
                 allow_sell,
                 shop_type,
-            } => Screen::Shop(Box::new(ShopState {
+            } => Box::new(ShopState {
                 items: items.clone(),
                 allow_buy: *allow_buy,
                 allow_sell: *allow_sell,
                 shop_type: *shop_type,
                 phase: initial_phase(*allow_buy, *allow_sell),
                 scene: default(),
-            })),
+            }),
             ShopRequest::ShowInn { .. } => continue,
         };
-        open.0 = true;
+        if let Some(fades) = fades.as_deref_mut() {
+            if fades.active() {
+                continue;
+            }
+            fades.enter(state);
+        } else {
+            *screen = Screen::Shop(state);
+            open.0 = true;
+        }
         outcome.transacted = false;
     }
 }
@@ -98,9 +107,13 @@ pub fn shop_input(
     mut outcome: ResMut<ShopOutcome>,
     mut audio: MessageWriter<AudioRequest>,
     sounds: Option<Res<SystemSounds>>,
+    mut fades: Option<ResMut<super::SceneFlow>>,
 ) {
     let ticks = clock.advance(frames.frame);
-    if pause.paused() || matches!(*screen, Screen::Closed) {
+    if pause.paused()
+        || fades.as_ref().is_some_and(|fades| fades.active())
+        || matches!(*screen, Screen::Closed)
+    {
         return;
     }
     if let Screen::Shop(state) = &mut *screen {
@@ -137,8 +150,15 @@ pub fn shop_input(
         Screen::Closed => StepResult::leave(Se::None),
         Screen::Shop(state) => shop_step(&keys, &data, &mut inventory, &mut outcome, state),
     };
-    *screen = if result.keep { current } else { Screen::Closed };
-    open.0 = result.keep;
+    if !result.keep
+        && let Some(fades) = fades.as_deref_mut()
+    {
+        fades.leave();
+        *screen = current;
+    } else {
+        *screen = if result.keep { current } else { Screen::Closed };
+        open.0 = result.keep;
+    }
     if let Some(sounds) = sounds.as_deref()
         && let Some(sound) = pick_se(sounds, result.se)
     {

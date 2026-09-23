@@ -36,14 +36,14 @@ pub(crate) fn input(world: &mut World, frame: u32) -> bool {
     }
     keys.reset_all();
     for key in match frame {
-        310 | 330 | 510 | 520 | 540 | 580 => vec![KeyCode::Enter],
+        316 | 330 | 510 | 520 | 540 | 580 => vec![KeyCode::Enter],
         320 | 355 | 500 => vec![KeyCode::ArrowDown],
         340 | 550 => vec![KeyCode::ArrowUp],
         345 | 530 | 555 | 560 | 565 | 570 => vec![KeyCode::ArrowRight],
         350 => vec![KeyCode::ArrowLeft],
         400 => vec![KeyCode::ArrowUp, KeyCode::Enter],
         420..=426 => vec![KeyCode::ArrowDown, KeyCode::Enter],
-        490 | 650 | 660 | 710 => vec![KeyCode::Escape],
+        490 | 650 | 660 | 720 => vec![KeyCode::Escape],
         _ => layout::input(frame),
     } {
         keys.press(key);
@@ -52,6 +52,7 @@ pub(crate) fn input(world: &mut World, frame: u32) -> bool {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    let fade = super::fades::smoke::drive(world, frame);
     if frame == 300 {
         assert!(!world.resource::<RunningEvent>().active());
         let mut inventory = Inventory::default();
@@ -90,7 +91,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         );
     }
     match frame {
-        305 => Some("shop-command"),
+        316 => Some("shop-command"),
         342 => {
             assert_number(world, 11);
             Some("shop-buy-quantity")
@@ -151,7 +152,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             world.resource_mut::<Probe>().finished = true;
             None
         }
-        _ => layout::drive(world, frame),
+        _ => layout::drive(world, frame).or(fade),
     }
 }
 
@@ -212,11 +213,11 @@ fn verify_sounds(world: &mut World, frame: u32) {
     let sounds = world.resource::<SystemSounds>();
     let cursor = &sounds.cursor;
     let expected = match frame {
-        311 | 331 | 511 | 541 | 581 => vec![&sounds.decision],
+        317 | 331 | 511 | 541 | 581 => vec![&sounds.decision],
         321 | 341 | 346 | 351 | 356 | 361 | 384 | 388 | 392 | 501 | 531 | 551 | 556 | 561 | 566
         | 571 => vec![cursor],
         401 => vec![cursor, &sounds.decision],
-        491 | 651 | 661 | 711 => vec![&sounds.cancel],
+        491 | 651 | 661 | 721 => vec![&sounds.cancel],
         521 => vec![&sounds.buzzer],
         _ => Vec::new(),
     }
@@ -236,6 +237,7 @@ fn verify_sounds(world: &mut World, frame: u32) {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    super::fades::smoke::verify_finished(world);
     layout::verify_finished(world);
     let probe = world.resource::<Probe>();
     assert!(probe.finished);

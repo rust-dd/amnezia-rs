@@ -31,6 +31,7 @@ pub(crate) mod name_smoke;
 mod nav;
 mod render;
 pub(crate) mod save_files;
+mod scene;
 mod skills;
 mod status;
 mod targets;
@@ -44,6 +45,7 @@ pub(crate) use items::smoke as item_smoke;
 pub(crate) use list_navigation::Input as DirectionInput;
 #[cfg(test)]
 pub(crate) use list_navigation::update_input as update_directions;
+pub(crate) use scene::Flow as SceneFlow;
 pub(crate) use skills::smoke as skill_smoke;
 pub(crate) use targets::smoke as target_navigation_smoke;
 pub(crate) use view::end_game::smoke as end_smoke;
@@ -141,10 +143,14 @@ pub struct MenuPlugin;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct MenuInput;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) struct MenuView;
+
 impl Plugin for MenuPlugin {
     fn build(&self, app: &mut App) {
         save_files::register(app);
         equip::register_switching(app);
+        scene::register(app);
         crate::windowskin::background::register(app);
         app.init_resource::<MenuOpen>()
             .init_resource::<MenuAccess>()
@@ -161,26 +167,31 @@ impl Plugin for MenuPlugin {
             .add_systems(
                 Update,
                 (
-                    (
-                        list_navigation::update_input,
-                        items::update,
-                        skills::update,
-                        equip::update,
-                        targets::update,
-                        command_navigation::update,
-                        input::menu_input,
-                        equip::refresh_actor,
-                    )
-                        .chain()
-                        .in_set(MenuInput),
-                    view::update_ui.after(MenuInput),
-                    view::item_list::update.after(MenuInput),
-                    view::skill_list::update.after(MenuInput),
-                    view::equipment::update.after(MenuInput),
-                    view::target::update.after(MenuInput),
-                    view::clocks::update.after(MenuInput),
-                    view::end_game::update.after(MenuInput),
-                ),
+                    list_navigation::update_input,
+                    items::update,
+                    skills::update,
+                    equip::update,
+                    targets::update,
+                    command_navigation::update,
+                    input::menu_input,
+                    equip::refresh_actor,
+                )
+                    .chain()
+                    .in_set(MenuInput),
+            )
+            .add_systems(
+                Update,
+                (
+                    view::update_ui,
+                    view::item_list::update,
+                    view::skill_list::update,
+                    view::equipment::update,
+                    view::target::update,
+                    view::clocks::update,
+                    view::end_game::update,
+                )
+                    .in_set(MenuView)
+                    .after(MenuInput),
             );
     }
 }

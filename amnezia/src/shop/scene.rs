@@ -14,6 +14,7 @@ pub(super) struct State {
     pub party_frame: u32,
     pub help_id: u32,
     pub item_id: u32,
+    pub updated: bool,
     initialized: bool,
 }
 
@@ -53,19 +54,10 @@ pub(super) fn update(
     data: &GameData,
     inventory: &Inventory,
 ) -> u32 {
+    initialize(state, data, inventory);
+    state.scene.updated = true;
     let buy = logic::buyable_ids(data, &state.items);
     let sell = logic::sell_ids(data, inventory);
-    if !state.scene.initialized {
-        state.scene.buy.refresh(0, buy.len());
-        state.scene.sell.refresh(0, sell.len().max(1));
-        if let Phase::Buy { cursor } = state.phase {
-            state.scene.buy.refresh(cursor, buy.len());
-        }
-        if let Phase::Sell { cursor } = state.phase {
-            state.scene.sell.refresh(cursor, sell.len().max(1));
-        }
-        state.scene.initialized = true;
-    }
     state.scene.party_frame = (state.scene.party_frame + ticks % 48) % 48;
     state.scene.command_frame = (state.scene.command_frame + ticks % 21) % 21;
     let buying = matches!(state.phase, Phase::Buy { .. });
@@ -109,4 +101,21 @@ pub(super) fn update(
         _ => {}
     }
     moves
+}
+
+pub(super) fn initialize(state: &mut ShopState, data: &GameData, inventory: &Inventory) {
+    if state.scene.initialized {
+        return;
+    }
+    let buy = logic::buyable_ids(data, &state.items);
+    let sell = logic::sell_ids(data, inventory);
+    state.scene.buy.refresh(0, buy.len());
+    state.scene.sell.refresh(0, sell.len().max(1));
+    if let Phase::Buy { cursor } = state.phase {
+        state.scene.buy.refresh(cursor, buy.len());
+    }
+    if let Phase::Sell { cursor } = state.phase {
+        state.scene.sell.refresh(cursor, sell.len().max(1));
+    }
+    state.scene.initialized = true;
 }

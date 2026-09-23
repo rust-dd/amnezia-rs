@@ -30,12 +30,12 @@ pub(crate) struct Checks {
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
-        310 | 380 | 430 | 460 | 480 | 710 | 980 | 1000 => Some(KeyCode::Escape),
-        320 | 395 | 550 | 560 | 570 | 580 | 590 | 600 | 610 | 620 | 630 | 640 | 650 => {
+        305 | 380 | 442 | 482 | 498 | 710 | 980 | 1000 => Some(KeyCode::Escape),
+        320 | 400 | 550 | 560 | 570 | 580 | 590 | 600 | 610 | 620 | 630 | 640 | 650 => {
             Some(KeyCode::ArrowDown)
         }
         750 => Some(KeyCode::ArrowUp),
-        330 | 340 | 350 | 390 | 400 | 420 | 425 | 450 | 455 | 490 | 500 | 530 | 690 | 800 => {
+        330 | 335 | 350 | 398 | 402 | 420 | 436 | 460 | 476 | 514 | 516 | 536 | 690 | 800 => {
             Some(KeyCode::Enter)
         }
         540 | 660 => Some(KeyCode::ArrowRight),
@@ -60,14 +60,14 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         verify_sounds(world, frame);
         verify_returns(world, frame);
     }
-    if matches!(frame, 440 | 470) {
+    if matches!(frame, 457 | 497) {
         assert_eq!(
             world.resource::<Vitals>().get_stored(1),
-            Some((if frame == 440 { 57 } else { 63 }, 5))
+            Some((if frame == 457 { 57 } else { 63 }, 5))
         );
         assert_eq!(
             world.resource::<Vitals>().get_stored(2),
-            Some((30, if frame == 440 { 60 } else { 45 }))
+            Some((30, if frame == 457 { 60 } else { 45 }))
         );
     }
     if frame == 510 {
@@ -114,16 +114,16 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             .load_skills(vec![(1, Vec::new())]);
     }
     match frame {
-        410 => Some("skills-tiffany"),
-        440 => Some("skills-used"),
-        470 => Some("skills-used-again"),
-        520 => Some("skills-grid"),
+        418 => Some("skills-tiffany"),
+        457 => Some("skills-used"),
+        497 => Some("skills-used-again"),
+        534 => Some("skills-grid"),
         642 => Some("skills-scroll-first"),
         643 => Some("skills-scroll-half"),
         645 => Some("skills-scroll-done"),
         665 => Some("skills-bottom"),
         685 => Some("skills-half-cost"),
-        720 => Some("skills-returned"),
+        726 => Some("skills-returned"),
         752 => Some("skills-up-first"),
         753 => Some("skills-up-half"),
         755 => Some("skills-up-done"),
@@ -135,13 +135,16 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 }
 
 fn verify_returns(world: &World, frame: u32) {
+    if world.resource::<crate::menu::SceneFlow>().active() {
+        return;
+    }
     let expected = match frame {
-        381..=390 | 481..=490 | 981..=1002 => MenuScreen::Command,
-        391..=395 | 491..=500 => MenuScreen::MemberSelect {
+        381..=398 | 499..=514 | 981..=1002 => MenuScreen::Command,
+        399..=400 | 515..=516 => MenuScreen::MemberSelect {
             action: crate::menu::MemberAction::Skill,
             cursor: 0,
         },
-        396..=400 => MenuScreen::MemberSelect {
+        401..=402 => MenuScreen::MemberSelect {
             action: crate::menu::MemberAction::Skill,
             cursor: 1,
         },
@@ -163,14 +166,14 @@ fn verify_sounds(world: &mut World, frame: u32) {
             .collect::<Vec<_>>();
         let sounds = world.resource::<SystemSounds>();
         let expected = match frame - 1 {
-            350 | 530 | 800 => Some(&sounds.buzzer),
-            310 | 330 | 340 | 390 | 400 | 420 | 450 | 490 | 500 | 690 => Some(&sounds.decision),
-            380 | 430 | 460 | 480 | 710 | 980 | 1000 => Some(&sounds.cancel),
-            320 | 395 | 540 | 550 | 560 | 570 | 580 | 590 | 600 | 610 | 620 | 630 | 640 | 650
+            350 | 536 | 800 => Some(&sounds.buzzer),
+            305 | 330 | 335 | 398 | 402 | 420 | 460 | 514 | 516 | 690 => Some(&sounds.decision),
+            380 | 442 | 482 | 498 | 710 | 980 | 1000 => Some(&sounds.cancel),
+            320 | 400 | 540 | 550 | 560 | 570 | 580 | 590 | 600 | 610 | 620 | 630 | 640 | 650
             | 660 | 750 => Some(&sounds.cursor),
             _ => None,
         };
-        let expected = if matches!(frame - 1, 425 | 455) {
+        let expected = if matches!(frame - 1, 436 | 476) {
             AudioRequest::se("Song2", 100, 110)
         } else {
             expected.and_then(|sound| AudioRequest::se(&sound.name, sound.volume, sound.tempo))

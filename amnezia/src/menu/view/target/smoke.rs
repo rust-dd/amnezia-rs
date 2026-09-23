@@ -81,7 +81,7 @@ pub(in crate::menu) fn drive(world: &mut World, frame: u32) -> Option<&'static s
         vitals.set(2, 30, 75);
     }
     match frame {
-        540 => Some("target-item"),
+        546 => Some("target-item"),
         560 => Some("target-used"),
         630 => Some("target-empty"),
         995 => Some("target-four"),
@@ -89,10 +89,10 @@ pub(in crate::menu) fn drive(world: &mut World, frame: u32) -> Option<&'static s
         1064 => Some("target-self"),
         1095 => Some("target-skill"),
         1125 => Some("target-long-name"),
-        1133 => Some("target-cast-ready"),
-        1138 => Some("target-cast-first"),
-        1143 => Some("target-cast-second"),
-        1154 => Some("target-cast-full"),
+        1147 => Some("target-cast-ready"),
+        1151 => Some("target-cast-first"),
+        1156 => Some("target-cast-second"),
+        1161 => Some("target-cast-full"),
         _ => None,
     }
 }

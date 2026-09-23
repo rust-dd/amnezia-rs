@@ -56,14 +56,14 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             );
             open(world, (1..=20).collect(), 0, true, true);
         }
-        950 => {
+        960 => {
             world.resource_mut::<crate::dialogue::Dialogue>().face = default();
             world.insert_resource(Inventory::default());
             open(world, vec![7], 1, true, false);
         }
-        1000 => open(world, vec![], 2, false, true),
-        1040 => open(world, vec![], 2, true, true),
-        1080 => open(world, vec![], 2, true, false),
+        1010 => open(world, vec![], 2, false, true),
+        1050 => open(world, vec![], 2, true, true),
+        1090 => open(world, vec![], 2, true, false),
         1110 => {
             world
                 .query_filtered::<&mut Window, With<bevy::window::PrimaryWindow>>()
@@ -96,17 +96,17 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         923 => Some("shop-sell-scroll-half"),
         925 => Some("shop-sell-scroll-done"),
         935 => Some("shop-portrait-regreeting"),
-        970 => Some("shop-disabled-buy"),
-        1020 => Some("shop-empty-sell"),
-        1060 => Some("shop-third-style"),
-        1100 => Some("shop-empty-buy"),
+        978 => Some("shop-disabled-buy"),
+        1028 => Some("shop-empty-sell"),
+        1068 => Some("shop-third-style"),
+        1108 => Some("shop-empty-buy"),
         1120 => Some("shop-resized"),
         _ => None,
     }
 }
 
 pub(super) fn verify_finished(world: &World) {
-    assert_eq!(world.resource::<Checks>().0.load(Ordering::Relaxed), 26);
+    assert_eq!(world.resource::<Checks>().0.load(Ordering::Relaxed), 29);
     assert!(!world.resource::<ShopOpen>().0);
-    info!("shop layout: 26 complete images / 1996800 reference pixels verified");
+    info!("shop layout: 29 complete images / 2227200 reference pixels verified");
 }

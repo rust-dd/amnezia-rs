@@ -101,7 +101,7 @@ fn check_restore(world: &mut World, frame: u32) {
     );
     assert!(!world.resource::<EventSaveRequest>().0);
     assert!(world.resource::<Switches>().get(9901));
-    if world.resource::<Fade>().busy() {
+    if world.resource::<Fade>().busy() || world.resource::<crate::timing::SceneWait>().0 {
         assert_eq!(
             world.resource::<crate::timing::SceneFrames>().frame,
             world.resource::<Probe>().scene_frame,

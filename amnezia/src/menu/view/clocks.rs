@@ -34,7 +34,7 @@ impl Clock {
         };
     }
 
-    pub(super) fn source_x(&self, cursor: CursorId) -> f32 {
+    pub(in crate::menu) fn source_x(&self, cursor: CursorId) -> f32 {
         if self.phases.get(cursor as usize).copied().unwrap_or(0) <= 10 {
             64.0
         } else {
@@ -53,7 +53,7 @@ pub(in crate::menu) struct Focus<'w> {
 pub(in crate::menu) fn update(
     frames: Res<GameFrames>,
     focus: Focus,
-    pause: crate::transitions::TransitionPause,
+    pause: crate::menu::scene::Pause,
     mut clock: ResMut<Clock>,
     cursors: Query<(&MenuCursor, &Children)>,
     mut images: Query<&mut ImageNode>,

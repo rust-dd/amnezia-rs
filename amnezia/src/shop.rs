@@ -14,6 +14,7 @@
 use bevy::prelude::*;
 
 mod clock;
+mod fades;
 mod flow;
 pub(crate) mod inn;
 mod logic;
@@ -26,6 +27,8 @@ mod steps;
 #[cfg(test)]
 mod tests;
 mod view;
+
+pub(crate) use fades::Flow as SceneFlow;
 
 /// A request from the interpreter to open a merchant screen. The main session
 /// wires the interpreter to emit this instead of skipping the opcodes.
@@ -140,13 +143,20 @@ impl Plugin for ShopPlugin {
                     view::party::update,
                 )
                     .chain()
+                    .in_set(ShopUpdate)
+                    .after(crate::interpreter::InterpreterStep)
                     .after(crate::menu::MenuInput),
             );
+        fades::register(app);
         inn::register(app);
     }
 }
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct ShopUpdate;
+
 pub(crate) fn reset_session(world: &mut World) {
     world.insert_resource(Screen::default());
+    world.insert_resource(SceneFlow::default());
     world.insert_resource(inn::State::default());
 }

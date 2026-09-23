@@ -36,11 +36,19 @@ pub(super) struct Blockers<'w> {
     menu: Res<'w, MenuOpen>,
     shop: Res<'w, ShopOpen>,
     battle: Res<'w, BattleActive>,
+    frame: Option<Res<'w, crate::timing::SceneWait>>,
+    menu_flow: Option<Res<'w, crate::menu::SceneFlow>>,
+    shop_flow: Option<Res<'w, crate::shop::SceneFlow>>,
 }
 
 impl Blockers<'_> {
     pub(super) fn any(&self) -> bool {
-        self.menu.0 || self.shop.0 || self.battle.0
+        self.menu.0
+            || self.shop.0
+            || self.battle.0
+            || self.frame.as_ref().is_some_and(|v| v.0)
+            || self.menu_flow.as_ref().is_some_and(|v| v.active())
+            || self.shop_flow.as_ref().is_some_and(|v| v.active())
     }
 }
 
@@ -124,6 +132,7 @@ pub(super) struct Merchant<'w> {
     pub(super) writer: MessageWriter<'w, ShopRequest>,
     pub(super) outcome: Res<'w, ShopOutcome>,
     pub(super) open: Res<'w, ShopOpen>,
+    pub(super) scene: Option<Res<'w, crate::shop::SceneFlow>>,
     pub(super) inn: Option<Res<'w, crate::shop::inn::State>>,
 }
 

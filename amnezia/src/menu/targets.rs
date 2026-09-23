@@ -78,7 +78,7 @@ pub(super) fn update(
     data: Res<GameData>,
     party: Res<Party>,
     files: Res<SaveFiles>,
-    pause: crate::transitions::TransitionPause,
+    pause: crate::menu::scene::Pause,
     fade: Res<crate::teleport::Fade>,
     mut navigation: ResMut<Navigation>,
     sounds: Option<Res<SystemSounds>>,

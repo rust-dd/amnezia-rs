@@ -22,6 +22,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    let fade = crate::menu::scene::smoke::drive(world, frame);
     equip_selection::drive(world, frame);
     let navigation = crate::menu::navigation_smoke::drive(world, frame);
     if frame == 300 {
@@ -42,8 +43,10 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         570 => Some("menu-member-blink"),
         580 => Some("menu-layout-member"),
         740 => Some("menu-layout-resized"),
-        786 => Some("menu-cursor-reopen"),
-        _ => super::text_smoke::drive(world, frame).or(navigation),
+        798 => Some("menu-cursor-reopen"),
+        _ => super::text_smoke::drive(world, frame)
+            .or(navigation)
+            .or(fade),
     }
 }
 
@@ -53,6 +56,24 @@ pub(crate) struct Snapshot {
 }
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
+    if matches!(label, "menu-scene-fade-in" | "menu-scene-fade-out") {
+        assert_eq!(world.resource::<crate::transitions::Transition>().age(), 1);
+        let factor = if label == "menu-scene-fade-in" {
+            127
+        } else {
+            128
+        };
+        let mut pixels = super::main_pixels::compose(world);
+        for (_, _, color) in &mut pixels {
+            for channel in &mut color[..3] {
+                *channel = ((u32::from(*channel) * factor + 127) / 255) as u8;
+            }
+        }
+        return Some(Snapshot {
+            pixels,
+            checks: world.resource::<Checks>().0.clone(),
+        });
+    }
     if let Some(snapshot) = navigation::snapshot(world, label) {
         return Some(snapshot);
     }
@@ -202,7 +223,8 @@ impl Snapshot {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    crate::menu::scene::smoke::verify_finished(world);
     equip_selection::verify_finished(world);
     crate::menu::navigation_smoke::verify_finished(world);
-    assert_eq!(world.resource::<Checks>().0.load(Ordering::Relaxed), 6);
+    assert_eq!(world.resource::<Checks>().0.load(Ordering::Relaxed), 8);
 }
