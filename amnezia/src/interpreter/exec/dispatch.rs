@@ -59,7 +59,9 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         INPUT_NUMBER => {
             let digits = command.params.first().copied().unwrap_or(0).max(0) as u32;
             let var_id = command.params.get(1).copied().unwrap_or(0) as u32;
-            x.subsystems.input_number.open(digits, var_id);
+            x.dialogue
+                .open_number(digits, var_id, &mut x.subsystems.input_number);
+            frame.message_pending = true;
             frame.input_pending = true;
             Flow::Yield
         }

@@ -14,23 +14,23 @@ struct Checks {
 }
 
 pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
-    if frame < 1250 {
+    if frame < 1262 {
         return false;
     }
     let mut keys = world.resource_mut::<ButtonInput<KeyCode>>();
     keys.clear();
-    if !(1261..1320).contains(&frame) {
+    if !(1273..1332).contains(&frame) {
         keys.reset_all();
     }
     let pressed = match frame {
-        1260..=1319 | 1340 => &[KeyCode::ArrowDown][..],
-        1325 => &[KeyCode::PageUp],
-        1330 | 1335 | 1400 => &[KeyCode::PageDown],
-        1345 | 1375 => &[KeyCode::ArrowUp],
-        1350 | 1380 => &[KeyCode::Escape, KeyCode::Enter],
-        1355 => &[KeyCode::Space],
-        1395 => &[KeyCode::ArrowDown, KeyCode::ArrowUp],
-        1405 => &[KeyCode::Enter, KeyCode::Space],
+        1272..=1331 | 1352 => &[KeyCode::ArrowDown][..],
+        1337 => &[KeyCode::PageUp],
+        1342 | 1347 | 1436 => &[KeyCode::PageDown],
+        1357 | 1399 => &[KeyCode::ArrowUp],
+        1362 | 1404 => &[KeyCode::Escape, KeyCode::Enter],
+        1367 => &[KeyCode::Space],
+        1431 => &[KeyCode::ArrowDown, KeyCode::ArrowUp],
+        1441 => &[KeyCode::Enter, KeyCode::Space],
         _ => &[],
     };
     for key in pressed {
@@ -75,19 +75,19 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             world.init_resource::<Checks>();
             start(world, 4, 0);
         }
-        1363 => start(world, 2, 2),
-        1386 => start(world, 1, 0),
+        1375 => start(world, 2, 2),
+        1410 => start(world, 1, 0),
         _ => {}
     }
-    if (1255..=1362).contains(&frame)
-        || (1373..=1385).contains(&frame)
-        || (1393..=1412).contains(&frame)
+    if (1267..=1374).contains(&frame)
+        || (1397..=1409).contains(&frame)
+        || (1429..=1448).contains(&frame)
     {
         verify_frame(world, frame);
     }
     match frame {
-        1321 => Some("choice-held-last"),
-        1341 => Some("choice-wrapped-first"),
+        1333 => Some("choice-held-last"),
+        1353 => Some("choice-wrapped-first"),
         _ => None,
     }
 }
@@ -95,24 +95,24 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 fn verify_frame(world: &mut World, frame: u32) {
     let choice = world.resource::<Choice>();
     let index = match frame {
-        1261..=1320 => (1 + frame.saturating_sub(1280) / 4) as usize % 4,
-        1321..=1325 | 1331..=1340 | 1346..=1362 => 3,
-        1376..=1385 => 1,
+        1273..=1332 => (1 + frame.saturating_sub(1292) / 4) as usize % 4,
+        1333..=1337 | 1343..=1352 | 1358..=1374 => 3,
+        1400..=1409 => 1,
         _ => 0,
     };
     assert_eq!(choice.cursor, index, "choice cursor at {frame}");
     assert_eq!(
         choice.active(),
-        frame <= 1355 || (1373..=1380).contains(&frame) || (1393..=1405).contains(&frame),
+        frame <= 1367 || (1397..=1404).contains(&frame) || (1429..=1441).contains(&frame),
         "choice activity at {frame}"
     );
-    if (1360..=1362).contains(&frame) {
+    if (1372..=1374).contains(&frame) {
         assert_eq!(world.resource::<Variables>().get(9012), 3);
     }
-    if (1383..=1385).contains(&frame) {
+    if (1407..=1409).contains(&frame) {
         assert_eq!(world.resource::<Variables>().get(9012), 1);
     }
-    if frame >= 1408 {
+    if frame >= 1444 {
         assert_eq!(world.resource::<Variables>().get(9012), 0);
     }
     assert!(!world.resource::<crate::menu::MenuOpen>().0);
@@ -125,9 +125,9 @@ fn verify_frame(world: &mut World, frame: u32) {
             .collect::<Vec<_>>();
         let sounds = world.resource::<SystemSounds>();
         let cursor = match frame - 1 {
-            1260 | 1283 | 1287 | 1291 | 1295 | 1299 | 1303 | 1307 | 1311 | 1315 | 1319 | 1325
-            | 1330 | 1340 | 1345 | 1375 => 1,
-            1395 => 2,
+            1272 | 1295 | 1299 | 1303 | 1307 | 1311 | 1315 | 1319 | 1323 | 1327 | 1331 | 1337
+            | 1342 | 1352 | 1357 | 1399 => 1,
+            1431 => 2,
             _ => 0,
         };
         let mut expected = vec![
@@ -140,8 +140,8 @@ fn verify_frame(world: &mut World, frame: u32) {
             cursor
         ];
         let extra = match frame - 1 {
-            1355 | 1405 => Some(&sounds.decision),
-            1380 => Some(&sounds.cancel),
+            1367 | 1441 => Some(&sounds.decision),
+            1404 => Some(&sounds.cancel),
             _ => None,
         };
         if let Some(sound) = extra {

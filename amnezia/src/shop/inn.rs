@@ -42,7 +42,10 @@ impl State {
     }
 
     pub(crate) fn resting(&self) -> bool {
-        !matches!(self.phase, Phase::Idle | Phase::Prompt { .. })
+        !matches!(
+            self.phase,
+            Phase::Idle | Phase::Prompt { .. } | Phase::Closing
+        )
     }
 }
 
@@ -51,15 +54,17 @@ pub(super) fn register(app: &mut App) {
         .add_systems(Startup, view::spawn)
         .add_systems(
             Update,
-            flow::open
+            (flow::open, flow::advance)
+                .chain()
                 .after(crate::interpreter::InterpreterStep)
-                .before(crate::dialogue::PromptInput),
+                .after(crate::audio::AudioRequests)
+                .before(crate::dialogue::DialogueView),
         )
         .add_systems(
             Update,
-            (flow::advance, view::update)
-                .chain()
+            flow::accept
                 .after(crate::dialogue::MessageUpdate)
-                .after(crate::audio::AudioRequests),
-        );
+                .before(crate::interpreter::InterpreterStep),
+        )
+        .add_systems(Update, view::update.after(crate::dialogue::DialogueView));
 }

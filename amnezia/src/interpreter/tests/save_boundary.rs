@@ -48,10 +48,10 @@ fn all_original_crystals_stop_at_the_save_menu_until_the_request_is_consumed() {
 }
 
 #[test]
-fn saving_suspends_the_foreground_tail_and_the_remaining_parallel_work() {
+fn foreground_saving_holds_its_tail_and_subsequent_parallel_updates() {
     let mut app = interp_app();
     app.insert_resource(MapEvents {
-        events: vec![map_event(2, 4, vec![switch_cmd(903, 0, 0)])],
+        events: vec![map_event(2, 4, vec![switch_cmd(903, 2, 0)])],
     });
     app.world_mut().resource_mut::<RunningEvent>().start(
         1,
@@ -65,13 +65,13 @@ fn saving_suspends_the_foreground_tail_and_the_remaining_parallel_work() {
         app.update();
         assert!(app.world().resource::<Switches>().get(901));
         assert!(!app.world().resource::<Switches>().get(902));
-        assert!(!app.world().resource::<Switches>().get(903));
+        assert!(app.world().resource::<Switches>().get(903));
         assert!(app.world().resource::<EventSaveRequest>().0);
     }
     app.world_mut().resource_mut::<EventSaveRequest>().0 = false;
     app.update();
     assert!(app.world().resource::<Switches>().get(902));
-    assert!(app.world().resource::<Switches>().get(903));
+    assert!(!app.world().resource::<Switches>().get(903));
     assert!(!app.world().resource::<RunningEvent>().active());
 }
 

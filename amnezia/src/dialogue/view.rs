@@ -8,6 +8,7 @@ use bevy::prelude::*;
 
 #[cfg(test)]
 mod arrow_tests;
+pub(super) mod motion;
 pub(super) mod prompts;
 pub(crate) mod smoke;
 #[cfg(test)]
@@ -68,6 +69,7 @@ pub(super) fn spawn_ui(mut commands: Commands, asset_server: Res<AssetServer>) {
                     crate::windowskin::fixed_frame(frame, &system, UVec2::new(320, 80))
                 });
             prompts::spawn(panel, &system);
+            motion::spawn(panel);
             panel.spawn((
                 Node {
                     position_type: PositionType::Absolute,
@@ -162,7 +164,7 @@ pub(super) fn render_box(
     prompts: prompts::Presentation,
     transparent: Res<MessageTransparent>,
     asset_server: Res<AssetServer>,
-    mut last: Local<Option<(bool, u64, usize, bool, Option<(String, u32)>)>>,
+    mut last: Local<Option<(bool, u64, usize, bool, bool, Option<(String, u32)>)>>,
     mut panels: Query<
         &mut Visibility,
         (
@@ -188,13 +190,16 @@ pub(super) fn render_box(
         ),
     >,
 ) {
-    let showing = (dialogue.active && dialogue.index < dialogue.boxes.len()) || prompts.active();
+    let showing = dialogue.lifecycle.message.visible()
+        || (dialogue.active && dialogue.index < dialogue.boxes.len())
+        || prompts.active();
     let face = prompts.face(&dialogue);
     let snapshot = (
         showing,
         dialogue.generation,
         dialogue.index,
         transparent.0,
+        dialogue.lifecycle.message.ready(),
         face.map(|(name, index)| (name.to_string(), index)),
     );
     if last.as_ref() == Some(&snapshot) {
@@ -211,7 +216,7 @@ pub(super) fn render_box(
     }
 
     if let Ok((mut image, mut visibility)) = faces.single_mut() {
-        match face {
+        match face.filter(|_| !dialogue.active || dialogue.lifecycle.message.ready()) {
             Some((name, index)) => {
                 image.image = asset_server.load(resolve_png("FaceSet", name));
                 let (col, row) = ((index % 4) as f32, (index / 4) as f32);
@@ -300,6 +305,9 @@ pub(super) fn update_position(
     mut panels: Query<&mut Node, With<DialoguePanel>>,
 ) {
     if !dialogue.active && !prompts.active() {
+        if dialogue.lifecycle.message.visible() {
+            return;
+        }
         *previous = None;
         return;
     }

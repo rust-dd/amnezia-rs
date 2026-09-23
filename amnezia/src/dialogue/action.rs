@@ -9,7 +9,10 @@ pub(super) fn register(app: &mut App) {
     // RPG_RT checks player actions before resuming the foreground interpreter.
     app.add_systems(
         Update,
-        update.after(crate::menu::MenuInput).before(InterpreterStep),
+        update
+            .after(crate::menu::MenuInput)
+            .before(InterpreterStep)
+            .before(super::MessageUpdate),
     );
 }
 

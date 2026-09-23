@@ -51,6 +51,7 @@ pub(super) fn open(
             lines: vocabulary.greetings.into(),
         };
         dialogue.open(vec![page]);
+        dialogue.open_gold();
         dialogue.append_prompt(MessagePrompt::Choice {
             labels: vec![vocabulary.accept, vocabulary.cancel],
             indent: 0,
@@ -87,25 +88,14 @@ pub(super) fn advance(
     mut transition: ResMut<Transition>,
     mut playback: Playback,
 ) {
-    if let Phase::Prompt { cost } = state.phase {
-        let Some(result) = choice.result.take() else {
-            return;
-        };
-        if result != 0 {
-            state.phase = Phase::Idle;
-            open.0 = false;
-            return;
-        }
-        inventory.remove_gold(cost);
-        open.0 = true;
-        state.phase = Phase::Closing;
-    }
+    accept_result(&mut state, &mut open, &mut inventory, &mut choice);
     let finished = match state.phase {
         Phase::Idle | Phase::Prompt { .. } => return,
         Phase::Closing => {
-            if dialogue.active || transition.busy() {
+            if dialogue.busy() || transition.busy() {
                 return;
             }
+            open.0 = true;
             state.before = playback.current.track();
             playback
                 .audio
@@ -159,6 +149,36 @@ pub(super) fn advance(
         transition.event_erased = false;
         transition.start(Kind::Fade, false, frames.frame, IVec2::new(160, 120));
         state.phase = Phase::FadeIn;
+    }
+}
+
+pub(super) fn accept(
+    mut state: ResMut<State>,
+    mut open: ResMut<ShopOpen>,
+    mut inventory: ResMut<Inventory>,
+    mut choice: ResMut<Choice>,
+) {
+    accept_result(&mut state, &mut open, &mut inventory, &mut choice);
+}
+
+fn accept_result(
+    state: &mut State,
+    open: &mut ShopOpen,
+    inventory: &mut Inventory,
+    choice: &mut Choice,
+) {
+    let Phase::Prompt { cost } = state.phase else {
+        return;
+    };
+    let Some(result) = choice.result.take() else {
+        return;
+    };
+    if result != 0 {
+        state.phase = Phase::Idle;
+        open.0 = false;
+    } else {
+        inventory.remove_gold(cost);
+        state.phase = Phase::Closing;
     }
 }
 

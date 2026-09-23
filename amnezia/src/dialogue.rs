@@ -12,6 +12,9 @@ mod embedded;
 mod input_prompts;
 #[cfg(test)]
 mod interaction_tests;
+mod lifecycle;
+#[cfg(test)]
+mod lifecycle_tests;
 mod options;
 mod pause;
 pub(crate) mod saved;
@@ -47,10 +50,16 @@ pub struct Dialogue {
     generation: u64,
     reveal: Option<Typewriter>,
     prompt: Option<embedded::Embedded>,
+    pub(crate) lifecycle: lifecycle::Lifecycle,
 }
 
 impl Dialogue {
     pub(crate) fn close(&mut self) {
+        self.lifecycle = default();
+        self.clear_message();
+    }
+
+    fn clear_message(&mut self) {
         self.active = false;
         self.boxes.clear();
         self.index = 0;
@@ -61,7 +70,24 @@ impl Dialogue {
     /// Show `boxes` from the first one. Called by the event interpreter, which
     /// then pauses until the player dismisses the last box (`active` clears).
     pub fn open(&mut self, boxes: Vec<MessageBox>) {
-        self.boxes = boxes;
+        self.lifecycle.open();
+        self.boxes = boxes
+            .into_iter()
+            .flat_map(|page| {
+                if page.lines.len() <= 4 {
+                    vec![page]
+                } else {
+                    page.lines
+                        .chunks(4)
+                        .map(|lines| MessageBox {
+                            face: page.face.clone(),
+                            face_index: page.face_index,
+                            lines: lines.to_vec(),
+                        })
+                        .collect()
+                }
+            })
+            .collect();
         self.index = 0;
         self.active = true;
         self.reveal = None;
@@ -71,11 +97,32 @@ impl Dialogue {
 
     /// Advance past the current box to the next one, closing the dialogue when
     /// the last box is dismissed. Clears the reveal so the next box types afresh.
-    fn advance(&mut self) {
+    fn advance(&mut self, frame: u32) {
         self.index += 1;
         self.reveal = None;
         if self.index >= self.boxes.len() {
-            self.close();
+            self.finish(frame);
+        } else {
+            self.lifecycle.page_wait = true;
+        }
+    }
+
+    pub(crate) fn busy(&self) -> bool {
+        self.active || self.lifecycle.busy()
+    }
+
+    pub(crate) fn allows_next(&self, foreground: bool) -> bool {
+        !self.active && self.lifecycle.allows_next(foreground)
+    }
+
+    fn finish(&mut self, frame: u32) {
+        self.clear_message();
+        self.lifecycle.close(frame);
+    }
+
+    pub(crate) fn open_gold(&mut self) {
+        if !self.lifecycle.gold.visible() || self.lifecycle.gold.closing() {
+            self.lifecycle.gold.open(!self.lifecycle.battle);
         }
     }
 }
@@ -109,6 +156,9 @@ pub(crate) struct PromptInput;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct MessageUpdate;
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct DialogueView;
 
 pub(crate) fn verify_placement(world: &mut World, top: bool) {
     let node = world
@@ -169,6 +219,7 @@ pub(crate) fn verify_saved_presentation(
 
 impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
+        crate::windowskin::motion::register(app);
         InputPrompts::register(app);
         action::register(app);
         view::prompts::register(app);
@@ -180,18 +231,36 @@ impl Plugin for DialoguePlugin {
             .add_systems(Startup, view::spawn_ui)
             .add_systems(
                 Update,
+                typewriter::prepare_windows
+                    .after(crate::interpreter::ParallelStep)
+                    .after(crate::menu::MenuInput)
+                    .before(PromptInput)
+                    .before(interact)
+                    .in_set(MessageUpdate),
+            )
+            .add_systems(
+                Update,
                 (
                     interact.in_set(DialogueInput).after(PromptInput),
                     typewriter::drive_reveal,
                     embedded::update,
+                )
+                    .chain()
+                    .in_set(MessageUpdate),
+            )
+            .add_systems(
+                Update,
+                (
                     view::render_box,
                     view::target_camera,
                     view::render_reveal,
                     view::prompts::render_cursor,
                     view::update_position,
+                    view::motion::render,
                 )
                     .chain()
-                    .in_set(MessageUpdate),
+                    .in_set(DialogueView)
+                    .after(crate::interpreter::InterpreterStep),
             );
     }
 }
@@ -201,6 +270,7 @@ impl Plugin for DialoguePlugin {
 /// completed page.
 fn interact(
     keys: Res<ButtonInput<KeyCode>>,
+    frames: Res<crate::timing::GameFrames>,
     prompts: InputPrompts,
     pause: MessagePause,
     mut dialogue: ResMut<Dialogue>,
@@ -209,13 +279,14 @@ fn interact(
     if (!decision && !keys.just_pressed(KeyCode::Escape))
         || pause.paused()
         || prompts.nested_active()
+        || !dialogue.lifecycle.message.ready()
     {
         return;
     }
     if dialogue.active {
         match dialogue.reveal.as_mut() {
             Some(reveal) if reveal.waiting_for_key() => reveal.resume(),
-            Some(reveal) if reveal.is_complete() => dialogue.advance(),
+            Some(reveal) if reveal.is_complete() => dialogue.advance(frames.frame),
             _ => {}
         }
     }

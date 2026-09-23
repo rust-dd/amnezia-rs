@@ -15,6 +15,7 @@ fn app(raw: &str, finished: bool) -> App {
         .init_resource::<Party>()
         .init_resource::<Inventory>()
         .init_resource::<Dialogue>()
+        .init_resource::<crate::timing::GameFrames>()
         .init_resource::<RunningEvent>()
         .init_resource::<ButtonInput<KeyCode>>()
         .add_systems(Update, interact.in_set(DialogueInput).after(PromptInput));
@@ -36,6 +37,7 @@ fn app(raw: &str, finished: bool) -> App {
         lines: vec![raw.into()],
     }]);
     dialogue.reveal = Some(reveal);
+    dialogue.lifecycle.message.open(false);
     app
 }
 
@@ -127,6 +129,12 @@ fn page_input_keeps_physical_keys_available_to_event_key_queries() {
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .clear();
+    for _ in 0..6 {
+        app.world_mut().resource_mut::<Dialogue>().lifecycle.step();
+        app.update();
+        assert!(app.world().resource::<PromptFrame>().active());
+    }
+    app.world_mut().resource_mut::<Dialogue>().lifecycle.step();
     app.update();
     assert!(!app.world().resource::<PromptFrame>().active());
 }

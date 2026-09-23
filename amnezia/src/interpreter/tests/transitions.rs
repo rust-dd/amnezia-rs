@@ -79,13 +79,13 @@ fn repeated_erase_does_not_add_another_full_transition() {
 fn transition_blocks_other_parallel_interpreters_until_it_finishes() {
     let mut app = app(vec![cmd(11010, 0, vec![17]), switch_cmd(70, 0, 0)]);
     app.insert_resource(MapEvents {
-        events: vec![map_event(2, 4, vec![switch_cmd(71, 0, 0)])],
+        events: vec![map_event(2, 4, vec![switch_cmd(71, 2, 0)])],
     });
     tick(&mut app, 0);
-    assert!(!switch_on(&app, 71));
+    assert!(switch_on(&app, 71));
     tick(&mut app, 40);
-    assert!(!switch_on(&app, 71));
+    assert!(switch_on(&app, 71));
     tick(&mut app, 41);
     assert!(switch_on(&app, 70));
-    assert!(switch_on(&app, 71));
+    assert!(!switch_on(&app, 71));
 }

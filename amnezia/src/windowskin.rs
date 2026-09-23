@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 
 pub(crate) mod background;
+pub(crate) mod motion;
 
 pub(crate) fn fixed_frame(parent: &mut ChildSpawnerCommands, system: &Handle<Image>, size: UVec2) {
     parent.spawn((

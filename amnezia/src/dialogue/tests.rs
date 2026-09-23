@@ -53,7 +53,7 @@ fn automatic_dialogue_position_is_chosen_once_per_box_and_battle_stays_at_the_bo
         .y = 72.0;
     app.update();
     assert_eq!(app.world().get::<Node>(panel).unwrap().top, Val::Px(0.0));
-    app.world_mut().resource_mut::<Dialogue>().advance();
+    app.world_mut().resource_mut::<Dialogue>().advance(0);
     app.update();
     assert_eq!(app.world().get::<Node>(panel).unwrap().bottom, Val::Px(0.0));
     app.world_mut().resource_mut::<MessageOptions>().fixed = true;
@@ -103,6 +103,7 @@ fn action_key_reaches_an_event_on_the_opposite_loop_edge() {
         .init_resource::<Inventory>()
         .init_resource::<Dialogue>()
         .init_resource::<RunningEvent>()
+        .init_resource::<crate::timing::GameFrames>()
         .init_resource::<ButtonInput<KeyCode>>()
         .add_systems(Update, interact);
     app.world_mut().spawn(Player {

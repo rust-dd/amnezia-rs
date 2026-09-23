@@ -16,6 +16,11 @@ fn app(raw: &str) -> App {
             face_index: 0,
             lines: vec![raw.into()],
         }]);
+    app.world_mut()
+        .resource_mut::<Dialogue>()
+        .lifecycle
+        .message
+        .open(false);
     app.update();
     app
 }
@@ -131,9 +136,7 @@ fn wrapping_the_global_clock_does_not_skip_text_or_restart_the_reveal() {
     let mut app = app("abcdefghijklmnop");
     app.world_mut()
         .resource_mut::<Dialogue>()
-        .reveal
-        .as_mut()
-        .unwrap()
+        .lifecycle
         .last_frame = Some(u32::MAX - 1);
     for frame in [u32::MAX, 0] {
         app.world_mut().resource_mut::<GameFrames>().frame = frame;

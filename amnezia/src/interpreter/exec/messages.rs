@@ -6,10 +6,14 @@ use crate::dialogue::MessagePrompt;
 use amnezia_data::EventCommand;
 
 pub(super) fn show(frame: &mut Frame, x: &mut Exec) -> Flow {
-    let run_len = frame.commands[frame.ip..]
-        .iter()
-        .take_while(|command| matches!(command.code, SHOW_MESSAGE | SHOW_MESSAGE_2 | CHANGE_FACE))
-        .count();
+    let run_len = if frame.commands[frame.ip].code == CHANGE_FACE {
+        1
+    } else {
+        1 + frame.commands[frame.ip + 1..]
+            .iter()
+            .take_while(|command| command.code == SHOW_MESSAGE_2)
+            .count()
+    };
     let mut boxes = crate::events::message_boxes(
         &frame.commands[frame.ip..frame.ip + run_len],
         &mut x.dialogue.face,
@@ -25,7 +29,7 @@ pub(super) fn show(frame: &mut Frame, x: &mut Exec) -> Flow {
     }
     x.dialogue.open(boxes);
     frame.message_pending = true;
-    if frame.commands[frame.ip - 1].code != CHANGE_FACE {
+    if run_len <= 4 {
         append_prompt(frame, x);
     }
     Flow::Yield

@@ -34,6 +34,12 @@ impl Embedded {
 }
 
 impl Dialogue {
+    pub(crate) fn open_number(&mut self, digits: u32, variable: u32, number: &mut InputNumber) {
+        self.open_prompt(MessagePrompt::Number { digits, variable });
+        number.open(digits, variable);
+        self.prompt.as_mut().unwrap().started = true;
+    }
+
     pub(crate) fn open_prompt(&mut self, kind: MessagePrompt) -> bool {
         let face = self.face.graphic();
         let page = crate::events::MessageBox {
@@ -85,11 +91,15 @@ impl Dialogue {
     }
 
     pub(crate) fn prompt_input_ready(&self) -> bool {
-        self.embedded_prompt().is_none()
+        (self.embedded_prompt().is_none()
+            || self
+                .embedded_prompt()
+                .is_some_and(|prompt| prompt.number() && prompt.line == 0)
             || self
                 .reveal
                 .as_ref()
-                .is_some_and(|reveal| reveal.is_complete())
+                .is_some_and(|reveal| reveal.is_complete()))
+            && (!self.active || self.lifecycle.message.ready())
     }
 
     pub(crate) fn disable_choice(&mut self, index: usize) {
@@ -105,6 +115,7 @@ pub(super) fn update(
     mut number: Option<ResMut<InputNumber>>,
     hero: Res<crate::text::HeroName>,
     variables: Res<crate::state::Variables>,
+    frames: Res<crate::timing::GameFrames>,
     pause: super::MessagePause,
 ) {
     let Some(prompt) = dialogue.embedded_prompt() else {
@@ -120,7 +131,7 @@ pub(super) fn update(
             choice.as_ref().is_some_and(|choice| choice.active())
         };
         if !active {
-            dialogue.close();
+            dialogue.finish(frames.frame);
         }
         return;
     }

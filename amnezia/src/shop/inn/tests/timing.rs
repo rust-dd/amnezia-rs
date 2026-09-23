@@ -16,8 +16,13 @@ fn inn_prompts_count_scene_time_but_overnight_handoffs_only_count_raw_time() {
             app.update();
         }
         assert_eq!(app.world().resource::<SceneFrames>().frame, 60);
+        app.world_mut().resource_mut::<State>().phase = Phase::Closing;
+        for _ in 0..fps {
+            app.update();
+            assert!(!app.world().resource::<SceneWait>().0);
+        }
+        assert_eq!(app.world().resource::<SceneFrames>().frame, 120);
         for phase in [
-            Phase::Closing,
             Phase::FadeOut {
                 started: Duration::ZERO,
             },
@@ -30,7 +35,7 @@ fn inn_prompts_count_scene_time_but_overnight_handoffs_only_count_raw_time() {
             let start = app.world().resource::<GameFrames>().frame;
             for _ in 0..fps {
                 app.update();
-                assert_eq!(app.world().resource::<SceneFrames>().frame, 60);
+                assert_eq!(app.world().resource::<SceneFrames>().frame, 120);
                 assert!(app.world().resource::<SceneWait>().0);
             }
             assert_eq!(app.world().resource::<GameFrames>().frame - start, 60);
@@ -39,7 +44,7 @@ fn inn_prompts_count_scene_time_but_overnight_handoffs_only_count_raw_time() {
         for _ in 0..fps {
             app.update();
         }
-        assert_eq!(app.world().resource::<SceneFrames>().frame, 120);
+        assert_eq!(app.world().resource::<SceneFrames>().frame, 180);
     }
 }
 

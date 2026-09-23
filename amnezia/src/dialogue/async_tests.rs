@@ -54,6 +54,15 @@ fn open(app: &mut App, raw: &str) {
             face_index: 0,
             lines: vec![raw.into()],
         }]);
+    app.world_mut()
+        .resource_mut::<Dialogue>()
+        .lifecycle
+        .message
+        .open(false);
+    app.world_mut()
+        .resource_mut::<Dialogue>()
+        .lifecycle
+        .last_frame = None;
 }
 
 fn start_transition(app: &mut App, duration: u32) {

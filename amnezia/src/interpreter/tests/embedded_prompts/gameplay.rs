@@ -148,6 +148,11 @@ fn parallel_work_continues_but_cannot_take_an_embedded_choices_result() {
         .start(3, vec![switch_cmd(44, 0, 0)]);
     step(&mut app, &[KeyCode::Escape]);
     for _ in 0..3 {
+        assert!(!switch_on(&app, 41));
+        assert!(app.world().resource::<Choice>().result.is_some());
+        step(&mut app, &[]);
+    }
+    for _ in 0..6 {
         step(&mut app, &[]);
     }
     assert!(!switch_on(&app, 40));
@@ -185,9 +190,84 @@ fn number_edit_and_confirm_are_blocked_during_the_final_text_wait() {
     }
     assert!(checked);
     assert!(!switch_on(&app, 42));
+    wait_for_prompt(&mut app, true);
     step(&mut app, &[KeyCode::Enter]);
     for _ in 0..3 {
         step(&mut app, &[]);
     }
     assert!(switch_on(&app, 42));
+}
+
+#[test]
+fn a_standalone_number_accepts_input_on_the_seventh_opening_update() {
+    let mut app = app();
+    app.world_mut()
+        .resource_mut::<RunningEvent>()
+        .start(1, vec![cmd(10150, 0, vec![3, 76]), switch_cmd(42, 0, 0)]);
+    step(&mut app, &[]);
+    assert_eq!(
+        app.world()
+            .resource::<Dialogue>()
+            .lifecycle
+            .message
+            .half_height(80),
+        0
+    );
+    for half in [5, 11, 17, 22, 28, 34] {
+        step(&mut app, &[KeyCode::ArrowUp, KeyCode::Enter]);
+        assert_eq!(
+            app.world()
+                .resource::<Dialogue>()
+                .lifecycle
+                .message
+                .half_height(80),
+            half
+        );
+        assert_eq!(app.world().resource::<InputNumber>().value, 0);
+        assert!(app.world().resource::<InputNumber>().active());
+        assert!(!switch_on(&app, 42));
+    }
+    step(&mut app, &[KeyCode::ArrowUp, KeyCode::Enter]);
+    assert!(!app.world().resource::<InputNumber>().active());
+    assert!(switch_on(&app, 42));
+    assert_eq!(app.world().resource::<Variables>().get(76), 1);
+}
+
+#[test]
+fn adjacent_foreground_messages_keep_a_full_window_and_one_blank_text_frame() {
+    let mut app = app();
+    app.world_mut().resource_mut::<RunningEvent>().start(
+        1,
+        vec![
+            message("ab", false),
+            message("cd", false),
+            switch_cmd(42, 0, 0),
+        ],
+    );
+    for _ in 0..20 {
+        step(&mut app, &[]);
+    }
+    step(&mut app, &[KeyCode::Enter]);
+    let dialogue = app.world().resource::<Dialogue>();
+    assert!(dialogue.active && dialogue.lifecycle.message.ready());
+    assert_eq!(dialogue.boxes[0].lines, ["cd"]);
+    assert!(!switch_on(&app, 42));
+    let visible_text = |app: &mut App| {
+        let world = app.world_mut();
+        world
+            .query::<&crate::font::bitmap::PixelText>()
+            .iter(world)
+            .filter(|text| text.size == UVec2::new(304, 64))
+            .flat_map(|text| text.runs.iter().map(|run| run.text.clone()))
+            .collect::<String>()
+    };
+    assert_eq!(visible_text(&mut app), "");
+    step(&mut app, &[]);
+    assert_eq!(visible_text(&mut app), "cd");
+    for _ in 0..5 {
+        step(&mut app, &[]);
+    }
+    step(&mut app, &[KeyCode::Enter]);
+    assert!(switch_on(&app, 42));
+    assert!(!app.world().resource::<RunningEvent>().active());
 }

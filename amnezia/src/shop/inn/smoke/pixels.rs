@@ -9,6 +9,13 @@ pub(crate) struct Snapshot {
 }
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
+    if let Some(pixels) = super::animation::reference(world, label) {
+        return Some(Snapshot {
+            pixels,
+            checked: world.resource::<Probe>().pixels.clone(),
+            label: label.into(),
+        });
+    }
     let (index, _) = fixtures::LABELS
         .iter()
         .enumerate()

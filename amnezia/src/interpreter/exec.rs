@@ -63,7 +63,7 @@ impl Exec<'_, '_> {
     /// Foreground execution waits on every message; parallel frames wait only
     /// for their own prompt or for commands that require a free message window.
     pub(super) fn scene_owns_flow(&self, fade_busy: bool, overlay_open: bool) -> bool {
-        self.scene_paused(fade_busy, overlay_open) || self.message_active()
+        self.scene_paused(fade_busy, overlay_open) || self.message_pending()
     }
 
     pub(super) fn scene_paused(&self, fade_busy: bool, overlay_open: bool) -> bool {
@@ -77,6 +77,10 @@ impl Exec<'_, '_> {
     }
 
     fn message_active(&self) -> bool {
+        self.dialogue.busy() || self.choice.active() || self.subsystems.input_number.active()
+    }
+
+    fn message_pending(&self) -> bool {
         self.dialogue.active || self.choice.active() || self.subsystems.input_number.active()
     }
 
@@ -84,6 +88,21 @@ impl Exec<'_, '_> {
         self.message_active()
             || self.choice.result.is_some()
             || self.subsystems.input_number.result.is_some()
+    }
+
+    fn message_command_reserved(
+        &self,
+        foreground: bool,
+        command: &amnezia_data::EventCommand,
+    ) -> bool {
+        let blocked = if message_gate::allows_closing_handoff(command) {
+            !self.dialogue.allows_next(foreground)
+                || self.choice.active()
+                || self.subsystems.input_number.active()
+        } else {
+            self.message_active()
+        };
+        blocked || self.choice.result.is_some() || self.subsystems.input_number.result.is_some()
     }
 }
 
@@ -135,7 +154,11 @@ pub(super) fn run_frame(
         return RunOutcome::Yielded;
     }
     if frame.message_pending {
-        if x.message_active() {
+        if if frame.parallel {
+            x.message_active()
+        } else {
+            x.message_pending()
+        } {
             return RunOutcome::Yielded;
         }
         frame.message_pending = false;
@@ -197,7 +220,9 @@ pub(super) fn run_frame(
             frame.stop();
             return RunOutcome::Finished;
         };
-        if x.message_reserved() && message_gate::needs_free_message(&command) {
+        if message_gate::needs_free_message(&command, !frame.parallel)
+            && x.message_command_reserved(!frame.parallel, &command)
+        {
             return RunOutcome::Yielded;
         }
         match dispatch(frame, command, x) {

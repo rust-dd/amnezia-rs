@@ -21,6 +21,15 @@ fn app(idle: u32) -> App {
             face_index: 0,
             lines: vec!["Ron".into()],
         }]);
+    app.world_mut()
+        .resource_mut::<Dialogue>()
+        .lifecycle
+        .message
+        .open(false);
+    app.world_mut()
+        .resource_mut::<Dialogue>()
+        .lifecycle
+        .last_frame = None;
     app.update();
     for frame in 1..=3 {
         app.world_mut().resource_mut::<GameFrames>().frame = frame;
@@ -53,6 +62,7 @@ fn advance(app: &mut App, ticks: u32) {
 }
 
 fn reopen(app: &mut App, raw: &str) {
+    app.world_mut().resource_mut::<GameFrames>().frame += 1;
     app.world_mut()
         .resource_mut::<Dialogue>()
         .open(vec![crate::events::MessageBox {
@@ -60,6 +70,11 @@ fn reopen(app: &mut App, raw: &str) {
             face_index: 0,
             lines: vec![raw.into()],
         }]);
+    app.world_mut()
+        .resource_mut::<Dialogue>()
+        .lifecycle
+        .message
+        .open(false);
     app.update();
 }
 

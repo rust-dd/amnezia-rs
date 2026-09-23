@@ -17,6 +17,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+mod animation;
 mod clock;
 mod fixtures;
 mod pixels;
@@ -55,6 +56,7 @@ struct Probe {
     ended: bool,
     asleep: bool,
     checked: u32,
+    animation: u16,
     pixels: Arc<AtomicUsize>,
     clock: clock::Clock,
 }
@@ -118,6 +120,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             ended: false,
             asleep: false,
             checked: 0,
+            animation: 0,
             pixels: Arc::default(),
             clock: default(),
         });
@@ -141,6 +144,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     };
     world.insert_resource(time);
     verify_sounds(world, step, age, index);
+    let animation = animation::capture(world, step, index);
     match step {
         Step::Gap if age == 12 => {
             let saved = music(world);
@@ -199,6 +203,13 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             }
         }
         Step::Rest => {
+            if matches!(world.resource::<State>().phase, Phase::Closing) {
+                assert!(world.resource::<Dialogue>().busy());
+                assert!(!world.resource::<ShopOpen>().0);
+                assert!(world.resource::<RunningEvent>().active());
+                fixtures::verify_vitals(world, false);
+                return None;
+            }
             let scene = world.resource::<SceneFrames>().frame;
             let expected = *world
                 .resource_mut::<Probe>()
@@ -241,7 +252,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
                 });
             }
         }
-        Step::Exit if age >= 3 => {
+        Step::Exit if age >= 3 && !world.resource::<Dialogue>().busy() => {
             assert!(!world.resource::<RunningEvent>().active());
             let case = fixtures::case(index);
             assert_eq!(
@@ -271,7 +282,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         _ => {}
     }
     world.resource_mut::<Probe>().checked += 1;
-    None
+    animation
 }
 
 fn move_to(world: &mut World, step: Step) {
@@ -329,10 +340,11 @@ pub(crate) fn verify_finished(world: &World) {
         probe.played && probe.ended,
         "Inn must decode, play and reach its natural end, not the timeout"
     );
-    assert_eq!(probe.pixels.load(Ordering::Relaxed), 11);
+    assert_eq!(probe.animation, (1 << 14) - 1);
+    assert_eq!(probe.pixels.load(Ordering::Relaxed), 25);
     assert_eq!(world.resource::<crate::state::Variables>().get(9032), 6);
     info!(
-        "inn: six original/compatibility cases, {} state checks, 844800 reference pixels, one decoded jingle and six exact branch handoffs",
+        "inn: six original/compatibility cases, {} state checks, 1920000 reference pixels including fourteen animated frames, one decoded jingle and six exact branch handoffs",
         probe.checked
     );
 }

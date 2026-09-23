@@ -118,10 +118,17 @@ fn choices_only_attach_to_the_last_message_page_and_must_fit_completely() {
             .resource_mut::<RunningEvent>()
             .start(1, commands);
         app.update();
-        let dialogue = app.world().resource::<Dialogue>();
-        assert_eq!(dialogue.boxes[0].lines, ["Első oldal"]);
         assert_eq!(
-            dialogue.boxes[1].lines.len(),
+            app.world().resource::<Dialogue>().boxes[0].lines,
+            ["Első oldal"]
+        );
+        assert_eq!(app.world().resource::<Dialogue>().boxes.len(), 1);
+        assert!(!app.world().resource::<RunningEvent>().frame.choice_pending);
+        app.world_mut().resource_mut::<Dialogue>().close();
+        app.update();
+        let dialogue = app.world().resource::<Dialogue>();
+        assert_eq!(
+            dialogue.boxes[0].lines.len(),
             lines + if lines <= 2 { 2 } else { 0 }
         );
         assert_eq!(
@@ -165,7 +172,8 @@ fn all_original_numeric_prompts_preserve_their_adjacent_message_rows() {
                 let rows = index - first;
                 let dialogue = app.world().resource::<Dialogue>();
                 if rows == 0 {
-                    assert!(!dialogue.active);
+                    assert!(dialogue.active);
+                    assert!(dialogue.boxes[0].lines.is_empty());
                     assert!(app.world().resource::<InputNumber>().active());
                 } else {
                     assert_eq!(dialogue.boxes[0].lines.len(), rows);

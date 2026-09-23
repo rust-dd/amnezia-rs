@@ -38,7 +38,7 @@ fn app() -> App {
         ))))
         .add_message::<ShopRequest>()
         .add_message::<AudioRequest>()
-        .add_systems(Update, (flow::open, flow::advance).chain());
+        .add_systems(Update, (flow::open, flow::accept, flow::advance).chain());
     app.update();
     app.world_mut().resource_mut::<Inventory>().add_gold(100);
     app.world_mut().resource_mut::<Vitals>().set(1, 2, 0);

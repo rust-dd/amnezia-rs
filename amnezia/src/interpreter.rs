@@ -73,6 +73,9 @@ pub struct InterpreterPlugin;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct InterpreterStep;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ParallelStep;
+
 impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RunningEvent>()
@@ -89,9 +92,16 @@ impl Plugin for InterpreterPlugin {
             .insert_resource(CommonEvents::load())
             .add_systems(
                 Update,
-                (autorun, run_interpreter, parallel::run_parallel)
+                (autorun, run_interpreter)
                     .chain()
-                    .in_set(InterpreterStep),
+                    .in_set(InterpreterStep)
+                    .after(crate::dialogue::MessageUpdate),
+            )
+            .add_systems(
+                Update,
+                parallel::run_parallel
+                    .in_set(ParallelStep)
+                    .before(crate::menu::MenuInput),
             );
     }
 }

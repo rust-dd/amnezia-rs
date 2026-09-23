@@ -31,6 +31,7 @@ fn app(body: &[&str], numeric: bool) -> App {
             cancel: 2,
         }
     }));
+    dialogue.lifecycle.message.open(false);
     app
 }
 

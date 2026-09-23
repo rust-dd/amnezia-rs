@@ -83,8 +83,12 @@ fn choice_result_belongs_only_to_its_interpreter_even_when_foreground_runs_first
         .resource_mut::<RunningEvent>()
         .start(3, vec![switch_cmd(43, 0, 0)]);
     app.update();
-    assert!(switch_on(&app, 42));
     assert!(switch_on(&app, 43));
+    assert!(!switch_on(&app, 42));
+    assert_eq!(app.world().resource::<Choice>().result, Some(0));
+    crate::dialogue::testing::finish_window_close(app.world_mut());
+    app.update();
+    assert!(switch_on(&app, 42));
     assert!(!app.world().resource::<Choice>().active());
     assert_eq!(app.world().resource::<Choice>().result, None);
 }
@@ -106,6 +110,10 @@ fn pending_choice_result_is_not_overwritten_by_an_earlier_parallel_prompt() {
         choice.result = Some(0);
     }
     crate::dialogue::testing::update_prompt(app.world_mut());
+    app.update();
+    assert!(!switch_on(&app, 42));
+    assert_eq!(app.world().resource::<Choice>().result, Some(0));
+    crate::dialogue::testing::finish_window_close(app.world_mut());
     app.update();
     assert!(switch_on(&app, 42));
     assert!(!app.world().resource::<Dialogue>().active);
@@ -145,6 +153,9 @@ fn a_removed_parallel_page_cannot_leave_an_orphaned_result_blocking_future_messa
         app.world_mut().resource_mut::<MapEvents>().events =
             vec![map_event(2, 4, vec![message("Új esemény")])];
         app.update();
+        assert!(!app.world().resource::<Dialogue>().active);
+        crate::dialogue::testing::finish_window_close(app.world_mut());
+        app.update();
         assert!(app.world().resource::<Dialogue>().active);
         assert_eq!(
             app.world().resource::<Dialogue>().boxes[0].lines,
@@ -180,6 +191,8 @@ fn numeric_prompt_holds_its_owner_without_freezing_other_background_work() {
         input.active = false;
         input.result = Some(123);
     }
+    crate::dialogue::testing::update_prompt(app.world_mut());
+    crate::dialogue::testing::finish_window_close(app.world_mut());
     app.update();
     assert_eq!(app.world().resource::<Variables>().get(50), 123);
     assert!(switch_on(&app, 40));

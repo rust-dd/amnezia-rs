@@ -1,7 +1,23 @@
 use super::super::opcodes::*;
 use amnezia_data::EventCommand;
 
-pub(super) fn needs_free_message(command: &EventCommand) -> bool {
+pub(super) fn allows_closing_handoff(command: &EventCommand) -> bool {
+    if command.code == SHOW_INN {
+        return command.params.get(1).copied().unwrap_or(0) != 0;
+    }
+    matches!(
+        command.code,
+        SHOW_MESSAGE
+            | SHOW_MESSAGE_2
+            | CHANGE_FACE
+            | MESSAGE_OPTIONS
+            | SHOW_CHOICE
+            | INPUT_NUMBER
+            | CHANGE_LEVEL
+    )
+}
+
+pub(super) fn needs_free_message(command: &EventCommand, foreground: bool) -> bool {
     match command.code {
         SHOW_MESSAGE | SHOW_MESSAGE_2 | CHANGE_FACE | MESSAGE_OPTIONS | SHOW_CHOICE
         | INPUT_NUMBER | TELEPORT | RECALL_TO_LOCATION | ENEMY_ENCOUNTER | OPEN_SHOP
@@ -9,7 +25,7 @@ pub(super) fn needs_free_message(command: &EventCommand) -> bool {
         // The original non-English RPG2000 runtime also blocks picture commands.
         SHOW_PICTURE | MOVE_PICTURE | ERASE_PICTURE => true,
         // Paid inns in parallel events overwrite an existing message in RPG_RT.
-        SHOW_INN => command.params.get(1).copied().unwrap_or(0) == 0,
+        SHOW_INN => foreground || command.params.get(1).copied().unwrap_or(0) == 0,
         CHANGE_LEVEL => command.params.get(5).copied().unwrap_or(0) != 0,
         _ => false,
     }

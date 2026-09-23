@@ -20,7 +20,7 @@ fn capture(
     number: Option<Res<crate::inputnumber::InputNumber>>,
     mut frame: ResMut<PromptFrame>,
 ) {
-    frame.message = dialogue.is_some_and(|dialogue| dialogue.active);
+    frame.message = dialogue.is_some_and(|dialogue| dialogue.busy());
     frame.nested = choice.is_some_and(|choice| choice.active())
         || number.is_some_and(|number| number.active());
 }

@@ -29,7 +29,6 @@ pub(super) struct Typewriter {
     cadence: Cadence,
     pause: PauseArrow,
     wait: u32,
-    last_frame: Option<u32>,
     finishing: bool,
     waiting_key: bool,
     kill_page: bool,
@@ -160,6 +159,21 @@ impl Typewriter {
     }
 }
 
+pub(in crate::dialogue) fn prepare_windows(
+    mut dialogue: ResMut<super::Dialogue>,
+    frames: Res<crate::timing::GameFrames>,
+    pause: super::MessagePause,
+    battle: Option<Res<crate::battle::BattleActive>>,
+) {
+    let active = dialogue.active;
+    dialogue.lifecycle.prepare(
+        frames.frame,
+        active,
+        battle.is_some_and(|battle| battle.0),
+        pause.paused(),
+    );
+}
+
 /// Consume logical ticks without charging a new page for time before it opened.
 pub(in crate::dialogue) fn drive_reveal(
     mut dialogue: ResMut<super::Dialogue>,
@@ -167,18 +181,24 @@ pub(in crate::dialogue) fn drive_reveal(
     variables: Res<Variables>,
     frames: Res<crate::timing::GameFrames>,
     pause: super::MessagePause,
+    battle: Option<Res<crate::battle::BattleActive>>,
 ) {
-    if !dialogue.active {
-        return;
-    }
-    let ticks = dialogue.reveal.as_mut().map_or(1, |reveal| {
-        let previous = reveal.last_frame.replace(frames.frame);
-        previous.map_or(1, |previous| frames.frame.wrapping_sub(previous))
-    });
-    if pause.paused() {
-        return;
-    }
-    for tick in 0..ticks {
+    let active = dialogue.active;
+    dialogue.lifecycle.prepare(
+        frames.frame,
+        active,
+        battle.is_some_and(|battle| battle.0),
+        pause.paused(),
+    );
+    let ticks = dialogue.lifecycle.reveal_ticks.take().unwrap();
+    for _ in 0..ticks {
+        if !dialogue.active {
+            dialogue.lifecycle.step();
+            continue;
+        }
+        if std::mem::take(&mut dialogue.lifecycle.page_wait) {
+            continue;
+        }
         if dialogue.reveal.is_none() {
             let Some(raw) = dialogue
                 .boxes
@@ -192,21 +212,17 @@ pub(in crate::dialogue) fn drive_reveal(
             if dialogue.embedded_prompt().is_some() {
                 reveal.expect_prompt();
             }
-            reveal.last_frame = Some(frames.frame);
             dialogue.reveal = Some(reveal);
         }
         let reveal = dialogue.reveal.as_mut().unwrap();
         reveal.tick();
         if reveal.is_complete() && reveal.kill_page() && !reveal.end_prompt {
-            dialogue.advance();
-            if !dialogue.active {
-                break;
-            }
-        } else if reveal.is_complete() || reveal.waiting_for_key() {
-            reveal.pause.advance(ticks - tick - 1);
-            break;
+            dialogue.advance(frames.frame);
+            dialogue.lifecycle.page_wait = false;
         }
     }
+    dialogue.lifecycle.reveal_ticks = None;
+    dialogue.lifecycle.last_frame = Some(frames.frame);
 }
 
 #[cfg(test)]

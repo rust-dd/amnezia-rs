@@ -107,6 +107,7 @@ fn show(app: &mut App, raw: &str, face: bool) {
     }
     assert!(reveal.is_complete());
     dialogue.reveal = Some(reveal);
+    dialogue.lifecycle.message.open(false);
     app.update();
 }
 
@@ -167,6 +168,84 @@ fn transparency_hides_only_the_skin_and_closing_clears_the_bitmap() {
     app.world_mut().resource_mut::<Dialogue>().close();
     app.update();
     assert!(text(&mut app).runs.is_empty());
+}
+
+#[test]
+fn opening_and_closing_hide_contents_and_use_only_the_animated_skin() {
+    for transparent in [false, true] {
+        let mut app = app();
+        app.add_systems(Update, motion::render.after(render_reveal));
+        app.world_mut().resource_mut::<MessageTransparent>().0 = transparent;
+        show(&mut app, "Ron", true);
+        app.world_mut()
+            .resource_mut::<Dialogue>()
+            .lifecycle
+            .message
+            .close(false);
+        app.world_mut()
+            .resource_mut::<Dialogue>()
+            .lifecycle
+            .message
+            .open(true);
+        for _ in 0..7 {
+            app.update();
+            let world = app.world_mut();
+            for visibility in world
+                .query_filtered::<&Visibility, Or<(
+                    With<DialogueText>,
+                    With<DialogueFace>,
+                    With<DialogueArrow>,
+                    With<DialogueFrame>,
+                )>>()
+                .iter(world)
+            {
+                assert_eq!(*visibility, Visibility::Hidden);
+            }
+            let visibility = world
+                .query_filtered::<&Visibility, With<motion::AnimatedFrame>>()
+                .single(world)
+                .unwrap();
+            assert_eq!(*visibility, visible_if(!transparent));
+            world.resource_mut::<Dialogue>().lifecycle.step();
+        }
+        app.update();
+        let world = app.world_mut();
+        assert_eq!(
+            *world
+                .query_filtered::<&Visibility, With<DialogueText>>()
+                .single(world)
+                .unwrap(),
+            Visibility::Visible
+        );
+        assert_eq!(
+            *world
+                .query_filtered::<&Visibility, With<DialogueFace>>()
+                .single(world)
+                .unwrap(),
+            Visibility::Visible
+        );
+        assert_eq!(
+            *world
+                .query_filtered::<&Visibility, With<DialogueFrame>>()
+                .single(world)
+                .unwrap(),
+            visible_if(!transparent)
+        );
+        world.resource_mut::<Dialogue>().finish(0);
+        app.update();
+        let world = app.world_mut();
+        for visibility in world
+            .query_filtered::<&Visibility, Or<(
+                With<DialogueText>,
+                With<DialogueFace>,
+                With<DialogueArrow>,
+                With<DialogueFrame>,
+            )>>()
+            .iter(world)
+        {
+            assert_eq!(*visibility, Visibility::Hidden);
+        }
+    }
 }
 
 #[test]

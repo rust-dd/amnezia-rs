@@ -13,6 +13,8 @@ fn select(app: &mut App, index: i32) {
     app.world_mut().resource_mut::<Choice>().result = Some(index);
     crate::dialogue::testing::update_prompt(app.world_mut());
     app.update();
+    crate::dialogue::testing::finish_window_close(app.world_mut());
+    app.update();
 }
 
 #[test]
