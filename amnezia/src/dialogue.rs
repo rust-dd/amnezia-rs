@@ -54,6 +54,14 @@ pub struct Dialogue {
 }
 
 impl Dialogue {
+    pub(crate) fn ready_to_advance(&self) -> bool {
+        self.reveal.as_ref().is_some_and(Typewriter::is_complete)
+    }
+
+    pub(crate) fn revealed_text(&self) -> &str {
+        self.reveal.as_ref().map_or("", Typewriter::text)
+    }
+
     pub(crate) fn close(&mut self) {
         self.lifecycle = default();
         self.clear_message();

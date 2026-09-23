@@ -109,7 +109,7 @@ pub(super) fn drive(
     }
     if matches!(
         battle.phase,
-        Phase::Inactive | Phase::Encounter | Phase::Outcome
+        Phase::Inactive | Phase::Encounter | Phase::Escape | Phase::Outcome
     ) || !battle.events.blocks_action()
     {
         return;

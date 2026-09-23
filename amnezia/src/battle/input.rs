@@ -3,7 +3,6 @@
 //! the [`Battle`] model. The menu-row builders are `pub` so the UI renders the
 //! exact same lists the selection indexes into.
 
-use super::BattleOutcome;
 use super::model::{Battle, BattleSe, Command, MenuLevel, Phase};
 use crate::gamedata::GameData;
 use crate::i18n;
@@ -91,7 +90,7 @@ fn party_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     match battle.cursor {
         0 => battle.begin_actor_commands(),
         1 => battle.auto_battle(),
-        _ => escape(battle),
+        _ => battle.begin_escape(super::message::Controls::from_keys(keys)),
     }
 }
 
@@ -349,20 +348,6 @@ fn remember_skill_cursor(battle: &mut Battle) {
     battle.menu_cursors[MenuLevel::Skill as usize] = battle.cursor;
     if let Some(cursor) = battle.skill_cursors.get_mut(battle.turn) {
         *cursor = battle.cursor;
-    }
-}
-
-/// Attempt a party escape from the party-option window: play the escape SE, then
-/// on success end the fight, or on failure forfeit the whole party's turn (the
-/// enemies act) and resolve — RM2000 `ProcessSceneActionEscape`'s failure path.
-fn escape(battle: &mut Battle) {
-    battle.pending_se.push(BattleSe::Escape);
-    if battle.attempt_escape() {
-        battle.finish(BattleOutcome::Escape);
-    } else {
-        let line = i18n::tr(&battle.text.escape_failure);
-        battle.log.push(line);
-        battle.begin_resolve();
     }
 }
 

@@ -1,5 +1,4 @@
-//! Ending the fight: the victory/defeat end check, the troop reward tally, the
-//! flee roll, and the concluding message run staged into the log.
+//! Battle end checks, escape rolls and the original outcome message script.
 
 use super::*;
 use crate::i18n;
@@ -48,19 +47,16 @@ impl Battle {
         }
     }
 
-    /// Conclude the fight with `outcome` and wait in the outcome phase for the
-    /// player. On victory this records the reward and stages the RM2000
-    /// `ProcessSceneActionVictory` message run as separate log lines — the victory
-    /// term, then the experience and gold gained. The reward is *paid* (gold added,
-    /// experience awarded, level-ups appended) by `battle::apply_victory_rewards`
-    /// once the outcome is entered, since that needs the party's progression and
-    /// inventory resources.
+    /// Stage the outcome text and reward totals. The outcome system pays rewards
+    /// once, appends item/level-up pages and waits for the shared message window.
     pub fn finish(&mut self, outcome: BattleOutcome) {
         if self.outcome == Some(outcome) {
             return;
         }
         self.outcome_log_start = self.log.len();
-        self.outcome_page = 0;
+        let announced_escape = self.phase == Phase::Escape;
+        self.outcome_message = Default::default();
+        self.messages.console.clear();
         self.reward_items.clear();
         self.outcome = Some(outcome);
         self.phase = Phase::Outcome;
@@ -79,31 +75,38 @@ impl Battle {
                         self.reward_items.push(enemy.drop_id);
                     }
                 }
-                self.log.push(i18n::tr(&self.text.victory));
+                self.outcome_line(i18n::tr(&self.text.victory), "\\|");
                 if exp > 0 {
-                    // RM2000 (2000) message order: "<value><exp_received>".
-                    self.log
-                        .push(format!("{exp}{}", i18n::tr(&self.text.exp_received)));
+                    self.outcome_line(format!("{exp}{}", i18n::tr(&self.text.exp_received)), "\\.");
                 }
                 if gold > 0 {
-                    // RM2000 (2000): "<received_a> <value><gold><received_b>".
-                    self.log.push(format!(
-                        "{} {gold}{}{}",
-                        i18n::tr(&self.text.gold_recieved_a),
-                        i18n::tr(&self.text.gold),
-                        i18n::tr(&self.text.gold_recieved_b),
-                    ));
+                    self.outcome_line(
+                        format!(
+                            "{} {gold}{}{}",
+                            i18n::tr(&self.text.gold_recieved_a),
+                            i18n::tr(&self.text.gold),
+                            i18n::tr(&self.text.gold_recieved_b),
+                        ),
+                        "\\.",
+                    );
                 }
             }
             BattleOutcome::Escape => {
                 let line = i18n::tr(&self.text.escape_success);
-                self.log.push(line);
+                if !announced_escape {
+                    self.log.push(line);
+                }
             }
             BattleOutcome::Defeat => {
                 let line = i18n::tr(&self.text.defeat);
-                self.log.push(line);
+                self.outcome_line(line, "");
             }
             BattleOutcome::Abort => {}
         }
+    }
+
+    fn outcome_line(&mut self, line: String, pause: &str) {
+        self.outcome_message.reward(&line, pause);
+        self.log.push(line);
     }
 }

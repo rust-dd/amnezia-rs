@@ -1,6 +1,5 @@
 use super::*;
 use crate::battle::{Battle, Phase};
-use crate::timing::{SceneFrames, SceneWait};
 use std::collections::VecDeque;
 
 #[derive(Default)]
@@ -16,31 +15,6 @@ enum Stage {
 pub(super) struct Encounter {
     stage: Stage,
     lines: VecDeque<String>,
-}
-
-pub(in crate::battle) fn tick(
-    frames: Res<SceneFrames>,
-    pause: Res<SceneWait>,
-    keys: Res<ButtonInput<KeyCode>>,
-    mut battle: ResMut<Battle>,
-) {
-    if battle.phase != Phase::Encounter {
-        return;
-    }
-    let delta = battle
-        .messages
-        .last_frame
-        .replace(frames.frame)
-        .map_or(1, |last| frames.frame.wrapping_sub(last));
-    if pause.0 || battle.events.presenting() {
-        return;
-    }
-    let controls = Controls::from_keys(&keys);
-    for _ in 0..delta {
-        if advance(&mut battle, controls) {
-            break;
-        }
-    }
 }
 
 pub(in crate::battle) fn advance(battle: &mut Battle, controls: Controls) -> bool {

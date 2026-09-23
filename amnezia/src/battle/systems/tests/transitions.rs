@@ -22,6 +22,11 @@ fn unhandled_defeat_hands_directly_to_game_over_without_revealing_or_replaying_t
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::Enter);
         frame(&mut app, 23);
+        assert!(app.world().resource::<crate::dialogue::Dialogue>().active);
+        app.world_mut()
+            .resource_mut::<crate::dialogue::Dialogue>()
+            .close();
+        frame(&mut app, 23);
         frame(&mut app, 24);
         frame(&mut app, 25);
         assert_eq!(

@@ -130,6 +130,7 @@ pub fn register(app: &mut App) {
                 arrows::update,
             )
                 .chain()
-                .after(super::input::command_input),
+                .after(super::input::command_input)
+                .after(super::systems::outcome_input),
         );
 }

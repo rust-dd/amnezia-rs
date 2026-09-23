@@ -1,6 +1,4 @@
-//! The Bevy systems that drive a fight: starting an encounter on request, the
-//! debug trigger, stepping resolution, paying victory rewards, the confirm/teardown
-//! at the outcome, and draining the per-tick sound/animation queues.
+//! Encounter startup, action resolution and sound/animation queue delivery.
 
 use super::model::{Battle, BattleSe, Phase};
 use super::scene;
@@ -308,64 +306,7 @@ pub(super) fn drain_pending_anims(
     }
 }
 
-/// On entering the victory outcome, pay the fight's reward exactly once (before
-/// the outcome screen, so a level-up shows now rather than next fight): add the
-/// gold, award the experience to every member — raising their persistent level —
-/// and append a level-up line for each actor whose level rose. This is the RM2000
-/// `ProcessSceneActionVictory` per-actor `ChangeExp` beat; `rewarded` guards it so
-/// it never double-pays while the outcome screen waits for the player.
-pub(super) fn apply_victory_rewards(
-    mut battle: ResMut<Battle>,
-    data: Res<GameData>,
-    mut inventory: ResMut<Inventory>,
-    mut progression: ResMut<Progression>,
-) {
-    if battle.phase != Phase::Outcome
-        || battle.outcome != Some(BattleOutcome::Victory)
-        || battle.rewarded
-    {
-        return;
-    }
-    battle.rewarded = true;
-    inventory.add_gold(battle.reward_gold as i32);
-    for id in battle.reward_items.clone() {
-        inventory.add_item(id, 1);
-        if let Some(item) = data.items.iter().find(|item| item.id == id) {
-            let line = format!(
-                "{}{}",
-                crate::i18n::tr(&item.name),
-                crate::i18n::tr(&battle.text.item_recieved)
-            );
-            battle.log.push(line);
-        }
-    }
-    let exp = battle.reward_exp;
-    let mut level_ups: Vec<String> = Vec::new();
-    for fighter in &battle.members {
-        // RM2000 awards experience only to the active (living) members
-        // (`GetActiveBattlers`); a fallen member gains none.
-        if !fighter.alive() {
-            continue;
-        }
-        if let Some(def) = data.actor(fighter.actor_id) {
-            let before = progression.level(def);
-            progression.add(def, exp);
-            let after = progression.level(def);
-            if after > before {
-                level_ups.push(format!("{} elérte a(z) {after}. szintet!", fighter.name));
-                for learn in &def.learnings {
-                    if learn.level > before
-                        && learn.level <= after
-                        && let Some(skill) = data.skills.iter().find(|s| s.id == learn.skill_id)
-                    {
-                        level_ups.push(format!("{} megtanulta: {}", fighter.name, skill.name));
-                    }
-                }
-            }
-        }
-    }
-    battle.log.extend(level_ups);
-}
+pub(super) use super::outcome::{apply_victory_rewards, outcome_input};
 
 pub(super) fn abort_expired_battle(
     clock: Option<Res<crate::timer::GameClock>>,
@@ -374,50 +315,6 @@ pub(super) fn abort_expired_battle(
     if clock.is_some_and(|clock| clock.expired) && battle.phase != Phase::Inactive {
         battle.finish(BattleOutcome::Abort);
     }
-}
-
-/// Persist the confirmed outcome before the exit transitions. Rewards were
-/// already paid on entering the outcome; the scene controller publishes the result.
-pub(super) fn outcome_input(
-    keys: Res<ButtonInput<KeyCode>>,
-    mut battle: ResMut<Battle>,
-    mut flow: ResMut<super::BattleFlow>,
-    mut vitals: ResMut<Vitals>,
-    mut dialogue: Option<ResMut<crate::dialogue::Dialogue>>,
-) {
-    if battle.phase != Phase::Outcome || flow.busy() {
-        return;
-    }
-    if battle.outcome != Some(BattleOutcome::Abort)
-        && !(keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter))
-    {
-        return;
-    }
-    let outcome = battle.outcome.unwrap_or(BattleOutcome::Escape);
-    if outcome != BattleOutcome::Abort && super::outcome_text::advance(&mut battle) {
-        return;
-    }
-    if let Some(dialogue) = dialogue.as_deref_mut()
-        && dialogue.active
-    {
-        dialogue.close();
-    }
-    for fighter in &battle.members {
-        vitals.set(fighter.actor_id, fighter.hp.max(0), fighter.sp);
-        let states = fighter
-            .states
-            .iter()
-            .filter(|(id, _)| {
-                battle
-                    .states
-                    .iter()
-                    .any(|state| state.id == *id && state.persistence == 1)
-            })
-            .map(|(id, _)| *id)
-            .collect::<Vec<_>>();
-        vitals.set_states(fighter.actor_id, states);
-    }
-    flow.leave(outcome);
 }
 
 /// A time-derived battle seed; the low bit is forced set by [`Battle::build`].

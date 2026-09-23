@@ -242,13 +242,14 @@ fn the_party_window_auto_option_orders_every_member_to_attack() {
 }
 
 #[test]
-fn the_party_window_escape_forfeits_the_turn_on_failure() {
+fn the_party_window_escape_starts_its_failure_message_before_forfeiting_the_turn() {
     let mut battle = build_party2();
     battle.escape_chance = 0;
     battle.cursor = 2;
     party_menu(&press_enter(), &mut battle);
     assert!(battle.members.iter().all(|m| m.command.is_none()));
-    assert!(battle.phase == Phase::Resolve);
+    assert!(battle.phase == Phase::Escape);
+    assert_eq!(battle.events.turn, 0);
     assert!(battle.log.iter().any(|l| l.contains("sikertelen")));
 }
 

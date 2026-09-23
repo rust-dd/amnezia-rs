@@ -50,18 +50,14 @@ fn victory_grants_each_drop_once_and_waits_until_all_reward_pages_are_confirmed(
     assert!(app.world().resource::<Battle>().phase == Phase::Outcome);
     assert_eq!(app.world().resource::<BattleResult>().0, None);
     assert!(
-        crate::battle::outcome_text::page(app.world().resource::<Battle>())
+        app.world()
+            .resource::<crate::dialogue::Dialogue>()
+            .boxes
             .iter()
-            .any(|l| l == "Topáz a tiéd!")
+            .flat_map(|page| &page.lines)
+            .any(|line| line == "Topáz a tiéd!\\.")
     );
-    app.world_mut()
-        .resource_mut::<ButtonInput<KeyCode>>()
-        .reset_all();
-    app.update();
-    app.world_mut()
-        .resource_mut::<ButtonInput<KeyCode>>()
-        .press(KeyCode::Enter);
-    app.update();
+    confirm_outcome(&mut app);
     finish_transition(&mut app);
     assert_eq!(
         app.world().resource::<BattleResult>().0,

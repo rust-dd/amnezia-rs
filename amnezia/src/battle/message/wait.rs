@@ -7,7 +7,7 @@ pub(in crate::battle) struct Controls {
 }
 
 impl Controls {
-    pub(super) fn from_keys(keys: &ButtonInput<KeyCode>) -> Self {
+    pub(in crate::battle) fn from_keys(keys: &ButtonInput<KeyCode>) -> Self {
         Self {
             fast: keys.any_pressed([
                 KeyCode::Enter,

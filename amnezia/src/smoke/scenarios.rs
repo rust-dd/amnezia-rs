@@ -10,6 +10,9 @@ pub(super) fn start(world: &mut World, scenario: &str) {
     if scenario == "battle-menus" {
         crate::battle::smoke::prepare(world);
     }
+    if scenario == "battle-rewards" {
+        crate::battle::outcome_smoke::prepare(world);
+    }
     let commands = if matches!(
         scenario,
         "message-options"
@@ -88,7 +91,7 @@ pub(super) fn start(world: &mut World, scenario: &str) {
         commands[start..end].to_vec()
     } else if matches!(
         scenario,
-        "battle" | "timer" | "battle-menus" | "battle-events"
+        "battle" | "timer" | "battle-menus" | "battle-events" | "battle-rewards"
     ) {
         let mut commands = if scenario == "timer" {
             let mut commands = vec![EventCommand {
@@ -261,6 +264,8 @@ pub(super) fn selected() -> &'static str {
         "battle-menus"
     } else if std::env::args().any(|arg| arg == "--smoke-battle-events") {
         "battle-events"
+    } else if std::env::args().any(|arg| arg == "--smoke-battle-rewards") {
+        "battle-rewards"
     } else if std::env::args().any(|arg| arg == "--smoke-timer") {
         "timer"
     } else if std::env::args().any(|arg| arg == "--smoke-panorama") {

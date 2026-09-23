@@ -40,9 +40,14 @@ pub(crate) fn entry(battle: bool) -> Vec<EventCommand> {
 pub(crate) fn input(world: &mut World, frame: u32, battle: bool) -> Option<KeyCode> {
     let trace = world.get_resource::<Trace>()?;
     if trace.defeated && !trace.defeat_confirmed {
-        world.resource_mut::<Trace>().defeat_confirmed = true;
-        return Some(KeyCode::Enter);
+        if world.resource::<crate::dialogue::Dialogue>().active {
+            return frame.is_multiple_of(15).then_some(KeyCode::Enter);
+        }
+        if !world.resource::<crate::battle::BattleActive>().0 {
+            world.resource_mut::<Trace>().defeat_confirmed = true;
+        }
     }
+    let trace = world.resource::<Trace>();
     if trace.ready_at.is_some_and(|ready| frame >= ready + 20) && !trace.confirmed {
         world.resource_mut::<Trace>().confirmed = true;
         return Some(KeyCode::Enter);

@@ -1,6 +1,5 @@
 use super::*;
 use crate::battle::input::{command_labels, item_choices, party_labels, skill_choices};
-use crate::battle::outcome_text;
 use crate::battle::outcome_text::wrap;
 use crate::gamedata::GameData;
 use crate::i18n;
@@ -42,7 +41,10 @@ pub(super) fn rows(
         }
         Panel::Status => Vec::new(),
         Panel::Message => {
-            if battle.phase == Phase::Encounter {
+            if matches!(
+                battle.phase,
+                Phase::Encounter | Phase::Escape | Phase::Outcome
+            ) {
                 return battle
                     .messages
                     .console
@@ -51,11 +53,6 @@ pub(super) fn rows(
                     .cloned()
                     .map(Row::plain)
                     .collect();
-            }
-            if battle.phase == Phase::Outcome {
-                let mut lines = outcome_text::page(battle);
-                lines.push("[Enter] Tovább".into());
-                return lines.into_iter().map(Row::plain).collect();
             }
             let log = battle.log_tail();
             let mut lines = wrap(&log, 50);

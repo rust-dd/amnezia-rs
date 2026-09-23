@@ -1,12 +1,12 @@
 use bevy::prelude::*;
 
 pub(in crate::battle) mod encounter;
+mod escape;
 pub(in crate::battle) mod smoke;
 #[cfg(test)]
 mod tests;
 mod wait;
 
-pub(super) use encounter::tick;
 pub(super) use wait::{Controls, Wait};
 
 #[derive(Default)]
@@ -17,7 +17,7 @@ pub(in crate::battle) struct Console {
 }
 
 impl Console {
-    pub(super) fn clear(&mut self) {
+    pub(in crate::battle) fn clear(&mut self) {
         self.lines.clear();
         self.first = 0;
     }
@@ -48,7 +48,42 @@ pub(in crate::battle) struct Messages {
     pub(in crate::battle) console: Console,
     wait: Wait,
     encounter: encounter::Encounter,
+    escaped: bool,
     last_frame: Option<u32>,
+}
+
+pub(super) fn tick(
+    frames: Res<crate::timing::SceneFrames>,
+    pause: Res<crate::timing::SceneWait>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut battle: ResMut<super::Battle>,
+) {
+    use super::Phase;
+    if battle.phase == Phase::Inactive {
+        return;
+    }
+    let delta = battle
+        .messages
+        .last_frame
+        .replace(frames.frame)
+        .map_or(1, |last| frames.frame.wrapping_sub(last));
+    if pause.0 || battle.events.presenting() {
+        return;
+    }
+    let controls = Controls::from_keys(&keys);
+    for _ in 0..delta {
+        let finished = match battle.phase {
+            Phase::Encounter => encounter::advance(&mut battle, controls),
+            Phase::Escape => escape::advance(&mut battle, controls),
+            _ => {
+                battle.messages.console.update();
+                true
+            }
+        };
+        if finished {
+            break;
+        }
+    }
 }
 
 impl super::Battle {

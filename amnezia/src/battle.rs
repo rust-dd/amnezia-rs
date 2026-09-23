@@ -25,6 +25,7 @@ mod log_terms;
 pub(crate) mod logic;
 mod message;
 mod model;
+mod outcome;
 mod outcome_text;
 mod resolve;
 mod scene;
@@ -42,6 +43,7 @@ use crate::vitals::Vitals;
 use amnezia_data::{AttributeDef, MonsterDef, StateDef, SystemDef, TroopDef};
 use bevy::prelude::*;
 pub(crate) use model::{Battle, Phase};
+pub(crate) use outcome::smoke as outcome_smoke;
 
 /// Encounter settings supplied by the map event that starts a fight.
 #[derive(Message, Default)]
@@ -168,6 +170,7 @@ impl Plugin for BattlePlugin {
                         .before(systems::outcome_input),
                     systems::resolve_tick
                         .run_if(flow::playing)
+                        .after(input::command_input)
                         .after(crate::animation::AnimationSet::Advance),
                     events::sync_switches
                         .after(systems::resolve_tick)
@@ -176,13 +179,18 @@ impl Plugin for BattlePlugin {
                         .run_if(flow::playing)
                         .after(systems::resolve_tick)
                         .before(systems::outcome_input),
-                    systems::outcome_input.run_if(flow::playing),
+                    systems::outcome_input
+                        .run_if(flow::playing)
+                        .after(crate::dialogue::MessageUpdate)
+                        .before(crate::dialogue::DialogueView)
+                        .after(message::tick),
                     systems::drain_pending_anims
                         .run_if(flow::playing)
                         .after(systems::resolve_tick)
                         .before(crate::animation::AnimationSet::Start),
                     systems::drain_pending_se
                         .run_if(flow::playing)
+                        .after(input::command_input)
                         .after(systems::resolve_tick),
                 ),
             );

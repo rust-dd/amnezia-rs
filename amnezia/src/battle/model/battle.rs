@@ -29,6 +29,7 @@ pub enum Phase {
     #[default]
     Inactive,
     Encounter,
+    Escape,
     /// The RM2000 party-level option window at the top of each round: Fight (drop
     /// to per-actor [`Command`] entry), Auto (auto-battle the whole party), or
     /// Escape (attempt to flee). Shown before any member picks an order.
@@ -101,7 +102,7 @@ pub struct Battle {
     pub reward_gold: u32,
     pub(in crate::battle) reward_items: Vec<u32>,
     pub(in crate::battle) outcome_log_start: usize,
-    pub(in crate::battle) outcome_page: usize,
+    pub(in crate::battle) outcome_message: crate::battle::outcome_text::Script,
     /// A unique-per-fight stamp (the build seed) the UI watches to rebuild the
     /// enemy battler nodes exactly once when a new encounter begins.
     pub generation: u64,

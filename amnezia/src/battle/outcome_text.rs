@@ -1,26 +1,36 @@
-use super::model::Battle;
+use crate::dialogue::Dialogue;
+use crate::events::MessageBox;
 
-const PAGE_ROWS: usize = 3;
-
-fn lines(battle: &Battle) -> Vec<String> {
-    let start = battle.outcome_log_start.min(battle.log.len());
-    wrap(&battle.log[start..].join("\n"), 50)
+#[derive(Default)]
+pub(in crate::battle) struct Script {
+    pages: Vec<Vec<String>>,
+    pub(in crate::battle) started: bool,
 }
 
-pub(super) fn page(battle: &Battle) -> Vec<String> {
-    lines(battle)
-        .into_iter()
-        .skip(battle.outcome_page * PAGE_ROWS)
-        .take(PAGE_ROWS)
-        .collect()
-}
+impl Script {
+    pub(in crate::battle) fn reward(&mut self, line: &str, pause: &str) {
+        if self.pages.is_empty() {
+            self.pages.push(Vec::new());
+        }
+        self.pages[0].push(format!("{line}{pause}"));
+    }
 
-pub(super) fn advance(battle: &mut Battle) -> bool {
-    if (battle.outcome_page + 1) * PAGE_ROWS < lines(battle).len() {
-        battle.outcome_page += 1;
-        true
-    } else {
-        false
+    pub(in crate::battle) fn actor(&mut self, lines: Vec<String>) {
+        self.pages.push(lines);
+    }
+
+    pub(in crate::battle) fn open(&mut self, dialogue: &mut Dialogue) {
+        self.started = true;
+        dialogue.open(
+            self.pages
+                .iter()
+                .map(|lines| MessageBox {
+                    face: None,
+                    face_index: 0,
+                    lines: lines.clone(),
+                })
+                .collect(),
+        );
     }
 }
 
@@ -49,26 +59,34 @@ mod tests {
     use crate::battle::model::testkit::build_1v2;
 
     #[test]
-    fn every_reward_and_level_up_line_remains_available_before_leaving_battle() {
+    fn rewards_keep_original_pauses_four_line_pages_and_separate_actor_pages() {
         let mut battle = build_1v2();
         battle.finish(BattleOutcome::Victory);
-        battle.log.extend([
-            "Jégkarom megszerezve!".into(),
-            "Ron szintet lépett!".into(),
-            "Tiffany szintet lépett!".into(),
-            "Daren szintet lépett!".into(),
-        ]);
-        let expected = battle.log[battle.outcome_log_start..].to_vec();
-        let mut shown = Vec::new();
-        loop {
-            let page = page(&battle);
-            assert!(page.len() <= 3);
-            shown.extend(page);
-            if !advance(&mut battle) {
-                break;
-            }
-        }
-        assert_eq!(shown, expected);
-        assert!(!advance(&mut battle));
+        battle
+            .outcome_message
+            .reward("Jégkarom megszerezve!", "\\.");
+        battle.outcome_message.reward("Topáz megszerezve!", "\\.");
+        battle
+            .outcome_message
+            .actor(vec!["Ron Sz 3 elérve!".into(), "Új képesség".into()]);
+        battle
+            .outcome_message
+            .actor(vec!["Tiffany Sz 4 elérve!".into()]);
+        let mut dialogue = Dialogue::default();
+        battle.outcome_message.open(&mut dialogue);
+        assert_eq!(dialogue.boxes.len(), 4);
+        assert_eq!(
+            dialogue.boxes[0].lines,
+            [
+                "Győzelem!\\|",
+                "20 EXP\\.",
+                "+ 60 arany\\.",
+                "Jégkarom megszerezve!\\."
+            ]
+        );
+        assert_eq!(dialogue.boxes[1].lines, ["Topáz megszerezve!\\."]);
+        assert_eq!(dialogue.boxes[2].lines, ["Ron Sz 3 elérve!", "Új képesség"]);
+        assert_eq!(dialogue.boxes[3].lines, ["Tiffany Sz 4 elérve!"]);
+        assert!(dialogue.boxes.iter().all(|page| page.face.is_none()));
     }
 }

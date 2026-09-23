@@ -2,6 +2,32 @@ use super::Dialogue;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 
+pub(crate) fn register_playback(app: &mut App) {
+    app.init_resource::<Dialogue>()
+        .init_resource::<crate::timing::GameFrames>()
+        .init_resource::<crate::state::Variables>()
+        .insert_resource(crate::text::HeroName("Ron".into()))
+        .init_resource::<ButtonInput<KeyCode>>()
+        .add_systems(
+            Update,
+            (
+                super::typewriter::prepare_windows,
+                super::interact,
+                super::typewriter::drive_reveal,
+            )
+                .chain()
+                .in_set(super::MessageUpdate),
+        );
+}
+
+pub(crate) fn ready(world: &World) -> bool {
+    world.resource::<Dialogue>().ready_to_advance()
+}
+
+pub(crate) fn text(world: &World) -> &str {
+    world.resource::<Dialogue>().revealed_text()
+}
+
 pub(crate) fn finish_prompt_text(world: &mut World) {
     for _ in 0..10_000 {
         let dialogue = world.resource::<Dialogue>();

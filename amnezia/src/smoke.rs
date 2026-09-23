@@ -164,6 +164,16 @@ fn drive(world: &mut World) {
             world.resource_mut::<SmokeRun>().finish_at = Some(frame + 45);
         }
     }
+    if scenario == "battle-rewards" {
+        if let Some(label) = crate::battle::outcome_smoke::drive(world) {
+            capture(world, label);
+        }
+        if crate::battle::outcome_smoke::ready(world)
+            && world.resource::<SmokeRun>().finish_at.is_none()
+        {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 45);
+        }
+    }
     if frame == 150 && !matches!(scenario, "intro" | "load-slots") {
         scenarios::start(world, scenario);
     }
@@ -380,7 +390,10 @@ fn drive(world: &mut World) {
         capture(world, &format!("{scenario}-early"));
     }
     let finish = world.resource::<SmokeRun>().finish_at.unwrap_or(
-        if matches!(scenario, "escape" | "battle-menus" | "battle-events") {
+        if matches!(
+            scenario,
+            "escape" | "battle-menus" | "battle-events" | "battle-rewards"
+        ) {
             2400
         } else if scenario == "items" {
             1480
@@ -515,6 +528,8 @@ fn drive(world: &mut World) {
             );
         } else if scenario == "battle-events" {
             crate::battle::smoke::verify_events(world);
+        } else if scenario == "battle-rewards" {
+            crate::battle::outcome_smoke::verify_finished(world);
         } else if scenario == "battle-menus" {
             crate::battle::smoke::verify_finished(world);
             crate::battle::hud::verify_cursors(world);
