@@ -51,9 +51,6 @@ pub struct InnVocab {
     pub greetings: [String; 2],
     pub accept: String,
     pub cancel: String,
-    /// Suffix marking the accept option as unaffordable.
-    pub broke: String,
-    pub rested: String,
 }
 
 /// The two original inn styles retain empty terms and the runtime's spacing.
@@ -83,8 +80,6 @@ pub fn inn_vocab(inn_type: u32, cost: i32, terms: &Terms) -> InnVocab {
         greetings: [format!("{first} {cost}{} {second}", currency(terms)), third],
         accept,
         cancel,
-        broke: "(nincs elég pénzed)".to_string(),
-        rested: "Kipihenten ébredsz.".to_string(),
     }
 }
 

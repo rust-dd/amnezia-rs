@@ -24,6 +24,7 @@ pub(super) struct Embedded {
     pub(super) line: usize,
     kind: MessagePrompt,
     started: bool,
+    pub(super) disabled: Vec<usize>,
 }
 
 impl Embedded {
@@ -72,6 +73,7 @@ impl Dialogue {
             line,
             kind,
             started: false,
+            disabled: Vec::new(),
         });
         true
     }
@@ -88,6 +90,12 @@ impl Dialogue {
                 .reveal
                 .as_ref()
                 .is_some_and(|reveal| reveal.is_complete())
+    }
+
+    pub(crate) fn disable_choice(&mut self, index: usize) {
+        if let Some(prompt) = &mut self.prompt {
+            prompt.disabled.push(index);
+        }
     }
 }
 
@@ -137,6 +145,7 @@ pub(super) fn update(
                 .map(|label| crate::text::substitute(label, &hero.0, &variables))
                 .collect();
             choice.open(labels, *indent, *cancel);
+            choice.disabled.clone_from(&prompt.disabled);
         }
         MessagePrompt::Number { digits, variable } => {
             let Some(number) = number.as_mut() else {

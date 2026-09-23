@@ -26,7 +26,7 @@ Hungarian is the original language and the default at startup. **English support
 
 The English catalog currently contains 6,173 entries: 2,917 differ from the source, while 3,256 are identical. Identical entries include legitimate names and symbols, but also many untranslated Hungarian dialogue lines. All 6,131 keys in the existing Hungarian catalog have an English entry; that is not proof of translation completeness.
 
-The runtime vocabulary has additional gaps: 48 of its 110 nonblank term fields have no English lookup, including the New Game, Load, save/load prompt, and End Game labels. Some inn strings also bypass localization. Translation quality, text fitting, text embedded in graphics, and a complete English playthrough still need verification.
+The runtime vocabulary has additional gaps: 48 of its 110 nonblank term fields have no English lookup, including the New Game, Load, save/load prompt, and End Game labels. Inn dialogue now uses the same localization lookup as other runtime terms. Translation quality, text fitting, text embedded in graphics, and a complete English playthrough still need verification.
 
 The catalogs are in [assets/i18n](assets/i18n); the runtime lookup is in [amnezia/src/i18n.rs](amnezia/src/i18n.rs).
 
@@ -96,7 +96,7 @@ Run `cargo run -p amnezia --locked -- --debug-tools` to enable development short
 
 Implemented systems include event interpretation, map rendering and movement, dialogue, music, menus, shops/inns, turn-based battles, progression, and save/load. The native canvas is 320×240 with whole-pixel scaling and letterboxing.
 
-Choice and number input now share the original bitmap message window, including prompts embedded below preceding dialogue. Both standalone and embedded choices type before accepting input. Remaining work includes message-window lifecycle and transitions, shop/inn presentation, battle text timing, full English localization, and end-to-end campaign and release verification. Original-data regression tests and focused native checks are not a substitute for those checks.
+Choice and number input now share the original bitmap message window, including prompts embedded below preceding dialogue. Both standalone and embedded choices type before accepting input. Shops use the original window layout; inns use a typed question, a separate gold window, affordability restrictions and automatic overnight healing with music and screen fades. Remaining work includes message/gold-window opening and closing, other scene transitions, battle text timing, full English localization, and end-to-end campaign and release verification. Original-data regression tests and focused native checks are not a substitute for those checks.
 
 ## Credits and third-party materials
 

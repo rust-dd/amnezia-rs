@@ -1,4 +1,8 @@
 use super::*;
+use crate::interpreter::RunningEvent;
+use crate::player::Player;
+use crate::state::{Inventory, Party, Switches, Variables};
+use crate::world::{MapData, MapEvents};
 
 #[test]
 fn automatic_dialogue_position_is_chosen_once_per_box_and_battle_stays_at_the_bottom() {
@@ -82,6 +86,7 @@ fn action_key_reaches_an_event_on_the_opposite_loop_edge() {
     let mut data = MapData::for_test(20, 30);
     data.scroll_type = 1;
     let mut app = App::new();
+    action::register(&mut app);
     app.insert_resource(data)
         .insert_resource(MapEvents {
             events: vec![amnezia_data::Event {

@@ -50,6 +50,7 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let dialogue_arrow_snapshot = crate::dialogue::timing_smoke::arrow_snapshot(world, label);
     let prompt_snapshot = crate::dialogue::prompt_smoke::snapshot(world, label);
     let shop_snapshot = crate::shop::smoke::snapshot(world, label);
+    let inn_snapshot = crate::shop::inn::smoke::snapshot(world, label);
     let embedded_snapshot = crate::dialogue::embedded_smoke::snapshot(world, label);
     let saved_npc_snapshot = crate::world::saved::smoke::snapshot(world, label);
     let saved_hero_snapshot = crate::save::hero_smoke::pixels::snapshot(world, label);
@@ -58,6 +59,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
             verify_content(&capture.image, &label);
+            if let Some(snapshot) = &inn_snapshot {
+                snapshot.verify(&capture.image);
+            }
             if let Some(snapshot) = &shop_snapshot {
                 snapshot.verify(&capture.image);
             }

@@ -12,7 +12,7 @@ pub(crate) struct Clock {
 }
 
 impl Clock {
-    pub(in crate::dialogue) fn source_x(&self, bank: usize, number: bool) -> f32 {
+    pub(crate) fn source_x(&self, bank: usize, number: bool) -> f32 {
         let phase = if number {
             self.number[bank]
         } else {

@@ -20,6 +20,9 @@ pub(super) fn input(world: &mut World) {
 fn run_script(world: &mut World) {
     let frame = world.resource::<SmokeRun>().frame;
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario == "inn" && crate::shop::inn::smoke::input(world, frame) {
+        return;
+    }
     if scenario == "shop" && crate::shop::smoke::input(world, frame) {
         return;
     }

@@ -4,6 +4,7 @@
 //! each page letter by letter and [`view`] draws it. Decision or Cancel advances
 //! a completed page or releases an explicit key-wait.
 
+mod action;
 pub(crate) mod async_smoke;
 #[cfg(test)]
 mod async_tests;
@@ -22,10 +23,6 @@ mod typewriter;
 mod view;
 
 use crate::events::MessageBox;
-use crate::interpreter::RunningEvent;
-use crate::player::{Player, facing_tile};
-use crate::state::{Inventory, Party, Switches, Variables, active_page};
-use crate::world::{MapData, MapEvents};
 use bevy::prelude::*;
 pub(crate) use embedded::MessagePrompt;
 pub(crate) use embedded::smoke as embedded_smoke;
@@ -34,6 +31,7 @@ pub use options::MessageOptions;
 pub(crate) use pause::MessagePause;
 use typewriter::Typewriter;
 pub(crate) use typewriter::smoke as timing_smoke;
+pub(crate) use view::DialoguePanel;
 pub(crate) use view::prompts::Clock as PromptClock;
 pub(crate) use view::prompts::smoke as prompt_smoke;
 pub(crate) use view::smoke as font_smoke;
@@ -109,6 +107,9 @@ pub(crate) struct DialogueInput;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct PromptInput;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct MessageUpdate;
+
 pub(crate) fn verify_placement(world: &mut World, top: bool) {
     let node = world
         .query_filtered::<&Node, With<view::DialoguePanel>>()
@@ -169,6 +170,7 @@ pub(crate) fn verify_saved_presentation(
 impl Plugin for DialoguePlugin {
     fn build(&self, app: &mut App) {
         InputPrompts::register(app);
+        action::register(app);
         view::prompts::register(app);
         app.init_resource::<Dialogue>()
             .init_resource::<crate::timing::GameFrames>()
@@ -188,31 +190,20 @@ impl Plugin for DialoguePlugin {
                     view::prompts::render_cursor,
                     view::update_position,
                 )
-                    .chain(),
+                    .chain()
+                    .in_set(MessageUpdate),
             );
     }
 }
 
-/// Advance an open message box on the action key, or — when idle — start the
-/// interpreter for an action-key (trigger 0) event on the tile the player faces.
-///
+/// Advance an open message box on Decision or Cancel.
 /// Typing ignores Decision and Cancel. Both release a key-wait or advance a
-/// completed page; only Decision can start a new map interaction.
-#[allow(clippy::too_many_arguments)]
+/// completed page.
 fn interact(
     keys: Res<ButtonInput<KeyCode>>,
     prompts: InputPrompts,
-    scene: crate::world::ScenePause,
     pause: MessagePause,
-    data: Res<MapData>,
-    map_events: Res<MapEvents>,
-    switches: Res<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
     mut dialogue: ResMut<Dialogue>,
-    mut running: ResMut<RunningEvent>,
-    players: Query<(&Player, Option<&crate::world::MoveQueue>)>,
 ) {
     let decision = keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter);
     if (!decision && !keys.just_pressed(KeyCode::Escape))
@@ -226,64 +217,6 @@ fn interact(
             Some(reveal) if reveal.waiting_for_key() => reveal.resume(),
             Some(reveal) if reveal.is_complete() => dialogue.advance(),
             _ => {}
-        }
-        return;
-    }
-    if !decision || scene.paused() || prompts.active() {
-        return;
-    }
-    if running.active() {
-        return;
-    }
-    if scene.vehicles.as_ref().is_some_and(|v| v.blocks_action()) {
-        return;
-    }
-    let Ok((player, queue)) = players.single() else {
-        return;
-    };
-    if queue.is_some_and(|q| q.busy()) {
-        return;
-    }
-    let (fx, fy) = facing_tile(player);
-    let (dx, dy) = (fx - player.tile_x, fy - player.tile_y);
-    // RM2000 `CheckActionEvent`: a trigger-0 event on the tile the hero faces
-    // fires only when its active page shares the hero's layer (layer 1). If that
-    // tile is a counter, the scan reaches across it to the next tile — up to
-    // RPG_RT's maximum of three counter tiles — so the hero can talk to an event
-    // standing behind a shop counter.
-    let (mut tx, mut ty) = data.normalize_tile(fx, fy);
-    for hop in 0..=3 {
-        for event in &map_events.events {
-            if event.x as i32 != tx || event.y as i32 != ty {
-                continue;
-            }
-            if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
-                && page.trigger == 0
-                && page.layer == 1
-            {
-                running.start(event.id, page.commands.clone());
-                return;
-            }
-        }
-        if hop == 3 || !data.is_counter(tx, ty) {
-            break;
-        }
-        (tx, ty) = data.normalize_tile(tx + dx, ty + dy);
-    }
-    // RM2000 `CheckEventTriggerHere`: a trigger-0 event on the hero's own tile
-    // fires when its active page is below or above the hero (layer != 1). The save
-    // crystal's action page sits on the above-hero layer, so it activates while the
-    // hero stands on the crystal rather than by facing it.
-    for event in &map_events.events {
-        if event.x as i32 != player.tile_x || event.y as i32 != player.tile_y {
-            continue;
-        }
-        if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
-            && page.trigger == 0
-            && page.layer != 1
-        {
-            running.start(event.id, page.commands.clone());
-            return;
         }
     }
 }

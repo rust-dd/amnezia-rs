@@ -6,7 +6,6 @@ use crate::terms::Terms;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-pub(super) mod inn;
 mod layout;
 pub(super) mod party;
 pub(in crate::shop) mod pixels;

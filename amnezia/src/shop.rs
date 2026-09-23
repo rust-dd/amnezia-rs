@@ -15,7 +15,7 @@ use bevy::prelude::*;
 
 mod clock;
 mod flow;
-mod inn_music;
+pub(crate) mod inn;
 mod logic;
 mod messages;
 mod navigation;
@@ -65,12 +65,6 @@ enum Screen {
     #[default]
     Closed,
     Shop(Box<ShopState>),
-    Inn {
-        cost: i32,
-        inn_type: u32,
-        yes: bool,
-        done: bool,
-    },
 }
 
 /// A live shop: the offered items, what the RM2000 mode permits, the wording set,
@@ -135,7 +129,7 @@ impl Plugin for ShopPlugin {
             .init_resource::<ShopOutcome>()
             .init_resource::<Screen>()
             .init_resource::<view::party::Cache>()
-            .add_systems(Startup, (view::spawn_ui, view::inn::spawn_ui))
+            .add_systems(Startup, view::spawn_ui)
             .add_systems(
                 Update,
                 (
@@ -144,11 +138,15 @@ impl Plugin for ShopPlugin {
                     flow::debug_triggers,
                     view::update_ui,
                     view::party::update,
-                    view::inn::update,
                 )
                     .chain()
                     .after(crate::menu::MenuInput),
             );
-        inn_music::register(app);
+        inn::register(app);
     }
+}
+
+pub(crate) fn reset_session(world: &mut World) {
+    world.insert_resource(Screen::default());
+    world.insert_resource(inn::State::default());
 }

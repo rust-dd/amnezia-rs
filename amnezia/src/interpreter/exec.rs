@@ -150,6 +150,15 @@ pub(super) fn run_frame(
         frame.choice_pending = false;
     }
     if frame.shop_pending {
+        if x.subsystems.merchant.open.0
+            || x.subsystems
+                .merchant
+                .inn
+                .as_ref()
+                .is_some_and(|inn| inn.active())
+        {
+            return RunOutcome::Yielded;
+        }
         frame.shop_transacted = Some(x.subsystems.merchant.outcome.transacted);
         frame.shop_pending = false;
         frame.ip += 1;

@@ -1,6 +1,30 @@
 use super::*;
 
 #[test]
+fn only_paid_parallel_inns_can_replace_an_occupied_message_window() {
+    for cost in [0, 30] {
+        for trigger in [3, 4] {
+            let mut app = interp_app();
+            app.world_mut().resource_mut::<Dialogue>().active = true;
+            app.insert_resource(MapEvents {
+                events: vec![map_event(1, trigger, vec![cmd(10730, 0, vec![1, cost, 1])])],
+            });
+            app.update();
+            let count = app
+                .world_mut()
+                .resource_mut::<Messages<ShopRequest>>()
+                .drain()
+                .count();
+            assert_eq!(
+                count,
+                usize::from(trigger == 4 && cost != 0),
+                "trigger {trigger}, cost {cost}"
+            );
+        }
+    }
+}
+
+#[test]
 fn every_original_inn_request_keeps_its_second_wording_set_and_price() {
     let mut count = 0;
     for (map_id, expected) in [(2, 6), (52, 8), (119, 2)] {

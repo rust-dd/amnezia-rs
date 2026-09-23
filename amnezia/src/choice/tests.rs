@@ -2,6 +2,8 @@ use super::*;
 use crate::audio::{AudioRequest, SystemSounds};
 use crate::timing::GameFrames;
 
+mod disabled;
+
 fn app(count: usize, cancel: i32) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)

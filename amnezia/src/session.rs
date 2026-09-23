@@ -103,6 +103,7 @@ pub(crate) fn clear_transient(world: &mut World) {
     reset::<crate::menu::save_files::SaveFiles>(world);
     reset::<crate::shop::ShopOpen>(world);
     reset::<crate::shop::ShopOutcome>(world);
+    crate::shop::reset_session(world);
     reset::<crate::battle::BattleActive>(world);
     reset::<crate::battle::BattleResult>(world);
     crate::battle::reset_session(world);

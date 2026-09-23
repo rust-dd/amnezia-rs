@@ -123,6 +123,8 @@ pub(super) struct CharacterVisuals<'w> {
 pub(super) struct Merchant<'w> {
     pub(super) writer: MessageWriter<'w, ShopRequest>,
     pub(super) outcome: Res<'w, ShopOutcome>,
+    pub(super) open: Res<'w, ShopOpen>,
+    pub(super) inn: Option<Res<'w, crate::shop::inn::State>>,
 }
 
 /// The interpreter's channel to the shop and battle subsystems: the writers that

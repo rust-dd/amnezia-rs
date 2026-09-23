@@ -29,6 +29,8 @@ pub enum AudioRequest {
         speed: f32,
         fade_in: f32,
     },
+    /// Play one complete pass, leaving its sink available for completion checks.
+    BgmOnce(BgmTrack),
     /// Ramp the current BGM to silence over `duration` seconds, then stop it.
     FadeOutBgm { duration: f32 },
     /// Stop the current background music at once.
@@ -104,6 +106,23 @@ impl AudioRequest {
             volume: log_volume(music.volume as i32),
             speed: playback_speed(music.tempo as i32),
             fade_in: fade_seconds(music.fadein as i32),
+        }
+    }
+
+    pub(crate) fn music_once(music: &MusicDef) -> Self {
+        match Self::from_music(music) {
+            Self::Bgm {
+                name,
+                volume,
+                speed,
+                fade_in,
+            } => Self::BgmOnce(BgmTrack {
+                name,
+                volume,
+                speed,
+                fade_in,
+            }),
+            _ => Self::StopBgm,
         }
     }
 

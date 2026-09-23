@@ -36,6 +36,8 @@ pub(super) fn start(world: &mut World, scenario: &str) {
             | "save-screen"
     ) {
         message_options::entry()
+    } else if scenario == "inn" {
+        crate::shop::inn::smoke::entry()
     } else if scenario == "screen-events" {
         crate::transitions::event_smoke::entry()
     } else if scenario == "battle-transitions" {
@@ -179,7 +181,9 @@ pub(super) fn start(world: &mut World, scenario: &str) {
 }
 
 pub(super) fn selected() -> &'static str {
-    if std::env::args().any(|arg| arg == "--smoke-shop") {
+    if std::env::args().any(|arg| arg == "--smoke-inn") {
+        "inn"
+    } else if std::env::args().any(|arg| arg == "--smoke-shop") {
         "shop"
     } else if std::env::args().any(|arg| arg == "--smoke-save-slots") {
         "save-slots"

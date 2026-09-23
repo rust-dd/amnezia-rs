@@ -6,7 +6,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-mod canvas;
+pub(in crate::shop) mod canvas;
 mod party;
 mod text;
 use canvas::Canvas;

@@ -62,6 +62,12 @@ pub(super) fn update(
         return;
     }
     if keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter) {
+        if choice.disabled.contains(&choice.cursor) {
+            if let Some(sounds) = sounds.as_deref() {
+                play_system_se(&mut audio, &sounds.buzzer);
+            }
+            return;
+        }
         if let Some(sounds) = sounds.as_deref() {
             play_system_se(&mut audio, &sounds.decision);
         }

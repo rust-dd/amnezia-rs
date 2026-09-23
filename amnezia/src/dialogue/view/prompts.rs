@@ -1,6 +1,6 @@
 use super::{Dialogue, visible_if};
 use crate::choice::Choice;
-use crate::font::bitmap::{DEFAULT, Run};
+use crate::font::bitmap::{DEFAULT, DISABLED, Run};
 use crate::inputnumber::InputNumber;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
@@ -52,7 +52,14 @@ impl Presentation<'_> {
                 .iter()
                 .take(4)
                 .enumerate()
-                .map(|(row, label)| Run::new(label, left, 2 + row as i32 * 16, DEFAULT))
+                .map(|(row, label)| {
+                    let color = if choice.disabled.contains(&row) {
+                        DISABLED
+                    } else {
+                        DEFAULT
+                    };
+                    Run::new(label, left, 2 + row as i32 * 16, color)
+                })
                 .collect()
         } else if let Some(number) = self.number.as_deref().filter(|number| number.active()) {
             number
@@ -80,7 +87,13 @@ impl Presentation<'_> {
             .filter(|(_, text)| !text.is_empty())
             .map(|(row, text)| {
                 let indent = i32::from(!prompt.number() && row >= prompt.line) * 12;
-                Run::new(text, left + indent, 2 + row as i32 * 16, DEFAULT)
+                let color = if row >= prompt.line && prompt.disabled.contains(&(row - prompt.line))
+                {
+                    DISABLED
+                } else {
+                    DEFAULT
+                };
+                Run::new(text, left + indent, 2 + row as i32 * 16, color)
             })
             .collect::<Vec<_>>();
         if prompt.number() && self.active() {

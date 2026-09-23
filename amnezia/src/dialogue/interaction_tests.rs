@@ -1,8 +1,13 @@
 use super::*;
+use crate::interpreter::RunningEvent;
+use crate::player::Player;
+use crate::state::{Inventory, Party, Switches, Variables};
+use crate::world::{MapData, MapEvents};
 
 fn app(raw: &str, finished: bool) -> App {
     let mut app = App::new();
     InputPrompts::register(&mut app);
+    action::register(&mut app);
     app.insert_resource(MapData::for_test(20, 15))
         .insert_resource(MapEvents { events: Vec::new() })
         .init_resource::<Switches>()
@@ -12,7 +17,7 @@ fn app(raw: &str, finished: bool) -> App {
         .init_resource::<Dialogue>()
         .init_resource::<RunningEvent>()
         .init_resource::<ButtonInput<KeyCode>>()
-        .add_systems(Update, interact);
+        .add_systems(Update, interact.in_set(DialogueInput).after(PromptInput));
     let mut reveal = Typewriter::new(raw, "Ron", &Variables::default());
     reveal.tick();
     if finished {
@@ -177,7 +182,7 @@ fn closing_a_nested_prompt_does_not_start_a_facing_event_on_the_same_decision() 
         action_event(&mut app);
         app.init_resource::<crate::choice::Choice>()
             .init_resource::<crate::inputnumber::InputNumber>()
-            .add_systems(Update, close_nested.before(interact));
+            .add_systems(Update, close_nested.before(action::update).before(interact));
         if number {
             app.world_mut()
                 .resource_mut::<crate::inputnumber::InputNumber>()
@@ -192,4 +197,69 @@ fn closing_a_nested_prompt_does_not_start_a_facing_event_on_the_same_decision() 
         press(&mut app, KeyCode::Enter);
         assert_eq!(app.world().resource::<RunningEvent>().debug_id(), Some(7));
     }
+}
+
+fn finish_waiting_event(mut running: ResMut<RunningEvent>) {
+    if running.debug_id() == Some(99) {
+        *running = default();
+    }
+}
+
+#[test]
+fn a_finishing_event_cannot_reuse_its_decision_to_start_a_facing_event() {
+    for key in [KeyCode::Enter, KeyCode::Space] {
+        let mut app = app("Ron", true);
+        app.world_mut().resource_mut::<Dialogue>().close();
+        action_event(&mut app);
+        app.world_mut().resource_mut::<RunningEvent>().start(
+            99,
+            vec![amnezia_data::EventCommand {
+                code: 11410,
+                indent: 0,
+                string: String::new(),
+                params: vec![100],
+            }],
+        );
+        app.configure_sets(
+            Update,
+            crate::interpreter::InterpreterStep.before(PromptInput),
+        )
+        .add_systems(
+            Update,
+            finish_waiting_event.in_set(crate::interpreter::InterpreterStep),
+        );
+        press(&mut app, key);
+        assert!(!app.world().resource::<RunningEvent>().active());
+        assert!(
+            app.world()
+                .resource::<ButtonInput<KeyCode>>()
+                .just_pressed(key)
+        );
+        press(&mut app, key);
+        assert_eq!(app.world().resource::<RunningEvent>().debug_id(), Some(7));
+    }
+}
+
+#[test]
+fn an_idle_map_action_is_available_to_the_same_frame_interpreter() {
+    #[derive(Resource, Default)]
+    struct Seen(Option<u32>);
+
+    let mut app = app("Ron", true);
+    app.world_mut().resource_mut::<Dialogue>().close();
+    action_event(&mut app);
+    app.init_resource::<Seen>()
+        .configure_sets(
+            Update,
+            crate::interpreter::InterpreterStep.before(PromptInput),
+        )
+        .add_systems(
+            Update,
+            (|running: Res<RunningEvent>, mut seen: ResMut<Seen>| {
+                seen.0 = running.debug_id();
+            })
+            .in_set(crate::interpreter::InterpreterStep),
+        );
+    press(&mut app, KeyCode::Enter);
+    assert_eq!(app.world().resource::<Seen>().0, Some(7));
 }

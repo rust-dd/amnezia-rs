@@ -4,10 +4,9 @@
 //! `Window_ShopBuy::CheckEnable` / `Window_ShopSell::CheckEnable` and
 //! `Scene_Shop::UpdateNumberInput`.
 
-use super::{Mode, ShopOutcome};
+use super::Mode;
 use crate::gamedata::GameData;
 use crate::state::Inventory;
-use crate::vitals::Vitals;
 
 /// The RM2000 per-item stock cap: the party can hold at most 99 of any item, so
 /// a purchase can never push the owned count past it (RPG_RT `GetMaxItemCount`).
@@ -90,32 +89,6 @@ pub fn sell_ids(data: &GameData, inventory: &Inventory) -> Vec<u32> {
         .filter(|i| inventory.count(i.id) > 0)
         .map(|i| i.id)
         .collect()
-}
-
-/// The gold left after an inn stay costing `cost`, or `None` when the party
-/// cannot pay. Mirrors [`buy`]: an overnight rest never drives gold negative.
-pub fn inn_afford(cost: i32, gold: i32) -> Option<i32> {
-    let cost = cost.max(0);
-    (gold >= cost).then_some(gold - cost)
-}
-
-/// Charge the inn `cost` and fully heal the party when affordable, flagging the
-/// merchant outcome so the interpreter's Inn-Stay branch self-selects. Returns
-/// whether the stay went through; an unaffordable stay is refused and changes
-/// nothing.
-pub fn resolve_stay(
-    cost: i32,
-    inventory: &mut Inventory,
-    vitals: &mut Vitals,
-    outcome: &mut ShopOutcome,
-) -> bool {
-    if inn_afford(cost, inventory.gold()).is_none() {
-        return false;
-    }
-    inventory.remove_gold(cost.max(0));
-    vitals.heal_all();
-    outcome.transacted = true;
-    true
 }
 
 #[cfg(test)]
@@ -252,24 +225,5 @@ mod tests {
     fn buyable_ids_drop_unknown_items() {
         let data = data(vec![item(1, 10), item(2, 20)]);
         assert_eq!(buyable_ids(&data, &[1, 999, 2, 0]), vec![1, 2]);
-    }
-
-    #[test]
-    fn inn_stay_charges_and_heals_only_when_affordable() {
-        let mut inv = Inventory::default();
-        inv.add_gold(30);
-        let mut vitals = Vitals::default();
-        vitals.set(1, 5, 0);
-        let mut outcome = ShopOutcome::default();
-
-        assert!(!resolve_stay(50, &mut inv, &mut vitals, &mut outcome));
-        assert_eq!(inv.gold(), 30);
-        assert_eq!(vitals.get_stored(1), Some((5, 0)));
-        assert!(!outcome.transacted);
-
-        assert!(resolve_stay(20, &mut inv, &mut vitals, &mut outcome));
-        assert_eq!(inv.gold(), 10);
-        assert_eq!(vitals.get_stored(1), None);
-        assert!(outcome.transacted);
     }
 }

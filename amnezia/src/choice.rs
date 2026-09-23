@@ -18,6 +18,7 @@ use input::update as choice_input;
 #[derive(Resource, Default)]
 pub struct Choice {
     pub options: Vec<String>,
+    pub(crate) disabled: Vec<usize>,
     pub cursor: usize,
     pub indent: u32,
     /// RM2000 `ShowChoices` cancel type (`parameters[0]`): `0` disallows cancel,
@@ -35,6 +36,7 @@ impl Choice {
     /// (`active` clears and `result` is set).
     pub fn open(&mut self, options: Vec<String>, indent: u32, cancel_type: i32) {
         self.options = options;
+        self.disabled.clear();
         self.cursor = 0;
         self.indent = indent;
         self.cancel_type = cancel_type;

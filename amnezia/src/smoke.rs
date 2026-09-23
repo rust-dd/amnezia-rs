@@ -116,6 +116,16 @@ fn drive(world: &mut World) {
             .requested = true;
     }
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario == "inn" {
+        if let Some(label) = crate::shop::inn::smoke::drive(world, frame) {
+            capture(world, label);
+        }
+        if crate::shop::inn::smoke::finished(world)
+            && world.resource::<SmokeRun>().finish_at.is_none()
+        {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
+        }
+    }
     if scenario == "shop"
         && let Some(label) = crate::shop::smoke::drive(world, frame)
     {
@@ -378,6 +388,8 @@ fn drive(world: &mut World) {
             1520
         } else if scenario == "dialogue-timing" {
             3000
+        } else if scenario == "inn" {
+            6000
         } else {
             1260
         },
@@ -389,7 +401,9 @@ fn drive(world: &mut World) {
                 "airship escape never reached the next dream scene"
             );
         }
-        if scenario == "shop" {
+        if scenario == "inn" {
+            crate::shop::inn::smoke::verify_finished(world);
+        } else if scenario == "shop" {
             crate::shop::smoke::verify_finished(world);
         } else if scenario == "save-slots" {
             crate::menu::save_files::smoke::verify_finished(world);

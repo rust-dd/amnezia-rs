@@ -1,13 +1,13 @@
 use super::*;
 
-pub(super) struct Canvas(pub Vec<[u8; 4]>);
+pub(in crate::shop) struct Canvas(pub Vec<[u8; 4]>);
 
 impl Canvas {
-    pub(super) fn new() -> Self {
+    pub(in crate::shop) fn new() -> Self {
         Self(vec![[0, 0, 0, 255]; 320 * 240])
     }
 
-    pub(super) fn window(
+    pub(in crate::shop) fn window(
         &mut self,
         skin: &Image,
         (left, top, width, height): (u32, u32, u32, u32),
@@ -23,7 +23,7 @@ impl Canvas {
         }
     }
 
-    pub(super) fn cursor(
+    pub(in crate::shop) fn cursor(
         &mut self,
         skin: &Image,
         (left, top, width, height): (u32, u32, u32, u32),
@@ -40,7 +40,7 @@ impl Canvas {
         }
     }
 
-    pub(super) fn text(
+    pub(in crate::shop) fn text(
         &mut self,
         font: &BitmapFont,
         skin: &Image,
@@ -58,7 +58,7 @@ impl Canvas {
         );
     }
 
-    pub(super) fn blit(
+    pub(in crate::shop) fn blit(
         &mut self,
         image: &Image,
         (left, top): (u32, u32),

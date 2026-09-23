@@ -27,7 +27,7 @@ const CONTENTS_WIDTH: u32 = 304;
 const CONTENTS_HEIGHT: u32 = 64;
 
 #[derive(Component)]
-pub(super) struct DialoguePanel;
+pub(crate) struct DialoguePanel;
 
 #[derive(Component)]
 pub(super) struct DialogueText;

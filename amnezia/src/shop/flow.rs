@@ -1,23 +1,19 @@
-//! Driving the merchant screens from the keyboard: opening them on a
-//! [`ShopRequest`], dispatching the shop's phase steps (in [`super::steps`]) and
-//! the inn's Yes/No prompt, playing the RM2000 system sound each step reports, and
-//! timing out the purchased/sold confirmation.
+//! Merchant requests, keyboard input and phase dispatch to [`super::steps`],
+//! including RM2000 system sounds and purchased/sold confirmation timing.
 
 use crate::audio::{AudioRequest, SystemSounds, play_system_se};
 use crate::gamedata::GameData;
 use crate::state::Inventory;
-use crate::vitals::Vitals;
 use amnezia_data::SoundDef;
 use bevy::prelude::*;
 
-use super::{Phase, Screen, ShopOpen, ShopOutcome, ShopRequest, ShopState, logic};
+use super::{Phase, Screen, ShopOpen, ShopOutcome, ShopRequest, ShopState};
 use super::{clock, quantity, steps};
 
 /// The RM2000 system sound a step asks the dispatcher to play.
 #[derive(Clone, Copy)]
 pub(super) enum Se {
     None,
-    Cursor,
     Decision,
     Cancel,
     Buzzer,
@@ -80,12 +76,7 @@ pub fn open_requests(
                 phase: initial_phase(*allow_buy, *allow_sell),
                 scene: default(),
             })),
-            ShopRequest::ShowInn { cost, inn_type } => Screen::Inn {
-                cost: *cost,
-                inn_type: *inn_type,
-                yes: true,
-                done: false,
-            },
+            ShopRequest::ShowInn { .. } => continue,
         };
         open.0 = true;
         outcome.transacted = false;
@@ -102,7 +93,6 @@ pub fn shop_input(
     mut clock: Local<clock::Clock>,
     data: Res<GameData>,
     mut inventory: ResMut<Inventory>,
-    mut vitals: ResMut<Vitals>,
     mut screen: ResMut<Screen>,
     mut open: ResMut<ShopOpen>,
     mut outcome: ResMut<ShopOutcome>,
@@ -146,17 +136,6 @@ pub fn shop_input(
     let result = match &mut current {
         Screen::Closed => StepResult::leave(Se::None),
         Screen::Shop(state) => shop_step(&keys, &data, &mut inventory, &mut outcome, state),
-        Screen::Inn {
-            cost, yes, done, ..
-        } => inn_step(
-            &keys,
-            &mut inventory,
-            &mut vitals,
-            &mut outcome,
-            *cost,
-            yes,
-            done,
-        ),
     };
     *screen = if result.keep { current } else { Screen::Closed };
     open.0 = result.keep;
@@ -171,7 +150,6 @@ pub fn shop_input(
 fn pick_se(sounds: &SystemSounds, se: Se) -> Option<&SoundDef> {
     match se {
         Se::None => None,
-        Se::Cursor => Some(&sounds.cursor),
         Se::Decision => Some(&sounds.decision),
         Se::Cancel => Some(&sounds.cancel),
         Se::Buzzer => Some(&sounds.buzzer),
@@ -210,50 +188,6 @@ fn shop_step(
         }
         Transition::Leave(se) => StepResult::leave(se),
     }
-}
-
-/// Handle the inn's Yes/No prompt. A confirmed Yes charges the room and full-heals
-/// (only when affordable — an unaffordable stay buzzes and is refused), flags the
-/// outcome so the interpreter's Stay branch runs, and shows the rest message; No
-/// or Escape leaves for the NoStay branch.
-fn inn_step(
-    keys: &ButtonInput<KeyCode>,
-    inventory: &mut Inventory,
-    vitals: &mut Vitals,
-    outcome: &mut ShopOutcome,
-    cost: i32,
-    yes: &mut bool,
-    done: &mut bool,
-) -> StepResult {
-    if keys.just_pressed(KeyCode::Escape) {
-        return StepResult::leave(Se::Cancel);
-    }
-    if *done {
-        return if confirm(keys) {
-            StepResult::leave(Se::None)
-        } else {
-            StepResult::stay(Se::None)
-        };
-    }
-    if keys.just_pressed(KeyCode::ArrowLeft)
-        || keys.just_pressed(KeyCode::ArrowRight)
-        || keys.just_pressed(KeyCode::ArrowUp)
-        || keys.just_pressed(KeyCode::ArrowDown)
-    {
-        *yes = !*yes;
-        return StepResult::stay(Se::Cursor);
-    }
-    if confirm(keys) {
-        if !*yes {
-            return StepResult::leave(Se::Decision);
-        }
-        if logic::resolve_stay(cost, inventory, vitals, outcome) {
-            *done = true;
-            return StepResult::stay(Se::Decision);
-        }
-        return StepResult::stay(Se::Buzzer);
-    }
-    StepResult::stay(Se::None)
 }
 
 /// Debug-only triggers so the shop/inn UI can be exercised without the
