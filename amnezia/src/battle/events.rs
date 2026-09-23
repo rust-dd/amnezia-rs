@@ -107,7 +107,11 @@ pub(super) fn drive(
             battle.ai_switches = switches;
         }
     }
-    if matches!(battle.phase, Phase::Inactive | Phase::Outcome) || !battle.events.blocks_action() {
+    if matches!(
+        battle.phase,
+        Phase::Inactive | Phase::Encounter | Phase::Outcome
+    ) || !battle.events.blocks_action()
+    {
         return;
     }
     let mut events = std::mem::take(&mut battle.events);

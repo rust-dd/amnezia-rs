@@ -116,7 +116,11 @@ pub(super) fn rows(
             };
             if row.is_some() || member.is_some() {
                 let margin = if panel == Panel::Status { 4.0 } else { 8.0 };
-                let text_width = width / columns as f32 - margin * 2.0;
+                let text_width = if panel == Panel::Message {
+                    width - 20.0
+                } else {
+                    width / columns as f32 - margin * 2.0
+                };
                 let runs = if let Some(member) = member {
                     status::runs(member, &battle.states, &terms, &font)
                 } else {

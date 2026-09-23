@@ -5,6 +5,7 @@ mod messages;
 pub(in crate::battle) mod shake;
 
 pub(crate) fn verify_finished(world: &World) {
+    super::message::smoke::verify_finished(world);
     messages::verify_finished(world);
     shake::verify_finished(world);
 }
@@ -78,6 +79,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
 }
 
 pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
+    let encounter = super::message::smoke::drive(world);
     let impact = messages::drive(world, frame);
     let shake = shake::drive(world, frame);
     status_colors(world, frame);
@@ -167,7 +169,10 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         1130 => Some("battle-ally-target"),
         1230 => Some("battle-resized"),
         1250 => Some("battle-skill-usage"),
-        _ => super::hud::movement_label(frame).or(impact).or(shake),
+        _ => super::hud::movement_label(frame)
+            .or(impact)
+            .or(shake)
+            .or(encounter),
     };
     if matches!(label, Some("battle-action-flash" | "battle-action-fade")) {
         assert!(world.resource::<Battle>().log.is_empty());

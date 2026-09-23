@@ -42,6 +42,16 @@ pub(super) fn rows(
         }
         Panel::Status => Vec::new(),
         Panel::Message => {
+            if battle.phase == Phase::Encounter {
+                return battle
+                    .messages
+                    .console
+                    .visible()
+                    .iter()
+                    .cloned()
+                    .map(Row::plain)
+                    .collect();
+            }
             if battle.phase == Phase::Outcome {
                 let mut lines = outcome_text::page(battle);
                 lines.push("[Enter] Tovább".into());

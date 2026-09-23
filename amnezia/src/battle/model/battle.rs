@@ -28,6 +28,7 @@ pub const LOG_TAIL: usize = 5;
 pub enum Phase {
     #[default]
     Inactive,
+    Encounter,
     /// The RM2000 party-level option window at the top of each round: Fight (drop
     /// to per-actor [`Command`] entry), Auto (auto-battle the whole party), or
     /// Escape (attempt to flee). Shown before any member picks an order.
@@ -57,6 +58,7 @@ pub struct Battle {
     pub(in crate::battle) pending_switches: Vec<(u32, bool)>,
     pub(in crate::battle) action_source: Option<Source>,
     pub phase: Phase,
+    pub(in crate::battle) messages: crate::battle::message::Messages,
     pub background: String,
     pub allow_escape: bool,
     pub members: Vec<Fighter>,

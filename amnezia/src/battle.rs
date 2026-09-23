@@ -23,6 +23,7 @@ pub(crate) mod hud;
 mod input;
 mod log_terms;
 pub(crate) mod logic;
+mod message;
 mod model;
 mod outcome_text;
 mod resolve;
@@ -140,6 +141,10 @@ impl Plugin for BattlePlugin {
                 (
                     systems::start_on_request.after(crate::audio::AudioRequests),
                     systems::debug_trigger,
+                    message::tick
+                        .run_if(flow::playing)
+                        .after(events::drive)
+                        .before(input::command_input),
                     input::command_input
                         .run_if(flow::playing)
                         .run_if(hud::commands_ready),

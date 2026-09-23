@@ -252,7 +252,7 @@ fn f6_starts_a_battle_and_confirming_a_win_publishes_the_contract_out() {
     );
     {
         let battle = app.world().resource::<Battle>();
-        assert!(battle.phase == Phase::PartyCommand);
+        assert!(battle.phase == Phase::Encounter);
         assert_eq!(battle.enemies.len(), 1);
         assert_eq!(battle.members.len(), 1);
     }

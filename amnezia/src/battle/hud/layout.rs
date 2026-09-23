@@ -25,7 +25,10 @@ pub(super) fn rectangle(panel: Panel, battle: &Battle) -> Option<(f32, f32, f32,
             _ => None,
         };
     }
-    if matches!(battle.phase, Phase::Resolve | Phase::Outcome) {
+    if matches!(
+        battle.phase,
+        Phase::Encounter | Phase::Resolve | Phase::Outcome
+    ) {
         return (panel == Panel::Message).then_some((0.0, 160.0, 320.0, 80.0));
     }
     if battle.phase != Phase::Command {

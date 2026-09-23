@@ -78,13 +78,13 @@ fn original_battle_entry_and_exit_hold_scene_input_and_result_until_each_transit
     frame(&mut app, 60);
     assert_eq!(app.world().resource::<Battle>().phase, Phase::Inactive);
     frame(&mut app, 61);
-    assert_eq!(app.world().resource::<Battle>().phase, Phase::PartyCommand);
+    assert_eq!(app.world().resource::<Battle>().phase, Phase::Encounter);
     assert!(app.world().resource::<crate::battle::BattleFlow>().busy());
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::Enter);
     frame(&mut app, 101);
-    assert_eq!(app.world().resource::<Battle>().phase, Phase::PartyCommand);
+    assert_eq!(app.world().resource::<Battle>().phase, Phase::Encounter);
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .clear();
@@ -147,6 +147,14 @@ fn troop_pages_do_not_start_during_the_battle_show_transition() {
     frame(&mut app, 101);
     assert!(!app.world().resource::<Switches>().get(9001));
     frame(&mut app, 102);
+    assert!(!app.world().resource::<Switches>().get(9001));
+    for _ in 0..80 {
+        let mut battle = app.world_mut().resource_mut::<Battle>();
+        if battle.phase == Phase::Encounter {
+            crate::battle::message::encounter::advance(&mut battle, default());
+        }
+    }
+    frame(&mut app, 103);
     assert!(app.world().resource::<Switches>().get(9001));
 }
 
@@ -167,7 +175,7 @@ fn already_erased_encounter_waits_forty_frames_and_returns_to_an_event_erased_ma
     frame(&mut app, 41);
     assert_eq!(app.world().resource::<Battle>().phase, Phase::Inactive);
     frame(&mut app, 42);
-    assert_eq!(app.world().resource::<Battle>().phase, Phase::PartyCommand);
+    assert_eq!(app.world().resource::<Battle>().phase, Phase::Encounter);
     frame(&mut app, 43);
     app.world_mut()
         .resource_mut::<Battle>()
