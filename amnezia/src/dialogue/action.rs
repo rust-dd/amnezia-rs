@@ -43,6 +43,7 @@ pub(super) fn update(
         || prompts.active()
         || dialogue.active
         || running.active()
+        || running.waiting()
         || scene.vehicles.as_ref().is_some_and(|v| v.blocks_action())
     {
         return;

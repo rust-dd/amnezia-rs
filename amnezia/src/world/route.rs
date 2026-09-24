@@ -125,7 +125,7 @@ fn tile_open(
 #[cfg(test)]
 pub(super) fn route_events(world: &mut World) {
     world
-        .run_system_cached_with(events::route_event, None)
+        .run_system_cached_with(events::route_event, (None, None))
         .unwrap();
 }
 

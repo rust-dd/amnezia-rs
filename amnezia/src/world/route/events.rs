@@ -2,7 +2,7 @@ use super::*;
 
 #[allow(clippy::too_many_arguments)]
 pub(in crate::world) fn route_event(
-    In(target): In<Option<u32>>,
+    In((target, forced)): In<(Option<u32>, Option<bool>)>,
     time: Res<Time>,
     data: Res<MapData>,
     mut map_events: ResMut<MapEvents>,
@@ -45,7 +45,9 @@ pub(in crate::world) fn route_event(
     bodies.include_vehicles(vehicles.as_deref(), data.map_id);
     let dt = time.delta_secs();
     for (mut sprite_c, mut queue, mut stepper, mut sprite) in &mut movers {
-        if target.is_some_and(|id| id != sprite_c.id) {
+        if target.is_some_and(|id| id != sprite_c.id)
+            || forced.is_some_and(|forced| forced != stepper.forced())
+        {
             continue;
         }
         if !stepper.forced() && guards.autonomous_paused(sprite_c.id) {

@@ -34,6 +34,7 @@ mod call_scope;
 mod camera;
 mod common_events;
 mod embedded_prompts;
+mod foreground_order;
 mod inns;
 mod key_input;
 mod logical;

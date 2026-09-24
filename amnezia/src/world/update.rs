@@ -35,6 +35,7 @@ pub(crate) fn register(app: &mut App) {
 
 pub(crate) fn event(world: &mut World, id: u32) {
     if !world.contains_resource::<CharacterUpdates>() {
+        crate::interpreter::foreground::queue_autorun(world, id);
         return;
     }
     refresh(world);
@@ -44,10 +45,21 @@ pub(crate) fn event(world: &mut World, id: u32) {
         .find(|(_, event)| event.id == id)
         .map(|(entity, _)| entity)
     else {
+        crate::interpreter::foreground::queue_autorun(world, id);
         return;
     };
+    let stopped = world
+        .get::<MoveQueue>(entity)
+        .is_none_or(|queue| !queue.busy());
     world
-        .run_system_cached_with(route::route_event, Some(id))
+        .run_system_cached_with(route::route_event, (Some(id), Some(true)))
+        .unwrap();
+    if stopped {
+        refresh(world);
+        crate::interpreter::foreground::queue_autorun(world, id);
+    }
+    world
+        .run_system_cached_with(route::route_event, (Some(id), Some(false)))
         .unwrap();
     world
         .run_system_cached_with(autonomy::advance_event, Some(id))

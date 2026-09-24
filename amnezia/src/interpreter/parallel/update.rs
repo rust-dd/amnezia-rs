@@ -18,6 +18,7 @@ enum Progress {
 }
 
 pub(super) fn run(world: &mut World) {
+    crate::interpreter::foreground::refresh(world);
     if world.run_system_cached_with(step, Phase::Begin).unwrap() == Progress::Paused {
         return;
     }

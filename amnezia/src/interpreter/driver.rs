@@ -5,35 +5,60 @@ use super::{Blockers, Fade, RunningEvent};
 use bevy::prelude::*;
 
 pub(super) fn foreground(world: &mut World) {
-    run(world, None);
+    let mut remaining = MAX_STEPS_PER_FRAME;
+    loop {
+        if run(world, None, &mut remaining) != RunOutcome::Finished || remaining == 0 {
+            return;
+        }
+        if !world
+            .run_system_cached(super::foreground::select_next)
+            .unwrap()
+        {
+            return;
+        }
+    }
 }
 
 pub(super) fn parallel(world: &mut World, source: ParallelSource) {
-    run(world, Some(source));
+    let mut remaining = MAX_STEPS_PER_FRAME;
+    run(world, Some(source), &mut remaining);
 }
 
-fn run(world: &mut World, source: Option<ParallelSource>) {
+fn run(world: &mut World, source: Option<ParallelSource>, remaining: &mut usize) -> RunOutcome {
     flush(world);
-    let mut operation = Operation::Resume;
-    for _ in 0..=MAX_STEPS_PER_FRAME {
-        let outcome = match source {
-            Some(source) => world
-                .run_system_cached_with(step_parallel, (source, operation))
-                .unwrap(),
-            None => world
-                .run_system_cached_with(step_foreground, operation)
-                .unwrap(),
-        };
-        flush(world);
-        if outcome != RunOutcome::Advance {
-            return;
-        }
-        operation = Operation::Command;
+    let outcome = step(world, source, Operation::Resume);
+    if outcome != RunOutcome::Advance {
+        return outcome;
     }
+    while *remaining > 0 {
+        let outcome = step(world, source, Operation::Command);
+        if outcome == RunOutcome::Finished {
+            return outcome;
+        }
+        *remaining -= 1;
+        if outcome != RunOutcome::Advance {
+            return outcome;
+        }
+    }
+    RunOutcome::Yielded
+}
+
+fn step(world: &mut World, source: Option<ParallelSource>, operation: Operation) -> RunOutcome {
+    let outcome = match source {
+        Some(source) => world
+            .run_system_cached_with(step_parallel, (source, operation))
+            .unwrap(),
+        None => world
+            .run_system_cached_with(step_foreground, operation)
+            .unwrap(),
+    };
+    flush(world);
+    outcome
 }
 
 fn flush(world: &mut World) {
     crate::world::update::flush(world);
+    super::foreground::refresh(world);
     crate::appearance::flush(world);
 }
 
@@ -50,7 +75,8 @@ fn step_foreground(
         return RunOutcome::Finished;
     }
     let scene_blocked = exec.scene_owns_flow(fade.busy(), blockers.any());
-    run_operation(
+    let base_id = running.frame.base_event_id();
+    let outcome = run_operation(
         operation,
         &mut running.frame,
         &mut exec,
@@ -58,7 +84,12 @@ fn step_foreground(
         scene_blocked,
         None,
         &mut pool,
-    )
+    );
+    if outcome == RunOutcome::Finished {
+        running.queue.finish(base_id);
+        running.queued_owner = false;
+    }
+    outcome
 }
 
 fn step_parallel(

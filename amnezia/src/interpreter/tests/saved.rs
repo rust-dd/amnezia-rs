@@ -6,6 +6,7 @@ mod continuation;
 mod erasure;
 mod fixture;
 mod originals;
+mod queued;
 mod validation;
 use fixture::{app, load, resume};
 

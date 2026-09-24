@@ -191,6 +191,7 @@ fn move_player(
     if dialogue.active
         || prompts.active()
         || running.active()
+        || running.waiting()
         || scene.paused()
         || scene.riding()
         || stepper.active()

@@ -1,7 +1,13 @@
 use super::*;
 use crate::world::{AutoMove, EventSprite};
 
-fn npc(app: &mut App, id: u32, x: i32, commands: Vec<EventCommand>, route: &[i32]) -> Entity {
+pub(super) fn npc(
+    app: &mut App,
+    id: u32,
+    x: i32,
+    commands: Vec<EventCommand>,
+    route: &[i32],
+) -> Entity {
     let mut event = map_event(id, 4, commands);
     event.x = x as u32;
     event.y = 1;

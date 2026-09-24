@@ -45,15 +45,12 @@ pub(crate) struct MoveGuards<'w> {
 impl MoveGuards<'_> {
     pub(crate) fn autonomous_paused(&self, event_id: u32) -> bool {
         self.forced_route_paused()
-            || if self
+            || self.running.event_paused(event_id)
+            || (!self
                 .message_options
                 .as_ref()
                 .is_some_and(|o| o.continue_events)
-            {
-                self.running.debug_id() == Some(event_id)
-            } else {
-                self.running.active()
-            }
+                && self.running.active())
     }
 
     /// Whether manual movement input is paused.
@@ -61,6 +58,7 @@ impl MoveGuards<'_> {
         self.dialogue.active
             || self.prompts.active()
             || self.running.active()
+            || self.running.waiting()
             || self.forced_route_paused()
     }
 

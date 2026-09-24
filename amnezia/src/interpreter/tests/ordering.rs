@@ -5,6 +5,7 @@ use bevy::time::TimeUpdateStrategy;
 use std::time::Duration;
 
 mod arrival;
+mod autoruns;
 mod immediate;
 mod input;
 mod npcs;

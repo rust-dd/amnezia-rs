@@ -12,9 +12,8 @@ use amnezia_data::EventCommand;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-/// A frame-local cap on executed commands, so a malformed list (e.g. a branch
-/// that never advances) can't lock up the frame. Well-formed pages never
-/// approach it — every command strictly advances the instruction pointer.
+/// Per-update command budget, shared by foreground continuations and separate
+/// for each parallel interpreter.
 pub(super) const MAX_STEPS_PER_FRAME: usize = 10_000;
 
 /// The maximum nested `CallEvent` depth, guarding a page that calls itself (or a
@@ -104,12 +103,26 @@ impl Frame {
     }
 
     pub(super) fn call(&mut self, commands: Vec<EventCommand>, event_id: u32) -> bool {
+        self.push(commands, event_id, self.ip + 1)
+    }
+
+    pub(super) fn push_foreground(&mut self, commands: Vec<EventCommand>, event_id: u32) {
+        assert!(self.push(commands, event_id, self.ip));
+    }
+
+    pub(super) fn base_event_id(&self) -> u32 {
+        self.call_stack
+            .first()
+            .map_or(self.event_id, |frame| frame.event_id)
+    }
+
+    fn push(&mut self, commands: Vec<EventCommand>, event_id: u32, return_ip: usize) -> bool {
         if self.call_stack.len() >= MAX_CALL_DEPTH {
             return false;
         }
         self.call_stack.push(CallFrame {
             commands: std::mem::take(&mut self.commands),
-            ip: self.ip + 1,
+            ip: return_ip,
             event_id: self.event_id,
             choices: std::mem::take(&mut self.choices),
             battle_outcome: self.battle_outcome.take(),

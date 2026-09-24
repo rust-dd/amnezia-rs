@@ -8,12 +8,7 @@
 //! are a flat list with a per-command `indent`; conditional branches use that
 //! indent to delimit their bodies.
 
-use crate::dialogue::Dialogue;
-use crate::gameover::GameOverActive;
-use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::teleport::Fade;
-use crate::title::TitleActive;
-use crate::world::MapEvents;
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
@@ -25,6 +20,7 @@ mod driver;
 mod event_rng;
 mod exec;
 mod flow;
+pub(crate) mod foreground;
 mod frame;
 mod opcodes;
 mod parallel;
@@ -47,11 +43,13 @@ pub use parallel::{CommonEvents, ParallelPool};
 #[derive(Resource, Default)]
 pub struct RunningEvent {
     frame: Frame,
+    queue: foreground::Queue,
+    queued_owner: bool,
+    restoring_queue: bool,
 }
 
 impl RunningEvent {
-    /// Whether an event is currently executing. Triggers and movement pause while
-    /// this holds.
+    /// Whether foreground commands or a suspended foreground wait are live.
     pub fn active(&self) -> bool {
         self.frame.active()
     }
@@ -64,7 +62,19 @@ impl RunningEvent {
     /// Begin running `commands` from the top. Ignored if a run is already live, so
     /// one event can't interrupt another mid-sequence.
     pub fn start(&mut self, event_id: u32, commands: Vec<EventCommand>) {
+        if !self.frame.active() {
+            self.queued_owner = false;
+        }
         self.frame.start(event_id, commands);
+    }
+
+    pub(crate) fn event_paused(&self, id: u32) -> bool {
+        self.queue.paused(id)
+            || (!self.queued_owner && self.active() && self.frame.base_event_id() == id)
+    }
+
+    pub(crate) fn waiting(&self) -> bool {
+        self.queue.waiting()
     }
 }
 
@@ -79,6 +89,7 @@ pub(crate) struct ParallelStep;
 impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RunningEvent>()
+            .init_resource::<foreground::Inbox>()
             .init_resource::<crate::dialogue::MessageOptions>()
             .init_resource::<EventRng>()
             .init_resource::<ParallelPool>()
@@ -102,10 +113,7 @@ impl Plugin for InterpreterPlugin {
                         .before(crate::menu::MenuInput),
                 ),
             )
-            .add_systems(
-                Update,
-                (autorun, run_interpreter).chain().in_set(InterpreterStep),
-            )
+            .add_systems(Update, run_interpreter.in_set(InterpreterStep))
             .add_systems(
                 Update,
                 parallel::run_parallel
@@ -120,57 +128,4 @@ impl Plugin for InterpreterPlugin {
 /// `Wait` is counting down; resumes automatically once the block clears.
 fn run_interpreter(world: &mut World) {
     driver::foreground(world);
-}
-
-/// Start a foreground autorun when nothing else is running: the map's autostart
-/// (trigger 3) event page, or — failing that — a common event whose autostart
-/// (trigger 3) switch is on. RM2000 replays an autostart page every frame its
-/// condition holds; a cutscene ends by flipping a switch so a non-autorun page
-/// becomes active and it stops. A common autostart likewise repeats while its
-/// switch stays on.
-#[allow(clippy::too_many_arguments)]
-fn autorun(
-    prompts: crate::dialogue::InputPrompts,
-    map_events: Res<MapEvents>,
-    common_events: Res<CommonEvents>,
-    switches: Res<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
-    dialogue: Res<Dialogue>,
-    fade: Res<Fade>,
-    save: Res<crate::save::EventSaveRequest>,
-    blockers: Blockers,
-    title: Res<TitleActive>,
-    gameover: Res<GameOverActive>,
-    transition: Res<crate::transitions::Transition>,
-    mut running: ResMut<RunningEvent>,
-) {
-    if running.active()
-        || save.0
-        || prompts.active()
-        || dialogue.active
-        || fade.busy()
-        || transition.busy()
-        || blockers.any()
-        || title.0
-        || gameover.0
-    {
-        return;
-    }
-    for event in &map_events.events {
-        if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
-            && page.trigger == 3
-        {
-            running.start(event.id, page.commands.clone());
-            return;
-        }
-    }
-    // Common events use global scope, so their "this event" reference is 0.
-    for ce in &common_events.0 {
-        if ce.trigger == 3 && parallel::common_gate_on(ce, &switches) && !ce.commands.is_empty() {
-            running.start(0, ce.commands.clone());
-            return;
-        }
-    }
 }
