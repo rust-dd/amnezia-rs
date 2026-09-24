@@ -15,6 +15,7 @@ mod messages;
 mod vehicles;
 
 use super::frame::{Frame, MAX_STEPS_PER_FRAME};
+use super::parallel::{PageOwner, ParallelPool};
 use super::params::SubsystemIo;
 use crate::audio::AudioRequest;
 use crate::battle::BattleOutcome;
@@ -134,7 +135,28 @@ pub(super) fn run_frame(
     x: &mut Exec,
     dt: f32,
     scene_blocked: bool,
+    source: Option<PageOwner>,
+    pool: &mut ParallelPool,
 ) -> RunOutcome {
+    let outcome = run_burst(frame, x, dt, scene_blocked, source, pool);
+    if refresh_parallel_pages(frame, source, pool, x) {
+        outcome
+    } else {
+        RunOutcome::Finished
+    }
+}
+
+fn run_burst(
+    frame: &mut Frame,
+    x: &mut Exec,
+    dt: f32,
+    scene_blocked: bool,
+    source: Option<PageOwner>,
+    pool: &mut ParallelPool,
+) -> RunOutcome {
+    if !refresh_parallel_pages(frame, source, pool, x) {
+        return RunOutcome::Finished;
+    }
     if frame.battle_pending
         && let Some(outcome) = x.subsystems.battle_result.0.take()
     {
@@ -217,6 +239,9 @@ pub(super) fn run_frame(
         }
         frame.wait_movement = false;
     }
+    if !refresh_parallel_pages(frame, source, pool, x) {
+        return RunOutcome::Finished;
+    }
     for _ in 0..MAX_STEPS_PER_FRAME {
         let Some(command) = frame.commands.get(frame.ip).cloned() else {
             if frame.return_to_caller() {
@@ -230,7 +255,11 @@ pub(super) fn run_frame(
         {
             return RunOutcome::Yielded;
         }
-        match dispatch(frame, command, x) {
+        let flow = dispatch(frame, command, x);
+        if !refresh_parallel_pages(frame, source, pool, x) {
+            return RunOutcome::Finished;
+        }
+        match flow {
             Flow::Advance => {}
             Flow::Yield => return RunOutcome::Yielded,
             Flow::Stop => {
@@ -240,6 +269,20 @@ pub(super) fn run_frame(
         }
     }
     RunOutcome::Yielded
+}
+
+fn refresh_parallel_pages(
+    frame: &mut Frame,
+    source: Option<PageOwner>,
+    pool: &mut ParallelPool,
+    exec: &Exec,
+) -> bool {
+    pool.discard_changed_pages(exec);
+    if source.is_some_and(|source| !source.current(pool)) {
+        frame.stop();
+        return false;
+    }
+    true
 }
 
 /// Whether any forced move route is still running — the hero's stepper or any

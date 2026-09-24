@@ -118,6 +118,7 @@ fn run_interpreter(
     fade: Res<Fade>,
     blockers: Blockers,
     mut running: ResMut<RunningEvent>,
+    mut pool: ResMut<ParallelPool>,
     mut exec: Exec,
 ) {
     if !running.frame.active() {
@@ -129,6 +130,8 @@ fn run_interpreter(
         &mut exec,
         time.delta_secs(),
         scene_blocked,
+        None,
+        &mut pool,
     );
 }
 

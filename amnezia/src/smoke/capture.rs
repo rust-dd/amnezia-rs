@@ -3,6 +3,7 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
 pub(super) fn capture(world: &mut World, label: &str) {
+    let world_snapshot = super::world_image::snapshot(world, label);
     let target = world.get_resource::<offscreen::Target>();
     let prefix = if target.is_some() {
         "amnezia-smoke-offscreen"
@@ -58,6 +59,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let label = label.to_owned();
     world.spawn(screenshot).observe(save_to_disk(path)).observe(
         move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
+            if let Some(snapshot) = &world_snapshot {
+                snapshot.verify(&capture.image, &label);
+            }
             verify_content(&capture.image, &label);
             if let Some(snapshot) = &inn_snapshot {
                 snapshot.verify(&capture.image);

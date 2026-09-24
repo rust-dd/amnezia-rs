@@ -11,6 +11,7 @@ mod message_options;
 pub(crate) mod offscreen;
 mod scenarios;
 mod ui_layers;
+mod world_image;
 
 pub struct SmokePlugin;
 
@@ -412,6 +413,7 @@ fn drive(world: &mut World) {
         },
     );
     if frame >= finish {
+        world_image::verify_finished(world, scenario);
         if scenario == "escape" {
             assert!(
                 world.resource::<SmokeRun>().finish_at.is_some(),

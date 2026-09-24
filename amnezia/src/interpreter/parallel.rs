@@ -18,6 +18,9 @@ use crate::world::MapEvents;
 use amnezia_data::{CommonEvent, EventCommand};
 use bevy::prelude::*;
 
+mod pages;
+pub(super) use pages::PageOwner;
+
 /// The database's common events, read once at boot. Autostart (trigger 3) events
 /// run foreground-style from `autorun`; parallel (trigger 4) events run in the
 /// [`ParallelPool`]. This game ships a single empty stub common event, so the
@@ -53,6 +56,7 @@ enum ParallelSource {
 /// its execution [`Frame`].
 struct ParallelFrame {
     source: ParallelSource,
+    owner: Option<PageOwner>,
     event_id: u32,
     commands: Vec<EventCommand>,
     frame: Frame,
@@ -65,13 +69,11 @@ struct ParallelFrame {
 pub struct ParallelPool {
     frames: Vec<ParallelFrame>,
     last_map: Option<u32>,
+    pages: std::collections::BTreeMap<u32, pages::Selection>,
 }
 
 impl ParallelPool {
-    /// The number of background interpreters currently scheduled — one per running
-    /// parallel common event and active trigger-4 map page. Stable across the
-    /// per-frame loop (a single-pass page that finishes and restarts still counts),
-    /// so it reads cleanly on the debug HUD.
+    /// Retained background interpreters, including gated common events.
     pub fn count(&self) -> usize {
         self.frames.len()
     }
@@ -94,6 +96,7 @@ pub(super) fn run_parallel(
     if pool.last_map != map_id {
         pool.frames
             .retain(|pf| !matches!(pf.source, ParallelSource::MapPage(..)));
+        pool.pages.clear();
         pool.last_map = map_id;
     }
     reconcile(
@@ -108,25 +111,108 @@ pub(super) fn run_parallel(
     discard_orphaned_results(&pool, &foreground.frame, &mut exec);
 
     let static_blocked = fade.busy() || blockers.any();
-    let dt = time.delta_secs();
-    let mut i = 0;
-    while i < pool.frames.len() {
+    let mut common_ids = common_events
+        .0
+        .iter()
+        .map(|event| event.id)
+        .collect::<Vec<_>>();
+    common_ids.sort_unstable();
+    for id in common_ids {
         if static_blocked || exec.scene_paused(false, false) {
-            break;
+            return;
         }
-        if !pool.frames[i].frame.active() {
-            let (event_id, commands) = {
-                let pf = &pool.frames[i];
-                (pf.event_id, pf.commands.clone())
-            };
-            pool.frames[i].frame.start(event_id, commands);
-            pool.frames[i].frame.parallel = true;
+        let event = common_events.0.iter().find(|event| event.id == id).unwrap();
+        if event.trigger == 4 && common_gate_on(event, &exec.switches) {
+            step_source(
+                ParallelSource::Common(id),
+                &mut pool,
+                &common_events,
+                &mut exec,
+                time.delta_secs(),
+            );
+            discard_orphaned_results(&pool, &foreground.frame, &mut exec);
         }
-        // A page that finishes in a single pass (no wait/loop) is left inactive and
-        // restarts next frame, so it drives its effect once per frame rather than
-        // spinning to the step cap.
-        let _ = run_frame(&mut pool.frames[i].frame, &mut exec, dt, false);
-        i += 1;
+    }
+    let mut map_ids = exec
+        .subsystems
+        .flow
+        .map_events
+        .as_ref()
+        .map_or_else(Vec::new, |events| {
+            events
+                .events
+                .iter()
+                .map(|event| event.id)
+                .collect::<Vec<_>>()
+        });
+    map_ids.sort_unstable();
+    for id in map_ids {
+        if static_blocked || exec.scene_paused(false, false) {
+            return;
+        }
+        if let Some(source) = map_source(id, &exec) {
+            step_source(
+                source,
+                &mut pool,
+                &common_events,
+                &mut exec,
+                time.delta_secs(),
+            );
+            discard_orphaned_results(&pool, &foreground.frame, &mut exec);
+        }
+    }
+}
+
+fn map_source(id: u32, exec: &Exec) -> Option<ParallelSource> {
+    let events = exec.subsystems.flow.map_events.as_ref()?;
+    let event = events.events.iter().find(|event| event.id == id)?;
+    let index = active_page_index(
+        event,
+        &exec.switches,
+        &exec.variables,
+        &exec.party,
+        &exec.inventory,
+    )?;
+    (event.pages[index].trigger == 4 && !event.pages[index].commands.is_empty())
+        .then_some(ParallelSource::MapPage(id, index))
+}
+
+fn step_source(
+    source: ParallelSource,
+    pool: &mut ParallelPool,
+    common_events: &CommonEvents,
+    exec: &mut Exec,
+    dt: f32,
+) {
+    let mut entry = if let Some(index) = pool.frames.iter().position(|entry| entry.source == source)
+    {
+        pool.frames.remove(index)
+    } else {
+        let Some((event_id, commands)) = fetch_commands(
+            source,
+            common_events,
+            exec.subsystems.flow.map_events.as_deref(),
+        ) else {
+            return;
+        };
+        if commands.is_empty() {
+            return;
+        }
+        ParallelFrame {
+            source,
+            owner: pool.owner(source),
+            event_id,
+            commands,
+            frame: Frame::default(),
+        }
+    };
+    if !entry.frame.active() {
+        entry.frame.start(entry.event_id, entry.commands.clone());
+        entry.frame.parallel = true;
+    }
+    run_frame(&mut entry.frame, exec, dt, false, entry.owner, pool);
+    if entry.owner.is_none_or(|owner| owner.current(pool)) {
+        pool.frames.push(entry);
     }
 }
 
@@ -144,11 +230,8 @@ fn discard_orphaned_results(pool: &ParallelPool, foreground: &Frame, exec: &mut 
     }
 }
 
-/// Bring the live frame set in line with what should be running now: parallel
-/// common events whose gate switch is on, and each map event whose active page is
-/// a trigger-4 parallel process. Frames whose source is no longer desired are
-/// dropped; newly desired sources get a fresh (idle) frame that the stepping loop
-/// starts. Matching frames keep running with their state intact.
+/// Retain common interpreters across switch pauses and map interpreters while
+/// no page is active. Selecting another page clears the previous interpreter.
 fn reconcile(
     pool: &mut ParallelPool,
     common_events: &CommonEvents,
@@ -158,9 +241,10 @@ fn reconcile(
     party: &Party,
     inventory: &Inventory,
 ) {
+    pool.refresh_pages(map_events, switches, variables, party, inventory);
     let mut desired = Vec::<ParallelSource>::new();
     for ce in &common_events.0 {
-        if ce.trigger == 4 && common_gate_on(ce, switches) && !ce.commands.is_empty() {
+        if ce.trigger == 4 && !ce.commands.is_empty() {
             desired.push(ParallelSource::Common(ce.id));
         }
     }
@@ -175,7 +259,9 @@ fn reconcile(
         }
     }
 
-    pool.frames.retain(|pf| desired.contains(&pf.source));
+    pool.frames.retain(|pf| {
+        matches!(pf.source, ParallelSource::MapPage(..)) || desired.contains(&pf.source)
+    });
     for key in &desired {
         if pool.frames.iter().any(|pf| pf.source == *key) {
             continue;
@@ -185,6 +271,7 @@ fn reconcile(
         };
         pool.frames.push(ParallelFrame {
             source: *key,
+            owner: pool.owner(*key),
             event_id,
             commands,
             frame: Frame::default(),
@@ -221,201 +308,4 @@ pub(super) fn common_gate_on(event: &CommonEvent, switches: &crate::state::Switc
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use amnezia_data::{EventCondition, EventPage};
-
-    fn cmd(code: u32) -> EventCommand {
-        EventCommand {
-            code,
-            indent: 0,
-            string: String::new(),
-            params: Vec::new(),
-        }
-    }
-
-    fn page(trigger: u32, condition: EventCondition) -> EventPage {
-        EventPage {
-            trigger,
-            graphic_name: String::new(),
-            graphic_index: 0,
-            direction: 2,
-            pattern: 1,
-            animation_type: 0,
-            translucent: false,
-            overlap_forbidden: false,
-            move_type: 0,
-            move_frequency: 3,
-            move_speed: 3,
-            move_route: Default::default(),
-            layer: 0,
-            condition,
-            commands: vec![cmd(10210)],
-        }
-    }
-
-    fn event(id: u32, pages: Vec<EventPage>) -> amnezia_data::Event {
-        amnezia_data::Event {
-            id,
-            x: 0,
-            y: 0,
-            name: String::new(),
-            pages,
-        }
-    }
-
-    fn common_event(id: u32, trigger: u32, switch_id: u32) -> CommonEvent {
-        CommonEvent {
-            id,
-            name: String::new(),
-            trigger,
-            switch_flag: switch_id != 0,
-            switch_id,
-            commands: vec![cmd(10210)],
-        }
-    }
-
-    /// Run the reconciler with fresh empty state except the given switches.
-    fn reconcile_with(
-        pool: &mut ParallelPool,
-        commons: &CommonEvents,
-        map: Option<&MapEvents>,
-        switches: &Switches,
-    ) {
-        let (variables, party, inventory) =
-            (Variables::default(), Party::default(), Inventory::default());
-        reconcile(pool, commons, map, switches, &variables, &party, &inventory);
-    }
-
-    #[test]
-    fn parallel_common_event_appears_and_disappears_with_its_switch() {
-        let commons = CommonEvents(vec![common_event(1, 4, 5)]);
-        let mut pool = ParallelPool::default();
-        let mut switches = Switches::default();
-
-        reconcile_with(&mut pool, &commons, None, &switches);
-        assert_eq!(
-            pool.count(),
-            0,
-            "a parallel common event stays out while its switch is off"
-        );
-
-        switches.set(5, true);
-        reconcile_with(&mut pool, &commons, None, &switches);
-        assert_eq!(pool.count(), 1, "it joins the pool once its switch is on");
-        assert!(matches!(pool.frames[0].source, ParallelSource::Common(1)));
-
-        switches.set(5, false);
-        reconcile_with(&mut pool, &commons, None, &switches);
-        assert_eq!(
-            pool.count(),
-            0,
-            "and leaves the pool when the switch goes off"
-        );
-    }
-
-    #[test]
-    fn unconditional_common_event_and_call_only_are_handled() {
-        let commons = CommonEvents(vec![common_event(1, 4, 0), common_event(2, 5, 0)]);
-        let mut pool = ParallelPool::default();
-        reconcile_with(&mut pool, &commons, None, &Switches::default());
-        assert_eq!(
-            pool.count(),
-            1,
-            "only the unconditional parallel event runs"
-        );
-        assert!(matches!(pool.frames[0].source, ParallelSource::Common(1)));
-    }
-
-    #[test]
-    fn only_trigger_four_map_pages_join_the_pool() {
-        let map = MapEvents {
-            events: vec![
-                event(1, vec![page(4, EventCondition::default())]),
-                event(2, vec![page(0, EventCondition::default())]),
-            ],
-        };
-        let mut pool = ParallelPool::default();
-        reconcile_with(
-            &mut pool,
-            &CommonEvents::default(),
-            Some(&map),
-            &Switches::default(),
-        );
-        assert_eq!(
-            pool.count(),
-            1,
-            "the trigger-4 page runs; the plain event does not"
-        );
-        assert!(matches!(
-            pool.frames[0].source,
-            ParallelSource::MapPage(1, 0)
-        ));
-    }
-
-    #[test]
-    fn a_promoted_page_resets_the_frame_to_the_new_page() {
-        let map = MapEvents {
-            events: vec![event(
-                7,
-                vec![
-                    page(4, EventCondition::default()),
-                    page(
-                        4,
-                        EventCondition {
-                            flags: 0x01,
-                            switch_a: 5,
-                            ..Default::default()
-                        },
-                    ),
-                ],
-            )],
-        };
-        let mut pool = ParallelPool::default();
-        let mut switches = Switches::default();
-
-        reconcile_with(&mut pool, &CommonEvents::default(), Some(&map), &switches);
-        assert!(matches!(
-            pool.frames[0].source,
-            ParallelSource::MapPage(7, 0)
-        ));
-
-        switches.set(5, true);
-        reconcile_with(&mut pool, &CommonEvents::default(), Some(&map), &switches);
-        assert_eq!(pool.count(), 1, "still one frame for the event");
-        assert!(
-            matches!(pool.frames[0].source, ParallelSource::MapPage(7, 1)),
-            "the frame is keyed to the newly active page"
-        );
-    }
-
-    #[test]
-    fn reconcile_is_idempotent_and_preserves_running_frames() {
-        let map = MapEvents {
-            events: vec![event(1, vec![page(4, EventCondition::default())])],
-        };
-        let mut pool = ParallelPool::default();
-        reconcile_with(
-            &mut pool,
-            &CommonEvents::default(),
-            Some(&map),
-            &Switches::default(),
-        );
-        pool.frames[0].frame.start(1, vec![cmd(10210)]);
-        reconcile_with(
-            &mut pool,
-            &CommonEvents::default(),
-            Some(&map),
-            &Switches::default(),
-        );
-        assert_eq!(
-            pool.count(),
-            1,
-            "a still-desired frame is neither dropped nor duplicated"
-        );
-        assert!(
-            pool.frames[0].frame.active(),
-            "and its running state is preserved"
-        );
-    }
-}
+mod tests;
