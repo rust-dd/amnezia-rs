@@ -6,6 +6,8 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
+mod portrait;
+
 #[derive(Resource, Default)]
 struct Probe {
     checked: u8,
@@ -58,6 +60,13 @@ fn expected(portrait: bool) -> MessageState {
     }
 }
 
+fn finished_settings(top: bool) -> MessageState {
+    MessageState {
+        face: default(),
+        ..expected(top)
+    }
+}
+
 fn start(world: &mut World, commands: Vec<amnezia_data::EventCommand>) {
     let mut running = world.resource_mut::<RunningEvent>();
     assert!(!running.active());
@@ -88,29 +97,28 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         }
         303 | 493 => {
             let path = world.resource::<Fixture>().slot.selected_path(world);
-            assert_eq!(read_save(&path).unwrap().message, expected(frame == 303));
+            assert_eq!(
+                read_save(&path).unwrap().message,
+                finished_settings(frame == 303)
+            );
         }
         310 | 480 => start(world, settings(false)),
         495 => start(world, settings(true)),
-        410 => show(world, expected(true)),
+        410 => show(world, finished_settings(true)),
         590 => show(world, expected(false)),
         700 => show(world, MessageState::default()),
         445 | 604 | 735 => {
-            let portrait = frame == 445;
-            crate::dialogue::verify_saved_presentation(world, frame != 604, portrait, portrait);
+            crate::dialogue::verify_saved_presentation(world, frame != 604, frame == 445, false);
             let dialogue = world.resource::<Dialogue>();
             assert!(dialogue.active);
-            assert_eq!(dialogue.boxes[0].face.as_deref(), portrait.then_some("Ron"));
-            if portrait {
-                assert_eq!(dialogue.boxes[0].face_index, 6);
-            }
+            assert!(dialogue.boxes[0].face.is_none());
             world.resource_mut::<Probe>().checked |= match frame {
                 445 => 1,
                 604 => 2,
                 _ => 4,
             };
             return Some(match frame {
-                445 => "save-message-portrait",
+                445 => "save-message-options",
                 604 => "save-message-cleared",
                 _ => "save-message-legacy",
             });
@@ -118,7 +126,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         455 | 606 | 745 => world.resource_mut::<Dialogue>().close(),
         _ => {}
     }
-    None
+    portrait::drive(world, frame)
 }
 
 pub(crate) struct Snapshot {
@@ -127,7 +135,10 @@ pub(crate) struct Snapshot {
 }
 
 pub(crate) fn snapshot(world: &World, label: &str) -> Option<Snapshot> {
-    if label != "save-message-portrait" {
+    if !matches!(
+        label,
+        "save-message-portrait" | "save-message-portrait-before-load"
+    ) {
         return None;
     }
     let handle = world
@@ -176,8 +187,9 @@ impl Snapshot {
 pub(super) fn verify_finished(world: &World) {
     let probe = world.resource::<Probe>();
     assert_eq!(probe.checked, 7);
-    assert_eq!(probe.pixels.load(Ordering::SeqCst), 1);
+    assert_eq!(probe.pixels.load(Ordering::SeqCst), 2);
+    portrait::verify_finished(world);
     info!(
-        "saved dialogue: portrait, cleared face, placement, transparency and legacy defaults verified"
+        "saved dialogue: finished-event face reset, options, active portrait resume and legacy defaults verified"
     );
 }

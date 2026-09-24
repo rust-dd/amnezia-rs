@@ -20,8 +20,13 @@ use std::sync::{
 mod animation;
 mod clock;
 mod fixtures;
+mod observation;
 mod pixels;
 pub(crate) use pixels::snapshot;
+
+pub(crate) fn configure(app: &mut App) {
+    app.add_systems(Update, observation::update.after(super::flow::advance));
+}
 
 pub(crate) fn entry() -> Vec<amnezia_data::EventCommand> {
     vec![amnezia_data::EventCommand {
@@ -52,6 +57,7 @@ struct Probe {
     memorized: Option<BgmTrack>,
     audio: MessageCursor<AudioRequest>,
     rest_scene: Option<u32>,
+    handoffs: u8,
     played: bool,
     ended: bool,
     asleep: bool,
@@ -116,6 +122,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             memorized: None,
             audio,
             rest_scene: None,
+            handoffs: 0,
             played: false,
             ended: false,
             asleep: false,
@@ -210,17 +217,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
                 fixtures::verify_vitals(world, false);
                 return None;
             }
-            let scene = world.resource::<SceneFrames>().frame;
-            let expected = *world
-                .resource_mut::<Probe>()
-                .rest_scene
-                .get_or_insert(scene);
-            assert_eq!(
-                scene, expected,
-                "inn must not advance scene time during rest"
-            );
             assert!(!world.resource::<crate::menu::MenuOpen>().0);
-            verify_playback(world);
             let inn = world.resource::<State>();
             let healed = matches!(inn.phase, Phase::FadeIn | Phase::Idle);
             fixtures::verify_vitals(world, healed);
@@ -233,10 +230,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
                 }
             }
             if !world.resource::<ShopOpen>().0 {
-                assert!(
-                    world.resource::<RunningEvent>().active(),
-                    "event must wait through the terminal fade frame"
-                );
+                assert_ne!(world.resource::<Probe>().handoffs & (1 << index), 0);
                 assert!(!world.resource::<Transition>().erased());
                 assert!(!world.resource::<Transition>().event_erased);
                 assert_eq!(
@@ -314,19 +308,6 @@ fn verify_sounds(world: &mut World, step: Step, age: u32, index: usize) {
     });
 }
 
-fn verify_playback(world: &mut World) {
-    let (mut playing, mut ended) = (false, false);
-    for (settings, sink) in world.query::<(&PlaybackSettings, &AudioSink)>().iter(world) {
-        if matches!(settings.mode, PlaybackMode::Once) {
-            playing |= !sink.empty() && !sink.position().is_zero();
-            ended |= sink.empty();
-        }
-    }
-    let mut probe = world.resource_mut::<Probe>();
-    probe.played |= playing;
-    probe.ended |= ended;
-}
-
 pub(crate) fn finished(world: &World) -> bool {
     world
         .get_resource::<Probe>()
@@ -340,6 +321,7 @@ pub(crate) fn verify_finished(world: &World) {
         probe.played && probe.ended,
         "Inn must decode, play and reach its natural end, not the timeout"
     );
+    assert_eq!(probe.handoffs, (1 << 2) | (1 << 3) | (1 << 4));
     assert_eq!(probe.animation, (1 << 14) - 1);
     assert_eq!(probe.pixels.load(Ordering::Relaxed), 25);
     assert_eq!(world.resource::<crate::state::Variables>().get(9032), 6);

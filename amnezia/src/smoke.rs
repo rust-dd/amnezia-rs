@@ -33,6 +33,8 @@ impl Plugin for SmokePlugin {
         let scenario = scenarios::selected();
         if scenario == "save-slots" {
             crate::menu::save_files::smoke::configure(app);
+        } else if scenario == "inn" {
+            crate::shop::inn::smoke::configure(app);
         } else if scenario == "load-slots" {
             crate::menu::save_files::smoke::load::configure(app);
         } else if scenario == "save-music" {

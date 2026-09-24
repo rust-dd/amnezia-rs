@@ -64,6 +64,14 @@ fn commands(index: usize) -> Vec<EventCommand> {
         inn
     };
     vec![
+        EventCommand {
+            string: if case(index).face {
+                "Ron".into()
+            } else {
+                String::new()
+            },
+            ..command(10130, 0, vec![6, 0, 0])
+        },
         inn,
         command(20730, 0, vec![]),
         command(10210, 1, vec![0, 9031, 9031, 0]),
@@ -98,17 +106,6 @@ pub(super) fn prepare(world: &mut World, index: usize) {
     world
         .resource_mut::<crate::dialogue::MessageTransparent>()
         .0 = fixture.transparent;
-    crate::events::message_boxes(
-        &[EventCommand {
-            string: if fixture.face {
-                "Ron".into()
-            } else {
-                String::new()
-            },
-            ..command(10130, 0, vec![6, 0, 0])
-        }],
-        &mut world.resource_mut::<Dialogue>().face,
-    );
     world.resource_mut::<crate::system_bgm::SystemBgm>().change(
         if index == 2 { "Inn" } else { "(OFF)" },
         &[2, 0, 90, 100, 50],

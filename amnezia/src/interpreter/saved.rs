@@ -60,6 +60,7 @@ pub(crate) fn restore(world: &mut World, state: Option<State>) {
             frame: state.frame,
             queue: state.queue,
             queued_owner: state.queued_owner,
+            fresh: false,
         }),
     );
 }

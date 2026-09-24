@@ -38,6 +38,7 @@ mod foreground_order;
 mod inns;
 mod key_input;
 mod logical;
+mod message_face;
 mod message_handoff;
 mod message_options;
 mod message_ownership;

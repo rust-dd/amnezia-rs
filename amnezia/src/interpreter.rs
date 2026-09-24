@@ -46,6 +46,7 @@ pub struct RunningEvent {
     queue: foreground::Queue,
     queued_owner: bool,
     restoring_queue: bool,
+    fresh: bool,
 }
 
 impl RunningEvent {
@@ -64,6 +65,7 @@ impl RunningEvent {
     pub fn start(&mut self, event_id: u32, commands: Vec<EventCommand>) {
         if !self.frame.active() {
             self.queued_owner = false;
+            self.fresh = true;
         }
         self.frame.start(event_id, commands);
     }

@@ -42,6 +42,10 @@ pub(super) struct Blockers<'w> {
 }
 
 impl Blockers<'_> {
+    pub(super) fn battle_active(&self) -> bool {
+        self.battle.0
+    }
+
     pub(super) fn any(&self) -> bool {
         self.menu.0
             || self.shop.0

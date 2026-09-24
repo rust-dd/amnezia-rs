@@ -82,6 +82,9 @@ fn step_foreground(
     if !running.frame.active() {
         return (RunOutcome::Finished, None);
     }
+    if std::mem::take(&mut running.fresh) && !blockers.battle_active() {
+        exec.dialogue.face = default();
+    }
     let scene_blocked = exec.scene_owns_flow(fade.busy(), blockers.any());
     let base_id = running.frame.base_event_id();
     let outcome = run_operation(
@@ -94,6 +97,9 @@ fn step_foreground(
         &mut pool,
     );
     if outcome == RunOutcome::Finished {
+        if !blockers.battle_active() {
+            exec.dialogue.face = default();
+        }
         running.queue.finish(base_id);
         running.queued_owner = false;
     }

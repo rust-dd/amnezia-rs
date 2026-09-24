@@ -98,7 +98,7 @@ pub(super) fn select_next(
     blockers: Blockers,
     common: Res<CommonEvents>,
     mut running: ResMut<RunningEvent>,
-    exec: Exec,
+    mut exec: Exec,
 ) -> bool {
     if exec.scene_paused(fade.busy(), blockers.any()) {
         return false;
@@ -126,6 +126,7 @@ pub(super) fn select_next(
     if common.is_none() && map.is_none() {
         return false;
     }
+    exec.dialogue.face = default();
     running.queued_owner = true;
     if let Some(common) = common {
         running.frame.start(0, common.commands.clone());
