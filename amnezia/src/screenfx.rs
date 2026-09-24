@@ -2,10 +2,8 @@
 //! scene-transition controller. Tint is applied to world bitmaps; flash uses
 //! a fullscreen overlay below message/menu windows.
 //!
-//! The shake avoids touching `player.rs`: [`apply_camera_shake`] runs in
-//! `PostUpdate` (after camera follow has set the base position)
-//! and adds an offset the follow overwrites again next frame, so it never
-//! accumulates.
+//! Camera follow and shake run together once per logical tick, so extra render
+//! frames cannot accumulate the shake offset.
 
 use crate::world::MainCamera;
 use bevy::prelude::*;
@@ -17,6 +15,8 @@ pub(crate) mod battle_smoke;
 #[cfg(test)]
 mod battle_tests;
 pub(crate) mod flash;
+#[cfg(test)]
+mod logical_tests;
 #[cfg(test)]
 mod map_tests;
 #[cfg(test)]
@@ -198,13 +198,13 @@ impl Plugin for ScreenFxPlugin {
                 PostUpdate,
                 flash::channel::paint
                     .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
-            )
-            .add_systems(
-                PostUpdate,
-                apply_camera_shake
-                    .in_set(ScreenShakeSet)
-                    .before(TransformSystems::Propagate),
             );
+        crate::timing::logical::post(app, || {
+            apply_camera_shake
+                .in_set(ScreenShakeSet)
+                .after(crate::player::CameraFollow)
+                .before(TransformSystems::Propagate)
+        });
     }
 }
 
@@ -262,9 +262,6 @@ fn step_shake(fx: &mut Fx, dt: f32) {
     fx.shake_offset = Vec2::new(fx.shake.step(dt), 0.0);
 }
 
-/// Add the current shake offset to the camera after `camera_follow` set its base
-/// position. Runs every frame; the follow re-centres next frame, so the offset
-/// never accumulates.
 fn apply_camera_shake(fx: Res<Fx>, mut cameras: Query<&mut Transform, With<MainCamera>>) {
     let Ok(mut camera) = cameras.single_mut() else {
         return;

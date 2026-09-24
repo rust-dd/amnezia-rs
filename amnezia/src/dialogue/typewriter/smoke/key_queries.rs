@@ -62,6 +62,9 @@ pub(super) fn input(world: &mut World, frame: u32) -> bool {
 pub(super) fn drive(world: &mut World, frame: u32) {
     match frame {
         1030 => {
+            world.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f64(1.0 / 60.0),
+            ));
             world.init_resource::<Probe>();
             start(world, 221, 9006);
             world

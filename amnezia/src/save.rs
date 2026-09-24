@@ -116,13 +116,12 @@ impl Plugin for SavePlugin {
             .init_resource::<EventSaveRequest>()
             .init_resource::<SaveAccess>()
             .init_resource::<SaveLocation>()
-            .init_resource::<slots::ActiveSlot>()
-            .add_systems(
-                PreUpdate,
-                save_or_load
-                    .in_set(SaveSet)
-                    .after(bevy::input::InputSystems),
-            );
+            .init_resource::<slots::ActiveSlot>();
+        crate::timing::logical::pre(app, || {
+            save_or_load
+                .in_set(SaveSet)
+                .after(bevy::input::InputSystems)
+        });
     }
 }
 

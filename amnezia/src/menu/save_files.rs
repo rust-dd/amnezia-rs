@@ -104,12 +104,6 @@ pub(crate) fn register_flow(app: &mut App) {
     app.init_resource::<SaveFiles>()
         .init_resource::<crate::transitions::Transition>()
         .add_systems(
-            PreUpdate,
-            (events::update, scene::authorize_write)
-                .chain()
-                .before(crate::save::SaveSet),
-        )
-        .add_systems(
             Update,
             (input::update, scene::update)
                 .chain()
@@ -117,4 +111,9 @@ pub(crate) fn register_flow(app: &mut App) {
                 .after(super::MenuInput)
                 .before(super::view::clocks::update),
         );
+    crate::timing::logical::pre(app, || {
+        (events::update, scene::authorize_write)
+            .chain()
+            .before(crate::save::SaveSet)
+    });
 }

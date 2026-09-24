@@ -125,8 +125,8 @@ impl Plugin for TransitionPlugin {
         app.init_resource::<Transition>()
             .init_resource::<crate::timing::GameFrames>()
             .init_resource::<Settings>()
-            .init_resource::<Defaults>()
-            .add_systems(PreUpdate, tick.after(crate::timing::FrameClockSet));
+            .init_resource::<Defaults>();
+        crate::timing::logical::pre(app, || tick.after(crate::timing::FrameClockSet));
     }
 }
 

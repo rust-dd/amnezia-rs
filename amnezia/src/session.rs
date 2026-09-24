@@ -25,8 +25,8 @@ pub struct SessionPlugin;
 
 impl Plugin for SessionPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<NewGameRequest>()
-            .add_systems(PreUpdate, start_new_game.before(crate::save::SaveSet));
+        app.init_resource::<NewGameRequest>();
+        crate::timing::logical::pre(app, || start_new_game.before(crate::save::SaveSet));
     }
 }
 

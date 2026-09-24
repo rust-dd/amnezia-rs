@@ -42,9 +42,13 @@ pub(super) fn register(app: &mut App) {
         .add_systems(
             PostUpdate,
             view::draw
+                .after(view::track_scroll)
                 .after(crate::screenfx::ScreenShakeSet)
                 .before(bevy::transform::TransformSystems::Propagate),
         );
+    crate::timing::logical::post(app, || {
+        view::track_scroll.after(crate::player::CameraFollow)
+    });
 }
 
 fn step(time: Res<Time>, scene: ScenePause, weather: Res<Weather>, mut rain: ResMut<Rain>) {

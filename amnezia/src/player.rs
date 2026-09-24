@@ -85,16 +85,16 @@ impl Plugin for PlayerPlugin {
             )
             .add_systems(
                 PostUpdate,
-                (
-                    camera::camera_follow
-                        .in_set(CameraFollow)
-                        .after(crate::vehicles::VehicleSync)
-                        .before(crate::screenfx::ScreenShakeSet)
-                        .before(bevy::transform::TransformSystems::Propagate),
-                    update_hero_hidden
-                        .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
-                ),
+                update_hero_hidden
+                    .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
             );
+        crate::timing::logical::post(app, || {
+            camera::camera_follow
+                .in_set(CameraFollow)
+                .after(crate::vehicles::VehicleSync)
+                .before(crate::screenfx::ScreenShakeSet)
+                .before(bevy::transform::TransformSystems::Propagate)
+        });
     }
 }
 

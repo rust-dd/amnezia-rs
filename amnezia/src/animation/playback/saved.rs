@@ -115,13 +115,12 @@ pub(crate) fn register(app: &mut App) {
             .chain()
             .after(AnimationSet::Advance)
             .before(AnimationSet::Start),
-    )
-    .add_systems(
-        PostUpdate,
+    );
+    crate::timing::logical::post(app, || {
         restore_target_flash
             .after(map::flash::Expire)
-            .before(crate::legacy_colors::world::WorldColors),
-    );
+            .before(crate::legacy_colors::world::WorldColors)
+    });
 }
 
 #[allow(clippy::too_many_arguments)]

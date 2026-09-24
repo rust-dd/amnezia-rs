@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+pub(crate) mod logical;
 mod scene;
 pub(crate) use scene::{SceneFrames, SceneWait};
 
@@ -40,11 +41,10 @@ impl Plugin for TimingPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameFrames>()
             .init_resource::<SceneFrames>()
-            .init_resource::<SceneWait>()
-            .add_systems(
-                PreUpdate,
-                tick.in_set(FrameClockSet).after(crate::save::SaveSet),
-            );
+            .init_resource::<SceneWait>();
+        logical::pre(app, || {
+            tick.in_set(FrameClockSet).after(crate::save::SaveSet)
+        });
     }
 }
 
@@ -54,9 +54,14 @@ fn tick(
     mut scene: ResMut<SceneFrames>,
     mut wait: ResMut<SceneWait>,
     waiting: scene::Waiting,
+    step: Option<Res<logical::Step>>,
 ) {
     let before = frames.frame;
-    frames.advance(time.delta_secs_f64());
+    if let Some(step) = step {
+        frames.frame = frames.frame.wrapping_add(u32::from(step.advancing));
+    } else {
+        frames.advance(time.delta_secs_f64());
+    }
     wait.0 = waiting.pending();
     if !wait.0 {
         scene.frame = scene.frame.wrapping_add(frames.frame.wrapping_sub(before));

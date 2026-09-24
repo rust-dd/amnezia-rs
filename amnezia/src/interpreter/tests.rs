@@ -35,6 +35,7 @@ mod camera;
 mod embedded_prompts;
 mod inns;
 mod key_input;
+mod logical;
 mod message_handoff;
 mod message_options;
 mod message_ownership;

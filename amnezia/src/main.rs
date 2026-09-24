@@ -77,6 +77,7 @@ fn main() -> AppExit {
     }
     let mut app = App::new();
     app.add_plugins(plugins)
+        .add_plugins(timing::logical::EnginePlugin)
         .add_plugins(legacy_colors::LegacyColorsPlugin)
         .add_plugins(display::DisplayPlugin)
         .add_plugins(timing::TimingPlugin)
@@ -121,6 +122,7 @@ fn main() -> AppExit {
         .add_plugins(vehicles::VehiclePlugin)
         .add_plugins(conditions::ConditionsPlugin)
         .add_plugins(panorama::PanoramaPlugin)
-        .add_plugins(smoke::SmokePlugin);
+        .add_plugins(smoke::SmokePlugin)
+        .add_plugins(timing::logical::LogicalPlugin);
     smoke::completion::run(&mut app)
 }

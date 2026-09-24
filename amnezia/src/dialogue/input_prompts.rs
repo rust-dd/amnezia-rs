@@ -34,8 +34,8 @@ pub(crate) struct InputPrompts<'w> {
 
 impl InputPrompts<'_> {
     pub(crate) fn register(app: &mut App) {
-        app.init_resource::<PromptFrame>()
-            .add_systems(PreUpdate, capture);
+        app.init_resource::<PromptFrame>();
+        crate::timing::logical::pre(app, || capture);
     }
 
     pub(crate) fn active(&self) -> bool {

@@ -35,27 +35,19 @@ pub(super) struct Input<'w> {
     strength: Res<'w, WeatherStrength>,
     tint: Option<Res<'w, TintState>>,
     battle: Option<Res<'w, crate::battle::BattleActive>>,
-    camera: Option<Res<'w, crate::player::CameraPan>>,
     shake: ScreenShake<'w>,
     texture: Res<'w, Texture>,
 }
 
-#[allow(clippy::type_complexity)]
-pub(super) fn draw(
-    input: Input,
+pub(super) fn track_scroll(
+    camera: Option<Res<crate::player::CameraPan>>,
     mut scroll: ResMut<Scroll>,
     mut changed: MessageReader<MapChanged>,
-    mut images: ResMut<Assets<Image>>,
-    cameras: Query<&Transform, (With<MainCamera>, Without<Canvas>)>,
-    mut canvas: Query<(&mut Transform, &mut RenderLayers, &mut Visibility), With<Canvas>>,
 ) {
     if changed.read().count() != 0 {
         scroll.previous = None;
     }
-    let center = cameras
-        .single()
-        .map_or(Vec2::ZERO, |camera| camera.translation.truncate());
-    let position = input.camera.as_ref().and_then(|pan| pan.position);
+    let position = camera.as_ref().and_then(|pan| pan.position);
     if let Some(position) = position {
         if let Some(previous) = scroll.previous {
             let moved = (position - previous) * Vec2::new(-1.0, 1.0);
@@ -63,6 +55,19 @@ pub(super) fn draw(
         }
         scroll.previous = Some(position);
     }
+}
+
+#[allow(clippy::type_complexity)]
+pub(super) fn draw(
+    input: Input,
+    scroll: Res<Scroll>,
+    mut images: ResMut<Assets<Image>>,
+    cameras: Query<&Transform, (With<MainCamera>, Without<Canvas>)>,
+    mut canvas: Query<(&mut Transform, &mut RenderLayers, &mut Visibility), With<Canvas>>,
+) {
+    let center = cameras
+        .single()
+        .map_or(Vec2::ZERO, |camera| camera.translation.truncate());
     let Ok((mut transform, mut layers, mut visibility)) = canvas.single_mut() else {
         return;
     };

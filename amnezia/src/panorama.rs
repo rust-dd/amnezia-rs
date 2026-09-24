@@ -32,9 +32,11 @@ impl Plugin for PanoramaPlugin {
         app.init_resource::<Panorama>().add_systems(
             PostUpdate,
             draw.in_set(PanoramaDraw)
+                .after(advance)
                 .after(crate::screenfx::ScreenShakeSet)
                 .before(bevy::transform::TransformSystems::Propagate),
         );
+        crate::timing::logical::post(app, || advance);
     }
 }
 
@@ -63,24 +65,51 @@ fn camera_scroll(
     }
 }
 
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
-fn draw(
-    mut commands: Commands,
+fn advance(
     time: Res<Time>,
     data: Res<MapData>,
     server: Res<AssetServer>,
     images: Res<Assets<Image>>,
     scene: ScenePause,
     mut panorama: ResMut<Panorama>,
-    mut previous: Local<Option<(PanoramaDef, UVec2)>>,
-    camera: Query<&Transform, (With<MainCamera>, Without<PanoramaTile>)>,
-    mut tiles: Query<(Entity, &PanoramaTile, &mut Transform), Without<MainCamera>>,
 ) {
     if panorama.map_id != Some(data.map_id) {
         panorama.map_id = Some(data.map_id);
         panorama.definition = data.panorama.clone();
         panorama.scroll = (0.0, 0.0);
     }
+    let Some(definition) = panorama.definition.clone() else {
+        return;
+    };
+    if !scene.paused() {
+        if definition.loop_x && definition.auto_x {
+            panorama.scroll.0 += speed(definition.speed_x) * time.delta_secs();
+        }
+        if definition.loop_y && definition.auto_y {
+            panorama.scroll.1 += speed(definition.speed_y) * time.delta_secs();
+        }
+    }
+    let image = server.load(resolve_png("Panorama", &definition.name));
+    if let Some(image) = images.get(&image) {
+        let size = image.size();
+        if size.x != 0 && size.y != 0 {
+            panorama.scroll.0 = panorama.scroll.0.rem_euclid(size.x as f32);
+            panorama.scroll.1 = panorama.scroll.1.rem_euclid(size.y as f32);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments, clippy::type_complexity)]
+fn draw(
+    mut commands: Commands,
+    data: Res<MapData>,
+    server: Res<AssetServer>,
+    images: Res<Assets<Image>>,
+    panorama: Res<Panorama>,
+    mut previous: Local<Option<(PanoramaDef, UVec2)>>,
+    camera: Query<&Transform, (With<MainCamera>, Without<PanoramaTile>)>,
+    mut tiles: Query<(Entity, &PanoramaTile, &mut Transform), Without<MainCamera>>,
+) {
     let Some(definition) = panorama.definition.clone() else {
         if previous.take().is_some() {
             for (entity, _, _) in &tiles {
@@ -118,16 +147,6 @@ fn draw(
         return;
     }
     let Ok(camera) = camera.single() else { return };
-    if !scene.paused() {
-        if definition.loop_x && definition.auto_x {
-            panorama.scroll.0 += speed(definition.speed_x) * time.delta_secs();
-        }
-        if definition.loop_y && definition.auto_y {
-            panorama.scroll.1 += speed(definition.speed_y) * time.delta_secs();
-        }
-    }
-    panorama.scroll.0 = panorama.scroll.0.rem_euclid(size.x as f32);
-    panorama.scroll.1 = panorama.scroll.1.rem_euclid(size.y as f32);
     let x_scroll = camera_scroll(
         camera.translation.x,
         data.width as f32 * 16.0,

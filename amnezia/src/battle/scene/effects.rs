@@ -182,12 +182,17 @@ fn paint(
 pub(super) fn register(app: &mut App) {
     app.init_resource::<Clock>().add_systems(
         PostUpdate,
-        (step, paint)
-            .chain()
+        paint
+            .after(step)
             .in_set(EffectsSet)
             .before(bevy::transform::TransformSystems::Propagate)
             .before(crate::legacy_colors::hue::HueSet),
     );
+    crate::timing::logical::post(app, || {
+        step.in_set(EffectsSet)
+            .before(bevy::transform::TransformSystems::Propagate)
+            .before(crate::legacy_colors::hue::HueSet)
+    });
 }
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]

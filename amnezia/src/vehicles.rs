@@ -45,22 +45,19 @@ impl Plugin for VehiclePlugin {
                 system.ship_music,
                 system.airship_music,
             ]))
-            .add_systems(
-                PreUpdate,
-                keyboard.in_set(VehicleInput).after(crate::save::SaveSet),
-            )
             .add_systems(Update, advance.after(saved::RestoreVehicles))
             .add_systems(
                 PostUpdate,
-                (
-                    render::sync_hero.in_set(VehicleSync),
-                    render::draw
-                        .in_set(VehicleDisplay)
-                        .after(crate::player::CameraFollow)
-                        .after(crate::screenfx::ScreenShakeSet)
-                        .before(bevy::transform::TransformSystems::Propagate),
-                ),
+                render::draw
+                    .in_set(VehicleDisplay)
+                    .after(crate::player::CameraFollow)
+                    .after(crate::screenfx::ScreenShakeSet)
+                    .before(bevy::transform::TransformSystems::Propagate),
             );
+        crate::timing::logical::pre(app, || {
+            keyboard.in_set(VehicleInput).after(crate::save::SaveSet)
+        });
+        crate::timing::logical::post(app, || render::sync_hero.in_set(VehicleSync));
     }
 }
 

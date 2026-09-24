@@ -4,6 +4,8 @@ use crate::world::MainCamera;
 use amnezia_data::{Event, EventCommand, Map};
 use bevy::math::Vec2;
 
+mod logical;
+
 #[test]
 fn an_empty_party_graphic_stays_hidden_until_an_actor_returns() {
     let mut app = App::new();

@@ -11,12 +11,12 @@ struct CharacterFlash {
 pub(in crate::animation) struct Expire;
 
 pub(in crate::animation) fn register(app: &mut App) {
-    app.add_message::<crate::world::MapRebuilt>().add_systems(
-        PostUpdate,
+    app.add_message::<crate::world::MapRebuilt>();
+    crate::timing::logical::post(app, || {
         expire
             .in_set(Expire)
-            .before(crate::legacy_colors::world::WorldColors),
-    );
+            .before(crate::legacy_colors::world::WorldColors)
+    });
 }
 
 pub(in crate::animation) fn color(def: &AnimationDef, tick: u32, duration: u32) -> [u8; 4] {
