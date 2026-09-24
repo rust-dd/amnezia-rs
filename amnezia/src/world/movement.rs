@@ -231,12 +231,21 @@ pub(crate) fn dir_delta(dir: u32) -> (i32, i32) {
 /// interpolated position and time-driven animation onto its sprite, including
 /// continuous and spinning animation while the character stands still.
 #[allow(clippy::type_complexity)]
-pub fn walk<C: Character + Component<Mutability = Mutable>>(
+pub fn walk<C: Character + Component<Mutability = Mutable>>(world: &mut World) {
+    world
+        .run_system_cached_with(walk_selected::<C>, None)
+        .unwrap();
+}
+
+#[allow(clippy::type_complexity)]
+pub(super) fn walk_selected<C: Character + Component<Mutability = Mutable>>(
+    In(target): In<Option<Entity>>,
     time: Res<Time>,
     data: Res<MapData>,
     asset_server: Res<AssetServer>,
     scene: super::ScenePause,
     mut movers: Query<(
+        Entity,
         &mut C,
         &mut MoveQueue,
         &mut Transform,
@@ -248,7 +257,10 @@ pub fn walk<C: Character + Component<Mutability = Mutable>>(
         return;
     }
     let dt = time.delta_secs();
-    for (mut ch, mut queue, mut transform, mut sprite, route) in &mut movers {
+    for (entity, mut ch, mut queue, mut transform, mut sprite, route) in &mut movers {
+        if target.is_some_and(|target| entity != target) {
+            continue;
+        }
         let moving = queue.busy();
         let facing = ch.dir();
         let position = if moving {

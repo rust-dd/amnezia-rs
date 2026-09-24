@@ -1,14 +1,7 @@
-//! Autonomous event movement: the RM2000 `move_type` behaviours (random, the
-//! two pacing cycles, and toward/away the hero) that let NPCs wander on their
-//! own, paced by the page's `move_frequency` and tweened at its `move_speed`.
-//!
-//! Each moving NPC carries an [`AutoMove`] holding its move fields and a
-//! frequency-derived countdown. When the countdown elapses and the NPC is
-//! standing still (and no message/fade/menu/battle/event is holding the map),
-//! [`autonomous_movement`] picks one tile step via [`decide`], updates both the
-//! logical [`MapEvents`] tile and the sprite's [`MoveQueue`] so they stay in
-//! sync, and re-arms the countdown. Scripted routes, the `Move Event` opcode,
-//! and custom routes (`move_type` 6) are handled elsewhere or deferred.
+//! Autonomous movement decisions and shared map-scene pause conditions.
+
+mod driver;
+pub(super) use driver::advance_event;
 
 use super::collision::{CollisionBodies, MapCollision, Mover};
 use super::movement::{dir_delta, step_secs_for_speed};
@@ -263,148 +256,11 @@ fn away_candidates(dx: i32, dy: i32) -> Vec<u32> {
     toward_candidates(dx, dy).into_iter().map(reverse).collect()
 }
 
-/// Drive every NPC's autonomous movement: on its frequency countdown, and only
-/// while standing still and unblocked by a message/fade/menu/battle/event, pick
-/// one passable tile step for its `move_type`, keep the logical [`MapEvents`]
-/// tile in step with the sprite's [`MoveQueue`], face the move, and re-arm.
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn autonomous_movement(
-    time: Res<Time>,
-    data: Res<MapData>,
-    mut map_events: ResMut<MapEvents>,
-    switches: Res<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
-    guards: MoveGuards,
-    mut touches: Option<ResMut<super::TouchEvents>>,
-    players: Query<(&Player, Option<&RouteStepper>), Without<EventSprite>>,
-    vehicles: Option<Res<crate::vehicles::Vehicles>>,
-    mut movers: Query<
-        (
-            &mut EventSprite,
-            &mut MoveQueue,
-            &mut AutoMove,
-            Option<&mut RouteStepper>,
-        ),
-        Without<Player>,
-    >,
-) {
-    let Ok((player, hero_route)) = players.single() else {
-        return;
-    };
-    let (px, py) = (player.tile_x, player.tile_y);
-    let dt = time.delta_secs();
-    let mut bodies =
-        CollisionBodies::from_events(movers.iter().map(|(event, _, _, route)| (event, route)));
-    bodies.hero_through = hero_route.is_some_and(RouteStepper::through);
-    bodies.include_vehicles(vehicles.as_deref(), data.map_id);
-    for (mut sprite, mut queue, mut auto, mut stepper) in &mut movers {
-        // Stationary (0) and custom-route (6) events never move here; a busy queue
-        // means the previous step is still tweening; and a live forced route (a
-        // MoveEvent override) takes over, as RM2000's move_route_overwritten
-        // suppresses the autonomous move_type. Like EasyRPG's stop_count, the delay
-        // only counts down while the NPC stands still.
-        if guards.autonomous_paused(sprite.id)
-            || auto.move_type == 0
-            || auto.move_type == 6
-            || queue.busy()
-            || stepper.as_ref().is_some_and(|route| route.active())
-        {
-            continue;
-        }
-        if let Some(route) = stepper.as_mut() {
-            auto.frequency = route.frequency();
-            auto.speed = route.speed();
-            if route.take_autonomy_reset() {
-                auto.timer = stop_frames(auto.frequency) as f32 / FPS;
-            }
-        }
-        auto.timer -= dt;
-        if auto.timer > 0.0 {
-            continue;
-        }
-
-        let (ex, ey) = (sprite.tile_x, sprite.tile_y);
-        let self_id = sprite.id;
-        let rand_dir = next_rand(&mut auto.rng) % 4;
-        let hero_delta = data.tile_delta((ex, ey), (px, py));
-        let touched = std::cell::Cell::new(false);
-        let decision = {
-            let collision = MapCollision::new(
-                &data,
-                &map_events,
-                (&switches, &variables, &party, &inventory),
-                &bodies,
-            );
-            let passable = |dir: u32| {
-                let (dx, dy) = dir_delta(dir);
-                let (nx, ny) = (ex + dx, ey + dy);
-                let destination = data.normalize_tile(nx, ny);
-                let through = stepper.as_ref().is_some_and(|route| route.through());
-                if !through && !bodies.hero_through && sprite.layer == 1 && destination == (px, py)
-                {
-                    touched.set(true);
-                }
-                collision.can_move(
-                    (ex, ey),
-                    (nx, ny),
-                    Mover::event(&sprite, through),
-                    Some((px, py)),
-                    false,
-                )
-            };
-            decide(
-                auto.move_type,
-                stepper
-                    .as_ref()
-                    .map_or(sprite.dir, |route| route.direction(&*sprite)),
-                ex,
-                ey,
-                ex + hero_delta.0,
-                ey + hero_delta.1,
-                rand_dir,
-                passable,
-            )
-        };
-
-        if touched.get()
-            && let Some(touches) = touches.as_mut()
-        {
-            touches.0.push(self_id);
-        }
-
-        match decision {
-            Decision::Step(dir) => {
-                let (dx, dy) = dir_delta(dir);
-                let (nx, ny) = data.normalize_tile(ex + dx, ey + dy);
-                if let Some(event) = map_events.events.iter_mut().find(|e| e.id == self_id) {
-                    event.x = nx as u32;
-                    event.y = ny as u32;
-                }
-                if let Some(route) = stepper.as_mut() {
-                    route.set_direction(&mut *sprite, dir);
-                } else {
-                    sprite.dir = dir;
-                }
-                queue.set_step_secs(step_secs_for_speed(auto.speed));
-                queue.enqueue_route([RouteAction::Step {
-                    dx,
-                    dy,
-                    face: sprite.dir,
-                }]);
-            }
-            Decision::Face(dir) => {
-                if let Some(route) = stepper.as_mut() {
-                    route.set_direction(&mut *sprite, dir);
-                } else {
-                    sprite.dir = dir;
-                }
-            }
-            Decision::Idle => {}
-        }
-        auto.timer = auto.next_delay();
-    }
+#[cfg(test)]
+pub(crate) fn autonomous_movement(world: &mut World) {
+    world
+        .run_system_cached_with(driver::advance_event, None)
+        .unwrap();
 }
 
 #[cfg(test)]

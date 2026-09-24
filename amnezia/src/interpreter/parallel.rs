@@ -10,15 +10,14 @@
 
 use super::exec::{Exec, run_frame};
 use super::frame::Frame;
-use super::params::Blockers;
 use crate::assets::{asset_root, load_ron};
 use crate::state::{Inventory, Party, Switches, Variables, active_page_index};
-use crate::teleport::Fade;
 use crate::world::MapEvents;
 use amnezia_data::{CommonEvent, EventCommand};
 use bevy::prelude::*;
 
 mod pages;
+mod update;
 pub(super) use pages::PageOwner;
 
 /// The database's common events, read once at boot. Autostart (trigger 3) events
@@ -79,88 +78,8 @@ impl ParallelPool {
     }
 }
 
-/// Step every background interpreter one frame: reconcile the live set against
-/// the current switches/variables (and the loaded map), then run each frame under
-/// the per-frame command budget, pausing the whole pool while a foreground scene
-/// owns the shared flow.
-pub(super) fn run_parallel(
-    time: Res<Time>,
-    fade: Res<Fade>,
-    blockers: Blockers,
-    mut pool: ResMut<ParallelPool>,
-    common_events: Res<CommonEvents>,
-    foreground: Res<super::RunningEvent>,
-    mut exec: Exec,
-) {
-    let map_id = exec.subsystems.flow.map_data.as_deref().map(|m| m.map_id);
-    if pool.last_map != map_id {
-        pool.frames
-            .retain(|pf| !matches!(pf.source, ParallelSource::MapPage(..)));
-        pool.pages.clear();
-        pool.last_map = map_id;
-    }
-    reconcile(
-        &mut pool,
-        &common_events,
-        exec.subsystems.flow.map_events.as_deref(),
-        &exec.switches,
-        &exec.variables,
-        &exec.party,
-        &exec.inventory,
-    );
-    discard_orphaned_results(&pool, &foreground.frame, &mut exec);
-
-    let static_blocked = fade.busy() || blockers.any();
-    let mut common_ids = common_events
-        .0
-        .iter()
-        .map(|event| event.id)
-        .collect::<Vec<_>>();
-    common_ids.sort_unstable();
-    for id in common_ids {
-        if static_blocked || exec.scene_paused(false, false) {
-            return;
-        }
-        let event = common_events.0.iter().find(|event| event.id == id).unwrap();
-        if event.trigger == 4 && common_gate_on(event, &exec.switches) {
-            step_source(
-                ParallelSource::Common(id),
-                &mut pool,
-                &common_events,
-                &mut exec,
-                time.delta_secs(),
-            );
-            discard_orphaned_results(&pool, &foreground.frame, &mut exec);
-        }
-    }
-    let mut map_ids = exec
-        .subsystems
-        .flow
-        .map_events
-        .as_ref()
-        .map_or_else(Vec::new, |events| {
-            events
-                .events
-                .iter()
-                .map(|event| event.id)
-                .collect::<Vec<_>>()
-        });
-    map_ids.sort_unstable();
-    for id in map_ids {
-        if static_blocked || exec.scene_paused(false, false) {
-            return;
-        }
-        if let Some(source) = map_source(id, &exec) {
-            step_source(
-                source,
-                &mut pool,
-                &common_events,
-                &mut exec,
-                time.delta_secs(),
-            );
-            discard_orphaned_results(&pool, &foreground.frame, &mut exec);
-        }
-    }
+pub(super) fn run_parallel(world: &mut World) {
+    update::run(world);
 }
 
 fn map_source(id: u32, exec: &Exec) -> Option<ParallelSource> {

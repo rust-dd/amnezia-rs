@@ -6,6 +6,7 @@ use std::time::Duration;
 
 mod arrival;
 mod input;
+mod npcs;
 
 fn app() -> App {
     let mut app = interp_app();

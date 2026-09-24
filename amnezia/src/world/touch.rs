@@ -8,8 +8,14 @@ use bevy::prelude::*;
 #[derive(Resource, Default)]
 pub(crate) struct TouchEvents(pub Vec<u32>);
 
+#[cfg(test)]
+pub(super) fn trigger(world: &mut World) {
+    world.run_system_cached_with(trigger_event, None).unwrap();
+}
+
 #[allow(clippy::too_many_arguments)]
-pub(super) fn trigger(
+pub(super) fn trigger_event(
+    In(target): In<Option<u32>>,
     mut touches: ResMut<TouchEvents>,
     mut running: ResMut<RunningEvent>,
     dialogue: Res<Dialogue>,
@@ -34,6 +40,9 @@ pub(super) fn trigger(
         return;
     }
     for event in &events.events {
+        if target.is_some_and(|id| event.id != id) {
+            continue;
+        }
         let Some(page) = active_page(event, &switches, &variables, &party, &inventory) else {
             continue;
         };

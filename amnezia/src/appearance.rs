@@ -68,7 +68,6 @@ impl Plugin for AppearancePlugin {
                     .in_set(PlayerGraphics)
                     .after(crate::interpreter::ParallelStep)
                     .after(crate::world::saved::RestoreCharacters)
-                    .before(crate::world::update::EventStep)
                     .before(crate::player::PlayerStep)
                     .before(ActorGraphics),
             )

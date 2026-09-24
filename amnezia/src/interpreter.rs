@@ -106,7 +106,12 @@ impl Plugin for InterpreterPlugin {
                 Update,
                 (autorun, run_interpreter).chain().in_set(InterpreterStep),
             )
-            .add_systems(Update, parallel::run_parallel.in_set(ParallelStep));
+            .add_systems(
+                Update,
+                parallel::run_parallel
+                    .in_set(ParallelStep)
+                    .in_set(crate::world::update::EventStep),
+            );
     }
 }
 
