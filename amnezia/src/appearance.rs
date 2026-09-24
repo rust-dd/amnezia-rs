@@ -3,6 +3,7 @@
 use crate::player::Player;
 use crate::state::Party;
 use crate::world::{Character, MapChanged, RouteStepper};
+use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -43,42 +44,70 @@ pub struct AppearancePlugin;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct ActorGraphics;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct PlayerGraphics;
+
+#[derive(Resource, Default)]
+struct Inbox {
+    sprites: MessageCursor<SpriteChange>,
+    transfers: MessageCursor<MapChanged>,
+    revision: Option<u64>,
+    appearance: Option<Appearance>,
+    player: Option<Entity>,
+}
+
 impl Plugin for AppearancePlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Appearance>()
+            .init_resource::<Inbox>()
             .add_message::<SpriteChange>()
             .add_message::<MapChanged>()
             .add_systems(
                 Update,
                 apply_sprite_change
+                    .in_set(PlayerGraphics)
+                    .after(crate::interpreter::ParallelStep)
+                    .after(crate::world::saved::RestoreCharacters)
+                    .before(crate::world::update::EventStep)
+                    .before(crate::player::PlayerStep)
+                    .before(ActorGraphics),
+            )
+            .add_systems(
+                Update,
+                apply_sprite_change
                     .in_set(ActorGraphics)
                     .after(crate::interpreter::InterpreterStep)
-                    .before(crate::world::walk::<Player>)
                     .before(crate::player::update_player_sprite),
             );
     }
 }
 
 fn apply_sprite_change(
-    mut reader: MessageReader<SpriteChange>,
-    mut transfers: MessageReader<MapChanged>,
+    messages: Res<Messages<SpriteChange>>,
+    transfers: Res<Messages<MapChanged>>,
+    mut inbox: ResMut<Inbox>,
     data: Res<crate::gamedata::GameData>,
     party: Res<Party>,
     mut appearance: ResMut<Appearance>,
-    mut players: Query<(&mut Player, Option<&mut RouteStepper>, Option<&mut Sprite>)>,
-    mut last_revision: Local<Option<u64>>,
+    mut players: Query<(
+        Entity,
+        &mut Player,
+        Option<&mut RouteStepper>,
+        Option<&mut Sprite>,
+    )>,
 ) {
-    let mut refresh = transfers.read().count() > 0
-        || *last_revision != Some(party.graphics_revision())
-        || appearance.is_changed();
-    *last_revision = Some(party.graphics_revision());
-    for msg in reader.read() {
+    let mut refresh = inbox.transfers.read(&transfers).count() > 0
+        || inbox.revision != Some(party.graphics_revision())
+        || inbox.appearance.as_ref() != Some(&appearance);
+    inbox.revision = Some(party.graphics_revision());
+    for msg in inbox.sprites.read(&messages) {
         if data.actor(msg.actor_id).is_none() {
             continue;
         }
         appearance.set(msg.actor_id, msg.charset.clone(), msg.index);
         refresh = true;
     }
+    inbox.appearance = Some(appearance.clone());
     let roster = party.snapshot();
     let graphic = roster
         .first()
@@ -88,10 +117,11 @@ fn apply_sprite_change(
                 .get(actor.id)
                 .unwrap_or((&actor.character_name, actor.character_index))
         });
-    for (mut player, route, sprite) in &mut players {
-        if !refresh && !player.is_added() {
+    for (entity, mut player, route, sprite) in &mut players {
+        if !refresh && inbox.player == Some(entity) {
             continue;
         }
+        inbox.player = Some(entity);
         player.set_graphic(graphic.0.to_owned(), graphic.1);
         if let Some(mut route) = route {
             route.reset_transparency();

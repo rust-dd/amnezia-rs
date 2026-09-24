@@ -73,15 +73,28 @@ pub struct HeroHidden(pub bool);
 
 pub struct PlayerPlugin;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct PlayerStep;
+
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CameraPan>()
             .init_resource::<HeroHidden>()
             .add_systems(
                 Update,
-                (move_player, walk::<Player>, update_player_sprite)
+                (move_player, walk::<Player>)
                     .chain()
+                    .in_set(PlayerStep)
+                    .after(crate::interpreter::ParallelStep)
+                    .after(crate::menu::MenuInput)
+                    .before(crate::dialogue::MessageUpdate)
                     .after(crate::world::saved::RestoreCharacters),
+            )
+            .add_systems(
+                Update,
+                update_player_sprite
+                    .after(PlayerStep)
+                    .after(crate::appearance::ActorGraphics),
             )
             .add_systems(
                 PostUpdate,
@@ -286,6 +299,7 @@ fn touch_page_at<'a>(
 pub(crate) fn update_player_sprite(
     data: Res<MapData>,
     asset_server: Res<AssetServer>,
+    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut players: Query<(&Player, &MoveQueue, &mut Sprite, &mut Transform), Changed<Player>>,
 ) {
     for (player, queue, mut sprite, mut transform) in &mut players {
@@ -295,7 +309,7 @@ pub(crate) fn update_player_sprite(
         sprite.image = asset_server.load(resolve_png("CharSet", &player.charset));
         let (sx, sy) = tiles::charset_source(player.index, player.dir, player.frame);
         sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
-        if queue.busy() {
+        if queue.busy() || vehicles.as_ref().is_some_and(|vehicles| vehicles.riding()) {
             continue;
         }
         let (world_x, world_y) = data.tile_center(player.tile_x, player.tile_y);

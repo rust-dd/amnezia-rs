@@ -25,6 +25,7 @@ mod screen;
 mod terrain;
 mod topology;
 mod touch;
+pub(crate) mod update;
 mod water;
 pub(crate) use water::smoke as water_smoke;
 
@@ -208,25 +209,6 @@ impl Plugin for WorldPlugin {
             .add_message::<MapChanged>()
             .add_systems(Startup, (cameras::setup, setup))
             .add_systems(
-                Update,
-                (
-                    (
-                        pages::refresh_pages,
-                        route::route_events,
-                        autonomy::autonomous_movement,
-                        walk::<EventSprite>,
-                        touch::trigger,
-                        update_event_sprites,
-                    )
-                        .chain()
-                        .after(saved::RestoreCharacters),
-                    route::route_hero
-                        .after(crate::appearance::ActorGraphics)
-                        .before(walk::<crate::player::Player>),
-                    apply_relocate,
-                ),
-            )
-            .add_systems(
                 PostUpdate,
                 (topology::wrap_scene, bush::update)
                     .chain()
@@ -237,6 +219,7 @@ impl Plugin for WorldPlugin {
                     .before(bevy::transform::TransformSystems::Propagate),
             );
         app.add_systems(PostUpdate, water::animate_water);
+        update::register(app);
     }
 }
 

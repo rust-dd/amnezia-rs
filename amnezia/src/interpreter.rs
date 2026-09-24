@@ -90,19 +90,23 @@ impl Plugin for InterpreterPlugin {
             .init_resource::<crate::transitions::Defaults>()
             .init_resource::<crate::timing::GameFrames>()
             .insert_resource(CommonEvents::load())
-            .add_systems(
+            .configure_sets(
                 Update,
-                (autorun, run_interpreter)
-                    .chain()
-                    .in_set(InterpreterStep)
-                    .after(crate::dialogue::MessageUpdate),
+                (
+                    InterpreterStep.after(crate::dialogue::MessageUpdate),
+                    ParallelStep
+                        .after(crate::teleport::MapTransfer)
+                        .after(crate::world::saved::RestoreCharacters)
+                        .after(crate::vehicles::saved::RestoreVehicles)
+                        .before(crate::dialogue::MessageUpdate)
+                        .before(crate::menu::MenuInput),
+                ),
             )
             .add_systems(
                 Update,
-                parallel::run_parallel
-                    .in_set(ParallelStep)
-                    .before(crate::menu::MenuInput),
-            );
+                (autorun, run_interpreter).chain().in_set(InterpreterStep),
+            )
+            .add_systems(Update, parallel::run_parallel.in_set(ParallelStep));
     }
 }
 

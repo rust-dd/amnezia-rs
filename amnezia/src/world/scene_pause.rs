@@ -13,6 +13,8 @@ pub(crate) struct ScenePause<'w> {
     battle: Option<Res<'w, crate::battle::BattleActive>>,
     title: Option<Res<'w, crate::title::TitleActive>>,
     gameover: Option<Res<'w, crate::gameover::GameOverActive>>,
+    save: Option<Res<'w, crate::save::EventSaveRequest>>,
+    files: Option<Res<'w, crate::menu::save_files::SaveFiles>>,
     pub(crate) vehicles: Option<Res<'w, crate::vehicles::Vehicles>>,
 }
 
@@ -31,6 +33,8 @@ impl ScenePause<'_> {
             || self.shop.as_ref().is_some_and(|v| v.0)
             || self.title.as_ref().is_some_and(|v| v.0)
             || self.gameover.as_ref().is_some_and(|v| v.0)
+            || self.save.as_ref().is_some_and(|v| v.0)
+            || self.files.as_ref().is_some_and(|v| v.active())
     }
 
     pub(crate) fn riding(&self) -> bool {

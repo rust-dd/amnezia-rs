@@ -45,6 +45,8 @@ pub(crate) struct MoveGuards<'w> {
     battle: Res<'w, BattleActive>,
     title: Res<'w, TitleActive>,
     gameover: Res<'w, GameOverActive>,
+    save: Option<Res<'w, crate::save::EventSaveRequest>>,
+    files: Option<Res<'w, crate::menu::save_files::SaveFiles>>,
 }
 
 impl MoveGuards<'_> {
@@ -64,15 +66,9 @@ impl MoveGuards<'_> {
     /// Whether manual movement input is paused.
     pub(crate) fn paused(&self) -> bool {
         self.dialogue.active
-            || self.transition.as_ref().is_some_and(|v| v.busy())
             || self.prompts.active()
-            || self.fade.busy()
             || self.running.active()
-            || self.menu.0
-            || self.shop.0
-            || self.battle.0
-            || self.title.0
-            || self.gameover.0
+            || self.forced_route_paused()
     }
 
     /// The pauses that freeze even a *forced* move route (a `MoveEvent` on the hero
@@ -90,6 +86,8 @@ impl MoveGuards<'_> {
             || self.battle.0
             || self.title.0
             || self.gameover.0
+            || self.save.as_ref().is_some_and(|v| v.0)
+            || self.files.as_ref().is_some_and(|v| v.active())
     }
 }
 

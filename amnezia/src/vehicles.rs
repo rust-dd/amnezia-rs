@@ -34,6 +34,9 @@ pub(crate) struct VehicleDisplay;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct VehicleSync;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct VehicleStep;
+
 pub struct VehiclePlugin;
 
 impl Plugin for VehiclePlugin {
@@ -45,7 +48,25 @@ impl Plugin for VehiclePlugin {
                 system.ship_music,
                 system.airship_music,
             ]))
-            .add_systems(Update, advance.after(saved::RestoreVehicles))
+            .add_systems(
+                Update,
+                (
+                    keyboard
+                        .in_set(VehicleInput)
+                        .after(crate::interpreter::ParallelStep)
+                        .after(crate::world::update::HeroRouteStep)
+                        .after(crate::player::PlayerStep),
+                    advance
+                        .in_set(VehicleStep)
+                        .after(saved::RestoreVehicles)
+                        .after(crate::player::PlayerStep)
+                        .after(VehicleInput),
+                    render::sync_hero
+                        .in_set(VehicleSync)
+                        .after(VehicleStep)
+                        .before(crate::dialogue::MessageUpdate),
+                ),
+            )
             .add_systems(
                 PostUpdate,
                 render::draw
@@ -54,10 +75,6 @@ impl Plugin for VehiclePlugin {
                     .after(crate::screenfx::ScreenShakeSet)
                     .before(bevy::transform::TransformSystems::Propagate),
             );
-        crate::timing::logical::pre(app, || {
-            keyboard.in_set(VehicleInput).after(crate::save::SaveSet)
-        });
-        crate::timing::logical::post(app, || render::sync_hero.in_set(VehicleSync));
     }
 }
 

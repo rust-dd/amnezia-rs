@@ -11,6 +11,8 @@ pub(super) fn register(app: &mut App) {
         Update,
         update
             .after(crate::menu::MenuInput)
+            .after(crate::player::PlayerStep)
+            .after(crate::vehicles::VehicleSync)
             .before(InterpreterStep)
             .before(super::MessageUpdate),
     );
