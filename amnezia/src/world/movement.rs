@@ -257,6 +257,9 @@ pub fn walk<C: Character + Component<Mutability = Mutable>>(
             None
         };
         if let Some(mut route) = route {
+            if moving && !queue.busy() {
+                route.settle_movement();
+            }
             if route.animation.keeps_facing() && ch.dir() != facing {
                 ch.set_dir(facing);
             }

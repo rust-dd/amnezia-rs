@@ -101,11 +101,8 @@ fn movement_app(events: Vec<Event>) -> App {
         .init_resource::<Inventory>()
         .init_resource::<Dialogue>()
         .init_resource::<RunningEvent>()
-        .init_resource::<ButtonInput<KeyCode>>()
-        .add_systems(
-            Update,
-            (move_player, walk::<Player>).chain().in_set(PlayerStep),
-        );
+        .init_resource::<ButtonInput<KeyCode>>();
+    register_movement(&mut app);
     app.world_mut().spawn((
         Player {
             tile_x: 3,

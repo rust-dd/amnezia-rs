@@ -2,7 +2,7 @@ use super::{Dialogue, InputPrompts, MessagePause};
 use crate::interpreter::{InterpreterStep, RunningEvent};
 use crate::player::{Player, facing_tile};
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
-use crate::world::{MapData, MapEvents, MoveQueue, ScenePause};
+use crate::world::{MapData, MapEvents, MoveQueue, RouteStepper, ScenePause};
 use bevy::prelude::*;
 
 pub(super) fn register(app: &mut App) {
@@ -11,8 +11,9 @@ pub(super) fn register(app: &mut App) {
         Update,
         update
             .after(crate::menu::MenuInput)
-            .after(crate::player::PlayerStep)
-            .after(crate::vehicles::VehicleSync)
+            .after(crate::player::PlayerInput)
+            .after(crate::vehicles::VehicleInput)
+            .before(crate::player::PlayerStep)
             .before(InterpreterStep)
             .before(super::MessageUpdate),
     );
@@ -34,7 +35,7 @@ pub(super) fn update(
     inventory: Res<Inventory>,
     dialogue: Res<Dialogue>,
     mut running: ResMut<RunningEvent>,
-    players: Query<(&Player, Option<&MoveQueue>)>,
+    players: Query<(&Player, Option<&MoveQueue>, Option<&RouteStepper>)>,
 ) {
     if !(keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter))
         || pause.paused()
@@ -46,10 +47,10 @@ pub(super) fn update(
     {
         return;
     }
-    let Ok((player, queue)) = players.single() else {
+    let Ok((player, queue, route)) = players.single() else {
         return;
     };
-    if queue.is_some_and(|q| q.busy()) {
+    if queue.is_some_and(MoveQueue::busy) || route.is_some_and(RouteStepper::active) {
         return;
     }
     let (fx, fy) = facing_tile(player);

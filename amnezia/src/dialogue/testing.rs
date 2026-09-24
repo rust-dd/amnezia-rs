@@ -2,6 +2,10 @@ use super::Dialogue;
 use bevy::ecs::system::RunSystemOnce;
 use bevy::prelude::*;
 
+pub(crate) fn register_actions(app: &mut App) {
+    super::action::register(app);
+}
+
 pub(crate) fn register_playback(app: &mut App) {
     app.init_resource::<Dialogue>()
         .init_resource::<crate::timing::GameFrames>()

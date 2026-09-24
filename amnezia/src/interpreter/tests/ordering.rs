@@ -4,6 +4,9 @@ use crate::player::PlayerPlugin;
 use bevy::time::TimeUpdateStrategy;
 use std::time::Duration;
 
+mod arrival;
+mod input;
+
 fn app() -> App {
     let mut app = interp_app();
     app.add_plugins((

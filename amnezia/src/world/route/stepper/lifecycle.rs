@@ -211,7 +211,7 @@ impl RouteStepper {
 
     /// The last move ends the forced route when its tween lands, without an
     /// additional route-frequency delay. Turns and waits still finish on their timer.
-    pub(in super::super) fn settle_movement(&mut self) -> bool {
+    pub(crate) fn settle_movement(&mut self) -> bool {
         if self.moving {
             self.moving = false;
             if self.index >= self.commands.len() {

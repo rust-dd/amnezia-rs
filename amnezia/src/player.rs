@@ -14,6 +14,7 @@ use crate::world::{
 use amnezia_data::EventPage;
 use bevy::prelude::*;
 
+mod arrival;
 mod camera;
 pub(crate) use camera::CameraFollow;
 pub use camera::CameraPan;
@@ -76,20 +77,13 @@ pub struct PlayerPlugin;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct PlayerStep;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct PlayerInput;
+
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CameraPan>()
             .init_resource::<HeroHidden>()
-            .add_systems(
-                Update,
-                (move_player, walk::<Player>)
-                    .chain()
-                    .in_set(PlayerStep)
-                    .after(crate::interpreter::ParallelStep)
-                    .after(crate::menu::MenuInput)
-                    .before(crate::dialogue::MessageUpdate)
-                    .after(crate::world::saved::RestoreCharacters),
-            )
             .add_systems(
                 Update,
                 update_player_sprite
@@ -110,7 +104,22 @@ impl Plugin for PlayerPlugin {
                 .before(crate::screenfx::ScreenShakeSet)
                 .before(crate::dialogue::MessageUpdate),
         );
+        register_movement(app);
     }
+}
+
+fn register_movement(app: &mut App) {
+    app.add_systems(
+        Update,
+        move_player
+            .in_set(PlayerInput)
+            .after(crate::interpreter::ParallelStep)
+            .after(crate::world::update::HeroRouteStep)
+            .after(crate::menu::MenuInput)
+            .after(crate::world::saved::RestoreCharacters)
+            .before(PlayerStep),
+    );
+    arrival::register(app);
 }
 
 /// Spawn the hero at `start` (tile) positioned via the map's geometry.
@@ -175,15 +184,10 @@ fn move_player(
     mut players: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper), Without<EventSprite>>,
     events: Query<(&EventSprite, Option<&RouteStepper>), Without<Player>>,
     vehicles: Option<Res<crate::vehicles::Vehicles>>,
-    mut arrived: Local<Option<(u32, i32, i32)>>,
 ) {
     let Ok((mut player, mut queue, mut stepper)) = players.single_mut() else {
         return;
     };
-    let position = (data.map_id, player.tile_x, player.tile_y);
-    if data.is_changed() {
-        *arrived = Some(position);
-    }
     if dialogue.active
         || prompts.active()
         || running.active()
@@ -191,27 +195,9 @@ fn move_player(
         || scene.riding()
         || stepper.active()
     {
-        *arrived = Some(position);
         return;
     }
     if queue.busy() {
-        return;
-    }
-    if arrived
-        .replace(position)
-        .is_some_and(|previous| previous.0 == position.0 && previous != position)
-        && let Some((id, page)) = touch_page_at(
-            &map_events,
-            &switches,
-            &variables,
-            &party,
-            &inventory,
-            player.tile_x,
-            player.tile_y,
-            false,
-        )
-    {
-        running.start(id, page.commands.clone());
         return;
     }
     let step = if keys.pressed(KeyCode::ArrowUp) {

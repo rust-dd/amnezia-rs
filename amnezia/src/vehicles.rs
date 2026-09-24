@@ -16,8 +16,8 @@ use crate::player::Player;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::{
-    Character, MapData, MapEvents, MoveGuards, MoveQueue, RouteAction, StepEffect, dir_delta,
-    drive_route, step_secs_for_speed,
+    Character, MapData, MapEvents, MoveGuards, MoveQueue, RouteAction, RouteStepper, StepEffect,
+    dir_delta, drive_route, step_secs_for_speed,
 };
 use amnezia_data::{MusicDef, SystemDef};
 use bevy::prelude::*;
@@ -55,7 +55,8 @@ impl Plugin for VehiclePlugin {
                         .in_set(VehicleInput)
                         .after(crate::interpreter::ParallelStep)
                         .after(crate::world::update::HeroRouteStep)
-                        .after(crate::player::PlayerStep),
+                        .after(crate::player::PlayerInput)
+                        .before(crate::player::PlayerStep),
                     advance
                         .in_set(VehicleStep)
                         .after(saved::RestoreVehicles)
@@ -149,17 +150,25 @@ fn keyboard(
     bgm: Res<CurrentBgm>,
     mut vehicles: ResMut<Vehicles>,
     mut audio: MessageWriter<AudioRequest>,
-    players: Query<(&Player, &MoveQueue)>,
+    players: Query<(&Player, &MoveQueue, Option<&RouteStepper>)>,
 ) {
     vehicles.consumed_action = false;
     if guards.paused() {
         return;
     }
     let Some(data) = data else { return };
-    let Ok((hero, queue)) = players.single() else {
+    let Ok((hero, queue, route)) = players.single() else {
         return;
     };
-    if queue.busy() || vehicles.airship_transitioning() {
+    if queue.busy() || route.is_some_and(RouteStepper::active) || vehicles.airship_transitioning() {
+        return;
+    }
+    if let Some(index) = vehicles.save.riding
+        && vehicles.motion[index].queue.busy()
+    {
+        return;
+    }
+    if move_rider(&keys, &data, &mut vehicles) {
         return;
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
@@ -189,13 +198,15 @@ fn keyboard(
                 );
             }
         }
-        return;
     }
+}
+
+fn move_rider(keys: &ButtonInput<KeyCode>, data: &MapData, vehicles: &mut Vehicles) -> bool {
     let Some(index) = vehicles.save.riding else {
-        return;
+        return false;
     };
-    if vehicles.motion[index].queue.busy() || vehicles.motion[index].route.active() {
-        return;
+    if vehicles.motion[index].route.active() {
+        return false;
     }
     let dir = [
         (KeyCode::ArrowUp, DIR_UP),
@@ -220,8 +231,10 @@ fn keyboard(
             vehicles.motion[index]
                 .queue
                 .push_step(RouteAction::Step { dx, dy, face: dir });
+            return true;
         }
     }
+    false
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -305,6 +318,9 @@ fn advance(
         let moving = motion.queue.busy();
         if let Some(pixel) = motion.queue.advance(vehicle, &data, time.delta_secs()) {
             motion.pixel = Some(pixel);
+        }
+        if moving && !motion.queue.busy() {
+            motion.route.settle_movement();
         }
         let animated = !motion.queue.jumping() && (index != 2 || vehicles.save.riding == Some(2));
         motion
