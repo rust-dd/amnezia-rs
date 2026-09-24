@@ -81,6 +81,12 @@ impl Plugin for AppearancePlugin {
     }
 }
 
+pub(crate) fn flush(world: &mut World) {
+    if world.contains_resource::<Inbox>() {
+        world.run_system_cached(apply_sprite_change).unwrap();
+    }
+}
+
 fn apply_sprite_change(
     messages: Res<Messages<SpriteChange>>,
     transfers: Res<Messages<MapChanged>>,

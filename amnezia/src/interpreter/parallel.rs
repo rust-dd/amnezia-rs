@@ -8,7 +8,7 @@
 //! Scene changes pause the pool. Messages pause their owner and message-sensitive
 //! commands, while other background scripts keep running.
 
-use super::exec::{Exec, run_frame};
+use super::exec::{Exec, Operation, RunOutcome, run_operation};
 use super::frame::Frame;
 use crate::assets::{asset_root, load_ron};
 use crate::state::{Inventory, Party, Switches, Variables, active_page_index};
@@ -43,7 +43,7 @@ impl CommonEvents {
 /// map page is keyed by `(event id, page index)` so a condition change that
 /// promotes a different page tears down the old frame and starts the new one.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum ParallelSource {
+pub(super) enum ParallelSource {
     /// A parallel common event, by its 1-based id.
     Common(u32),
     /// A trigger-4 map event page, by event id and active page index.
@@ -96,26 +96,30 @@ fn map_source(id: u32, exec: &Exec) -> Option<ParallelSource> {
         .then_some(ParallelSource::MapPage(id, index))
 }
 
-fn step_source(
+pub(super) fn step_source(
     source: ParallelSource,
+    operation: Operation,
     pool: &mut ParallelPool,
     common_events: &CommonEvents,
     exec: &mut Exec,
     dt: f32,
-) {
+) -> RunOutcome {
     let mut entry = if let Some(index) = pool.frames.iter().position(|entry| entry.source == source)
     {
         pool.frames.remove(index)
     } else {
+        if operation != Operation::Resume {
+            return RunOutcome::Finished;
+        }
         let Some((event_id, commands)) = fetch_commands(
             source,
             common_events,
             exec.subsystems.flow.map_events.as_deref(),
         ) else {
-            return;
+            return RunOutcome::Finished;
         };
         if commands.is_empty() {
-            return;
+            return RunOutcome::Finished;
         }
         ParallelFrame {
             source,
@@ -126,13 +130,25 @@ fn step_source(
         }
     };
     if !entry.frame.active() {
+        if operation != Operation::Resume {
+            return RunOutcome::Finished;
+        }
         entry.frame.start(entry.event_id, entry.commands.clone());
         entry.frame.parallel = true;
     }
-    run_frame(&mut entry.frame, exec, dt, false, entry.owner, pool);
+    let outcome = run_operation(
+        operation,
+        &mut entry.frame,
+        exec,
+        dt,
+        false,
+        entry.owner,
+        pool,
+    );
     if entry.owner.is_none_or(|owner| owner.current(pool)) {
         pool.frames.push(entry);
     }
+    outcome
 }
 
 fn discard_orphaned_results(pool: &ParallelPool, foreground: &Frame, exec: &mut Exec) {

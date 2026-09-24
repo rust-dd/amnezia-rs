@@ -21,6 +21,7 @@ mod actor_query;
 mod branch;
 mod commands;
 mod control_vars;
+mod driver;
 mod event_rng;
 mod exec;
 mod flow;
@@ -34,7 +35,6 @@ pub(crate) mod saved;
 mod tests;
 
 pub(crate) use event_rng::EventRng;
-use exec::{Exec, run_frame};
 use frame::Frame;
 use params::Blockers;
 
@@ -118,26 +118,8 @@ impl Plugin for InterpreterPlugin {
 /// Execute the foreground event, one burst of commands per frame. Pauses while a
 /// message box is open, a teleport fade is running, a blocking overlay is up, or a
 /// `Wait` is counting down; resumes automatically once the block clears.
-fn run_interpreter(
-    time: Res<Time>,
-    fade: Res<Fade>,
-    blockers: Blockers,
-    mut running: ResMut<RunningEvent>,
-    mut pool: ResMut<ParallelPool>,
-    mut exec: Exec,
-) {
-    if !running.frame.active() {
-        return;
-    }
-    let scene_blocked = exec.scene_owns_flow(fade.busy(), blockers.any());
-    run_frame(
-        &mut running.frame,
-        &mut exec,
-        time.delta_secs(),
-        scene_blocked,
-        None,
-        &mut pool,
-    );
+fn run_interpreter(world: &mut World) {
+    driver::foreground(world);
 }
 
 /// Start a foreground autorun when nothing else is running: the map's autostart

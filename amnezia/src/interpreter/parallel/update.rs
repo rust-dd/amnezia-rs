@@ -4,6 +4,7 @@ use crate::teleport::Fade;
 
 enum Phase {
     Begin,
+    After,
     Common(u32),
     Map(u32),
 }
@@ -13,6 +14,7 @@ enum Progress {
     Continue,
     NoPage,
     Paused,
+    Run(ParallelSource),
 }
 
 pub(super) fn run(world: &mut World) {
@@ -27,11 +29,7 @@ pub(super) fn run(world: &mut World) {
         .collect::<Vec<_>>();
     ids.sort_unstable();
     for id in ids {
-        if world
-            .run_system_cached_with(step, Phase::Common(id))
-            .unwrap()
-            == Progress::Paused
-        {
+        if phase(world, Phase::Common(id)) == Progress::Paused {
             return;
         }
     }
@@ -44,19 +42,28 @@ pub(super) fn run(world: &mut World) {
     ids.sort_unstable();
     for id in ids {
         crate::world::update::refresh(world);
-        match world.run_system_cached_with(step, Phase::Map(id)).unwrap() {
+        match phase(world, Phase::Map(id)) {
             Progress::Paused => return,
             Progress::NoPage => {}
             Progress::Continue => crate::world::update::event(world, id),
+            Progress::Run(_) => unreachable!(),
         }
     }
     crate::world::update::refresh(world);
 }
 
-#[allow(clippy::too_many_arguments)]
+fn phase(world: &mut World, phase: Phase) -> Progress {
+    let progress = world.run_system_cached_with(step, phase).unwrap();
+    if let Progress::Run(source) = progress {
+        crate::interpreter::driver::parallel(world, source);
+        world.run_system_cached_with(step, Phase::After).unwrap()
+    } else {
+        progress
+    }
+}
+
 fn step(
     In(phase): In<Phase>,
-    time: Res<Time>,
     fade: Res<Fade>,
     blockers: Blockers,
     mut pool: ResMut<ParallelPool>,
@@ -89,7 +96,7 @@ fn step(
         return Progress::Paused;
     }
     let source = match phase {
-        Phase::Begin => None,
+        Phase::Begin | Phase::After => None,
         Phase::Common(id) => common_events
             .0
             .iter()
@@ -118,14 +125,7 @@ fn step(
         }
     };
     if let Some(source) = source {
-        step_source(
-            source,
-            &mut pool,
-            &common_events,
-            &mut exec,
-            time.delta_secs(),
-        );
-        discard_orphaned_results(&pool, &foreground.frame, &mut exec);
+        return Progress::Run(source);
     }
     if exec.scene_paused(false, false) {
         Progress::Paused

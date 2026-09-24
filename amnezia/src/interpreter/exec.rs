@@ -1,10 +1,4 @@
-//! The shared interpreter core: the [`Exec`] IO bundle every opcode handler
-//! reads and writes, and [`run_frame`] — the per-frame resume-and-step driver
-//! that both the foreground [`super::RunningEvent`] and each parallel-pool frame
-//! run against. Extracting the state ([`super::frame::Frame`]) and the dispatch
-//! (`dispatch`) from the driver is what lets one command list run in the
-//! foreground while others run concurrently in the background, all sharing the
-//! same game state through `Exec`.
+//! Shared opcode IO, dispatch and resumable command execution.
 
 mod actors;
 mod dispatch;
@@ -12,13 +6,12 @@ mod handlers;
 mod key_input;
 mod message_gate;
 mod messages;
+mod step;
+pub(super) use step::{Operation, RunOutcome, run_operation};
 mod vehicles;
 
-use super::frame::{Frame, MAX_STEPS_PER_FRAME};
-use super::parallel::{PageOwner, ParallelPool};
 use super::params::SubsystemIo;
 use crate::audio::AudioRequest;
-use crate::battle::BattleOutcome;
 use crate::choice::Choice;
 use crate::dialogue::Dialogue;
 use crate::player::Player;
@@ -29,12 +22,8 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 use dispatch::dispatch;
 
-/// Every resource, writer, and query the opcode dispatch touches, bundled into
-/// one `SystemParam` so both the foreground and parallel systems can pull the
-/// identical shared state and hand it to [`run_frame`] as a single argument.
-/// Two systems each taking `Exec` conflict on this access, so Bevy serialises
-/// them — foreground and parallel never mutate the game state at the same
-/// instant, only within the same frame.
+/// Shared opcode access, released between commands so map refreshes can update
+/// the live character components before the next command reads them.
 #[derive(SystemParam)]
 pub(super) struct Exec<'w, 's> {
     pub(super) dialogue: ResMut<'w, Dialogue>,
@@ -116,173 +105,6 @@ pub(super) enum Flow {
     Yield,
     /// The run is over (Game Over / Return to Title); the caller stops the frame.
     Stop,
-}
-
-/// How a [`run_frame`] call ended, so the parallel pool can loop a finished
-/// background page while the foreground simply idles.
-pub(super) enum RunOutcome {
-    /// The frame yielded (or hit the per-frame step cap) but is still live.
-    Yielded,
-    /// The frame's command list ended (or a Stop opcode terminated it).
-    Finished,
-}
-
-/// Run one frame's worth of an interpreter: settle any pending resume, honour the
-/// pause conditions, then execute a bounded batch of commands. The caller blocks
-/// scenes globally; each frame owns its prompt, key, movement and battle waits.
-pub(super) fn run_frame(
-    frame: &mut Frame,
-    x: &mut Exec,
-    dt: f32,
-    scene_blocked: bool,
-    source: Option<PageOwner>,
-    pool: &mut ParallelPool,
-) -> RunOutcome {
-    let outcome = run_burst(frame, x, dt, scene_blocked, source, pool);
-    if refresh_parallel_pages(frame, source, pool, x) {
-        outcome
-    } else {
-        RunOutcome::Finished
-    }
-}
-
-fn run_burst(
-    frame: &mut Frame,
-    x: &mut Exec,
-    dt: f32,
-    scene_blocked: bool,
-    source: Option<PageOwner>,
-    pool: &mut ParallelPool,
-) -> RunOutcome {
-    if !refresh_parallel_pages(frame, source, pool, x) {
-        return RunOutcome::Finished;
-    }
-    if frame.battle_pending
-        && let Some(outcome) = x.subsystems.battle_result.0.take()
-    {
-        frame.battle_pending = false;
-        if outcome == BattleOutcome::Defeat && frame.defeat_is_unhandled() {
-            x.subsystems.gameover.0 = true;
-            frame.stop();
-            return RunOutcome::Finished;
-        }
-        if outcome == BattleOutcome::Escape && frame.escape_ends_event() {
-            frame.stop();
-            return RunOutcome::Finished;
-        }
-        frame.battle_outcome = Some(outcome);
-    }
-    if scene_blocked || frame.battle_pending {
-        return RunOutcome::Yielded;
-    }
-    if frame.message_pending {
-        if if frame.parallel {
-            x.message_active()
-        } else {
-            x.message_pending()
-        } {
-            return RunOutcome::Yielded;
-        }
-        frame.message_pending = false;
-    }
-    if frame.choice_pending {
-        if x.choice.active() {
-            return RunOutcome::Yielded;
-        }
-        if let Some(result) = x.choice.result.take() {
-            frame.choices.insert(x.choice.indent, result);
-        }
-        frame.choice_pending = false;
-    }
-    if frame.shop_pending {
-        if x.subsystems.merchant.open.0
-            || x.subsystems
-                .merchant
-                .scene
-                .as_ref()
-                .is_some_and(|scene| scene.active())
-            || x.subsystems
-                .merchant
-                .inn
-                .as_ref()
-                .is_some_and(|inn| inn.active())
-        {
-            return RunOutcome::Yielded;
-        }
-        frame.shop_transacted = Some(x.subsystems.merchant.outcome.transacted);
-        frame.shop_pending = false;
-        frame.ip += 1;
-    }
-    if frame.input_pending {
-        if x.subsystems.input_number.active() {
-            return RunOutcome::Yielded;
-        }
-        if let Some(value) = x.subsystems.input_number.result.take() {
-            x.variables
-                .set(x.subsystems.input_number.var_id, value as i32);
-        }
-        frame.input_pending = false;
-        frame.ip += 1;
-    }
-    if !key_input::resume(frame, x) {
-        return RunOutcome::Yielded;
-    }
-    if frame.wait > 0.0 {
-        frame.wait -= dt;
-        return RunOutcome::Yielded;
-    }
-    if frame.wait_movement {
-        if any_route_running(&x.hero_queue, &x.event_movers)
-            || x.subsystems.mapfx.vehicles.routes_pending()
-        {
-            return RunOutcome::Yielded;
-        }
-        frame.wait_movement = false;
-    }
-    if !refresh_parallel_pages(frame, source, pool, x) {
-        return RunOutcome::Finished;
-    }
-    for _ in 0..MAX_STEPS_PER_FRAME {
-        let Some(command) = frame.commands.get(frame.ip).cloned() else {
-            if frame.return_to_caller() {
-                continue;
-            }
-            frame.stop();
-            return RunOutcome::Finished;
-        };
-        if message_gate::needs_free_message(&command, !frame.parallel)
-            && x.message_command_reserved(!frame.parallel, &command)
-        {
-            return RunOutcome::Yielded;
-        }
-        let flow = dispatch(frame, command, x);
-        if !refresh_parallel_pages(frame, source, pool, x) {
-            return RunOutcome::Finished;
-        }
-        match flow {
-            Flow::Advance => {}
-            Flow::Yield => return RunOutcome::Yielded,
-            Flow::Stop => {
-                frame.stop();
-                return RunOutcome::Finished;
-            }
-        }
-    }
-    RunOutcome::Yielded
-}
-
-fn refresh_parallel_pages(
-    frame: &mut Frame,
-    source: Option<PageOwner>,
-    pool: &mut ParallelPool,
-    exec: &Exec,
-) -> bool {
-    pool.discard_changed_pages(exec);
-    if source.is_some_and(|source| !source.current(pool)) {
-        frame.stop();
-        return false;
-    }
-    true
 }
 
 /// Whether any forced move route is still running — the hero's stepper or any

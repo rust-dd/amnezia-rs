@@ -12,6 +12,7 @@ struct CharacterUpdates;
 pub(crate) fn register(app: &mut App) {
     app.init_resource::<TouchEvents>()
         .init_resource::<CharacterUpdates>()
+        .init_resource::<relocation::Inbox>()
         .add_message::<RelocateEvent>()
         .configure_sets(Update, EventStep.before(HeroRouteStep))
         .add_systems(
@@ -62,5 +63,12 @@ pub(crate) fn event(world: &mut World, id: u32) {
 pub(crate) fn refresh(world: &mut World) {
     if world.contains_resource::<CharacterUpdates>() {
         world.run_system_cached(pages::refresh_pages).unwrap();
+    }
+}
+
+pub(crate) fn flush(world: &mut World) {
+    if world.contains_resource::<CharacterUpdates>() {
+        world.run_system_cached(apply_relocate).unwrap();
+        refresh(world);
     }
 }

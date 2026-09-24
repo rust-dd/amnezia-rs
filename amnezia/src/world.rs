@@ -6,7 +6,7 @@
 use crate::assets::{asset_root, load_ron, resolve_png};
 use crate::player::spawn_player;
 use crate::state::{Inventory, Party, Switches, Variables};
-use crate::tiles::{self, CHAR_Y_OFFSET};
+use crate::tiles;
 use amnezia_data::{Chipset, Event, Map, Start};
 use bevy::prelude::*;
 
@@ -17,6 +17,7 @@ mod character_animation;
 pub(crate) mod collision;
 mod movement;
 mod pages;
+mod relocation;
 mod render;
 mod route;
 pub(crate) mod saved;
@@ -35,6 +36,7 @@ pub(crate) use bush::BushBottom;
 pub(crate) use cameras::{HudCamera, setup as setup_cameras};
 pub use movement::{Character, MoveQueue, RouteAction, walk};
 pub(crate) use movement::{dir_delta, step_secs_for_speed};
+use relocation::apply_relocate;
 pub use route::RouteStepper;
 pub(crate) use route::{StepEffect, drive as drive_route};
 pub(crate) use scene_pause::ScenePause;
@@ -388,93 +390,5 @@ fn update_event_sprites(
         }
         let (x, y) = data.tile_center(event.tile_x, event.tile_y);
         transform.translation = Vec3::new(x, y + event.y_offset(), event.draw_z(event.tile_y));
-    }
-}
-
-/// Teleport events per each [`RelocateEvent`]: move the logical [`MapEvents`]
-/// entry (so collision/touch use the new tile) and, for a graphic-bearing event,
-/// snap its [`EventSprite`] tile and transform to the target tile center,
-/// cancelling any in-flight move by resetting its [`MoveQueue`]. A graphic-less
-/// event has no sprite, so updating only the logical position is correct.
-fn apply_relocate(
-    mut reader: MessageReader<RelocateEvent>,
-    data: Res<MapData>,
-    mut map_events: ResMut<MapEvents>,
-    mut sprites: Query<(&mut EventSprite, &mut Transform, &mut MoveQueue)>,
-) {
-    for msg in reader.read() {
-        if let Some(event) = map_events.events.iter_mut().find(|e| e.id == msg.event_id) {
-            event.x = msg.x;
-            event.y = msg.y;
-        }
-        if let Some((mut sprite, mut transform, mut queue)) =
-            sprites.iter_mut().find(|(s, _, _)| s.id == msg.event_id)
-        {
-            sprite.tile_x = msg.x as i32;
-            sprite.tile_y = msg.y as i32;
-            *queue = MoveQueue::default();
-            let (wx, wy) = data.tile_center(msg.x as i32, msg.y as i32);
-            transform.translation = Vec3::new(
-                wx,
-                wy + CHAR_Y_OFFSET,
-                tiles::character_z_layer(msg.y as i32, sprite.layer),
-            );
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tiles::DIR_DOWN;
-
-    #[test]
-    fn relocate_moves_event_logical_and_visual() {
-        let mut app = App::new();
-        app.add_plugins(MinimalPlugins);
-        app.add_message::<RelocateEvent>();
-        app.add_systems(Update, apply_relocate);
-        app.insert_resource(MapData::for_test(10, 10));
-        app.insert_resource(MapEvents {
-            events: vec![Event {
-                id: 5,
-                x: 0,
-                y: 0,
-                name: String::new(),
-                pages: Vec::new(),
-            }],
-        });
-        let entity = app
-            .world_mut()
-            .spawn((
-                EventSprite {
-                    id: 5,
-                    tile_x: 0,
-                    tile_y: 0,
-                    dir: DIR_DOWN,
-                    frame: 1,
-                    charset: "C".into(),
-                    index: 0,
-                    layer: 1,
-                },
-                Transform::default(),
-                MoveQueue::default(),
-            ))
-            .id();
-
-        app.world_mut().write_message(RelocateEvent {
-            event_id: 5,
-            x: 3,
-            y: 4,
-        });
-        app.update();
-
-        let sprite = app.world().entity(entity).get::<EventSprite>().unwrap();
-        assert_eq!(sprite.tile_x, 3);
-        assert_eq!(sprite.tile_y, 4);
-        let events = app.world().resource::<MapEvents>();
-        let ev = events.events.iter().find(|e| e.id == 5).unwrap();
-        assert_eq!(ev.x, 3);
-        assert_eq!(ev.y, 4);
     }
 }

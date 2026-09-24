@@ -1,5 +1,6 @@
 use super::super::commands::{KeyAccept, decode_key_accept, key_code};
-use super::{Exec, Flow, Frame};
+use super::super::frame::Frame;
+use super::{Exec, Flow};
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
