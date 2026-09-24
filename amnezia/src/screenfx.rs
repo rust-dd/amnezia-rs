@@ -7,7 +7,6 @@
 
 use crate::world::MainCamera;
 use bevy::prelude::*;
-use bevy::transform::TransformSystems;
 use flash::Flashing;
 use shake::ShakeState;
 
@@ -113,6 +112,9 @@ pub struct ScreenShakeSet;
 pub(crate) struct ScreenEffectsSet;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct ScreenAdvance;
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct MapScreenReset;
 
 #[derive(bevy::ecs::system::SystemParam)]
@@ -164,6 +166,19 @@ impl Plugin for ScreenFxPlugin {
             .init_resource::<flash::channel::Inbox>()
             .add_plugins(tone::ScreenTonePlugin)
             .add_plugins(weather::WeatherPlugin)
+            .configure_sets(
+                Update,
+                (
+                    ScreenAdvance
+                        .after(crate::dialogue::MessageUpdate)
+                        .after(crate::timer::ClockTick)
+                        .before(crate::animation::AnimationSet::Advance)
+                        .before(crate::interpreter::InterpreterStep),
+                    ScreenEffectsSet
+                        .after(crate::interpreter::InterpreterStep)
+                        .after(crate::animation::AnimationSet::Advance),
+                ),
+            )
             .add_systems(Startup, flash::channel::spawn_overlay)
             .add_systems(
                 Update,
@@ -177,6 +192,7 @@ impl Plugin for ScreenFxPlugin {
                 Update,
                 step_effects
                     .in_set(flash::channel::Advance)
+                    .in_set(ScreenAdvance)
                     .after(crate::interpreter::ParallelStep)
                     .before(crate::animation::AnimationSet::Advance),
             )
@@ -187,24 +203,21 @@ impl Plugin for ScreenFxPlugin {
                     .before(ScreenEffectsSet)
                     .before(crate::animation::AnimationSet::Start),
             )
-            .add_systems(
-                Update,
-                flash::channel::receive
-                    .in_set(ScreenEffectsSet)
-                    .after(crate::interpreter::InterpreterStep)
-                    .after(crate::animation::AnimationSet::Advance),
-            )
+            .add_systems(Update, flash::channel::receive.in_set(ScreenEffectsSet))
             .add_systems(
                 PostUpdate,
                 flash::channel::paint
                     .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
             );
-        crate::timing::logical::post(app, || {
+        app.add_systems(
+            Update,
             apply_camera_shake
                 .in_set(ScreenShakeSet)
                 .after(crate::player::CameraFollow)
-                .before(TransformSystems::Propagate)
-        });
+                .after(ScreenAdvance)
+                .before(crate::animation::AnimationSet::Advance)
+                .before(crate::interpreter::InterpreterStep),
+        );
     }
 }
 

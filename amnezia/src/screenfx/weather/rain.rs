@@ -38,7 +38,12 @@ pub(super) fn register(app: &mut App) {
         .init_resource::<Scroll>()
         .add_message::<MapChanged>()
         .add_systems(Startup, view::setup)
-        .add_systems(Update, step.after(crate::interpreter::InterpreterStep))
+        .add_systems(
+            Update,
+            step.in_set(crate::screenfx::ScreenAdvance)
+                .after(crate::screenfx::flash::channel::Advance)
+                .before(crate::interpreter::InterpreterStep),
+        )
         .add_systems(
             PostUpdate,
             view::draw
@@ -46,9 +51,13 @@ pub(super) fn register(app: &mut App) {
                 .after(crate::screenfx::ScreenShakeSet)
                 .before(bevy::transform::TransformSystems::Propagate),
         );
-    crate::timing::logical::post(app, || {
-        view::track_scroll.after(crate::player::CameraFollow)
-    });
+    app.add_systems(
+        Update,
+        view::track_scroll
+            .after(crate::player::CameraFollow)
+            .after(crate::screenfx::saved::RestoreScreen)
+            .before(crate::screenfx::ScreenAdvance),
+    );
 }
 
 fn step(time: Res<Time>, scene: ScenePause, weather: Res<Weather>, mut rain: ResMut<Rain>) {

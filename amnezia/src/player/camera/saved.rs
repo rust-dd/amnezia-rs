@@ -72,6 +72,7 @@ pub(crate) fn register(app: &mut App) {
         Update,
         restore
             .after(crate::teleport::MapTransfer)
+            .before(super::CameraFollow)
             .before(crate::interpreter::InterpreterStep),
     );
 }

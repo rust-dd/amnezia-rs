@@ -44,6 +44,7 @@ mod ordering;
 mod outcomes;
 mod save_boundary;
 mod saved;
+mod scene_effects;
 mod screen_coordinates;
 mod transfers;
 mod transitions;

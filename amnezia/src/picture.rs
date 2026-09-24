@@ -5,11 +5,10 @@
 //!
 //! Each picture carries a palette-space colour [`Tone`] (saturation + hard light, so a
 //! grayscale or tinted picture renders as one — see [`render`]) and honours the
-//! RM2000 fixed-to-map flag: a screen-pinned picture re-centres on the (shaken)
+//! RM2000 fixed-to-map flag: a screen-pinned picture re-centres on the unshaken
 //! camera every frame, a map-fixed one holds a world anchor and scrolls with the
-//! map. Pictures shake with the screen (they track the shaken camera) but are
-//! never touched by the screen tint. Rebuilding the map clears the previous
-//! scene's pictures; same-map repositioning preserves them.
+//! map. Pictures inherit screen shake but not screen tint. Rebuilding the map
+//! clears the previous scene's pictures; same-map repositioning preserves them.
 
 use crate::screenfx::ScreenShakeSet;
 use crate::world::MapRebuilt;
@@ -275,23 +274,41 @@ impl Plugin for PicturePlugin {
             .add_plugins(Material2dPlugin::<render::PictureMaterial>::default())
             .add_systems(Startup, render::setup_picture_mesh)
             .add_systems(
-                Update,
-                (
-                    clear_on_map_change.after(crate::teleport::MapTransfer),
-                    saved::restore,
-                    render::apply_commands,
-                    render::size_pictures,
-                    drive_tweens,
-                )
-                    .chain(),
-            )
-            .add_systems(
                 PostUpdate,
-                render::place_pictures
+                (render::size_pictures, render::place_pictures)
+                    .chain()
                     .after(ScreenShakeSet)
                     .before(TransformSystems::Propagate),
             );
+        register_timeline(app);
     }
+}
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+struct ParallelPictures;
+
+fn register_timeline(app: &mut App) {
+    app.add_systems(
+        Update,
+        (
+            (clear_on_map_change, saved::restore)
+                .chain()
+                .after(crate::teleport::MapTransfer)
+                .before(crate::interpreter::ParallelStep)
+                .before(ParallelPictures),
+            render::apply_commands
+                .in_set(ParallelPictures)
+                .after(crate::interpreter::ParallelStep)
+                .before(crate::player::PlayerStep)
+                .before(crate::player::CameraFollow),
+            drive_tweens
+                .after(ParallelPictures)
+                .after(crate::screenfx::ScreenAdvance)
+                .after(crate::animation::AnimationSet::Advance)
+                .before(crate::interpreter::InterpreterStep),
+            render::apply_commands.after(crate::interpreter::InterpreterStep),
+        ),
+    );
 }
 
 /// Advance picture moves and effects on their shared 60 Hz clock.

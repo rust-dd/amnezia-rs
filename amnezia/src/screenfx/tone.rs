@@ -62,11 +62,38 @@ impl TintState {
 
 pub struct ScreenTonePlugin;
 
+#[derive(Resource, Default)]
+pub(super) struct Inbox(bevy::ecs::message::MessageCursor<ScreenEffect>);
+
+impl Inbox {
+    fn apply(&mut self, effects: &Messages<ScreenEffect>, state: &mut TintState) {
+        for effect in self.0.read(effects) {
+            if let ScreenEffect::Tint { r, g, b, sat, secs } = *effect {
+                state.target = [r, g, b, sat].map(f64::from);
+                state.frames_left = (secs * 60.0).round().max(0.0) as u32;
+                state.fraction = 0.0;
+                if state.frames_left == 0 {
+                    state.current = state.target;
+                }
+            }
+        }
+    }
+}
+
 impl Plugin for ScreenTonePlugin {
     fn build(&self, app: &mut App) {
         crate::legacy_colors::world::register(app);
         app.init_resource::<TintState>()
-            .add_systems(Update, update_tone.in_set(super::ScreenEffectsSet))
+            .init_resource::<Inbox>()
+            .add_systems(
+                Update,
+                (
+                    update_tone
+                        .in_set(super::ScreenAdvance)
+                        .before(super::flash::channel::Advance),
+                    receive_tone.in_set(super::ScreenEffectsSet),
+                ),
+            )
             .add_systems(
                 PostUpdate,
                 sync_front_camera
@@ -80,22 +107,22 @@ impl Plugin for ScreenTonePlugin {
 pub(super) fn update_tone(
     pause: super::EffectPause,
     time: Res<Time>,
-    mut effects: MessageReader<ScreenEffect>,
+    effects: Res<Messages<ScreenEffect>>,
+    mut inbox: ResMut<Inbox>,
     mut state: ResMut<TintState>,
 ) {
-    for effect in effects.read() {
-        if let ScreenEffect::Tint { r, g, b, sat, secs } = *effect {
-            state.target = [r, g, b, sat].map(f64::from);
-            state.frames_left = (secs * 60.0).round().max(0.0) as u32;
-            state.fraction = 0.0;
-            if state.frames_left == 0 {
-                state.current = state.target;
-            }
-        }
-    }
+    inbox.apply(&effects, &mut state);
     if !pause.paused() {
         step_tint(&mut state, time.delta_secs());
     }
+}
+
+fn receive_tone(
+    effects: Res<Messages<ScreenEffect>>,
+    mut inbox: ResMut<Inbox>,
+    mut state: ResMut<TintState>,
+) {
+    inbox.apply(&effects, &mut state);
 }
 
 pub(super) fn step_tint(state: &mut TintState, dt: f32) {
@@ -186,6 +213,7 @@ mod tests {
                 std::time::Duration::from_millis(250),
             ))
             .init_resource::<TintState>()
+            .init_resource::<Inbox>()
             .init_resource::<crate::transitions::Transition>()
             .add_message::<ScreenEffect>()
             .add_systems(Update, update_tone);

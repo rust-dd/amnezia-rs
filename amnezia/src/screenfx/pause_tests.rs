@@ -6,6 +6,7 @@ fn app() -> App {
         .init_resource::<Fx>()
         .init_resource::<crate::screenfx::flash::channel::Inbox>()
         .init_resource::<TintState>()
+        .init_resource::<tone::Inbox>()
         .init_resource::<crate::battle::Battle>()
         .init_resource::<crate::battle::BattleActive>()
         .add_message::<ScreenEffect>()

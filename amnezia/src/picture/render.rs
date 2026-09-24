@@ -60,6 +60,9 @@ impl Material2d for PictureMaterial {
 #[derive(Resource)]
 pub(super) struct PictureMesh(Handle<Mesh>);
 
+#[derive(Resource, Default)]
+struct Inbox(bevy::ecs::message::MessageCursor<PictureCommand>);
+
 /// Register the shared unit quad once at startup.
 pub(super) fn setup_picture_mesh(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     commands.insert_resource(PictureMesh(meshes.add(Rectangle::new(1.0, 1.0))));
@@ -69,22 +72,28 @@ pub(super) fn setup_picture_mesh(mut commands: Commands, mut meshes: ResMut<Asse
 /// picture records its world anchor from the (pre-shake) camera here so it stays
 /// pinned to the map; a `Move` on a legacy map-fixed picture keeps its position
 /// (RM2000 ignores the target coordinates for those).
-pub(super) fn apply_commands(
-    world: &mut World,
-    mut cursor: Local<bevy::ecs::message::MessageCursor<PictureCommand>>,
-) {
+pub(super) fn apply_commands(world: &mut World) {
     if !world.contains_resource::<PictureMesh>() {
         return;
     }
     let camera_base = world
-        .query_filtered::<&Transform, With<MainCamera>>()
-        .single(world)
-        .map(|t| t.translation.truncate())
-        .ok();
-    let requests = cursor
-        .read(world.resource::<Messages<PictureCommand>>())
-        .cloned()
-        .collect::<Vec<_>>();
+        .get_resource::<crate::player::CameraPan>()
+        .and_then(|pan| pan.position)
+        .or_else(|| {
+            world
+                .query_filtered::<&Transform, With<MainCamera>>()
+                .single(world)
+                .map(|t| t.translation.truncate())
+                .ok()
+        });
+    world.init_resource::<Inbox>();
+    let requests = world.resource_scope(|world, mut inbox: Mut<Inbox>| {
+        inbox
+            .0
+            .read(world.resource::<Messages<PictureCommand>>())
+            .cloned()
+            .collect::<Vec<_>>()
+    });
     for request in requests {
         match request {
             PictureCommand::Show {
@@ -220,10 +229,10 @@ pub(super) fn size_pictures(
     }
 }
 
-/// Place each picture (screen-pinned to the shaken camera, or fixed to its map
-/// anchor), scale it to texture size × zoom, and push its tone/opacity into the
-/// material.
+/// Position pictures against the unshaken map origin; the picture camera applies
+/// screen shake to both anchor modes. Wave clipping uses the displayed viewport.
 pub(super) fn place_pictures(
+    pan: Option<Res<crate::player::CameraPan>>,
     cameras: Query<&Transform, (With<MainCamera>, Without<Picture>)>,
     mut materials: ResMut<Assets<PictureMaterial>>,
     mut pictures: Query<(&Picture, &mut Transform, &MeshMaterial2d<PictureMaterial>)>,
@@ -232,8 +241,9 @@ pub(super) fn place_pictures(
         return;
     };
     let base = camera.translation.truncate();
+    let unshaken = pan.as_ref().and_then(|pan| pan.position).unwrap_or(base);
     for (pic, mut transform, handle) in &mut pictures {
-        let pos = picture_translation(base, pic.x, pic.y, pic.world_anchor);
+        let pos = picture_translation(unshaken, pic.x, pic.y, pic.world_anchor);
         transform.translation = pos.extend(picture_z(pic.id));
         transform.rotation = Quat::from_rotation_z(pic.effect.angle());
         let mut wave_uniform = Vec4::ZERO;
@@ -258,7 +268,7 @@ pub(super) fn place_pictures(
 }
 
 /// A picture's world translation: its fixed map anchor when it scrolls with the
-/// map, otherwise the (shaken) camera centre plus its screen offset. RM2000 y
+/// map, otherwise the unshaken camera centre plus its screen offset. RM2000 y
 /// grows downward, so the offset flips against world y.
 fn picture_translation(base: Vec2, x: f32, y: f32, anchor: Option<Vec2>) -> Vec2 {
     match anchor {

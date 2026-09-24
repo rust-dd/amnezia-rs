@@ -88,12 +88,17 @@ pub(crate) fn prepare(world: &mut World, map_id: u32, screen: Option<ScreenState
     }
 }
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct RestoreScreen;
+
 pub(crate) fn register(app: &mut App) {
     app.add_message::<crate::world::MapRebuilt>().add_systems(
         Update,
         restore
+            .in_set(RestoreScreen)
             .after(crate::teleport::MapTransfer)
             .after(super::MapScreenReset)
+            .before(super::ScreenAdvance)
             .before(super::flash::channel::Advance)
             .before(crate::interpreter::InterpreterStep)
             .before(super::ScreenEffectsSet),

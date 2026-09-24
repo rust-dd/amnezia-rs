@@ -97,6 +97,7 @@ pub(crate) struct ClockTick;
 #[derive(bevy::ecs::system::SystemParam)]
 pub(super) struct ClockScene<'w> {
     transition: crate::transitions::TransitionPause<'w>,
+    scene: crate::world::ScenePause<'w>,
     menu: Option<Res<'w, crate::menu::MenuOpen>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
     title: Option<Res<'w, crate::title::TitleActive>>,
@@ -111,6 +112,7 @@ impl ClockScene<'_> {
 
     fn paused(&self) -> bool {
         self.outside_game()
+            || self.scene.screen_effects_paused()
             || self.transition.paused()
             || self.menu.as_ref().is_some_and(|v| v.0)
             || self.shop.as_ref().is_some_and(|v| v.0)
@@ -125,6 +127,13 @@ impl Plugin for GameClockPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GameClock>()
             .init_resource::<PlayTime>()
+            .configure_sets(
+                Update,
+                ClockTick
+                    .after(crate::dialogue::MessageUpdate)
+                    .after(crate::interpreter::ParallelStep)
+                    .before(crate::interpreter::InterpreterStep),
+            )
             .add_systems(Update, tick_clock.in_set(ClockTick))
             .add_systems(Update, (tick_playtime, view::update).after(ClockTick))
             .add_systems(PostStartup, view::spawn);
