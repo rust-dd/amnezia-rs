@@ -1,4 +1,4 @@
-use super::{EventSprite, EventTriggers, MoveQueue, RouteStepper, ScenePause};
+use super::{EventTriggers, RouteStepper, ScenePause};
 use crate::interpreter::RunningEvent;
 use crate::player::Player;
 use bevy::prelude::*;
@@ -19,9 +19,8 @@ pub(super) fn trigger_event(
     mut touches: ResMut<TouchEvents>,
     mut running: ResMut<RunningEvent>,
     scene: ScenePause,
-    triggers: EventTriggers,
+    mut triggers: EventTriggers,
     players: Query<(&Player, &RouteStepper)>,
-    sprites: Query<(&EventSprite, &MoveQueue)>,
 ) {
     let attempts = std::mem::take(&mut touches.0);
     touches.0.extend(
@@ -36,6 +35,7 @@ pub(super) fn trigger_event(
     let Ok((hero, route)) = players.single() else {
         return;
     };
+    let mut pending = Vec::new();
     for event in &triggers.events.events {
         if target.is_some_and(|id| event.id != id) {
             continue;
@@ -53,12 +53,13 @@ pub(super) fn trigger_event(
                 && !route.forced()
                 && event.x as i32 == hero.tile_x
                 && event.y as i32 == hero.tile_y
-                && sprites
-                    .iter()
-                    .any(|(sprite, queue)| sprite.id == event.id && !queue.busy())
+                && triggers.stopped(event.id)
         };
         if collision {
-            running.queue_event(triggers.data.map_id, event.id, index);
+            pending.push((event.id, index));
         }
+    }
+    for (id, index) in pending {
+        triggers.queue(&mut running, id, index, (hero.tile_x, hero.tile_y), false);
     }
 }

@@ -14,8 +14,14 @@ pub(super) use queue::Queue;
 pub(super) struct Inbox(MessageCursor<MapRebuilt>);
 
 impl RunningEvent {
-    pub(crate) fn queue_event(&mut self, map_id: u32, id: u32, page: usize) -> bool {
-        self.queue.schedule(map_id, id, page)
+    pub(crate) fn queue_event(
+        &mut self,
+        map_id: u32,
+        id: u32,
+        page: usize,
+        decision: bool,
+    ) -> bool {
+        self.queue.schedule(map_id, id, page, decision)
     }
 
     #[cfg(test)]
@@ -54,7 +60,7 @@ fn schedule_autorun(In(id): In<u32>, pages: Pages, mut running: ResMut<RunningEv
     };
     let page = &event.pages[index];
     if page.trigger == 3 && !page.commands.is_empty() {
-        running.queue.schedule(pages.data.map_id, id, index);
+        running.queue.schedule(pages.data.map_id, id, index, false);
     }
 }
 
@@ -106,7 +112,7 @@ pub(super) fn select_next(
                 && !event.commands.is_empty()
         })
         .min_by_key(|event| event.id);
-    let map = running.queue.take_next().and_then(|(id, index)| {
+    let map = running.queue.take_next().and_then(|(id, index, decision)| {
         let event = exec
             .subsystems
             .flow
@@ -115,7 +121,7 @@ pub(super) fn select_next(
             .events
             .iter()
             .find(|event| event.id == id)?;
-        Some((id, event.pages.get(index)?.commands.clone()))
+        Some((id, event.pages.get(index)?.commands.clone(), decision))
     });
     if common.is_none() && map.is_none() {
         return false;
@@ -124,12 +130,13 @@ pub(super) fn select_next(
     if let Some(common) = common {
         running.frame.start(0, common.commands.clone());
     }
-    if let Some((id, commands)) = map {
+    if let Some((id, commands, decision)) = map {
         if running.frame.active() {
             running.frame.push_foreground(commands, id);
         } else {
             running.frame.start(id, commands);
         }
+        running.frame.decision = decision;
     }
     true
 }

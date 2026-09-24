@@ -96,9 +96,10 @@ impl Vehicles {
                 return true;
             }
             let vehicle = &self.save.vehicles[index];
+            let direction = self.motion[index].route.direction(vehicle);
             let (mut x, mut y) = vehicle.tile();
             if index != 2 {
-                let (dx, dy) = dir_delta(vehicle.dir);
+                let (dx, dy) = dir_delta(direction);
                 x += dx;
                 y += dy;
             }
@@ -106,7 +107,11 @@ impl Vehicles {
             if !data.passable(x, y) || blocked(x, y) {
                 return false;
             }
-            self.disembark = Some((x, y, vehicle.dir));
+            self.disembark = Some(model::DisembarkPose {
+                tile: (x, y),
+                direction,
+                facing: vehicle.dir,
+            });
             self.save.riding = None;
             return true;
         }
@@ -123,6 +128,7 @@ impl Vehicles {
                 && !self.motion[index].queue.busy()
             {
                 self.save.riding = Some(index);
+                self.motion[index].route.set_direction(vehicle, hero.2);
                 vehicle.dir = if index == 2 { DIR_LEFT } else { hero.2 };
                 if index == 2 {
                     self.save.airship_flight.ascend();
@@ -173,7 +179,8 @@ fn keyboard(
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
         let was_riding = vehicles.riding();
-        if vehicles.toggle(&data, (hero.tile_x, hero.tile_y, hero.dir), |x, y| {
+        let direction = route.map_or(hero.dir, |route| route.direction(hero));
+        if vehicles.toggle(&data, (hero.tile_x, hero.tile_y, direction), |x, y| {
             map_events.events.iter().any(|event| {
                 event.x as i32 == x
                     && event.y as i32 == y
@@ -220,7 +227,9 @@ fn move_rider(keys: &ButtonInput<KeyCode>, data: &MapData, vehicles: &mut Vehicl
     if let Some(dir) = dir {
         let (dx, dy) = dir_delta(dir);
         let (x, y) = vehicles.save.vehicles[index].tile();
-        vehicles.save.vehicles[index].dir = dir;
+        vehicles.motion[index]
+            .route
+            .set_direction(&mut vehicles.save.vehicles[index], dir);
         if data.contains_tile(x + dx, y + dy)
             && (index != 2 || data.airship_passable(x + dx, y + dy))
         {
@@ -228,9 +237,11 @@ fn move_rider(keys: &ButtonInput<KeyCode>, data: &MapData, vehicles: &mut Vehicl
             vehicles.motion[index]
                 .queue
                 .set_step_secs(step_secs_for_speed(speed));
-            vehicles.motion[index]
-                .queue
-                .push_step(RouteAction::Step { dx, dy, face: dir });
+            vehicles.motion[index].queue.push_step(RouteAction::Step {
+                dx,
+                dy,
+                face: vehicles.save.vehicles[index].dir,
+            });
             return true;
         }
     }

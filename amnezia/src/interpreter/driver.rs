@@ -48,9 +48,17 @@ fn step(world: &mut World, source: Option<ParallelSource>, operation: Operation)
         Some(source) => world
             .run_system_cached_with(step_parallel, (source, operation))
             .unwrap(),
-        None => world
-            .run_system_cached_with(step_foreground, operation)
-            .unwrap(),
+        None => {
+            let (outcome, finished) = world
+                .run_system_cached_with(step_foreground, operation)
+                .unwrap();
+            if let Some(id) = finished {
+                world
+                    .run_system_cached_with(crate::world::finish_foreground, id)
+                    .unwrap();
+            }
+            outcome
+        }
     };
     flush(world);
     outcome
@@ -70,9 +78,9 @@ fn step_foreground(
     mut running: ResMut<RunningEvent>,
     mut pool: ResMut<ParallelPool>,
     mut exec: Exec,
-) -> RunOutcome {
+) -> (RunOutcome, Option<u32>) {
     if !running.frame.active() {
-        return RunOutcome::Finished;
+        return (RunOutcome::Finished, None);
     }
     let scene_blocked = exec.scene_owns_flow(fade.busy(), blockers.any());
     let base_id = running.frame.base_event_id();
@@ -89,7 +97,10 @@ fn step_foreground(
         running.queue.finish(base_id);
         running.queued_owner = false;
     }
-    outcome
+    (
+        outcome,
+        (outcome == RunOutcome::Finished && base_id > 0).then_some(base_id),
+    )
 }
 
 fn step_parallel(

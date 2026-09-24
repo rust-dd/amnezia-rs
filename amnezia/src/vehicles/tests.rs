@@ -33,10 +33,19 @@ fn boarding_and_disembarking_wrap_the_facing_tile() {
     let mut vehicles = Vehicles::default();
     vehicles.set_location(0, 0, 139, 2);
     assert!(vehicles.toggle(&data, (0, 2, DIR_LEFT), |_, _| false));
-    vehicles.save.vehicles[0].dir = DIR_RIGHT;
+    vehicles.motion[0]
+        .route
+        .set_direction(&mut vehicles.save.vehicles[0], DIR_RIGHT);
     assert!(!vehicles.toggle(&data, (139, 2, DIR_RIGHT), |x, y| (x, y) == (0, 2)));
     assert!(vehicles.toggle(&data, (139, 2, DIR_RIGHT), |_, _| false));
-    assert_eq!(vehicles.disembark, Some((0, 2, DIR_RIGHT)));
+    assert_eq!(
+        vehicles.disembark,
+        Some(model::DisembarkPose {
+            tile: (0, 2),
+            direction: DIR_RIGHT,
+            facing: DIR_RIGHT
+        })
+    );
 }
 
 #[test]
@@ -56,7 +65,14 @@ fn airship_boards_on_its_tile_and_lands_at_its_live_position() {
     for _ in 0..32 {
         vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
     }
-    assert_eq!(vehicles.disembark, Some((28, 100, DIR_DOWN)));
+    assert_eq!(
+        vehicles.disembark,
+        Some(model::DisembarkPose {
+            tile: (28, 100),
+            direction: DIR_LEFT,
+            facing: DIR_DOWN
+        })
+    );
     assert!(!vehicles.riding());
 }
 

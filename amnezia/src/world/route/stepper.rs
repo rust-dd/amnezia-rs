@@ -14,6 +14,7 @@ use amnezia_data::{MoveCommandDef, MoveRouteDef};
 use bevy::prelude::Component;
 
 mod decode;
+mod facing;
 mod jump;
 mod lifecycle;
 mod saved;
@@ -158,10 +159,7 @@ impl RouteStepper {
                 self.try_move(ch, Some(dir), dir_delta(dir), can_step)
             }
             11 => self.try_move(ch, None, dir_delta(self.direction(ch)), can_step),
-            12..=15 => {
-                self.set_direction(ch, cmd.code - 12);
-                self.gate_turn()
-            }
+            12..=15 => self.turn_to(ch, cmd.code - 12),
             16 => self.turn(ch, 1),
             17 => self.turn(ch, 3),
             18 => self.turn(ch, 2),
@@ -171,17 +169,10 @@ impl RouteStepper {
             }
             20 => {
                 let dir = self.random_dir();
-                self.set_direction(ch, dir);
-                self.gate_turn()
+                self.turn_to(ch, dir)
             }
-            21 => {
-                self.set_direction(ch, toward_dir(hero, ch.tile()));
-                self.gate_turn()
-            }
-            22 => {
-                self.set_direction(ch, away_dir(hero, ch.tile()));
-                self.gate_turn()
-            }
+            21 => self.turn_to(ch, toward_dir(hero, ch.tile())),
+            22 => self.turn_to(ch, away_dir(hero, ch.tile())),
             23 => {
                 self.timer = wait_delay_secs(self.frequency);
                 Step::Gate(None)
@@ -262,6 +253,7 @@ impl RouteStepper {
         can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
     ) -> Step {
         let prev = self.direction(ch);
+        let prev_facing = ch.dir();
         if let Some(dir) = new_dir {
             self.set_direction(ch, dir);
         }
@@ -273,7 +265,8 @@ impl RouteStepper {
                 step_secs_for_speed(self.speed),
             )))
         } else if self.skippable {
-            self.set_direction(ch, prev);
+            self.direction = Some(prev);
+            ch.set_dir(prev_facing);
             Step::Next
         } else {
             self.timer = step_delay_secs(self.frequency);
@@ -282,19 +275,13 @@ impl RouteStepper {
     }
 
     fn turn<C: Character>(&mut self, ch: &mut C, quarters: u32) -> Step {
-        self.set_direction(ch, (self.direction(ch) + quarters) % 4);
-        self.gate_turn()
+        self.turn_to(ch, (ch.dir() + quarters) % 4)
     }
 
-    pub(crate) fn direction<C: Character>(&self, ch: &C) -> u32 {
-        self.direction.unwrap_or_else(|| ch.dir())
-    }
-
-    pub(crate) fn set_direction<C: Character>(&mut self, ch: &mut C, dir: u32) {
+    fn turn_to<C: Character>(&mut self, ch: &mut C, dir: u32) -> Step {
         self.direction = Some(dir);
-        if self.facing_lock.is_none() && !self.animation.keeps_facing() {
-            ch.set_dir(dir);
-        }
+        ch.set_dir(dir);
+        self.gate_turn()
     }
 
     fn gate_turn(&mut self) -> Step {

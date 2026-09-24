@@ -229,7 +229,7 @@ fn changing_to_a_fixed_page_during_movement_immediately_installs_its_direction_a
     assert_eq!(sprite.rect.unwrap().min, Vec2::new(72.0, 96.0));
 }
 
-fn page(graphic: &str, index: u32) -> EventPage {
+pub(super) fn page(graphic: &str, index: u32) -> EventPage {
     let mut page = load_ron::<amnezia_data::Map>(&format!("{}/maps/map_0001.ron", asset_root()))
         .events[0]
         .pages[0]
@@ -242,7 +242,7 @@ fn page(graphic: &str, index: u32) -> EventPage {
     page
 }
 
-fn app_with_event(event: Event) -> App {
+pub(super) fn app_with_event(event: Event) -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, AssetPlugin::default()))
         .init_asset::<Image>()

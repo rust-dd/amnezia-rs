@@ -109,9 +109,14 @@ impl Vehicles {
             if self.save.airship_flight.step() {
                 if self.can_land_airship(data, &blocked) {
                     let (x, y) = self.save.vehicles[2].tile();
+                    let direction = self.motion[2].route.direction(&self.save.vehicles[2]);
                     self.save.vehicles[2].dir = DIR_LEFT;
                     self.save.riding = None;
-                    self.disembark = Some((x, y, DIR_DOWN));
+                    self.disembark = Some(super::model::DisembarkPose {
+                        tile: (x, y),
+                        direction,
+                        facing: DIR_DOWN,
+                    });
                     return true;
                 }
                 self.save.airship_flight.ascend();

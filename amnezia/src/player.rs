@@ -6,7 +6,7 @@ use crate::dialogue::Dialogue;
 use crate::interpreter::RunningEvent;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::EventSprite;
-use crate::world::collision::{CollisionBodies, Mover};
+use crate::world::collision::Mover;
 use crate::world::{
     Character, EventTriggers, MapData, MoveQueue, RouteAction, RouteStepper, ScenePause, walk,
 };
@@ -160,28 +160,16 @@ pub fn spawn_player(
     ));
 }
 
-/// The tile directly in front of the player, given its facing direction.
-pub fn facing_tile(player: &Player) -> (i32, i32) {
-    let (dx, dy) = match player.dir {
-        DIR_UP => (0, -1),
-        DIR_RIGHT => (1, 0),
-        DIR_DOWN => (0, 1),
-        _ => (-1, 0),
-    };
-    (player.tile_x + dx, player.tile_y + dy)
-}
-
 #[allow(clippy::too_many_arguments)]
 fn move_player(
     keys: Res<ButtonInput<KeyCode>>,
     prompts: crate::dialogue::InputPrompts,
-    triggers: EventTriggers,
+    mut triggers: EventTriggers,
     dialogue: Res<Dialogue>,
     scene: ScenePause,
     mut running: ResMut<RunningEvent>,
     mut phase: ResMut<InputPhase>,
     mut players: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper), Without<EventSprite>>,
-    events: Query<(&EventSprite, Option<&RouteStepper>), Without<Player>>,
     vehicles: Option<Res<crate::vehicles::Vehicles>>,
 ) {
     phase.blocked = true;
@@ -200,7 +188,8 @@ fn move_player(
         return;
     }
     if !scene.airship() {
-        triggers.queue_at(&mut running, (player.tile_x, player.tile_y), false, &[2]);
+        let hero = (player.tile_x, player.tile_y);
+        triggers.queue_at(&mut running, hero, false, &[2], hero, false);
     }
     if running.waiting() {
         return;
@@ -230,7 +219,7 @@ fn move_player(
         return;
     }
     let (tx, ty) = data.normalize_tile(nx, ny);
-    let mut bodies = CollisionBodies::from_events(events.iter());
+    let mut bodies = triggers.bodies();
     bodies.include_vehicles(vehicles.as_deref(), data.map_id);
     let collision = triggers.collision(&bodies);
     let blocked = !collision.can_move(
@@ -249,7 +238,14 @@ fn move_player(
         });
     }
     if blocked {
-        triggers.queue_at(&mut running, (tx, ty), true, &[1, 2]);
+        triggers.queue_at(
+            &mut running,
+            (tx, ty),
+            true,
+            &[1, 2],
+            (player.tile_x, player.tile_y),
+            false,
+        );
     }
 }
 

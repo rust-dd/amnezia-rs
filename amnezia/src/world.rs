@@ -43,7 +43,7 @@ pub(crate) use route::{StepEffect, drive as drive_route};
 pub(crate) use scene_pause::ScenePause;
 pub(crate) use screen::MapScreen;
 pub(crate) use touch::TouchEvents;
-pub(crate) use triggers::EventTriggers;
+pub(crate) use triggers::{EventTriggers, finish_foreground};
 
 /// Developer start override. `None` uses the faithful LMT start (`start.ron`,
 /// the intro map_0005), whose autorun cutscene the interpreter now runs; set it

@@ -1,7 +1,7 @@
 use super::{Dialogue, InputPrompts, MessagePause};
 use crate::interpreter::{InterpreterStep, RunningEvent};
-use crate::player::{Player, facing_tile};
-use crate::world::{EventTriggers, MoveQueue, RouteStepper, ScenePause};
+use crate::player::Player;
+use crate::world::{EventTriggers, MoveQueue, RouteStepper, ScenePause, dir_delta};
 use bevy::prelude::*;
 
 pub(super) fn register(app: &mut App) {
@@ -26,7 +26,7 @@ pub(super) fn update(
     prompts: InputPrompts,
     scene: ScenePause,
     pause: MessagePause,
-    triggers: EventTriggers,
+    mut triggers: EventTriggers,
     input: Option<Res<crate::player::InputPhase>>,
     dialogue: Res<Dialogue>,
     mut running: ResMut<RunningEvent>,
@@ -51,19 +51,29 @@ pub(super) fn update(
     if queue.is_some_and(MoveQueue::busy) || route.is_some_and(RouteStepper::active) {
         return;
     }
-    let (fx, fy) = facing_tile(player);
-    let (dx, dy) = (fx - player.tile_x, fy - player.tile_y);
-    let data = &triggers.data;
-    let (mut tx, mut ty) = data.normalize_tile(fx, fy);
-    triggers.queue_at(&mut running, (tx, ty), true, &[1, 2]);
-    triggers.queue_at(&mut running, (player.tile_x, player.tile_y), false, &[0]);
+    let (x, y, _) = scene
+        .vehicles
+        .as_ref()
+        .map_or((player.tile_x, player.tile_y, player.dir), |vehicles| {
+            vehicles.hero_position((player.tile_x, player.tile_y, player.dir))
+        });
+    let hero = (x, y);
+    let direction = scene
+        .vehicles
+        .as_ref()
+        .and_then(|vehicles| vehicles.rider_direction())
+        .unwrap_or_else(|| route.map_or(player.dir, |route| route.direction(player)));
+    let (dx, dy) = dir_delta(direction);
+    let (mut tx, mut ty) = triggers.data.normalize_tile(hero.0 + dx, hero.1 + dy);
+    triggers.queue_at(&mut running, (tx, ty), true, &[1, 2], hero, true);
+    triggers.queue_at(&mut running, hero, false, &[0], hero, true);
     for hop in 0..=3 {
-        if triggers.queue_at(&mut running, (tx, ty), true, &[0]) {
+        if triggers.queue_at(&mut running, (tx, ty), true, &[0], hero, true) {
             break;
         }
-        if hop == 3 || !data.is_counter(tx, ty) {
+        if hop == 3 || !triggers.data.is_counter(tx, ty) {
             break;
         }
-        (tx, ty) = data.normalize_tile(tx + dx, ty + dy);
+        (tx, ty) = triggers.data.normalize_tile(tx + dx, ty + dy);
     }
 }

@@ -153,6 +153,7 @@ pub(super) fn refresh_pages(
             && let Some(page) = page
             && old.is_none_or(|p| (p.direction, p.pattern) != (page.direction, page.pattern))
         {
+            route.set_direction(&mut *ch, page.direction);
             ch.dir = page.direction;
             ch.frame = page.pattern;
         }
@@ -181,3 +182,6 @@ pub(super) fn refresh_pages(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod facing_tests;

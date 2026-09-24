@@ -6,6 +6,8 @@ use std::time::Duration;
 
 mod arrival;
 mod autoruns;
+mod decision;
+mod facing;
 mod immediate;
 mod input;
 mod npcs;

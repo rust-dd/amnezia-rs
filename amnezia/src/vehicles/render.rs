@@ -2,7 +2,7 @@ use super::Vehicles;
 use crate::assets::resolve_png;
 use crate::player::Player;
 use crate::tiles::{self, CHAR_Y_OFFSET};
-use crate::world::{Character, MainCamera, MapData, MoveQueue};
+use crate::world::{Character, MainCamera, MapData, MoveQueue, RouteStepper};
 use bevy::prelude::*;
 
 #[derive(Component)]
@@ -11,9 +11,14 @@ pub(crate) struct VehicleSprite(pub(crate) usize);
 pub(super) fn sync_hero(
     data: Res<MapData>,
     mut vehicles: ResMut<Vehicles>,
-    mut players: Query<(&mut Player, &mut Transform, &mut MoveQueue)>,
+    mut players: Query<(
+        &mut Player,
+        &mut Transform,
+        &mut MoveQueue,
+        Option<&mut RouteStepper>,
+    )>,
 ) {
-    let Ok((mut hero, mut transform, mut queue)) = players.single_mut() else {
+    let Ok((mut hero, mut transform, mut queue, mut route)) = players.single_mut() else {
         return;
     };
     let transferred = vehicles.last_map.is_some_and(|id| id != data.map_id);
@@ -34,6 +39,9 @@ pub(super) fn sync_hero(
         let (x, y) = vehicle.tile();
         hero.tile_x = x;
         hero.tile_y = y;
+        if let Some(route) = route.as_mut() {
+            route.set_direction(&mut *hero, vehicles.motion[index].route.direction(vehicle));
+        }
         hero.dir = vehicle.dir;
         let (wx, wy) = data.tile_center(x, y);
         let pixel = vehicles.motion[index].pixel.unwrap_or(Vec2::new(wx, wy));
@@ -41,10 +49,14 @@ pub(super) fn sync_hero(
         transform.translation.y = pixel.y + CHAR_Y_OFFSET;
         *queue = default();
     } else {
-        if let Some((x, y, dir)) = vehicles.disembark.take() {
+        if let Some(pose) = vehicles.disembark.take() {
+            let (x, y) = pose.tile;
             hero.tile_x = x;
             hero.tile_y = y;
-            hero.dir = dir;
+            if let Some(route) = route.as_mut() {
+                route.set_direction(&mut *hero, pose.direction);
+            }
+            hero.dir = pose.facing;
             let (wx, wy) = data.tile_center(x, y);
             transform.translation.x = wx;
             transform.translation.y = wy + CHAR_Y_OFFSET;

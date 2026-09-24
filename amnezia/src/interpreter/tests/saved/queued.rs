@@ -1,6 +1,44 @@
 use super::*;
 
 #[test]
+fn a_real_slot_retains_active_and_pending_decision_origins() {
+    let (mut app, path) = app("queued-actions");
+    app.world_mut().resource_mut::<MapData>().map_id = 3;
+    let mut events = vec![];
+    for id in 1..=2 {
+        let mut commands = vec![
+            cmd(CONDITIONAL_BRANCH, 0, vec![8]),
+            switch_cmd(10 + id as i32, 0, 1),
+            cmd(END_BRANCH, 0, vec![]),
+        ];
+        if id == 1 {
+            commands.insert(0, cmd(11910, 0, vec![]));
+        }
+        events.push(map_event(id, 0, commands));
+        app.world_mut()
+            .resource_mut::<RunningEvent>()
+            .queue_event(3, id, 0, true);
+    }
+    app.insert_resource(MapEvents { events });
+    app.update();
+    let saved = app.world().resource::<RunningEvent>().snapshot().unwrap();
+    app.update();
+    let bytes = std::fs::read(&path).unwrap();
+    assert!(switch_on(&app, 11) && switch_on(&app, 12));
+    load(&mut app);
+    assert_eq!(
+        app.world().resource::<RunningEvent>().snapshot(),
+        Some(saved)
+    );
+    assert!(!switch_on(&app, 11) && !switch_on(&app, 12));
+    resume(&mut app);
+    assert!(switch_on(&app, 11) && switch_on(&app, 12));
+    assert!(!app.world().resource::<RunningEvent>().active());
+    assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    std::fs::remove_file(path).unwrap();
+}
+
+#[test]
 fn a_real_slot_retains_pending_autoruns_through_loading_and_resumption() {
     let (mut app, path) = app("queued");
     app.world_mut().resource_mut::<MapData>().map_id = 3;

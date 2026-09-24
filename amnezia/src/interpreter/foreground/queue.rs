@@ -8,6 +8,8 @@ struct Entry {
     page: usize,
     waiting: bool,
     paused: bool,
+    #[serde(default)]
+    decision: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -37,13 +39,15 @@ impl Queue {
             .collect()
     }
 
-    pub(super) fn schedule(&mut self, map_id: u32, id: u32, page: usize) -> bool {
+    pub(super) fn schedule(&mut self, map_id: u32, id: u32, page: usize, decision: bool) -> bool {
         self.map_id = Some(map_id);
         let entry = self.events.entry(id).or_insert(Entry {
             page,
             waiting: false,
             paused: false,
+            decision,
         });
+        entry.decision = decision;
         if entry.waiting {
             return false;
         }
@@ -52,13 +56,13 @@ impl Queue {
         true
     }
 
-    pub(super) fn take_next(&mut self) -> Option<(u32, usize)> {
+    pub(super) fn take_next(&mut self) -> Option<(u32, usize, bool)> {
         self.events.iter_mut().find_map(|(&id, entry)| {
             if !entry.waiting {
                 return None;
             }
             entry.waiting = false;
-            Some((id, entry.page))
+            Some((id, entry.page, entry.decision))
         })
     }
 
@@ -130,14 +134,14 @@ mod tests {
     #[test]
     fn finishing_an_event_keeps_a_second_scheduled_run_without_repausing_it() {
         let mut queue = Queue::default();
-        queue.schedule(3, 1, 0);
-        assert_eq!(queue.take_next(), Some((1, 0)));
+        queue.schedule(3, 1, 0, false);
+        assert_eq!(queue.take_next(), Some((1, 0, false)));
         assert!(queue.paused(1));
-        queue.schedule(3, 1, 0);
+        queue.schedule(3, 1, 0, false);
         queue.finish(1);
         assert!(queue.waiting());
         assert!(!queue.paused(1));
-        assert_eq!(queue.take_next(), Some((1, 0)));
+        assert_eq!(queue.take_next(), Some((1, 0, false)));
         queue.finish(1);
         assert_eq!(queue, Queue::default());
     }
@@ -145,7 +149,7 @@ mod tests {
     #[test]
     fn a_queue_without_an_active_interpreter_is_persistent_state() {
         let mut running = RunningEvent::default();
-        running.queue.schedule(3, 1, 0);
+        running.queue.schedule(3, 1, 0, false);
         assert!(!running.active());
         let saved = running.snapshot().unwrap();
         assert!(saved.valid());
@@ -157,7 +161,7 @@ mod tests {
     #[test]
     fn malformed_queue_entries_are_not_valid_save_state() {
         let mut queue = Queue::default();
-        queue.schedule(3, 1, 0);
+        queue.schedule(3, 1, 0, false);
         queue.map_id = None;
         assert!(!queue.valid());
         queue.map_id = Some(3);

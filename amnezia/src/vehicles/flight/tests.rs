@@ -35,7 +35,14 @@ fn boarding_and_landing_take_32_ticks_with_original_integer_altitude() {
     }
     assert!(!vehicles.riding());
     assert_eq!(vehicles.airship_altitude(), 0.0);
-    assert_eq!(vehicles.disembark, Some((4, 4, DIR_DOWN)));
+    assert_eq!(
+        vehicles.disembark,
+        Some(crate::vehicles::model::DisembarkPose {
+            tile: (4, 4),
+            direction: DIR_RIGHT,
+            facing: DIR_DOWN
+        })
+    );
     assert_eq!(vehicles.save.vehicles[2].dir, DIR_LEFT);
 }
 

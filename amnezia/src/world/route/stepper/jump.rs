@@ -17,6 +17,7 @@ impl RouteStepper {
         };
         let (mut dx, mut dy) = (0, 0);
         let previous = self.direction(ch);
+        let previous_facing = ch.dir();
         let mut direction = previous;
         for index in self.index + 1..end {
             let code = self.commands[index].code;
@@ -56,7 +57,8 @@ impl RouteStepper {
         if (dx != 0 || dy != 0) && !can_step(ch, dx, dy, true, self.through) {
             self.timer = step_delay_secs(self.frequency);
             if self.skippable {
-                self.set_direction(ch, previous);
+                self.direction = Some(previous);
+                ch.set_dir(previous_facing);
                 self.index = end;
                 return Step::Next;
             }

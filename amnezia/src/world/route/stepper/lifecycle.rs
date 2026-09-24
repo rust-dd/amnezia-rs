@@ -104,6 +104,7 @@ impl RouteStepper {
         if let Some(page) = page {
             let mut route = Self::from_page(&page.move_route, page.move_speed, page.move_frequency);
             route.animation.mode = page.animation_type;
+            route.direction = Some(page.direction);
             route.transparency = if page.translucent { 3 } else { 0 };
             route.active &= page.move_type == 6;
             route.timer = if page.move_type == 6 {
@@ -247,7 +248,6 @@ impl RouteStepper {
         self.frequency = next.frequency;
         self.timer = next.timer;
         self.transparency = next.transparency;
-        self.direction = None;
         self.facing_lock = None;
         if self.forced {
             self.suspended = Some(Suspended::take(&mut next));

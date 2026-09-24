@@ -29,6 +29,8 @@ pub(super) struct CallFrame {
     pub(super) ip: usize,
     pub(super) event_id: u32,
     #[serde(default)]
+    pub(super) decision: bool,
+    #[serde(default)]
     pub(super) choices: HashMap<u32, i32>,
     #[serde(default)]
     pub(super) battle_outcome: Option<BattleOutcome>,
@@ -51,6 +53,8 @@ pub(super) struct Frame {
     /// only this opcode blocks, mirroring RM2000's "wait until movement complete".
     pub(super) wait_movement: bool,
     pub(super) event_id: u32,
+    #[serde(default)]
+    pub(super) decision: bool,
     pub(super) message_pending: bool,
     pub(super) choice_pending: bool,
     pub(super) choices: HashMap<u32, i32>,
@@ -124,6 +128,7 @@ impl Frame {
             commands: std::mem::take(&mut self.commands),
             ip: return_ip,
             event_id: self.event_id,
+            decision: self.decision,
             choices: std::mem::take(&mut self.choices),
             battle_outcome: self.battle_outcome.take(),
             shop_transacted: self.shop_transacted.take(),
@@ -131,6 +136,7 @@ impl Frame {
         self.commands = commands;
         self.ip = 0;
         self.event_id = event_id;
+        self.decision = false;
         true
     }
 
@@ -141,6 +147,7 @@ impl Frame {
         self.commands = caller.commands;
         self.ip = caller.ip;
         self.event_id = caller.event_id;
+        self.decision = caller.decision;
         self.choices = caller.choices;
         self.battle_outcome = caller.battle_outcome;
         self.shop_transacted = caller.shop_transacted;
@@ -155,6 +162,7 @@ impl Frame {
         self.wait = 0.0;
         self.wait_movement = false;
         self.event_id = 0;
+        self.decision = false;
         self.message_pending = false;
         self.choice_pending = false;
         self.choices.clear();

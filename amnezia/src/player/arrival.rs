@@ -26,7 +26,7 @@ fn remember(
 fn trigger(
     moving: Res<InFlight>,
     scene: ScenePause,
-    triggers: EventTriggers,
+    mut triggers: EventTriggers,
     mut running: ResMut<RunningEvent>,
     players: Query<(&Player, &MoveQueue, &RouteStepper)>,
 ) {
@@ -39,5 +39,6 @@ fn trigger(
     if queue.busy() || route.forced() {
         return;
     }
-    triggers.queue_at(&mut running, (hero.tile_x, hero.tile_y), false, &[1, 2]);
+    let hero = (hero.tile_x, hero.tile_y);
+    triggers.queue_at(&mut running, hero, false, &[1, 2], hero, false);
 }

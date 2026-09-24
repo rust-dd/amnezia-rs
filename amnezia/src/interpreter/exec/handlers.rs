@@ -88,10 +88,6 @@ pub(super) fn control_variables(frame: &mut Frame, command: &EventCommand, x: &m
 /// `ConditionalBranch` (12010): evaluate the predicate and either step into the
 /// true body or skip past it (into an else body or the terminator).
 pub(super) fn conditional_branch(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -> Flow {
-    // Timer conditional (type 2) compares the running clock; the rest are state
-    // checks in `branch_holds`. The actor sub-checks (type 5) read from `ActorCtx`,
-    // and the orientation check (type 6) needs the referenced character's real
-    // facing, resolved here from the world.
     let kind = command.params.first().copied().unwrap_or(-1);
     let holds = if kind == 2 {
         let target = command.params.get(1).copied().unwrap_or(0).max(0) as u32;
@@ -105,6 +101,8 @@ pub(super) fn conditional_branch(frame: &mut Frame, command: &EventCommand, x: &
         command.params.get(1).is_some_and(|wanted| {
             x.subsystems.mapfx.vehicles.save.riding.map(|id| id as i32) == Some(*wanted)
         })
+    } else if kind == 8 {
+        frame.decision
     } else {
         let facing = if kind == 6 {
             resolve_character(

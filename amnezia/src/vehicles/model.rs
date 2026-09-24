@@ -95,9 +95,16 @@ impl Default for Motion {
 pub struct Vehicles {
     pub save: VehicleSave,
     pub(super) motion: [Motion; 3],
-    pub(super) disembark: Option<(i32, i32, u32)>,
+    pub(super) disembark: Option<DisembarkPose>,
     pub(super) consumed_action: bool,
     pub(super) last_map: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(super) struct DisembarkPose {
+    pub tile: (i32, i32),
+    pub direction: u32,
+    pub facing: u32,
 }
 
 impl Vehicles {
@@ -131,8 +138,19 @@ impl Vehicles {
         self.save
             .riding
             .and_then(|index| self.character(10002 + index as i32))
-            .or(self.disembark)
+            .or(self
+                .disembark
+                .map(|pose| (pose.tile.0, pose.tile.1, pose.facing)))
             .unwrap_or(fallback)
+    }
+
+    pub(crate) fn rider_direction(&self) -> Option<u32> {
+        let index = self.save.riding?;
+        Some(
+            self.motion[index]
+                .route
+                .direction(&self.save.vehicles[index]),
+        )
     }
 
     pub fn blocks_action(&self) -> bool {
