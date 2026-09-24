@@ -8,6 +8,7 @@ use crate::world::MapChanged;
 
 mod loading;
 mod new_game_clock;
+mod repetition;
 
 fn flow_app() -> App {
     let mut app = App::new();
@@ -20,6 +21,7 @@ fn flow_app() -> App {
         .init_resource::<crate::menu::MenuOpen>()
         .init_resource::<crate::menu::save_files::SaveFiles>()
         .init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<crate::menu::DirectionInput>()
         .init_resource::<LoadRequest>()
         .init_resource::<LoadOutcome>()
         .init_resource::<NewGameRequest>()
@@ -31,6 +33,7 @@ fn flow_app() -> App {
         .add_systems(
             Update,
             (
+                crate::menu::update_directions,
                 flow::entered,
                 flow::loaded,
                 flow::input,
@@ -210,6 +213,7 @@ fn selecting_shutdown_requests_app_exit_after_thirty_five_frames() {
         .add_plugins(crate::transitions::TransitionPlugin)
         .init_resource::<NewGameRequest>()
         .init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<crate::menu::DirectionInput>()
         .insert_resource(TitleActive(true))
         .insert_resource(TitleState {
             cursor: SHUTDOWN,

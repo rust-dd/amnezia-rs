@@ -68,6 +68,7 @@ pub(super) fn entered(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn input(
     keys: Res<ButtonInput<KeyCode>>,
+    directions: Res<crate::menu::DirectionInput>,
     location: Res<SaveLocation>,
     title: Res<TitleActive>,
     mut state: ResMut<TitleState>,
@@ -82,13 +83,20 @@ pub(super) fn input(
         return;
     }
     let sounds = sounds.as_deref();
-    if keys.just_pressed(KeyCode::ArrowUp) {
-        state.cursor = wrap_cursor(state.cursor, -1, ROWS.len());
-        play_se(&mut audio, sounds, |s| &s.cursor);
-    }
-    if keys.just_pressed(KeyCode::ArrowDown) {
-        state.cursor = wrap_cursor(state.cursor, 1, ROWS.len());
-        play_se(&mut audio, sounds, |s| &s.cursor);
+    for repeated in directions.slot_steps() {
+        for (action, pressed) in repeated.into_iter().enumerate() {
+            if !pressed {
+                continue;
+            }
+            state.cursor = match action {
+                0 => wrap_cursor(state.cursor, 1, ROWS.len()),
+                1 => wrap_cursor(state.cursor, -1, ROWS.len()),
+                4 if state.cursor < ROWS.len() - 1 => ROWS.len() - 1,
+                5 if state.cursor > 0 => 0,
+                _ => continue,
+            };
+            play_se(&mut audio, sounds, |s| &s.cursor);
+        }
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
         let action = action_for(state.cursor, location.has_saves());

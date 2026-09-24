@@ -69,6 +69,7 @@ impl Plugin for TitlePlugin {
         view::register(app);
         app.init_resource::<TitleActive>()
             .init_resource::<TitleState>()
+            .init_resource::<crate::menu::DirectionInput>()
             .init_resource::<crate::save::SaveLocation>()
             .init_resource::<crate::menu::save_files::SaveFiles>()
             .add_systems(Startup, view::spawn)

@@ -1,8 +1,15 @@
-pub(crate) use super::view::smoke::{snapshot, verify_finished, verify_load_finished};
+pub(crate) use super::view::smoke::{snapshot, verify_load_finished};
 use super::*;
 
 mod new_game;
+pub(in crate::title) mod repetition;
 pub(crate) use new_game::{observe as new_game_frame, verify_finished as verify_new_game_finished};
+pub(crate) use repetition::held_input;
+
+pub(crate) fn verify_finished(world: &World) {
+    super::view::smoke::verify_finished(world);
+    repetition::verify_finished(world);
+}
 
 pub(crate) fn ready(world: &World) -> bool {
     world.resource::<TitleActive>().0 && world.resource::<TitleState>().stage == flow::Stage::Ready
@@ -24,7 +31,7 @@ pub(crate) fn return_input(frame: u32) -> Option<KeyCode> {
         320 | 330 | 340 | 350 => Some(KeyCode::ArrowDown),
         448 => Some(KeyCode::ArrowUp),
         351 | 380 | 397 | 432 | 462 => Some(KeyCode::Enter),
-        _ => None,
+        _ => repetition::input(frame),
     }
 }
 
@@ -53,6 +60,6 @@ pub(crate) fn return_scene(world: &mut World, frame: u32) -> Option<&'static str
             assert!(ready(world));
             Some("title-return-ready")
         }
-        _ => None,
+        _ => repetition::drive(world, frame),
     }
 }

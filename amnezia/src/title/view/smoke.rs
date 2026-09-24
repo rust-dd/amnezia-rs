@@ -59,6 +59,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         | "title-return-ready"
         | "title-load-return"
         | "title-new-game-fade" => 8,
+        label if crate::title::smoke::repetition::LABELS.contains(&label) => 8,
         _ => return None,
     };
     world.init_resource::<Checks>();
@@ -107,7 +108,7 @@ impl Snapshot {
 pub(crate) fn verify_finished(world: &World) {
     let checks = world.resource::<Checks>();
     assert_eq!(checks.requested, [15, 15]);
-    assert_eq!(checks.verified.load(Ordering::Relaxed), 10);
+    assert_eq!(checks.verified.load(Ordering::Relaxed), 14);
 }
 
 pub(crate) fn verify_load_finished(world: &World) {
