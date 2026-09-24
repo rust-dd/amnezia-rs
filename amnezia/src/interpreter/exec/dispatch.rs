@@ -101,11 +101,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         PAN_SCREEN => {
             frame.wait = x.subsystems.mapfx.camera_pan.command(&command.params);
             frame.ip += 1;
-            if frame.wait > 0.0 {
-                Flow::Yield
-            } else {
-                Flow::Advance
-            }
+            Flow::Advance
         }
         WEATHER => {
             *x.subsystems.mapfx.weather =
@@ -134,9 +130,9 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         WAIT => {
-            frame.wait = command.params.first().copied().unwrap_or(0) as f32 / 10.0;
+            frame.wait_for(command.params.first().copied().unwrap_or(0) as f32 / 10.0);
             frame.ip += 1;
-            Flow::Yield
+            Flow::Advance
         }
         TELEPORT => {
             if let [map, tx, ty, ..] = command.params.as_slice() {
@@ -199,7 +195,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         PROCEED_WITH_MOVEMENT => {
             frame.wait_movement = true;
             frame.ip += 1;
-            Flow::Yield
+            Flow::Advance
         }
         ENEMY_ENCOUNTER => {
             let troop_id = super::super::commands::operate_value(

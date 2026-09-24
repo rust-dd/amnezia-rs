@@ -89,6 +89,20 @@ impl Frame {
         self.active
     }
 
+    pub(super) fn wait_for(&mut self, seconds: f32) {
+        self.wait = if seconds == 0.0 { 1.0 / 60.0 } else { seconds };
+    }
+
+    pub(super) fn consume_wait(&mut self) -> bool {
+        if self.wait <= 0.0 {
+            return false;
+        }
+        // Saves retain seconds; round each logical tick to avoid accumulating float drift.
+        let frames = (f64::from(self.wait) * 60.0).round();
+        self.wait = ((frames - 1.0).max(0.0) / 60.0) as f32;
+        true
+    }
+
     /// Begin running `commands` from the top. Ignored if a run is already live,
     /// so one event can't interrupt another mid-sequence.
     pub(super) fn start(&mut self, event_id: u32, commands: Vec<EventCommand>) {

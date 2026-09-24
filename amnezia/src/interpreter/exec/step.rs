@@ -20,7 +20,6 @@ pub(in crate::interpreter) fn run_operation(
     operation: Operation,
     frame: &mut Frame,
     x: &mut Exec,
-    dt: f32,
     scene_blocked: bool,
     source: Option<PageOwner>,
     pool: &mut ParallelPool,
@@ -28,9 +27,9 @@ pub(in crate::interpreter) fn run_operation(
     if !refresh_parallel_pages(frame, source, pool, x) {
         return RunOutcome::Finished;
     }
-    let outcome = match operation {
-        Operation::Resume => resume(frame, x, dt, scene_blocked),
-        Operation::Command => command(frame, x),
+    let outcome = match resume(frame, x, scene_blocked) {
+        RunOutcome::Advance if operation == Operation::Command => command(frame, x),
+        outcome => outcome,
     };
     if refresh_parallel_pages(frame, source, pool, x) {
         outcome
@@ -39,7 +38,7 @@ pub(in crate::interpreter) fn run_operation(
     }
 }
 
-fn resume(frame: &mut Frame, x: &mut Exec, dt: f32, scene_blocked: bool) -> RunOutcome {
+fn resume(frame: &mut Frame, x: &mut Exec, scene_blocked: bool) -> RunOutcome {
     if frame.battle_pending
         && let Some(outcome) = x.subsystems.battle_result.0.take()
     {
@@ -107,11 +106,7 @@ fn resume(frame: &mut Frame, x: &mut Exec, dt: f32, scene_blocked: bool) -> RunO
         frame.input_pending = false;
         frame.ip += 1;
     }
-    if !key_input::resume(frame, x) {
-        return RunOutcome::Yielded;
-    }
-    if frame.wait > 0.0 {
-        frame.wait -= dt;
+    if frame.consume_wait() {
         return RunOutcome::Yielded;
     }
     if frame.wait_movement {
@@ -121,6 +116,9 @@ fn resume(frame: &mut Frame, x: &mut Exec, dt: f32, scene_blocked: bool) -> RunO
             return RunOutcome::Yielded;
         }
         frame.wait_movement = false;
+    }
+    if !key_input::resume(frame, x) {
+        return RunOutcome::Yielded;
     }
     RunOutcome::Advance
 }

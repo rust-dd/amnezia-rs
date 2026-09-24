@@ -154,7 +154,7 @@ fn a_resumed_number_result_refreshes_pages_before_the_next_command() {
 }
 
 #[test]
-fn command_boundaries_do_not_advance_wait_clocks() {
+fn command_boundaries_consume_only_the_initial_wait_tick() {
     let mut app = prepared();
     script(
         &mut app,
@@ -167,10 +167,13 @@ fn command_boundaries_do_not_advance_wait_clocks() {
         ],
     );
     app.update();
-    assert_eq!(app.world().resource::<RunningEvent>().frame.wait, 0.1);
+    assert_eq!(
+        app.world().resource::<RunningEvent>().frame.wait,
+        5.0 / 60.0
+    );
     app.update();
     let wait = app.world().resource::<RunningEvent>().frame.wait;
-    assert!((wait - (0.1 - 1.0 / 60.0)).abs() < 0.000001);
+    assert_eq!(wait, 4.0 / 60.0);
     assert!(!switch_on(&app, 10));
 }
 

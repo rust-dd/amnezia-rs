@@ -116,6 +116,13 @@ fn a_loaded_foreground_keeps_its_time_movement_and_key_waits() {
         ("key", cmd(11610, 0, vec![9, 1, 1, 1, 1])),
     ] {
         let (mut app, path) = app(tag);
+        if tag == "movement" {
+            let world = app.world_mut();
+            *world
+                .query::<&mut RouteStepper>()
+                .single_mut(world)
+                .unwrap() = RouteStepper::from_move_event(&[10001, 8, 0, 0, 1]);
+        }
         app.world_mut()
             .resource_mut::<RunningEvent>()
             .start(0, vec![command, switch_cmd(901, 2, 0)]);

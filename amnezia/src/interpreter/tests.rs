@@ -53,6 +53,7 @@ mod screen_coordinates;
 mod transfers;
 mod transitions;
 mod vehicles;
+mod waits;
 
 const CONTROL_SWITCHES: u32 = 10210;
 const CONDITIONAL_BRANCH: u32 = 12010;

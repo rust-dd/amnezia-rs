@@ -7,8 +7,12 @@ fn saved_wait_and_key_input_continue_identically_to_an_uninterrupted_event() {
         let (mut app, path) = app(&format!("continuation-{fps}"));
         let mut control = interp_app();
         for app in [&mut app, &mut control] {
+            app.add_plugins((
+                crate::timing::TimingPlugin,
+                crate::timing::logical::LogicalPlugin,
+            ));
             app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
-                std::time::Duration::from_secs_f64(1.0 / fps as f64),
+                std::time::Duration::from_secs_f64(1.0 / 60.0),
             ));
             app.update();
         }
@@ -39,6 +43,11 @@ fn saved_wait_and_key_input_continue_identically_to_an_uninterrupted_event() {
         app.world_mut()
             .resource_mut::<crate::transitions::Transition>()
             .clear();
+        for app in [&mut app, &mut control] {
+            app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+                std::time::Duration::from_secs_f64(1.0 / fps as f64),
+            ));
+        }
         for tick in 0..fps * 2 {
             for app in [&mut app, &mut control] {
                 let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();

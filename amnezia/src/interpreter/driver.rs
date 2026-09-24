@@ -72,7 +72,6 @@ fn flush(world: &mut World) {
 
 fn step_foreground(
     In(operation): In<Operation>,
-    time: Res<Time>,
     fade: Res<Fade>,
     blockers: Blockers,
     mut running: ResMut<RunningEvent>,
@@ -91,7 +90,6 @@ fn step_foreground(
         operation,
         &mut running.frame,
         &mut exec,
-        time.delta_secs(),
         scene_blocked,
         None,
         &mut pool,
@@ -111,17 +109,9 @@ fn step_foreground(
 
 fn step_parallel(
     In((source, operation)): In<(ParallelSource, Operation)>,
-    time: Res<Time>,
     mut pool: ResMut<ParallelPool>,
     common_events: Res<CommonEvents>,
     mut exec: Exec,
 ) -> RunOutcome {
-    super::parallel::step_source(
-        source,
-        operation,
-        &mut pool,
-        &common_events,
-        &mut exec,
-        time.delta_secs(),
-    )
+    super::parallel::step_source(source, operation, &mut pool, &common_events, &mut exec)
 }

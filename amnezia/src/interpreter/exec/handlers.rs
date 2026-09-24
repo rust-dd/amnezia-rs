@@ -237,13 +237,10 @@ pub(super) fn show_battle_animation(
         None
     };
     frame.ip += 1;
-    match wait {
-        Some(secs) => {
-            frame.wait = secs;
-            Flow::Yield
-        }
-        None => Flow::Advance,
+    if let Some(secs) = wait {
+        frame.wait = secs;
     }
+    Flow::Advance
 }
 
 /// The presentation opcodes (screen effects, pictures, Game Over): emit the
@@ -276,12 +273,12 @@ pub(super) fn present(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -
         Some(Present::Screen(effect, wait)) => {
             x.subsystems.screen_writer.write(effect);
             frame.ip += 1;
-            wait_or_advance(frame, wait)
+            wait_if_requested(frame, wait)
         }
         Some(Present::Picture(picture, wait)) => {
             x.subsystems.picture_writer.write(picture);
             frame.ip += 1;
-            wait_or_advance(frame, wait)
+            wait_if_requested(frame, wait)
         }
         Some(Present::GameOver) => {
             x.subsystems.gameover.0 = true;
@@ -294,13 +291,9 @@ pub(super) fn present(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -
     }
 }
 
-/// Arm a `Wait` and yield when the presentation carries a duration, else advance.
-fn wait_or_advance(frame: &mut Frame, wait: Option<f32>) -> Flow {
-    match wait {
-        Some(secs) => {
-            frame.wait = secs;
-            Flow::Yield
-        }
-        None => Flow::Advance,
+fn wait_if_requested(frame: &mut Frame, wait: Option<f32>) -> Flow {
+    if let Some(secs) = wait {
+        frame.wait_for(secs);
     }
+    Flow::Advance
 }

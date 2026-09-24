@@ -39,7 +39,7 @@ pub(super) fn parse_present(command: &EventCommand, variables: &Variables) -> Op
         )),
         SHAKE_SCREEN => Some(Present::Screen(
             ScreenEffect::shake(params),
-            wait_secs(params, 3, 2),
+            wait_secs(params, 3, 2).filter(|seconds| *seconds > 0.0),
         )),
         SHOW_PICTURE => {
             let (x, y) = picture_xy(params, variables);

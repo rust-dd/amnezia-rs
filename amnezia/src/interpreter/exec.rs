@@ -101,8 +101,7 @@ impl Exec<'_, '_> {
 pub(super) enum Flow {
     /// The command is done; step to the next one this frame.
     Advance,
-    /// The command opened a blocking screen or armed a wait; yield the frame for
-    /// the rest of this frame and resume next frame.
+    /// Suspend command execution until the next interpreter update.
     Yield,
     /// The run is over (Game Over / Return to Title); the caller stops the frame.
     Stop,

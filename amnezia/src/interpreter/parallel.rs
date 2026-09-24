@@ -102,7 +102,6 @@ pub(super) fn step_source(
     pool: &mut ParallelPool,
     common_events: &CommonEvents,
     exec: &mut Exec,
-    dt: f32,
 ) -> RunOutcome {
     let mut entry = if let Some(index) = pool.frames.iter().position(|entry| entry.source == source)
     {
@@ -136,15 +135,7 @@ pub(super) fn step_source(
         entry.frame.start(entry.event_id, entry.commands.clone());
         entry.frame.parallel = true;
     }
-    let outcome = run_operation(
-        operation,
-        &mut entry.frame,
-        exec,
-        dt,
-        false,
-        entry.owner,
-        pool,
-    );
+    let outcome = run_operation(operation, &mut entry.frame, exec, false, entry.owner, pool);
     if entry.owner.is_none_or(|owner| owner.current(pool)) {
         pool.frames.push(entry);
     }

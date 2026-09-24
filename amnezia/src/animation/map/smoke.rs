@@ -1,12 +1,13 @@
 use super::*;
 use crate::interpreter::RunningEvent;
 use crate::player::CameraPan;
-use crate::world::{MapScene, RouteAction, RouteStepper};
+use crate::world::{RouteAction, RouteStepper};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
 
+mod fixture;
 mod transfers;
 
 const LABELS: [&str; 10] = [
@@ -44,22 +45,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         world
             .resource_mut::<crate::screenfx::TintState>()
             .set_tone([100.0; 4]);
-        world.spawn((
-            EventSprite {
-                id: 9000,
-                tile_x: 60,
-                tile_y: 60,
-                dir: 1,
-                frame: 1,
-                charset: "Chara1".into(),
-                index: 1,
-                layer: 1,
-            },
-            MoveQueue::default(),
-            Sprite::default(),
-            Transform::default(),
-            MapScene,
-        ));
+        fixture::spawn_target(world);
     }
     if (300..=940).contains(&frame) && (frame - 300).is_multiple_of(160) {
         start_case(world, (frame - 300) / 160);
