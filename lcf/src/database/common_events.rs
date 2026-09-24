@@ -8,13 +8,14 @@ use crate::map::parse_commands;
 use crate::{EventCommand, LcfError, Reader, decode_cp1250};
 
 /// A common event (global event script): its 1-based id, name, `trigger`
-/// (0 = call, 1 = autostart, 2 = parallel), the `switch_id` gating an
-/// autostart/parallel event, and its command list.
+/// (3 = autostart, 4 = parallel, 5 = call), an optional switch condition,
+/// and its command list.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommonEvent {
     pub id: u32,
     pub name: String,
     pub trigger: u32,
+    pub switch_flag: bool,
     pub switch_id: u32,
     pub commands: Vec<EventCommand>,
 }
@@ -22,14 +23,15 @@ pub struct CommonEvent {
 const COMMON_EVENT_SECTION: u32 = 0x19;
 const COMMON_EVENT_NAME: u32 = 0x01;
 const COMMON_EVENT_TRIGGER: u32 = 0x0B;
+const COMMON_EVENT_SWITCH_FLAG: u32 = 0x0C;
 const COMMON_EVENT_SWITCH_ID: u32 = 0x0D;
 const COMMON_EVENT_COMMANDS: u32 = 0x16;
 
 /// Parse the common-event table (`ChunkData::common_events` = `0x19`) out of an
 /// LDB byte slice. Chunk ids (liblcf `ChunkCommonEvent`): name `0x01`, trigger
-/// `0x0B`, switch_id `0x0D`, event_commands `0x16`. The command stream reuses
-/// the map event-page command format ([`crate::map::parse_commands`]). Omitted
-/// scalar fields default to 0; an omitted command list is empty.
+/// `0x0B`, switch_flag `0x0C`, switch_id `0x0D`, event_commands `0x16`. Commands
+/// reuse the map event-page format ([`crate::map::parse_commands`]). Omitted
+/// fields default to call trigger 5, no switch condition, and switch id 1.
 pub fn parse_common_events(bytes: &[u8]) -> Result<Vec<CommonEvent>, LcfError> {
     let section = find_section(bytes, COMMON_EVENT_SECTION, LcfError::MissingCommonEvents)?;
     let mut reader = Reader::new(section);
@@ -40,8 +42,9 @@ pub fn parse_common_events(bytes: &[u8]) -> Result<Vec<CommonEvent>, LcfError> {
         let mut event = CommonEvent {
             id,
             name: String::new(),
-            trigger: 0,
-            switch_id: 0,
+            trigger: 5,
+            switch_flag: false,
+            switch_id: 1,
             commands: Vec::new(),
         };
         loop {
@@ -54,6 +57,9 @@ pub fn parse_common_events(bytes: &[u8]) -> Result<Vec<CommonEvent>, LcfError> {
             match sub_id {
                 COMMON_EVENT_NAME => event.name = decode_cp1250(sub_data),
                 COMMON_EVENT_TRIGGER => event.trigger = Reader::new(sub_data).varint()?,
+                COMMON_EVENT_SWITCH_FLAG => {
+                    event.switch_flag = Reader::new(sub_data).varint()? != 0;
+                }
                 COMMON_EVENT_SWITCH_ID => event.switch_id = Reader::new(sub_data).varint()?,
                 COMMON_EVENT_COMMANDS => event.commands = parse_commands(sub_data)?,
                 _ => {}
@@ -85,8 +91,6 @@ mod tests {
 
     #[test]
     fn parses_common_event_with_command_list() {
-        // Message text bytes are CP1250 "Helló" (0xF3 = 'ó'); the name bytes are
-        // "Kezdés" (start): 0xE9 = 'é'.
         let mut commands = command(10110, 0, &[0x48, 0x65, 0x6C, 0x6C, 0xF3], &[]);
         commands.extend(command(10, 1, b"", &[1, 2]));
         commands.extend(command(0, 0, b"", &[]));
@@ -94,7 +98,8 @@ mod tests {
             1,
             &[
                 subchunk(0x01, &[0x4B, 0x65, 0x7A, 0x64, 0xE9, 0x73]),
-                subchunk(0x0B, &varint(1)),
+                subchunk(0x0B, &varint(3)),
+                subchunk(0x0C, &varint(1)),
                 subchunk(0x0D, &varint(7)),
                 subchunk(0x16, &commands),
             ],
@@ -105,7 +110,8 @@ mod tests {
         let event = &events[0];
         assert_eq!(event.id, 1);
         assert_eq!(event.name, "Kezdés");
-        assert_eq!(event.trigger, 1, "autostart");
+        assert_eq!(event.trigger, 3, "autostart");
+        assert!(event.switch_flag);
         assert_eq!(event.switch_id, 7);
         assert_eq!(event.commands.len(), 3);
         assert_eq!(
@@ -137,9 +143,20 @@ mod tests {
         let e = &events[0];
         assert_eq!(e.id, 3);
         assert_eq!(e.name, "Idle");
-        assert_eq!(e.trigger, 0, "trigger defaults to call");
-        assert_eq!(e.switch_id, 0);
+        assert_eq!(e.trigger, 5, "trigger defaults to call");
+        assert!(!e.switch_flag);
+        assert_eq!(e.switch_id, 1);
         assert!(e.commands.is_empty());
+    }
+
+    #[test]
+    fn an_unchecked_switch_condition_preserves_its_switch_id() {
+        let event = element(1, &[subchunk(0x0B, &varint(4)), subchunk(0x0D, &varint(7))]);
+        let ldb = make_ldb(&[(0x19, section(&[event]))]);
+        let events = parse_common_events(&ldb).unwrap();
+        assert_eq!(events[0].trigger, 4);
+        assert_eq!(events[0].switch_id, 7);
+        assert!(!events[0].switch_flag);
     }
 
     #[test]

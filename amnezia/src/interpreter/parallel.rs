@@ -1,5 +1,5 @@
 //! Concurrently-running background interpreters: RM2000's parallel-process map
-//! event pages (trigger 4) and parallel common events (trigger 2). Each gets its
+//! event pages (trigger 4) and parallel common events (trigger 4). Each gets its
 //! own [`Frame`] in the [`ParallelPool`], stepped every frame with the same
 //! per-frame command budget the foreground uses, sharing the one game state
 //! through [`Exec`]. A finished background page loops from the top the next
@@ -18,8 +18,8 @@ use crate::world::MapEvents;
 use amnezia_data::{CommonEvent, EventCommand};
 use bevy::prelude::*;
 
-/// The database's common events, read once at boot. Autostart (trigger 1) events
-/// run foreground-style from `autorun`; parallel (trigger 2) events run in the
+/// The database's common events, read once at boot. Autostart (trigger 3) events
+/// run foreground-style from `autorun`; parallel (trigger 4) events run in the
 /// [`ParallelPool`]. This game ships a single empty stub common event, so the
 /// list is effectively dormant, but the machinery drives any that exist.
 #[derive(Resource, Default)]
@@ -90,9 +90,6 @@ pub(super) fn run_parallel(
     foreground: Res<super::RunningEvent>,
     mut exec: Exec,
 ) {
-    // Drop the previous map's parallel pages when the map changes; the reconcile
-    // below rebuilds the new map's set. Detected from the loaded map id rather
-    // than a MapChanged reader to keep the system-parameter count down.
     let map_id = exec.subsystems.flow.map_data.as_deref().map(|m| m.map_id);
     if pool.last_map != map_id {
         pool.frames
@@ -117,8 +114,6 @@ pub(super) fn run_parallel(
         if static_blocked || exec.scene_paused(false, false) {
             break;
         }
-        // A finished (or freshly reconciled) page restarts from the top — parallel
-        // events run continuously, re-executing when their list ends.
         if !pool.frames[i].frame.active() {
             let (event_id, commands) = {
                 let pf = &pool.frames[i];
@@ -163,11 +158,9 @@ fn reconcile(
     party: &Party,
     inventory: &Inventory,
 ) {
-    let mut desired: Vec<ParallelSource> = Vec::new();
+    let mut desired = Vec::<ParallelSource>::new();
     for ce in &common_events.0 {
-        // A parallel common event runs while its switch is on, or unconditionally
-        // when it names no switch (switch_id 0 = RM2000's switch_flag off).
-        if ce.trigger == 2 && common_gate_on(ce, switches) && !ce.commands.is_empty() {
+        if ce.trigger == 4 && common_gate_on(ce, switches) && !ce.commands.is_empty() {
             desired.push(ParallelSource::Common(ce.id));
         }
     }
@@ -222,10 +215,9 @@ fn fetch_commands(
     }
 }
 
-/// Whether a common event is currently gated on: it names no switch, or its
-/// switch is set. Shared with `autorun` for the autostart (trigger 1) form.
+/// Whether a common event has no switch condition or its condition is met.
 pub(super) fn common_gate_on(event: &CommonEvent, switches: &crate::state::Switches) -> bool {
-    event.switch_id == 0 || switches.get(event.switch_id)
+    !event.switch_flag || switches.get(event.switch_id)
 }
 
 #[cfg(test)]
@@ -277,6 +269,7 @@ mod tests {
             id,
             name: String::new(),
             trigger,
+            switch_flag: switch_id != 0,
             switch_id,
             commands: vec![cmd(10210)],
         }
@@ -296,7 +289,7 @@ mod tests {
 
     #[test]
     fn parallel_common_event_appears_and_disappears_with_its_switch() {
-        let commons = CommonEvents(vec![common_event(1, 2, 5)]);
+        let commons = CommonEvents(vec![common_event(1, 4, 5)]);
         let mut pool = ParallelPool::default();
         let mut switches = Switches::default();
 
@@ -323,8 +316,7 @@ mod tests {
 
     #[test]
     fn unconditional_common_event_and_call_only_are_handled() {
-        // Switch id 0 = always on; trigger 0 (call) is never a background process.
-        let commons = CommonEvents(vec![common_event(1, 2, 0), common_event(2, 0, 0)]);
+        let commons = CommonEvents(vec![common_event(1, 4, 0), common_event(2, 5, 0)]);
         let mut pool = ParallelPool::default();
         reconcile_with(&mut pool, &commons, None, &Switches::default());
         assert_eq!(
@@ -363,7 +355,6 @@ mod tests {
 
     #[test]
     fn a_promoted_page_resets_the_frame_to_the_new_page() {
-        // Page 1 (trigger 4) activates over page 0 (trigger 4) once switch 5 is on.
         let map = MapEvents {
             events: vec![event(
                 7,
@@ -410,7 +401,6 @@ mod tests {
             Some(&map),
             &Switches::default(),
         );
-        // Mark the frame active (as the stepping loop would) and reconcile again.
         pool.frames[0].frame.start(1, vec![cmd(10210)]);
         reconcile_with(
             &mut pool,

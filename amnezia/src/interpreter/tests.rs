@@ -32,6 +32,7 @@ use bevy::prelude::*;
 mod actor_commands;
 mod call_scope;
 mod camera;
+mod common_events;
 mod embedded_prompts;
 mod inns;
 mod key_input;
@@ -75,6 +76,7 @@ fn common(id: u32, trigger: u32, switch_id: u32, commands: Vec<EventCommand>) ->
         id,
         name: String::new(),
         trigger,
+        switch_flag: switch_id != 0,
         switch_id,
         commands,
     }
@@ -189,7 +191,7 @@ fn common_autostart_fires_only_while_its_switch_is_on() {
     let mut app = interp_app();
     app.insert_resource(CommonEvents(vec![common(
         1,
-        1,
+        3,
         5,
         vec![switch_cmd(10, 0, 0), cmd(0, 0, vec![])],
     )]));
@@ -222,12 +224,11 @@ fn parallel_common_event_steps_and_loops_every_frame() {
     let mut app = interp_app();
     app.insert_resource(CommonEvents(vec![common(
         1,
-        2,
+        4,
         0,
         vec![switch_cmd(20, 2, 0), cmd(0, 0, vec![])],
     )]));
 
-    // One toggle per frame proves the page runs, ends, and loops from the top.
     app.update();
     assert!(switch_on(&app, 20), "first pass toggles the switch on");
     assert_eq!(app.world().resource::<ParallelPool>().count(), 1);
@@ -285,7 +286,7 @@ fn parallel_switches_continue_during_another_interpreters_message() {
     let mut app = interp_app();
     app.insert_resource(CommonEvents(vec![common(
         1,
-        2,
+        4,
         0,
         vec![switch_cmd(22, 2, 0), cmd(0, 0, vec![])],
     )]));
@@ -309,7 +310,7 @@ fn parallel_writes_are_visible_to_the_foreground() {
     let mut app = interp_app();
     app.insert_resource(CommonEvents(vec![common(
         1,
-        2,
+        4,
         0,
         vec![switch_cmd(30, 0, 0), cmd(0, 0, vec![])],
     )]));
@@ -337,7 +338,6 @@ fn parallel_writes_are_visible_to_the_foreground() {
 #[test]
 fn move_event_is_fire_and_forget() {
     let mut app = interp_app();
-    // MoveEvent is fire-and-forget; the switch must run in the same burst.
     app.insert_resource(MapEvents {
         events: vec![map_event(
             1,

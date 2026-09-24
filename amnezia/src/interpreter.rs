@@ -2,7 +2,7 @@
 //! page's RM2000 command list one step at a time — driving the message box,
 //! teleport fade, and the game's switches and variables — while a background
 //! [`ParallelPool`] runs parallel-process map pages (trigger 4) and parallel
-//! common events (trigger 2) concurrently against the same shared state. Both
+//! common events (trigger 4) concurrently against the same shared state. Both
 //! execute the identical opcode dispatch ([`exec`]) over their own execution
 //! state ([`frame::Frame`]); the only difference is scheduling. A page's commands
 //! are a flat list with a per-command `indent`; conditional branches use that
@@ -134,7 +134,7 @@ fn run_interpreter(
 
 /// Start a foreground autorun when nothing else is running: the map's autostart
 /// (trigger 3) event page, or — failing that — a common event whose autostart
-/// (trigger 1) switch is on. RM2000 replays an autostart page every frame its
+/// (trigger 3) switch is on. RM2000 replays an autostart page every frame its
 /// condition holds; a cutscene ends by flipping a switch so a non-autorun page
 /// becomes active and it stops. A common autostart likewise repeats while its
 /// switch stays on.
@@ -178,7 +178,7 @@ fn autorun(
     }
     // Common events use global scope, so their "this event" reference is 0.
     for ce in &common_events.0 {
-        if ce.trigger == 1 && parallel::common_gate_on(ce, &switches) && !ce.commands.is_empty() {
+        if ce.trigger == 3 && parallel::common_gate_on(ce, &switches) && !ce.commands.is_empty() {
             running.start(0, ce.commands.clone());
             return;
         }

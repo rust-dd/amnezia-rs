@@ -121,14 +121,16 @@ pub struct EventCommand {
 }
 
 /// A common event (global event script), read by the interpreter: its 1-based
-/// id, name, `trigger` (0 = call, 1 = autostart, 2 = parallel), the `switch_id`
-/// gating an autostart/parallel event, and its command list. Unlike a map
+/// id, name, `trigger` (3 = autostart, 4 = parallel, 5 = call), an optional
+/// switch condition, and its command list. Unlike a map
 /// event, it belongs to no map and its commands run in the global scope.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommonEvent {
     pub id: u32,
     pub name: String,
     pub trigger: u32,
+    #[serde(default)]
+    pub switch_flag: bool,
     pub switch_id: u32,
     pub commands: Vec<EventCommand>,
 }

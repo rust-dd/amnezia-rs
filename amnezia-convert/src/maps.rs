@@ -220,12 +220,13 @@ pub fn convert_common_events(input: &Path, output: &Path) -> Result<usize> {
     let bytes = std::fs::read(&ldb).with_context(|| format!("reading {}", ldb.display()))?;
     let parsed =
         lcf::parse_common_events(&bytes).with_context(|| format!("parsing {}", ldb.display()))?;
-    let events: Vec<CommonEvent> = parsed
+    let events = parsed
         .into_iter()
         .map(|e| CommonEvent {
             id: e.id,
             name: e.name,
             trigger: e.trigger,
+            switch_flag: e.switch_flag,
             switch_id: e.switch_id,
             commands: e
                 .commands
@@ -238,7 +239,7 @@ pub fn convert_common_events(input: &Path, output: &Path) -> Result<usize> {
                 })
                 .collect(),
         })
-        .collect();
+        .collect::<Vec<_>>();
     let count = events.len();
     let serialised = ron::to_string(&events).context("serialising common events to RON")?;
     std::fs::create_dir_all(output).with_context(|| format!("creating {}", output.display()))?;

@@ -70,14 +70,14 @@ fn converts_ldb_to_common_events_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    // Message text bytes are CP1250 "Helló"; the name bytes are "Kezdés".
     let mut commands = command(10110, &[0x48, 0x65, 0x6C, 0x6C, 0xF3], &[]);
     commands.extend(command(0, b"", &[]));
     let intro = element(
         1,
         &[
             subchunk(0x01, &[0x4B, 0x65, 0x7A, 0x64, 0xE9, 0x73]),
-            subchunk(0x0B, &varint(1)),
+            subchunk(0x0B, &varint(3)),
+            subchunk(0x0C, &varint(1)),
             subchunk(0x0D, &varint(7)),
             subchunk(0x16, &commands),
         ],
@@ -90,13 +90,14 @@ fn converts_ldb_to_common_events_ron() {
     assert_eq!(count, 2);
 
     let text = std::fs::read_to_string(output.join("common_events.ron")).unwrap();
-    let events: Vec<CommonEvent> = ron::from_str(&text).unwrap();
+    let events = ron::from_str::<Vec<CommonEvent>>(&text).unwrap();
     assert_eq!(
         events[0],
         CommonEvent {
             id: 1,
             name: "Kezdés".to_string(),
-            trigger: 1,
+            trigger: 3,
+            switch_flag: true,
             switch_id: 7,
             commands: vec![
                 EventCommand {
@@ -115,6 +116,8 @@ fn converts_ldb_to_common_events_ron() {
         }
     );
     assert_eq!(events[1].name, "Idle");
-    assert_eq!(events[1].trigger, 0, "trigger defaults to call");
+    assert_eq!(events[1].trigger, 5, "trigger defaults to call");
+    assert!(!events[1].switch_flag);
+    assert_eq!(events[1].switch_id, 1);
     assert!(events[1].commands.is_empty());
 }

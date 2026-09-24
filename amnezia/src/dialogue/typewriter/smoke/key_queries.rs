@@ -73,7 +73,8 @@ pub(super) fn drive(world: &mut World, frame: u32) {
                 .push(amnezia_data::CommonEvent {
                     id: 9000,
                     name: String::new(),
-                    trigger: 2,
+                    trigger: 4,
+                    switch_flag: false,
                     switch_id: 0,
                     commands: vec![original(13, false)],
                 });
