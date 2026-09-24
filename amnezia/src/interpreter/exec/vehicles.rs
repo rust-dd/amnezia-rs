@@ -45,20 +45,24 @@ pub(super) fn toggle(frame: &mut Frame, x: &mut Exec) -> Flow {
         return Flow::Advance;
     };
     let was_riding = x.subsystems.mapfx.vehicles.riding();
-    let changed =
-        x.subsystems
-            .mapfx
-            .vehicles
-            .toggle(data, (hero.tile_x, hero.tile_y, hero.dir), |tx, ty| {
-                x.subsystems.flow.map_events.as_ref().is_some_and(|events| {
-                    events.events.iter().any(|event| {
-                        event.x as i32 == tx
-                            && event.y as i32 == ty
-                            && active_page(event, &x.switches, &x.variables, &x.party, &x.inventory)
-                                .is_some_and(|page| page.layer == 1)
-                    })
+    let direction = x
+        .hero_queue
+        .single_mut()
+        .map_or(hero.dir, |(_, mut route)| route.normalize_direction(hero));
+    let changed = x.subsystems.mapfx.vehicles.toggle(
+        data,
+        (hero.tile_x, hero.tile_y, direction),
+        |tx, ty| {
+            x.subsystems.flow.map_events.as_ref().is_some_and(|events| {
+                events.events.iter().any(|event| {
+                    event.x as i32 == tx
+                        && event.y as i32 == ty
+                        && active_page(event, &x.switches, &x.variables, &x.party, &x.inventory)
+                            .is_some_and(|page| page.layer == 1)
                 })
-            });
+            })
+        },
+    );
     if changed {
         let vehicles = &mut x.subsystems.mapfx.vehicles;
         if was_riding {

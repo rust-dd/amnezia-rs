@@ -39,7 +39,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-pub(crate) const SAVE_FORMAT_VERSION: u32 = 18;
+pub(crate) const SAVE_FORMAT_VERSION: u32 = 19;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"

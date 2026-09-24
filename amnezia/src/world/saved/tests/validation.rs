@@ -66,13 +66,30 @@ fn invalid_motion_route_and_animation_values_are_rejected() {
         ("transparency:0", "transparency:8"),
         ("timer:0.0", "timer:inf"),
         ("facing_lock:None", "facing_lock:Some(4)"),
-        ("direction:None", "direction:Some(4)"),
+        ("direction:None", "direction:Some(8)"),
         ("count:0", "count:24"),
         ("fraction:0.0", "fraction:NaN"),
     ] {
         assert!(original.contains(from), "{from}: {original}");
         let broken = ron::from_str::<EventState>(&original.replace(from, to)).unwrap();
         assert!(!valid(&[broken], &map), "{from} -> {to}");
+    }
+}
+
+#[test]
+fn saved_npcs_accept_diagonal_movement_but_only_cardinal_sprite_faces() {
+    let (mut app, _) = app("diagonal-fields");
+    let mut base = snapshot(app.world_mut()).remove(0);
+    base.route = RouteStepper::default();
+    let original = ron::to_string(&base).unwrap();
+    let map = load_ron::<Map>(&format!("{}/maps/map_0003.ron", asset_root()));
+    for direction in 4..8 {
+        let encoded = original.replace("direction:None", &format!("direction:Some({direction})"));
+        let mut saved = ron::from_str::<EventState>(&encoded).unwrap();
+        assert_eq!(saved.route.direction(&saved.character), direction);
+        assert!(valid(&[saved.clone()], &map));
+        saved.character.dir = direction;
+        assert!(!valid(&[saved], &map));
     }
 }
 

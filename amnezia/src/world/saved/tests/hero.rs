@@ -3,6 +3,7 @@ use crate::appearance::{ActorGraphics, Appearance, AppearancePlugin};
 use crate::player::Player;
 
 mod continuation;
+mod diagonals;
 mod lifecycle;
 
 fn hero_app(tag: &str) -> (App, std::path::PathBuf, Entity) {

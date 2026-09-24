@@ -2,6 +2,7 @@ use super::*;
 use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::{Character, EventSprite};
 
+mod diagonals;
 mod vehicles;
 
 fn setup(mode: u32) -> (App, Entity) {

@@ -11,7 +11,7 @@
 
 use super::MapData;
 use crate::assets::resolve_png;
-use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_RIGHT, DIR_UP};
+use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use bevy::ecs::component::Mutable;
 use bevy::prelude::*;
 use std::collections::VecDeque;
@@ -217,13 +217,18 @@ fn center(data: &MapData, x: i32, y: i32) -> Vec2 {
     Vec2::new(wx, wy)
 }
 
-/// The tile delta for a facing direction.
+/// The tile delta for a cardinal or diagonal movement direction.
 pub(crate) fn dir_delta(dir: u32) -> (i32, i32) {
     match dir {
         DIR_UP => (0, -1),
         DIR_RIGHT => (1, 0),
         DIR_DOWN => (0, 1),
-        _ => (-1, 0),
+        DIR_LEFT => (-1, 0),
+        4 => (1, -1),
+        5 => (1, 1),
+        6 => (-1, 1),
+        7 => (-1, -1),
+        _ => (0, 0),
     }
 }
 

@@ -30,7 +30,7 @@ pub(super) fn update(
     input: Option<Res<crate::player::InputPhase>>,
     dialogue: Res<Dialogue>,
     mut running: ResMut<RunningEvent>,
-    players: Query<(&Player, Option<&MoveQueue>, Option<&RouteStepper>)>,
+    mut players: Query<(&Player, Option<&MoveQueue>, Option<&mut RouteStepper>)>,
 ) {
     if !(keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter))
         || pause.paused()
@@ -45,10 +45,10 @@ pub(super) fn update(
     {
         return;
     }
-    let Ok((player, queue, route)) = players.single() else {
+    let Ok((player, queue, mut route)) = players.single_mut() else {
         return;
     };
-    if queue.is_some_and(MoveQueue::busy) || route.is_some_and(RouteStepper::active) {
+    if queue.is_some_and(MoveQueue::busy) || route.as_ref().is_some_and(|route| route.active()) {
         return;
     }
     let (x, y, _) = scene
@@ -58,11 +58,14 @@ pub(super) fn update(
             vehicles.hero_position((player.tile_x, player.tile_y, player.dir))
         });
     let hero = (x, y);
+    let hero_direction = route
+        .as_mut()
+        .map_or(player.dir, |route| route.normalize_direction(player));
     let direction = scene
         .vehicles
         .as_ref()
         .and_then(|vehicles| vehicles.rider_direction())
-        .unwrap_or_else(|| route.map_or(player.dir, |route| route.direction(player)));
+        .unwrap_or(hero_direction);
     let (dx, dy) = dir_delta(direction);
     let (mut tx, mut ty) = triggers.data.normalize_tile(hero.0 + dx, hero.1 + dy);
     triggers.queue_at(&mut running, (tx, ty), true, &[1, 2], hero, true);

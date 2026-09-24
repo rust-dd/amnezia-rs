@@ -87,6 +87,9 @@ impl Vehicles {
         blocked: impl Fn(i32, i32) -> bool,
     ) -> bool {
         if let Some(index) = self.save.riding {
+            self.motion[index]
+                .route
+                .normalize_direction(&self.save.vehicles[index]);
             if self.motion[index].queue.busy() || self.airship_transitioning() {
                 return false;
             }
@@ -156,17 +159,20 @@ fn keyboard(
     bgm: Res<CurrentBgm>,
     mut vehicles: ResMut<Vehicles>,
     mut audio: MessageWriter<AudioRequest>,
-    players: Query<(&Player, &MoveQueue, Option<&RouteStepper>)>,
+    mut players: Query<(&Player, &MoveQueue, Option<&mut RouteStepper>)>,
 ) {
     vehicles.consumed_action = false;
     if guards.paused() {
         return;
     }
     let Some(data) = data else { return };
-    let Ok((hero, queue, route)) = players.single() else {
+    let Ok((hero, queue, mut route)) = players.single_mut() else {
         return;
     };
-    if queue.busy() || route.is_some_and(RouteStepper::active) || vehicles.airship_transitioning() {
+    if queue.busy()
+        || route.as_ref().is_some_and(|route| route.active())
+        || vehicles.airship_transitioning()
+    {
         return;
     }
     if let Some(index) = vehicles.save.riding
@@ -179,7 +185,9 @@ fn keyboard(
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {
         let was_riding = vehicles.riding();
-        let direction = route.map_or(hero.dir, |route| route.direction(hero));
+        let direction = route
+            .as_mut()
+            .map_or(hero.dir, |route| route.normalize_direction(hero));
         if vehicles.toggle(&data, (hero.tile_x, hero.tile_y, direction), |x, y| {
             map_events.events.iter().any(|event| {
                 event.x as i32 == x

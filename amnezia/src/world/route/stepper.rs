@@ -22,10 +22,6 @@ mod saved;
 /// Logical frames per second the RM2000 stop-count delays are measured in.
 const FPS: f32 = 60.0;
 
-/// The `(dx, dy)` of a diagonal move command (4 up-right, 5 down-right, 6
-/// down-left, 7 up-left).
-const DIAGONALS: [(i32, i32); 4] = [(1, -1), (1, 1), (-1, 1), (-1, -1)];
-
 /// A side-effect a route command produces that the driving system applies to
 /// shared state: a game-switch toggle (32/33), a sound effect (35), or a
 /// transparency change (40/41) applied to the character's sprite.
@@ -140,12 +136,7 @@ impl RouteStepper {
         cmd: &MoveCommandDef,
     ) -> Step {
         match cmd.code {
-            0..=3 => self.try_move(ch, Some(cmd.code), dir_delta(cmd.code), can_step),
-            4..=7 => {
-                let (dx, dy) = DIAGONALS[(cmd.code - 4) as usize];
-                let face = if dy < 0 { DIR_UP } else { DIR_DOWN };
-                self.try_move(ch, Some(face), (dx, dy), can_step)
-            }
+            0..=7 => self.try_move(ch, Some(cmd.code), dir_delta(cmd.code), can_step),
             8 => {
                 let dir = self.random_dir();
                 self.try_move(ch, Some(dir), dir_delta(dir), can_step)
@@ -241,10 +232,9 @@ impl RouteStepper {
         }
     }
 
-    /// Attempt a move: face `new_dir` (unless `None`, i.e. move-forward), then step
-    /// the delta if passable (or `through`). A blocked move on a `skippable` route
-    /// un-turns and skips to the next command; otherwise it faces the obstacle and
-    /// waits, retrying after the step delay.
+    /// Movement attempts update facing; a successful MoveForward restores its
+    /// previous pose. Skipping a blocked move restores both directions, while a
+    /// blocked non-skippable move keeps facing the obstacle.
     fn try_move<C: Character>(
         &mut self,
         ch: &mut C,
@@ -254,14 +244,18 @@ impl RouteStepper {
     ) -> Step {
         let prev = self.direction(ch);
         let prev_facing = ch.dir();
-        if let Some(dir) = new_dir {
-            self.set_direction(ch, dir);
-        }
-        let face = ch.dir();
+        self.set_direction(ch, new_dir.unwrap_or(prev));
         if can_step(ch, dx, dy, false, self.through) {
+            if new_dir.is_none() {
+                ch.set_dir(prev_facing);
+            }
             self.timer = step_delay_secs(self.frequency);
             Step::Gate(Some((
-                RouteAction::Step { dx, dy, face },
+                RouteAction::Step {
+                    dx,
+                    dy,
+                    face: ch.dir(),
+                },
                 step_secs_for_speed(self.speed),
             )))
         } else if self.skippable {

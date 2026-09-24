@@ -1,6 +1,8 @@
 use super::*;
 use crate::world::{EventSprite, MapData, MoveQueue, drive_route};
 
+mod directions;
+
 fn character() -> EventSprite {
     EventSprite {
         id: 5,

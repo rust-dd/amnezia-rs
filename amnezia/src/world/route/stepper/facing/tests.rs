@@ -2,6 +2,8 @@ use super::*;
 use crate::player::Player;
 use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 
+mod diagonals;
+
 fn character() -> Player {
     Player {
         tile_x: 5,

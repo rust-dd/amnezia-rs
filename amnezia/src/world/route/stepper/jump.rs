@@ -7,29 +7,18 @@ impl RouteStepper {
         hero: (i32, i32),
         can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
     ) -> Step {
-        let Some(end) = self.commands[self.index + 1..]
+        let end = self.commands[self.index + 1..]
             .iter()
             .position(|cmd| cmd.code == 25)
-            .map(|offset| self.index + 1 + offset)
-        else {
-            self.index = self.commands.len();
-            return Step::Next;
-        };
+            .map(|offset| self.index + 1 + offset);
         let (mut dx, mut dy) = (0, 0);
         let previous = self.direction(ch);
         let previous_facing = ch.dir();
         let mut direction = previous;
-        for index in self.index + 1..end {
+        for index in self.index + 1..end.unwrap_or(self.commands.len()) {
             let code = self.commands[index].code;
             match code {
-                0..=3 => direction = code,
-                4..=7 => {
-                    let delta = DIAGONALS[(code - 4) as usize];
-                    dx += delta.0;
-                    dy += delta.1;
-                    direction = if delta.1 < 0 { DIR_UP } else { DIR_DOWN };
-                    continue;
-                }
+                0..=7 => direction = code,
                 8 | 20 => direction = self.random_dir(),
                 9 | 21 => direction = toward_dir(hero, ch.tile()),
                 10 | 22 => direction = away_dir(hero, ch.tile()),
@@ -46,6 +35,11 @@ impl RouteStepper {
                 dy += delta.1;
             }
         }
+        self.direction = Some(direction);
+        let Some(end) = end else {
+            self.index = self.commands.len() - 1;
+            return Step::Next;
+        };
         let direction = if dx.abs() > dy.abs() {
             if dx < 0 { DIR_LEFT } else { DIR_RIGHT }
         } else if dy < 0 {
@@ -53,7 +47,13 @@ impl RouteStepper {
         } else {
             DIR_DOWN
         };
-        self.set_direction(ch, direction);
+        self.direction = Some(direction);
+        if (dx != 0 || dy != 0)
+            && self.facing_lock.is_none()
+            && !matches!(self.animation.mode, 2..=4)
+        {
+            ch.set_dir(direction);
+        }
         if (dx != 0 || dy != 0) && !can_step(ch, dx, dy, true, self.through) {
             self.timer = step_delay_secs(self.frequency);
             if self.skippable {
