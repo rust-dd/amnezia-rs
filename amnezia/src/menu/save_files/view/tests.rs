@@ -142,26 +142,24 @@ fn file_arrows_wait_for_the_first_tick_and_update_before_the_list_moves() {
     files.navigation = crate::menu::save_files::navigation::Navigation::new(2);
     app.update();
     assert_arrows(&mut app, [false, false]);
-    let mut keys = ButtonInput::default();
-    keys.press(KeyCode::ArrowDown);
-    app.world_mut()
-        .resource_mut::<SaveFiles>()
-        .navigation
-        .tick(&keys, true, true);
+    app.world_mut().resource_mut::<SaveFiles>().navigation.tick(
+        [true, false, false, false, false, false],
+        [true, false],
+        true,
+    );
     app.update();
     assert_arrows(&mut app, [false, true]);
-    keys.reset_all();
     app.world_mut()
         .resource_mut::<SaveFiles>()
         .navigation
-        .tick(&keys, false, true);
+        .tick([false; 6], [false; 2], true);
     app.update();
     assert_arrows(&mut app, [true, true]);
     for _ in 0..18 {
         app.world_mut()
             .resource_mut::<SaveFiles>()
             .navigation
-            .tick(&keys, false, true);
+            .tick([false; 6], [false; 2], true);
     }
     app.update();
     assert_arrows(&mut app, [false, false]);
@@ -169,7 +167,7 @@ fn file_arrows_wait_for_the_first_tick_and_update_before_the_list_moves() {
         app.world_mut()
             .resource_mut::<SaveFiles>()
             .navigation
-            .tick(&keys, false, true);
+            .tick([false; 6], [false; 2], true);
     }
     app.update();
     assert_arrows(&mut app, [true, true]);

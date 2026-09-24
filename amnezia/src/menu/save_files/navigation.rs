@@ -1,12 +1,4 @@
 use crate::save::slots::COUNT;
-use bevy::prelude::*;
-
-const KEYS: [KeyCode; 4] = [
-    KeyCode::ArrowDown,
-    KeyCode::ArrowUp,
-    KeyCode::PageDown,
-    KeyCode::PageUp,
-];
 
 #[derive(Default)]
 pub(super) struct Navigation {
@@ -17,7 +9,6 @@ pub(super) struct Navigation {
     pub cursors: [u32; COUNT as usize],
     old_top: usize,
     movement: Option<u32>,
-    held: [u32; 4],
 }
 
 impl Navigation {
@@ -28,7 +19,7 @@ impl Navigation {
             index,
             top: index.saturating_sub(2),
             cursors,
-            ..default()
+            ..Self::default()
         }
     }
 
@@ -39,7 +30,7 @@ impl Navigation {
         })
     }
 
-    pub fn tick(&mut self, keys: &ButtonInput<KeyCode>, triggered: bool, timed: bool) -> bool {
+    pub fn tick(&mut self, repeated: [bool; 6], triggered: [bool; 2], timed: bool) -> u32 {
         if timed {
             self.arrow = (self.arrow + 1) % 40;
             self.arrows = [self.top > 0, self.top + 3 < COUNT as usize]
@@ -52,24 +43,16 @@ impl Navigation {
                 self.movement = None;
             }
         }
-        let mut repeated = [false; 4];
-        for (index, key) in KEYS.iter().enumerate() {
-            self.held[index] = if keys.pressed(*key) {
-                self.held[index].saturating_add(u32::from(timed))
-            } else {
-                0
-            };
-            repeated[index] = (triggered && keys.just_pressed(*key))
-                || (timed && self.held[index] >= 24 && self.held[index].is_multiple_of(4));
-        }
         if moving {
             self.cursors[self.index] = (self.cursors[self.index] + u32::from(timed)) % 21;
-            return false;
+            return 0;
         }
-        let old_index = self.index;
-        for (action, repeated) in repeated.into_iter().enumerate() {
-            if repeated {
-                self.navigate(action, triggered && keys.just_pressed(KEYS[action]));
+        let mut moves = 0;
+        for action in [0, 1, 4, 5] {
+            if repeated[action] {
+                moves += u32::from(
+                    self.navigate(action, triggered.get(action).copied().unwrap_or(false)),
+                );
             }
         }
         self.old_top = self.top;
@@ -78,21 +61,22 @@ impl Navigation {
             self.movement = Some(u32::from(timed));
         }
         self.cursors[self.index] = (self.cursors[self.index] + u32::from(timed)) % 21;
-        old_index != self.index
+        moves
     }
 
     pub fn moving(&self) -> bool {
         self.movement.is_some()
     }
 
-    fn navigate(&mut self, action: usize, triggered: bool) {
+    fn navigate(&mut self, action: usize, triggered: bool) -> bool {
         let last = COUNT as usize - 1;
         self.index = match action {
             0 if triggered || self.index < last => (self.index + 1) % COUNT as usize,
             1 if triggered || self.index > 0 => (self.index + last) % COUNT as usize,
-            2 => (self.index + 3).min(last),
-            3 => self.index.saturating_sub(3),
-            _ => self.index,
+            4 if self.index < last => (self.index + 3).min(last),
+            5 if self.index > 0 => self.index.saturating_sub(3),
+            _ => return false,
         };
+        true
     }
 }

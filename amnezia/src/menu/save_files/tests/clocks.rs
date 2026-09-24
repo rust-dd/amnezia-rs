@@ -29,7 +29,7 @@ fn opening_updates_only_the_selected_window_once_before_its_first_input_frame() 
             assert_eq!(*cursor, u32::from(index == selected));
         }
         for tick in 1..=42 {
-            nav.tick(&ButtonInput::default(), false, true);
+            nav.tick([false; 6], [false; 2], true);
             assert_eq!(nav.cursors[selected], (1 + tick) % 21);
             assert_eq!(nav.arrow, tick % 40);
         }

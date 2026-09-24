@@ -32,11 +32,17 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
     })
     .insert_resource(SaveAccess(true))
     .init_resource::<SaveFiles>()
+    .init_resource::<crate::menu::DirectionInput>()
     .init_resource::<crate::menu::items::List>()
     .add_message::<crate::audio::AudioRequest>()
     .add_systems(
         Update,
-        crate::menu::input::menu_input.in_set(crate::menu::MenuInput),
+        (
+            crate::menu::update_directions,
+            crate::menu::input::menu_input,
+        )
+            .chain()
+            .in_set(crate::menu::MenuInput),
     );
     super::register_flow(&mut app);
     let mut map = crate::world::MapData::for_test(20, 15);
@@ -123,4 +129,5 @@ fn selecting_the_last_slot_saves_only_that_slot_after_confirmation() {
 mod clocks;
 mod events;
 mod navigation;
+mod repetition;
 mod transitions;

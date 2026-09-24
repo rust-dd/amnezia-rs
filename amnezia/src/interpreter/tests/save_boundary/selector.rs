@@ -53,7 +53,12 @@ fn every_original_crystal_can_be_cancelled_or_saved_then_resumes_exactly_once() 
     for (map, event, commands) in original_crystals() {
         for save in [false, true] {
             let (mut app, path) = super::storage::app(&format!("selector-{map}-{event}-{save}"));
-            app.add_plugins(crate::transitions::TransitionPlugin);
+            app.add_plugins(crate::transitions::TransitionPlugin)
+                .init_resource::<crate::menu::DirectionInput>()
+                .add_systems(
+                    Update,
+                    crate::menu::update_directions.before(crate::menu::save_files::FileInput),
+                );
             register_flow(&mut app);
             let mut commands = commands.clone();
             commands.push(switch_cmd(9998, 2, 0));

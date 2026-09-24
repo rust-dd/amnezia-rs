@@ -20,11 +20,16 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
     .init_resource::<TitleState>()
     .init_resource::<NewGameRequest>()
     .init_resource::<MenuOpen>()
+    .init_resource::<crate::menu::DirectionInput>()
     .init_resource::<view::clock::Clock>()
     .init_resource::<SystemMusic>()
     .add_message::<AudioRequest>()
     .add_message::<AppExit>()
     .add_message::<MapChanged>()
+    .add_systems(
+        Update,
+        crate::menu::update_directions.before(crate::menu::save_files::FileInput),
+    )
     .add_systems(
         Update,
         (

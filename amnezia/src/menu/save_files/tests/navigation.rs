@@ -1,19 +1,17 @@
 use super::super::navigation::Navigation;
-use bevy::prelude::*;
+
+fn navigate(nav: &mut Navigation, action: usize, fresh: bool) -> u32 {
+    let mut repeated = [false; 6];
+    repeated[action] = true;
+    nav.tick(repeated, [fresh && action == 0, fresh && action == 1], true)
+}
 
 #[test]
 fn scrolling_uses_original_integer_interpolation_and_blocks_through_the_last_tick() {
-    for (index, key, top, distance) in [
-        (2, KeyCode::ArrowDown, 1, 64),
-        (0, KeyCode::ArrowUp, 12, 768),
-        (14, KeyCode::ArrowDown, 0, -768),
-    ] {
+    for (index, action, top, distance) in [(2, 0, 1, 64), (0, 1, 12, 768), (14, 0, 0, -768)] {
         let mut nav = Navigation::new(index);
-        let mut keys = ButtonInput::default();
-        keys.press(key);
-        assert!(nav.tick(&keys, true, true));
+        assert_eq!(navigate(&mut nav, action, true), 1);
         assert_eq!(nav.top, top);
-        keys.reset_all();
         for frame in 1..=7 {
             assert!(nav.moving());
             assert_eq!(
@@ -21,7 +19,7 @@ fn scrolling_uses_original_integer_interpolation_and_blocks_through_the_last_tic
                 distance - distance * frame / 7,
                 "frame {frame}"
             );
-            assert!(!nav.tick(&keys, false, true));
+            assert_eq!(nav.tick([false; 6], [false; 2], true), 0);
         }
         assert!(!nav.moving());
         assert_eq!(nav.offset(), 0);
@@ -29,24 +27,17 @@ fn scrolling_uses_original_integer_interpolation_and_blocks_through_the_last_tic
 }
 
 #[test]
-fn held_arrows_repeat_at_tick_twenty_four_then_four_and_do_not_wrap() {
-    let mut nav = Navigation::new(0);
-    let mut keys = ButtonInput::default();
-    keys.press(KeyCode::ArrowDown);
-    for frame in 1..=24 {
-        nav.tick(&keys, frame == 1, true);
-        if frame < 24 {
-            assert_eq!(nav.index, 1, "frame {frame}");
+fn repeated_vertical_arrows_stop_at_the_boundary_but_fresh_presses_wrap() {
+    for (index, action, wrapped) in [(14, 0, 0), (0, 1, 14)] {
+        let mut nav = Navigation::new(index);
+        for _ in 0..300 {
+            assert_eq!(navigate(&mut nav, action, false), 0);
+            assert_eq!(nav.index, index);
         }
+        assert!(!nav.moving());
+        assert_eq!(navigate(&mut nav, action, true), 1);
+        assert_eq!(nav.index, wrapped);
     }
-    assert_eq!(nav.index, 2);
-    for _ in 0..300 {
-        nav.tick(&keys, false, true);
-    }
-    assert_eq!(nav.index, 14);
-    assert!(!nav.moving());
-    nav.tick(&keys, true, true);
-    assert_eq!(nav.index, 0);
 }
 
 #[test]
@@ -56,16 +47,12 @@ fn page_keys_move_three_slots_and_initial_view_contains_the_latest_slot() {
         assert_eq!(nav.top, index.saturating_sub(2));
     }
     let mut nav = Navigation::new(0);
-    let mut keys = ButtonInput::default();
-    keys.press(KeyCode::PageDown);
-    nav.tick(&keys, true, true);
+    navigate(&mut nav, 4, true);
     assert_eq!((nav.index, nav.top), (3, 1));
     for _ in 0..8 {
-        nav.tick(&ButtonInput::default(), false, true);
+        nav.tick([false; 6], [false; 2], true);
     }
-    keys.reset_all();
-    keys.press(KeyCode::PageUp);
-    nav.tick(&keys, true, true);
+    navigate(&mut nav, 5, true);
     assert_eq!((nav.index, nav.top), (0, 0));
 }
 
@@ -79,7 +66,7 @@ fn clocks_count_logical_frames_without_advancing_on_extra_render_frames() {
             clock.advance(1.0 / fps as f64);
             let elapsed = clock.frame - before;
             for _ in 0..elapsed.max(1) {
-                nav.tick(&ButtonInput::default(), false, elapsed > 0);
+                nav.tick([false; 6], [false; 2], elapsed > 0);
             }
         }
         assert_eq!((nav.arrow, nav.cursors[0]), (20, 19), "{fps} FPS");

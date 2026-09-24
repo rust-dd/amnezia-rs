@@ -8,6 +8,7 @@ use bevy::prelude::*;
 #[allow(clippy::too_many_arguments)]
 pub(super) fn update(
     keys: Res<ButtonInput<KeyCode>>,
+    directions: Res<crate::menu::DirectionInput>,
     frames: Res<GameFrames>,
     pause: crate::transitions::TransitionPause,
     open: Res<MenuOpen>,
@@ -26,19 +27,32 @@ pub(super) fn update(
     if files.entries.is_none() || files.finished.is_some() {
         return;
     }
-    let elapsed = frames.frame.wrapping_sub(files.last_frame);
+    let elapsed = if directions.rewound {
+        0
+    } else {
+        frames.frame.wrapping_sub(files.last_frame)
+    };
     files.last_frame = frames.frame;
     if pause.paused() || (files.mode == Mode::Save && files.stage != super::scene::Stage::Ready) {
         return;
     }
     let selected = files.navigation.index;
     let choice = decision(&files, &keys, sounds.as_deref(), &mut audio);
-    let mut moved = false;
+    let mut moves = 0;
+    let mut repeats = directions.slot_steps();
     for tick in 0..elapsed.max(1) {
-        moved |= files.navigation.tick(&keys, tick == 0, elapsed != 0);
+        let triggered =
+            [KeyCode::ArrowDown, KeyCode::ArrowUp].map(|key| tick == 0 && keys.just_pressed(key));
+        moves += files.navigation.tick(
+            repeats.next().unwrap_or([false; 6]),
+            triggered,
+            elapsed != 0,
+        );
     }
-    if moved && let Some(sounds) = sounds {
-        play_system_se(&mut audio, &sounds.cursor);
+    if let Some(sounds) = sounds {
+        for _ in 0..moves {
+            play_system_se(&mut audio, &sounds.cursor);
+        }
     }
     if let Some(confirmed) = choice {
         if confirmed {
