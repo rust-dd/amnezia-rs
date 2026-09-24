@@ -80,7 +80,7 @@ fn chasing_app() -> App {
 fn chasing_enemy_starts_its_touch_event_when_it_reaches_the_hero() {
     let mut app = chasing_app();
     app.update();
-    assert_eq!(app.world().resource::<RunningEvent>().debug_id(), Some(1));
+    assert_eq!(app.world().resource::<RunningEvent>().queued_ids(), vec![1]);
 }
 
 #[test]
@@ -98,13 +98,15 @@ fn a_parallel_message_without_a_foreground_event_does_not_freeze_npcs() {
 }
 
 #[test]
-fn npc_touch_cannot_start_a_foreground_event_during_a_parallel_choice() {
+fn npc_collision_can_queue_behind_a_parallel_choice() {
     let mut app = chasing_app();
     let mut choice = crate::choice::Choice::default();
     choice.open(vec!["Igen".into()], 0, 0);
     app.insert_resource(choice);
     app.update();
     assert!(!app.world().resource::<RunningEvent>().active());
+    assert_eq!(app.world().resource::<RunningEvent>().queued_ids(), vec![1]);
+    assert!(app.world().resource::<crate::choice::Choice>().active());
 }
 
 #[test]
@@ -211,7 +213,10 @@ fn chasing_npc_uses_the_short_path_and_touch_collision_across_a_seam() {
         world.resource_mut::<MapEvents>().events[0].y = 0;
         app.update();
         let world = app.world();
-        assert_eq!(world.resource::<RunningEvent>().active(), hero_y == 9);
+        assert_eq!(
+            world.resource::<RunningEvent>().queued_ids(),
+            if hero_y == 9 { vec![1] } else { vec![] }
+        );
         assert_eq!(
             world.resource::<MapEvents>().events[0].y,
             if hero_y == 9 { 0 } else { 9 }

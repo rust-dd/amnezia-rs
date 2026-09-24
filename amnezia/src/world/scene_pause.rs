@@ -40,4 +40,10 @@ impl ScenePause<'_> {
     pub(crate) fn riding(&self) -> bool {
         self.vehicles.as_ref().is_some_and(|v| v.riding())
     }
+
+    pub(crate) fn airship(&self) -> bool {
+        self.vehicles
+            .as_ref()
+            .is_some_and(|v| v.save.riding == Some(2))
+    }
 }

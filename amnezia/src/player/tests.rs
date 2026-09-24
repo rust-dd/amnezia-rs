@@ -1,6 +1,8 @@
 use super::camera::{camera_follow, clamp_to_map, ease_toward};
 use super::*;
+use crate::state::{Inventory, Party, Switches, Variables};
 use crate::world::MainCamera;
+use crate::world::MapEvents;
 use amnezia_data::{Event, EventCommand, Map};
 use bevy::math::Vec2;
 
@@ -203,16 +205,28 @@ fn floor_touch_waits_for_arrival_and_does_not_fire_again_at_rest() {
         .press(KeyCode::ArrowRight);
     app.update();
     assert!(!app.world().resource::<RunningEvent>().active());
+    assert!(
+        app.world()
+            .resource::<RunningEvent>()
+            .queued_ids()
+            .is_empty()
+    );
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .release(KeyCode::ArrowRight);
     for _ in 0..15 {
         app.update();
     }
-    assert!(app.world().resource::<RunningEvent>().active());
+    assert_eq!(app.world().resource::<RunningEvent>().queued_ids(), vec![1]);
     *app.world_mut().resource_mut::<RunningEvent>() = default();
     app.update();
     assert!(!app.world().resource::<RunningEvent>().active());
+    assert!(
+        app.world()
+            .resource::<RunningEvent>()
+            .queued_ids()
+            .is_empty()
+    );
 }
 
 #[test]
@@ -337,7 +351,10 @@ fn keyboard_wraps_and_triggers_events_across_the_seam() {
         let world = app.world_mut();
         let player = world.query::<&Player>().single(world).unwrap();
         assert_eq!(player.tile_x, if looping && layer == 0 { 9 } else { 0 });
-        assert_eq!(world.resource::<RunningEvent>().active(), looping);
+        assert_eq!(
+            world.resource::<RunningEvent>().queued_ids(),
+            if looping { vec![1] } else { vec![] }
+        );
     }
 }
 

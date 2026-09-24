@@ -54,21 +54,30 @@ pub(crate) fn event(world: &mut World, id: u32) {
     world
         .run_system_cached_with(route::route_event, (Some(id), Some(true)))
         .unwrap();
+    world
+        .run_system_cached_with(touch::trigger_event, (Some(id), false))
+        .unwrap();
     if stopped {
         refresh(world);
         crate::interpreter::foreground::queue_autorun(world, id);
+        world
+            .run_system_cached_with(touch::trigger_event, (Some(id), true))
+            .unwrap();
     }
     world
         .run_system_cached_with(route::route_event, (Some(id), Some(false)))
         .unwrap();
     world
+        .run_system_cached_with(touch::trigger_event, (Some(id), false))
+        .unwrap();
+    world
         .run_system_cached_with(autonomy::advance_event, Some(id))
         .unwrap();
     world
-        .run_system_cached_with(movement::walk_selected::<EventSprite>, Some(entity))
+        .run_system_cached_with(touch::trigger_event, (Some(id), false))
         .unwrap();
     world
-        .run_system_cached_with(touch::trigger_event, Some(id))
+        .run_system_cached_with(movement::walk_selected::<EventSprite>, Some(entity))
         .unwrap();
 }
 

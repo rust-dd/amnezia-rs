@@ -40,6 +40,7 @@ pub(crate) struct MoveGuards<'w> {
     gameover: Res<'w, GameOverActive>,
     save: Option<Res<'w, crate::save::EventSaveRequest>>,
     files: Option<Res<'w, crate::menu::save_files::SaveFiles>>,
+    input: Option<Res<'w, crate::player::InputPhase>>,
 }
 
 impl MoveGuards<'_> {
@@ -58,7 +59,10 @@ impl MoveGuards<'_> {
         self.dialogue.active
             || self.prompts.active()
             || self.running.active()
-            || self.running.waiting()
+            || self
+                .input
+                .as_ref()
+                .map_or_else(|| self.running.waiting(), |input| input.blocked)
             || self.forced_route_paused()
     }
 

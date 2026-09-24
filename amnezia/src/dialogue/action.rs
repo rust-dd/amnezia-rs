@@ -1,8 +1,7 @@
 use super::{Dialogue, InputPrompts, MessagePause};
 use crate::interpreter::{InterpreterStep, RunningEvent};
 use crate::player::{Player, facing_tile};
-use crate::state::{Inventory, Party, Switches, Variables, active_page};
-use crate::world::{MapData, MapEvents, MoveQueue, RouteStepper, ScenePause};
+use crate::world::{EventTriggers, MoveQueue, RouteStepper, ScenePause};
 use bevy::prelude::*;
 
 pub(super) fn register(app: &mut App) {
@@ -27,12 +26,8 @@ pub(super) fn update(
     prompts: InputPrompts,
     scene: ScenePause,
     pause: MessagePause,
-    data: Res<MapData>,
-    map_events: Res<MapEvents>,
-    switches: Res<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
+    triggers: EventTriggers,
+    input: Option<Res<crate::player::InputPhase>>,
     dialogue: Res<Dialogue>,
     mut running: ResMut<RunningEvent>,
     players: Query<(&Player, Option<&MoveQueue>, Option<&RouteStepper>)>,
@@ -43,7 +38,9 @@ pub(super) fn update(
         || prompts.active()
         || dialogue.active
         || running.active()
-        || running.waiting()
+        || input
+            .as_ref()
+            .map_or_else(|| running.waiting(), |input| input.blocked)
         || scene.vehicles.as_ref().is_some_and(|v| v.blocks_action())
     {
         return;
@@ -56,35 +53,17 @@ pub(super) fn update(
     }
     let (fx, fy) = facing_tile(player);
     let (dx, dy) = (fx - player.tile_x, fy - player.tile_y);
+    let data = &triggers.data;
     let (mut tx, mut ty) = data.normalize_tile(fx, fy);
+    triggers.queue_at(&mut running, (tx, ty), true, &[1, 2]);
+    triggers.queue_at(&mut running, (player.tile_x, player.tile_y), false, &[0]);
     for hop in 0..=3 {
-        for event in &map_events.events {
-            if event.x as i32 != tx || event.y as i32 != ty {
-                continue;
-            }
-            if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
-                && page.trigger == 0
-                && page.layer == 1
-            {
-                running.start(event.id, page.commands.clone());
-                return;
-            }
+        if triggers.queue_at(&mut running, (tx, ty), true, &[0]) {
+            break;
         }
         if hop == 3 || !data.is_counter(tx, ty) {
             break;
         }
         (tx, ty) = data.normalize_tile(tx + dx, ty + dy);
-    }
-    for event in &map_events.events {
-        if event.x as i32 != player.tile_x || event.y as i32 != player.tile_y {
-            continue;
-        }
-        if let Some(page) = active_page(event, &switches, &variables, &party, &inventory)
-            && page.trigger == 0
-            && page.layer != 1
-        {
-            running.start(event.id, page.commands.clone());
-            return;
-        }
     }
 }

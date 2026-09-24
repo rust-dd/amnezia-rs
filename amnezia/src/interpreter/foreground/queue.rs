@@ -29,17 +29,27 @@ impl Queue {
         self.events.values().any(|entry| entry.waiting)
     }
 
-    pub(super) fn schedule(&mut self, map_id: u32, id: u32, page: usize) {
+    #[cfg(test)]
+    pub(super) fn waiting_ids(&self) -> Vec<u32> {
+        self.events
+            .iter()
+            .filter_map(|(&id, entry)| entry.waiting.then_some(id))
+            .collect()
+    }
+
+    pub(super) fn schedule(&mut self, map_id: u32, id: u32, page: usize) -> bool {
         self.map_id = Some(map_id);
         let entry = self.events.entry(id).or_insert(Entry {
             page,
             waiting: false,
             paused: false,
         });
-        if !entry.waiting {
-            entry.waiting = true;
-            entry.paused = true;
+        if entry.waiting {
+            return false;
         }
+        entry.waiting = true;
+        entry.paused = true;
+        true
     }
 
     pub(super) fn take_next(&mut self) -> Option<(u32, usize)> {

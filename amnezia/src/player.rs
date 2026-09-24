@@ -4,14 +4,12 @@
 use crate::assets::resolve_png;
 use crate::dialogue::Dialogue;
 use crate::interpreter::RunningEvent;
-use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::EventSprite;
-use crate::world::collision::{CollisionBodies, MapCollision, Mover};
+use crate::world::collision::{CollisionBodies, Mover};
 use crate::world::{
-    Character, MapData, MapEvents, MoveQueue, RouteAction, RouteStepper, ScenePause, walk,
+    Character, EventTriggers, MapData, MoveQueue, RouteAction, RouteStepper, ScenePause, walk,
 };
-use amnezia_data::EventPage;
 use bevy::prelude::*;
 
 mod arrival;
@@ -80,6 +78,11 @@ pub(crate) struct PlayerStep;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct PlayerInput;
 
+#[derive(Resource, Default)]
+pub(crate) struct InputPhase {
+    pub(crate) blocked: bool,
+}
+
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<CameraPan>()
@@ -109,7 +112,7 @@ impl Plugin for PlayerPlugin {
 }
 
 fn register_movement(app: &mut App) {
-    app.add_systems(
+    app.init_resource::<InputPhase>().add_systems(
         Update,
         move_player
             .in_set(PlayerInput)
@@ -172,35 +175,41 @@ pub fn facing_tile(player: &Player) -> (i32, i32) {
 fn move_player(
     keys: Res<ButtonInput<KeyCode>>,
     prompts: crate::dialogue::InputPrompts,
-    data: Res<MapData>,
+    triggers: EventTriggers,
     dialogue: Res<Dialogue>,
     scene: ScenePause,
-    map_events: Res<MapEvents>,
-    switches: Res<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
     mut running: ResMut<RunningEvent>,
+    mut phase: ResMut<InputPhase>,
     mut players: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper), Without<EventSprite>>,
     events: Query<(&EventSprite, Option<&RouteStepper>), Without<Player>>,
     vehicles: Option<Res<crate::vehicles::Vehicles>>,
 ) {
+    phase.blocked = true;
     let Ok((mut player, mut queue, mut stepper)) = players.single_mut() else {
         return;
     };
-    if dialogue.active
-        || prompts.active()
-        || running.active()
-        || running.waiting()
-        || scene.paused()
-        || scene.riding()
-        || stepper.active()
+    if dialogue.active || prompts.active() || running.active() || scene.paused() || stepper.active()
     {
         return;
     }
-    if queue.busy() {
+    if queue.busy()
+        || vehicles
+            .as_ref()
+            .is_some_and(|vehicles| vehicles.rider_moving())
+    {
         return;
     }
+    if !scene.airship() {
+        triggers.queue_at(&mut running, (player.tile_x, player.tile_y), false, &[2]);
+    }
+    if running.waiting() {
+        return;
+    }
+    phase.blocked = false;
+    if scene.riding() {
+        return;
+    }
+    let data = &triggers.data;
     let step = if keys.pressed(KeyCode::ArrowUp) {
         Some((0, -1, DIR_UP))
     } else if keys.pressed(KeyCode::ArrowDown) {
@@ -223,12 +232,7 @@ fn move_player(
     let (tx, ty) = data.normalize_tile(nx, ny);
     let mut bodies = CollisionBodies::from_events(events.iter());
     bodies.include_vehicles(vehicles.as_deref(), data.map_id);
-    let collision = MapCollision::new(
-        &data,
-        &map_events,
-        (&switches, &variables, &party, &inventory),
-        &bodies,
-    );
+    let collision = triggers.collision(&bodies);
     let blocked = !collision.can_move(
         (player.tile_x, player.tile_y),
         (nx, ny),
@@ -244,45 +248,9 @@ fn move_player(
             face: player.dir,
         });
     }
-    if blocked
-        && let Some((id, page)) = touch_page_at(
-            &map_events,
-            &switches,
-            &variables,
-            &party,
-            &inventory,
-            tx,
-            ty,
-            true,
-        )
-    {
-        running.start(id, page.commands.clone());
+    if blocked {
+        triggers.queue_at(&mut running, (tx, ty), true, &[1, 2]);
     }
-}
-
-/// The active page (with its event id) of a player-touch event (trigger 1 or 2)
-/// on tile `(x, y)`, if any — the command list the interpreter should run on
-/// contact.
-#[allow(clippy::too_many_arguments)]
-fn touch_page_at<'a>(
-    map_events: &'a MapEvents,
-    switches: &Switches,
-    variables: &Variables,
-    party: &Party,
-    inventory: &Inventory,
-    x: i32,
-    y: i32,
-    same_layer: bool,
-) -> Option<(u32, &'a EventPage)> {
-    map_events
-        .events
-        .iter()
-        .filter(|e| e.x as i32 == x && e.y as i32 == y)
-        .find_map(|e| {
-            active_page(e, switches, variables, party, inventory)
-                .filter(|p| (p.trigger == 1 || p.trigger == 2) && (p.layer == 1) == same_layer)
-                .map(|p| (e.id, p))
-        })
 }
 
 pub(crate) fn update_player_sprite(

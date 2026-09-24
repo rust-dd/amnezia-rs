@@ -136,7 +136,13 @@ impl Vehicles {
     }
 
     pub fn blocks_action(&self) -> bool {
-        self.riding() || self.consumed_action
+        self.save.riding == Some(2) || self.rider_moving() || self.consumed_action
+    }
+
+    pub(crate) fn rider_moving(&self) -> bool {
+        self.save
+            .riding
+            .is_some_and(|index| self.motion[index].queue.busy())
     }
 
     pub fn character(&self, reference: i32) -> Option<(i32, i32, u32)> {

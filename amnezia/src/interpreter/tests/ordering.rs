@@ -9,6 +9,7 @@ mod autoruns;
 mod immediate;
 mod input;
 mod npcs;
+mod triggers;
 
 fn app() -> App {
     let mut app = interp_app();

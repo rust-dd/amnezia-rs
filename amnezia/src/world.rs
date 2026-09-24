@@ -26,6 +26,7 @@ mod screen;
 mod terrain;
 mod topology;
 mod touch;
+mod triggers;
 pub(crate) mod update;
 mod water;
 pub(crate) use water::smoke as water_smoke;
@@ -42,6 +43,7 @@ pub(crate) use route::{StepEffect, drive as drive_route};
 pub(crate) use scene_pause::ScenePause;
 pub(crate) use screen::MapScreen;
 pub(crate) use touch::TouchEvents;
+pub(crate) use triggers::EventTriggers;
 
 /// Developer start override. `None` uses the faithful LMT start (`start.ron`,
 /// the intro map_0005), whose autorun cutscene the interpreter now runs; set it
@@ -153,6 +155,11 @@ impl MapData {
 
 #[cfg(test)]
 impl MapData {
+    pub(crate) fn set_counter_for_test(&mut self, x: i32, y: i32) {
+        self.upper[(y * self.width + x) as usize] = 10001;
+        self.passages_up[1] |= 0x40;
+    }
+
     /// Build a bare, fully passable `MapData` of the given tile dimensions for
     /// headless tests: offsets centered as on a real load, all tiles empty.
     pub(crate) fn for_test(width: i32, height: i32) -> MapData {

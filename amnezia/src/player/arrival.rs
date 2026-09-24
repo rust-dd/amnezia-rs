@@ -26,15 +26,11 @@ fn remember(
 fn trigger(
     moving: Res<InFlight>,
     scene: ScenePause,
-    events: Res<MapEvents>,
-    switches: Res<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
+    triggers: EventTriggers,
     mut running: ResMut<RunningEvent>,
     players: Query<(&Player, &MoveQueue, &RouteStepper)>,
 ) {
-    if !moving.0 || scene.paused() || scene.riding() || running.active() {
+    if !moving.0 || scene.paused() || scene.airship() {
         return;
     }
     let Ok((hero, queue, route)) = players.single() else {
@@ -43,16 +39,5 @@ fn trigger(
     if queue.busy() || route.forced() {
         return;
     }
-    if let Some((id, page)) = touch_page_at(
-        &events,
-        &switches,
-        &variables,
-        &party,
-        &inventory,
-        hero.tile_x,
-        hero.tile_y,
-        false,
-    ) {
-        running.start(id, page.commands.clone());
-    }
+    triggers.queue_at(&mut running, (hero.tile_x, hero.tile_y), false, &[1, 2]);
 }

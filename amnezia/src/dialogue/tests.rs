@@ -122,14 +122,26 @@ fn action_key_reaches_an_event_on_the_opposite_loop_edge() {
     app.insert_resource(choice);
     app.update();
     assert!(!app.world().resource::<RunningEvent>().active());
+    assert!(
+        app.world()
+            .resource::<RunningEvent>()
+            .queued_ids()
+            .is_empty()
+    );
     app.world_mut().remove_resource::<crate::choice::Choice>();
     let mut number = crate::inputnumber::InputNumber::default();
     number.open(3, 1);
     app.insert_resource(number);
     app.update();
     assert!(!app.world().resource::<RunningEvent>().active());
+    assert!(
+        app.world()
+            .resource::<RunningEvent>()
+            .queued_ids()
+            .is_empty()
+    );
     app.world_mut()
         .remove_resource::<crate::inputnumber::InputNumber>();
     app.update();
-    assert_eq!(app.world().resource::<RunningEvent>().debug_id(), Some(7));
+    assert_eq!(app.world().resource::<RunningEvent>().queued_ids(), vec![7]);
 }

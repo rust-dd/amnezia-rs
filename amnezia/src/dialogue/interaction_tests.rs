@@ -202,8 +202,14 @@ fn closing_a_nested_prompt_does_not_start_a_facing_event_on_the_same_decision() 
         }
         press(&mut app, KeyCode::Enter);
         assert!(!app.world().resource::<RunningEvent>().active());
+        assert!(
+            app.world()
+                .resource::<RunningEvent>()
+                .queued_ids()
+                .is_empty()
+        );
         press(&mut app, KeyCode::Enter);
-        assert_eq!(app.world().resource::<RunningEvent>().debug_id(), Some(7));
+        assert_eq!(app.world().resource::<RunningEvent>().queued_ids(), vec![7]);
     }
 }
 
@@ -240,18 +246,24 @@ fn a_finishing_event_cannot_reuse_its_decision_to_start_a_facing_event() {
         assert!(!app.world().resource::<RunningEvent>().active());
         assert!(
             app.world()
+                .resource::<RunningEvent>()
+                .queued_ids()
+                .is_empty()
+        );
+        assert!(
+            app.world()
                 .resource::<ButtonInput<KeyCode>>()
                 .just_pressed(key)
         );
         press(&mut app, key);
-        assert_eq!(app.world().resource::<RunningEvent>().debug_id(), Some(7));
+        assert_eq!(app.world().resource::<RunningEvent>().queued_ids(), vec![7]);
     }
 }
 
 #[test]
 fn an_idle_map_action_is_available_to_the_same_frame_interpreter() {
     #[derive(Resource, Default)]
-    struct Seen(Option<u32>);
+    struct Seen(Vec<u32>);
 
     let mut app = app("Ron", true);
     app.world_mut().resource_mut::<Dialogue>().close();
@@ -264,10 +276,11 @@ fn an_idle_map_action_is_available_to_the_same_frame_interpreter() {
         .add_systems(
             Update,
             (|running: Res<RunningEvent>, mut seen: ResMut<Seen>| {
-                seen.0 = running.debug_id();
+                assert!(!running.active());
+                seen.0 = running.queued_ids();
             })
             .in_set(crate::interpreter::InterpreterStep),
         );
     press(&mut app, KeyCode::Enter);
-    assert_eq!(app.world().resource::<Seen>().0, Some(7));
+    assert_eq!(app.world().resource::<Seen>().0, vec![7]);
 }

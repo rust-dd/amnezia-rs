@@ -13,6 +13,17 @@ pub(super) use queue::Queue;
 #[derive(Resource, Default)]
 pub(super) struct Inbox(MessageCursor<MapRebuilt>);
 
+impl RunningEvent {
+    pub(crate) fn queue_event(&mut self, map_id: u32, id: u32, page: usize) -> bool {
+        self.queue.schedule(map_id, id, page)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn queued_ids(&self) -> Vec<u32> {
+        self.queue.waiting_ids()
+    }
+}
+
 #[derive(SystemParam)]
 struct Pages<'w> {
     data: Res<'w, MapData>,
