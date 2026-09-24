@@ -92,6 +92,7 @@ impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<RunningEvent>()
             .init_resource::<foreground::Inbox>()
+            .add_message::<foreground::UnpauseEvent>()
             .init_resource::<crate::dialogue::MessageOptions>()
             .init_resource::<EventRng>()
             .init_resource::<ParallelPool>()

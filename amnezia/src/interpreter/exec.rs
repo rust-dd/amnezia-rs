@@ -46,6 +46,7 @@ pub(super) struct Exec<'w, 's> {
         Without<Player>,
     >,
     pub(super) audio: MessageWriter<'w, AudioRequest>,
+    pub(super) unpause: MessageWriter<'w, super::foreground::UnpauseEvent>,
     pub(super) subsystems: SubsystemIo<'w, 's>,
 }
 

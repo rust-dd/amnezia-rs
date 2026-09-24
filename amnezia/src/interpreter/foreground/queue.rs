@@ -66,7 +66,7 @@ impl Queue {
         })
     }
 
-    pub(in crate::interpreter) fn finish(&mut self, id: u32) {
+    pub(in crate::interpreter) fn unpause(&mut self, id: u32) {
         if let Some(entry) = self.events.get_mut(&id) {
             entry.paused = false;
             if !entry.waiting {
@@ -138,11 +138,11 @@ mod tests {
         assert_eq!(queue.take_next(), Some((1, 0, false)));
         assert!(queue.paused(1));
         queue.schedule(3, 1, 0, false);
-        queue.finish(1);
+        queue.unpause(1);
         assert!(queue.waiting());
         assert!(!queue.paused(1));
         assert_eq!(queue.take_next(), Some((1, 0, false)));
-        queue.finish(1);
+        queue.unpause(1);
         assert_eq!(queue, Queue::default());
     }
 

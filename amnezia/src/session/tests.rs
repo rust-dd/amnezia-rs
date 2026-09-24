@@ -120,3 +120,13 @@ fn clearing_a_session_stops_the_previous_script_and_movement() {
     assert!(!world.resource::<RunningEvent>().active());
     assert!(!world.get::<MoveQueue>(mover).unwrap().busy());
 }
+
+#[test]
+fn clearing_a_session_discards_pending_character_unpause_requests() {
+    use crate::interpreter::foreground::UnpauseEvent;
+    let mut world = World::new();
+    world.init_resource::<Messages<UnpauseEvent>>();
+    world.write_message(UnpauseEvent(1));
+    clear_transient(&mut world);
+    assert!(world.resource::<Messages<UnpauseEvent>>().is_empty());
+}

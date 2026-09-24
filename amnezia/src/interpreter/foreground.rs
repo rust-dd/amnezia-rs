@@ -11,7 +11,13 @@ mod queue;
 pub(super) use queue::Queue;
 
 #[derive(Resource, Default)]
-pub(super) struct Inbox(MessageCursor<MapRebuilt>);
+pub(super) struct Inbox {
+    rebuilt: MessageCursor<MapRebuilt>,
+    unpause: MessageCursor<UnpauseEvent>,
+}
+
+#[derive(Message)]
+pub(crate) struct UnpauseEvent(pub u32);
 
 impl RunningEvent {
     pub(crate) fn queue_event(
@@ -27,6 +33,13 @@ impl RunningEvent {
     #[cfg(test)]
     pub(crate) fn queued_ids(&self) -> Vec<u32> {
         self.queue.waiting_ids()
+    }
+
+    fn unpause_event(&mut self, id: u32) {
+        self.queue.unpause(id);
+        if self.active() && self.frame.base_event_id() == id {
+            self.queued_owner = true;
+        }
     }
 }
 
@@ -73,8 +86,9 @@ fn refresh_queue(
     mut running: ResMut<RunningEvent>,
     mut inbox: ResMut<Inbox>,
     rebuilt: Option<Res<Messages<MapRebuilt>>>,
+    unpause: Res<Messages<UnpauseEvent>>,
 ) {
-    if rebuilt.is_some_and(|messages| inbox.0.read(&messages).count() > 0) {
+    if rebuilt.is_some_and(|messages| inbox.rebuilt.read(&messages).count() > 0) {
         if running.restoring_queue {
             running.restoring_queue = false;
         } else {
@@ -90,6 +104,9 @@ fn refresh_queue(
             &pages.party,
             &pages.inventory,
         );
+    }
+    for event in inbox.unpause.read(&unpause) {
+        running.unpause_event(event.0);
     }
 }
 

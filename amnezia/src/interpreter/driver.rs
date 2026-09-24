@@ -100,7 +100,7 @@ fn step_foreground(
         if !blockers.battle_active() {
             exec.dialogue.face = default();
         }
-        running.queue.finish(base_id);
+        running.queue.unpause(base_id);
         running.queued_owner = false;
     }
     (

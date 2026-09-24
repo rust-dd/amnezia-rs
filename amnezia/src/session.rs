@@ -120,6 +120,7 @@ pub(crate) fn clear_transient(world: &mut World) {
     clear_messages::<crate::battle::BattleRequest>(world);
     clear_messages::<crate::shop::ShopRequest>(world);
     clear_messages::<crate::world::RelocateEvent>(world);
+    clear_messages::<crate::interpreter::foreground::UnpauseEvent>(world);
     clear_messages::<crate::animation::ShowMapAnimation>(world);
     clear_messages::<crate::animation::PlayAnimation>(world);
     crate::animation::reset_transient(world);

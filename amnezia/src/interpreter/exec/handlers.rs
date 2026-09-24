@@ -203,6 +203,8 @@ pub(super) fn move_event(frame: &mut Frame, command: &EventCommand, x: &mut Exec
             .find(|(e, _, _)| e.id as i32 == id)
         {
             stepper.force_route(route);
+            x.unpause
+                .write(super::super::foreground::UnpauseEvent(id as u32));
         }
     }
     frame.ip += 1;

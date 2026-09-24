@@ -12,6 +12,7 @@ mod immediate;
 mod input;
 mod npcs;
 mod triggers;
+mod unpause;
 
 fn app() -> App {
     let mut app = interp_app();
