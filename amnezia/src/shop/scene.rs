@@ -1,13 +1,13 @@
-use super::{Phase, ShopState, logic, navigation::List};
+use super::{Phase, ShopState, logic};
 use crate::gamedata::GameData;
 use crate::menu::DirectionInput;
 use crate::state::Inventory;
+use crate::windowskin::selectable::List;
 use bevy::prelude::*;
 
-#[derive(Default)]
 pub(super) struct State {
-    pub buy: List<1>,
-    pub sell: List<2>,
+    pub buy: List,
+    pub sell: List,
     pub command_cursor: usize,
     pub command_frame: u32,
     pub number_frame: u32,
@@ -16,6 +16,23 @@ pub(super) struct State {
     pub item_id: u32,
     pub updated: bool,
     initialized: bool,
+}
+
+impl Default for State {
+    fn default() -> Self {
+        Self {
+            buy: List::new(1, 7, false),
+            sell: List::new(2, 7, false),
+            command_cursor: 0,
+            command_frame: 0,
+            number_frame: 0,
+            party_frame: 0,
+            help_id: 0,
+            item_id: 0,
+            updated: false,
+            initialized: false,
+        }
+    }
 }
 
 impl ShopState {

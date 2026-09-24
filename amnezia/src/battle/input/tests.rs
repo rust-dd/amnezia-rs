@@ -2,6 +2,7 @@ use super::super::model::testkit::build_party2;
 use super::*;
 
 mod menus;
+mod priority;
 
 #[test]
 fn a_disallowed_escape_buzzes_without_spending_the_party_turn() {
@@ -254,13 +255,8 @@ fn the_party_window_escape_starts_its_failure_message_before_forfeiting_the_turn
 }
 
 #[test]
-fn navigating_the_battle_menu_plays_the_system_se() {
+fn battle_decisions_and_cancellation_play_the_system_sounds() {
     let mut battle = build_party2();
-    let mut down = ButtonInput::<KeyCode>::default();
-    down.press(KeyCode::ArrowDown);
-    party_menu(&down, &mut battle);
-    assert!(battle.pending_se.contains(&BattleSe::Cursor));
-    battle.pending_se.clear();
     battle.cursor = 0;
     party_menu(&press_enter(), &mut battle);
     assert!(battle.pending_se.contains(&BattleSe::Decision));

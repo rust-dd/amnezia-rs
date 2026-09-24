@@ -56,7 +56,7 @@ pub fn command_input(
     inventory: Res<Inventory>,
     mut battle: ResMut<Battle>,
 ) {
-    if !any_key(&keys) || battle.events.blocks_action() {
+    if (!confirm(&keys) && !keys.just_pressed(KeyCode::Escape)) || battle.events.blocks_action() {
         return;
     }
     match battle.phase {
@@ -76,9 +76,6 @@ pub fn command_input(
 /// per-actor command entry, Auto orders the whole party a basic attack and
 /// resolves, Escape attempts to flee now.
 fn party_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
-    if move_cursor(keys, &mut battle.cursor, PARTY_COUNT) {
-        battle.pending_se.push(BattleSe::Cursor);
-    }
     if !confirm(keys) {
         return;
     }
@@ -129,13 +126,10 @@ pub fn item_choices(data: &GameData, inventory: &Inventory) -> Vec<(u32, String)
 }
 
 fn command_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
-    if keys.just_pressed(KeyCode::Escape) {
+    if !confirm(keys) && keys.just_pressed(KeyCode::Escape) {
         battle.pending_se.push(BattleSe::Cancel);
         battle.undo_choice();
         return;
-    }
-    if move_cursor(keys, &mut battle.cursor, COMMAND_COUNT) {
-        battle.pending_se.push(BattleSe::Cursor);
     }
     if !confirm(keys) {
         return;
@@ -150,16 +144,13 @@ fn command_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
 }
 
 fn skill_menu(keys: &ButtonInput<KeyCode>, data: &GameData, battle: &mut Battle) {
-    if keys.just_pressed(KeyCode::Escape) {
+    if !confirm(keys) && keys.just_pressed(KeyCode::Escape) {
         battle.pending_se.push(BattleSe::Cancel);
         enter(battle, MenuLevel::Command);
         return;
     }
     let known = battle.members[battle.turn].known_skills.clone();
     let choices = skill_choices(data, &known, battle.members[battle.turn].equipment_effects);
-    if move_grid_cursor(keys, &mut battle.cursor, choices.len()) {
-        battle.pending_se.push(BattleSe::Cursor);
-    }
     if confirm(keys) {
         remember_skill_cursor(battle);
         let Some(&(skill_id, _, _)) = choices.get(battle.cursor) else {
@@ -200,15 +191,12 @@ fn item_menu(
     inventory: &Inventory,
     battle: &mut Battle,
 ) {
-    if keys.just_pressed(KeyCode::Escape) {
+    if !confirm(keys) && keys.just_pressed(KeyCode::Escape) {
         battle.pending_se.push(BattleSe::Cancel);
         enter(battle, MenuLevel::Command);
         return;
     }
     let choices = item_choices(data, inventory);
-    if move_grid_cursor(keys, &mut battle.cursor, choices.len()) {
-        battle.pending_se.push(BattleSe::Cursor);
-    }
     if confirm(keys) {
         let Some(&(id, _)) = choices.get(battle.cursor) else {
             battle.pending_se.push(BattleSe::Buzzer);
@@ -240,7 +228,7 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
         enter(battle, MenuLevel::Command);
         return;
     }
-    if keys.just_pressed(KeyCode::Escape) {
+    if !confirm(keys) && keys.just_pressed(KeyCode::Escape) {
         battle.pending_se.push(BattleSe::Cancel);
         let back = if battle.pending_skill.is_some() {
             MenuLevel::Skill
@@ -249,9 +237,6 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
         };
         enter(battle, back);
         return;
-    }
-    if move_cursor(keys, &mut battle.cursor, living.len()) {
-        battle.pending_se.push(BattleSe::Cursor);
     }
     if confirm(keys) {
         battle.pending_se.push(BattleSe::Decision);
@@ -272,7 +257,7 @@ fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &Inventory, battle: 
         enter(battle, MenuLevel::Command);
         return;
     }
-    if keys.just_pressed(KeyCode::Escape) {
+    if !confirm(keys) && keys.just_pressed(KeyCode::Escape) {
         battle.pending_se.push(BattleSe::Cancel);
         let back = if battle.pending_skill.is_some() {
             MenuLevel::Skill
@@ -281,9 +266,6 @@ fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &Inventory, battle: 
         };
         enter(battle, back);
         return;
-    }
-    if move_cursor(keys, &mut battle.cursor, battle.members.len()) {
-        battle.pending_se.push(BattleSe::Cursor);
     }
     if confirm(keys) {
         if battle.pending_item.is_some_and(|id| !inventory.has(id)) {
@@ -349,56 +331,6 @@ fn remember_skill_cursor(battle: &mut Battle) {
     if let Some(cursor) = battle.skill_cursors.get_mut(battle.turn) {
         *cursor = battle.cursor;
     }
-}
-
-/// Move a wrapping cursor over `len` rows, clamped when the list shrank. Returns
-/// whether the cursor actually moved, so the caller can play the cursor SE.
-fn move_cursor(keys: &ButtonInput<KeyCode>, cursor: &mut usize, len: usize) -> bool {
-    if len == 0 {
-        *cursor = 0;
-        return false;
-    }
-    let before = *cursor;
-    if keys.just_pressed(KeyCode::ArrowDown) {
-        *cursor = (*cursor + 1) % len;
-    }
-    if keys.just_pressed(KeyCode::ArrowUp) {
-        *cursor = (*cursor + len - 1) % len;
-    }
-    *cursor = (*cursor).min(len - 1);
-    *cursor != before
-}
-
-fn move_grid_cursor(keys: &ButtonInput<KeyCode>, cursor: &mut usize, len: usize) -> bool {
-    let before = *cursor;
-    *cursor = (*cursor).min(len.saturating_sub(1));
-    if keys.just_pressed(KeyCode::ArrowDown) && *cursor + 2 < len {
-        *cursor += 2;
-    }
-    if keys.just_pressed(KeyCode::ArrowUp) && *cursor >= 2 {
-        *cursor -= 2;
-    }
-    if keys.just_pressed(KeyCode::ArrowRight) && *cursor + 1 < len {
-        *cursor += 1;
-    }
-    if keys.just_pressed(KeyCode::ArrowLeft) && *cursor > 0 {
-        *cursor -= 1;
-    }
-    *cursor != before
-}
-
-/// Whether any key the battle menus react to was just pressed.
-fn any_key(keys: &ButtonInput<KeyCode>) -> bool {
-    const RELEVANT: [KeyCode; 7] = [
-        KeyCode::Escape,
-        KeyCode::Enter,
-        KeyCode::Space,
-        KeyCode::ArrowUp,
-        KeyCode::ArrowDown,
-        KeyCode::ArrowLeft,
-        KeyCode::ArrowRight,
-    ];
-    RELEVANT.iter().any(|k| keys.just_pressed(*k))
 }
 
 /// The action key: Space or Enter, as the dialogue and shop boxes use.

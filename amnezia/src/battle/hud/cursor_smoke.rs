@@ -24,7 +24,7 @@ pub(crate) struct Snapshot {
 }
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
-    if !LABELS.contains(&label) {
+    if !LABELS.contains(&label) && !navigation::smoke::LABELS.contains(&label) {
         return None;
     }
     world.init_resource::<Checks>();
@@ -37,7 +37,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         .collect::<Vec<_>>();
     let battle = world.resource::<Battle>();
     let windows = world.resource::<motion::CommandWindows>();
-    let clocks = world.resource::<clocks::WindowClocks>();
+    let lists = world.resource::<navigation::Windows>();
     let handle = world
         .resource::<AssetServer>()
         .load("graphics/System/System.png");
@@ -57,7 +57,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         let top = window_y as i32 + native(node.top);
         let width = native(node.width);
         let height = native(node.height);
-        let origin = clocks.cursor_x(panel) as u32;
+        let origin = lists.get(panel).cursor_x() as u32;
         for y in 0..height {
             for x in 0..width {
                 if x != 0 && y != 0 && x + 1 != width && y + 1 != height {
@@ -80,7 +80,12 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
                     .unwrap()
                     .to_srgba()
                     .to_u8_array();
-                if rgba[3] == 255 {
+                let exposed = pixels[..window_pixels]
+                    .binary_search_by_key(&((top + y) as u32, (left + x) as u32), |pixel| {
+                        (pixel.1, pixel.0)
+                    })
+                    .is_ok_and(|index| pixels[index].2 == rgba);
+                if rgba[3] == 255 && exposed {
                     pixels.push(((left + x) as u32, (top + y) as u32, rgba));
                 }
             }
@@ -122,6 +127,6 @@ impl Snapshot {
 pub(crate) fn verify_finished(world: &World) {
     assert_eq!(
         world.resource::<Checks>().0.load(Ordering::Relaxed),
-        LABELS.len()
+        LABELS.len() + navigation::smoke::LABELS.len()
     );
 }

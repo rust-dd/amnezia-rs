@@ -207,10 +207,7 @@ fn revival_items_can_target_a_fallen_party_member() {
     let mut inventory = Inventory::default();
     inventory.add_item(112, 1);
     open_ally_target(&mut battle, None, Some(112));
-    let mut down = ButtonInput::<KeyCode>::default();
-    down.press(KeyCode::ArrowDown);
-    ally_target_menu(&down, &inventory, &mut battle);
-    assert_eq!(battle.cursor, 1);
+    battle.cursor = 1;
     ally_target_menu(&press_enter(), &inventory, &mut battle);
     assert!(matches!(
         battle.members[0].command,
@@ -240,7 +237,8 @@ fn cancelling_a_target_restores_the_selected_skill_and_command() {
 
 #[test]
 fn grid_navigation_matches_two_columns_and_stops_at_an_incomplete_last_row() {
-    let mut cursor = 0;
+    let mut list = crate::windowskin::selectable::List::new(2, 4, true);
+    list.refresh(0, 5);
     for (key, expected) in [
         (KeyCode::ArrowRight, 1),
         (KeyCode::ArrowDown, 3),
@@ -251,8 +249,17 @@ fn grid_navigation_matches_two_columns_and_stops_at_an_incomplete_last_row() {
     ] {
         let mut keys = ButtonInput::default();
         keys.press(key);
-        move_grid_cursor(&keys, &mut cursor, 5);
-        assert_eq!(cursor, expected);
+        let repeated = [
+            KeyCode::ArrowDown,
+            KeyCode::ArrowUp,
+            KeyCode::ArrowRight,
+            KeyCode::ArrowLeft,
+            KeyCode::PageDown,
+            KeyCode::PageUp,
+        ]
+        .map(|key| keys.just_pressed(key));
+        list.tick(repeated, [repeated[0], repeated[1]], true, true);
+        assert_eq!(list.index, expected);
     }
 }
 

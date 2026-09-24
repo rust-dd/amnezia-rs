@@ -19,7 +19,6 @@ mod flow;
 pub(crate) mod inn;
 mod logic;
 mod messages;
-mod navigation;
 mod quantity;
 mod scene;
 pub(crate) mod smoke;

@@ -66,7 +66,7 @@ pub(super) fn rows(
                 .collect();
             lines.into_iter().map(Row::plain).collect()
         }
-        Panel::Help => vec![Row::plain(description(battle, data, inventory))],
+        Panel::Help => vec![Row::plain(description(battle, data, inventory, None))],
     }
 }
 
@@ -119,17 +119,22 @@ fn commands(
     }
 }
 
-fn description(battle: &Battle, data: &GameData, inventory: &Inventory) -> String {
+pub(super) fn description(
+    battle: &Battle,
+    data: &GameData,
+    inventory: &Inventory,
+    index: Option<usize>,
+) -> String {
     let Some(actor) = battle.members.get(battle.turn) else {
         return String::new();
     };
     let value = match layout::base_menu(battle) {
         MenuLevel::Skill => skill_choices(data, &actor.known_skills, actor.equipment_effects)
-            .get(Panel::Skill.cursor(battle))
+            .get(index.unwrap_or_else(|| Panel::Skill.cursor(battle)))
             .and_then(|(id, _, _)| data.skills.iter().find(|s| s.id == *id))
             .map(|s| &s.description),
         MenuLevel::Item => item_choices(data, inventory)
-            .get(Panel::Item.cursor(battle))
+            .get(index.unwrap_or_else(|| Panel::Item.cursor(battle)))
             .and_then(|(id, _)| data.items.iter().find(|item| item.id == *id))
             .map(|i| &i.description),
         _ => None,

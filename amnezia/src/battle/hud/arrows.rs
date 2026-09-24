@@ -39,8 +39,7 @@ pub(super) fn spawn(parent: &mut ChildSpawnerCommands, system: &Handle<Image>, p
 
 pub(super) fn update(
     battle: Res<Battle>,
-    scroll: Res<ListScroll>,
-    clocks: Res<clocks::WindowClocks>,
+    windows: Res<navigation::Windows>,
     mut arrows: Query<(&Arrow, &mut Node, &mut Visibility)>,
 ) {
     for (arrow, mut node, mut visibility) in &mut arrows {
@@ -48,8 +47,7 @@ pub(super) fn update(
             *visibility = Visibility::Hidden;
             continue;
         };
-        let shown =
-            clocks.arrows(arrow.panel, scroll.first[arrow.panel as usize])[usize::from(!arrow.up)];
+        let shown = windows.get(arrow.panel).arrows[usize::from(!arrow.up)];
         *visibility = if shown {
             Visibility::Inherited
         } else {

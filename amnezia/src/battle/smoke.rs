@@ -8,6 +8,7 @@ pub(crate) fn verify_finished(world: &World) {
     super::message::smoke::verify_finished(world);
     messages::verify_finished(world);
     shake::verify_finished(world);
+    super::hud::navigation_smoke::verify_finished(world);
 }
 
 pub(crate) fn defeat(world: &mut World) {
@@ -71,7 +72,8 @@ pub(crate) fn prepare(world: &mut World) {
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
     match frame {
         400 | 403 | 443 | 470 | 540 | 586 | 592 | 626 | 835 => Some(KeyCode::Enter),
-        407 | 447 | 591 | 625 => Some(KeyCode::ArrowDown),
+        407 | 447 | 591 | 625 | 634 => Some(KeyCode::ArrowDown),
+        642 => Some(KeyCode::ArrowUp),
         585 => Some(KeyCode::ArrowRight),
         440 | 565 | 610 | 620 | 860 => Some(KeyCode::Escape),
         _ => None,
@@ -82,6 +84,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
     let encounter = super::message::smoke::drive(world);
     let impact = messages::drive(world, frame);
     let shake = shake::drive(world, frame);
+    let navigation = super::hud::navigation_smoke::drive(world, frame);
     status_colors(world, frame);
     if let Some(tone) = match frame {
         900 => Some([50.0, 100.0, 150.0, 0.0]),
@@ -170,6 +173,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         1230 => Some("battle-resized"),
         1250 => Some("battle-skill-usage"),
         _ => super::hud::movement_label(frame)
+            .or(navigation)
             .or(impact)
             .or(shake)
             .or(encounter),

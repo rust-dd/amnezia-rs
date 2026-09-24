@@ -101,7 +101,7 @@ impl CommandWindows {
     }
 }
 
-fn tick(
+pub(super) fn tick(
     frames: Res<GameFrames>,
     pause: crate::transitions::TransitionPause,
     battle: Res<Battle>,

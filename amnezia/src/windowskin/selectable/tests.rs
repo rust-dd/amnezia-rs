@@ -1,6 +1,8 @@
 use super::List;
 
-fn input<const COLUMNS: usize>(list: &mut List<COLUMNS>, action: usize, fresh: bool) -> u32 {
+mod battle;
+
+fn input(list: &mut List, action: usize, fresh: bool) -> u32 {
     let mut repeated = [false; 6];
     repeated[action] = true;
     list.tick(
@@ -13,7 +15,7 @@ fn input<const COLUMNS: usize>(list: &mut List<COLUMNS>, action: usize, fresh: b
 
 #[test]
 fn single_column_wraps_only_fresh_vertical_presses() {
-    let mut list = List::<1>::default();
+    let mut list = List::new(1, 7, false);
     list.refresh(0, 3);
     assert_eq!(input(&mut list, 1, false), 0);
     assert_eq!(input(&mut list, 1, true), 1);
@@ -31,7 +33,7 @@ fn single_column_wraps_only_fresh_vertical_presses() {
 
 #[test]
 fn selling_moves_two_rows_vertically_and_one_item_horizontally_without_wrap() {
-    let mut list = List::<2>::default();
+    let mut list = List::new(2, 7, false);
     list.refresh(0, 5);
     assert_eq!(input(&mut list, 1, true), 0);
     assert_eq!(input(&mut list, 3, true), 0);
@@ -51,7 +53,7 @@ fn selling_moves_two_rows_vertically_and_one_item_horizontally_without_wrap() {
 
 #[test]
 fn buying_pages_seven_items_and_keeps_selection_visible() {
-    let mut list = List::<1>::default();
+    let mut list = List::new(1, 7, false);
     list.refresh(0, 19);
     for expected in [(7, 16), (14, 128), (18, 192)] {
         assert_eq!(input(&mut list, 4, true), 1);
@@ -69,7 +71,7 @@ fn buying_pages_seven_items_and_keeps_selection_visible() {
 
 #[test]
 fn smooth_scroll_keeps_cursor_and_help_until_the_fourth_tick() {
-    let mut list = List::<1>::default();
+    let mut list = List::new(1, 7, false);
     list.refresh(6, 20);
     list.tick([false; 6], [false; 2], true, true);
     assert_eq!(input(&mut list, 0, true), 1);
@@ -112,7 +114,7 @@ fn smooth_scroll_keeps_cursor_and_help_until_the_fourth_tick() {
 
 #[test]
 fn cursor_only_ticks_when_active_but_hidden_list_arrows_keep_blinking() {
-    let mut list = List::<1>::default();
+    let mut list = List::new(1, 7, false);
     list.refresh(0, 10);
     for frame in 1..=42 {
         list.tick([false; 6], [false; 2], true, true);
@@ -135,11 +137,11 @@ fn cursor_only_ticks_when_active_but_hidden_list_arrows_keep_blinking() {
 
 #[test]
 fn simultaneous_inputs_follow_original_down_up_page_right_left_order() {
-    let mut list = List::<1>::default();
+    let mut list = List::new(1, 7, false);
     list.refresh(0, 8);
     assert_eq!(list.tick([true; 6], [true; 2], true, true), 4);
     assert_eq!(list.index, 0);
-    let mut list = List::<2>::default();
+    let mut list = List::new(2, 7, false);
     list.refresh(0, 4);
     assert_eq!(list.tick([true; 6], [true; 2], true, true), 4);
     assert_eq!(list.index, 0);
