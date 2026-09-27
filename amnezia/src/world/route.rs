@@ -153,9 +153,7 @@ fn tile_open(
 
 #[cfg(test)]
 pub(super) fn route_events(world: &mut World) {
-    world
-        .run_system_cached_with(events::route_event, (None, None))
-        .unwrap();
+    events::route_event(world, None, None);
 }
 
 /// Step the hero's forced route (a `MoveEvent` targeting the hero). Same guards

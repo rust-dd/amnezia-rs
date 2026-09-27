@@ -8,6 +8,7 @@ use crate::world::stop_clock::{self, StopClock};
 use amnezia_data::{MoveCommandDef, MoveRouteDef};
 use bevy::prelude::Component;
 
+mod attempt;
 mod decode;
 mod facing;
 mod jump;
@@ -15,6 +16,8 @@ mod lifecycle;
 mod saved;
 mod stops;
 mod turn;
+pub(in crate::world) use attempt::Attempt;
+pub(in crate::world) use turn::Boundary;
 pub(in crate::world) use turn::Progress;
 pub(crate) use turn::Turn;
 
@@ -47,6 +50,8 @@ pub struct RouteStepper {
     through: bool,
     #[serde(default)]
     route_through: Option<bool>,
+    #[serde(default)]
+    overlap_forbidden: Option<bool>,
     /// Transparency level 0 (opaque) … 7, adjusted by commands 40/41.
     transparency: u8,
     #[serde(default)]
@@ -108,38 +113,26 @@ impl RouteStepper {
         &mut self,
         ch: &mut C,
         hero: (i32, i32),
-        can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
         effects: &mut Vec<StepEffect>,
         cmd: &MoveCommandDef,
         program: &MoveRouteDef,
+        turn: &Turn,
     ) -> Step {
         match cmd.code {
-            0..=7 => self.try_move(
-                ch,
-                Some(cmd.code),
-                dir_delta(cmd.code),
-                can_step,
-                program.skippable,
-            ),
+            0..=7 => self.prepare_move(ch, Some(cmd.code), dir_delta(cmd.code)),
             8 => {
                 let dir = self.random_dir();
-                self.try_move(ch, Some(dir), dir_delta(dir), can_step, program.skippable)
+                self.prepare_move(ch, Some(dir), dir_delta(dir))
             }
             9 => {
                 let dir = toward_dir(hero, ch.tile());
-                self.try_move(ch, Some(dir), dir_delta(dir), can_step, program.skippable)
+                self.prepare_move(ch, Some(dir), dir_delta(dir))
             }
             10 => {
                 let dir = away_dir(hero, ch.tile());
-                self.try_move(ch, Some(dir), dir_delta(dir), can_step, program.skippable)
+                self.prepare_move(ch, Some(dir), dir_delta(dir))
             }
-            11 => self.try_move(
-                ch,
-                None,
-                dir_delta(self.direction(ch)),
-                can_step,
-                program.skippable,
-            ),
+            11 => self.prepare_move(ch, None, dir_delta(self.direction(ch))),
             12..=15 => self.turn_to(ch, cmd.code - 12),
             16 => self.turn(ch, 1),
             17 => self.turn(ch, 3),
@@ -159,7 +152,7 @@ impl RouteStepper {
                 self.set_stop_count(0);
                 Step::Gate(None)
             }
-            24 => self.begin_jump(ch, hero, can_step, program),
+            24 => self.begin_jump(ch, hero, program, turn),
             26 => {
                 self.direction = Some(self.direction(ch));
                 self.facing_lock = Some(ch.dir());
@@ -225,43 +218,6 @@ impl RouteStepper {
         }
     }
 
-    /// Movement attempts update facing; a successful MoveForward restores its
-    /// previous pose. Skipping a blocked move restores both directions, while a
-    /// blocked non-skippable move keeps facing the obstacle.
-    fn try_move<C: Character>(
-        &mut self,
-        ch: &mut C,
-        new_dir: Option<u32>,
-        (dx, dy): (i32, i32),
-        can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
-        skippable: bool,
-    ) -> Step {
-        let prev = self.direction(ch);
-        let prev_facing = ch.dir();
-        self.set_direction(ch, new_dir.unwrap_or(prev));
-        if can_step(ch, dx, dy, false, self.through) {
-            if new_dir.is_none() {
-                ch.set_dir(prev_facing);
-            }
-            self.set_stop_maximum(stop_clock::step(self.frequency));
-            Step::Gate(Some((
-                RouteAction::Step {
-                    dx,
-                    dy,
-                    face: ch.dir(),
-                },
-                step_secs_for_speed(self.speed),
-            )))
-        } else if skippable {
-            self.direction = Some(prev);
-            ch.set_dir(prev_facing);
-            self.set_stop_maximum(stop_clock::step(self.frequency));
-            Step::Next
-        } else {
-            Step::Retry
-        }
-    }
-
     fn turn<C: Character>(&mut self, ch: &mut C, quarters: u32) -> Step {
         self.turn_to(ch, (ch.dir() + quarters) % 4)
     }
@@ -302,6 +258,7 @@ impl RouteStepper {
 
 /// Movement or a new stop threshold, a blocked retry, or an instant command.
 enum Step {
+    Attempt(Attempt),
     Gate(Option<(RouteAction, f32)>),
     Retry,
     Next,

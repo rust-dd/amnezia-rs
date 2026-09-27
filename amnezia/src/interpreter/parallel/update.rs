@@ -22,6 +22,7 @@ pub(super) fn run(world: &mut World) {
     if world.run_system_cached_with(step, Phase::Begin).unwrap() == Progress::Paused {
         return;
     }
+    crate::world::update::begin(world);
     let mut ids = world
         .resource::<CommonEvents>()
         .0
@@ -42,15 +43,24 @@ pub(super) fn run(world: &mut World) {
         .collect::<Vec<_>>();
     ids.sort_unstable();
     for id in ids {
-        crate::world::update::refresh(world);
-        match phase(world, Phase::Map(id)) {
-            Progress::Paused => return,
-            Progress::NoPage => {}
-            Progress::Continue => crate::world::update::event(world, id),
-            Progress::Run(_) => unreachable!(),
+        if !map_event(world, id) {
+            return;
         }
     }
     crate::world::update::refresh(world);
+}
+
+pub(crate) fn map_event(world: &mut World, id: u32) -> bool {
+    crate::world::update::refresh(world);
+    match phase(world, Phase::Map(id)) {
+        Progress::Paused => false,
+        Progress::NoPage => true,
+        Progress::Continue => {
+            crate::world::update::event(world, id);
+            true
+        }
+        Progress::Run(_) => unreachable!(),
+    }
 }
 
 fn phase(world: &mut World, phase: Phase) -> Progress {

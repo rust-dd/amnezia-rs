@@ -4,7 +4,7 @@ use amnezia_data::EventPage;
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(super) struct Suspended {
     commands: Vec<MoveCommandDef>,
-    index: usize,
+    pub(super) index: usize,
     repeat: bool,
     skippable: bool,
     frequency: u32,
@@ -58,6 +58,7 @@ impl RouteStepper {
             frequency: frequency.clamp(1, 8),
             through: false,
             route_through: Some(false),
+            overlap_forbidden: None,
             transparency: 0,
             stop: Some(StopClock {
                 count: if forced { 0xFFFF } else { 0 },
@@ -110,6 +111,7 @@ impl RouteStepper {
             let mut route = Self::from_page(&page.move_route, page.move_speed, page.move_frequency);
             route.animation.mode = page.animation_type;
             route.direction = Some(page.direction);
+            route.overlap_forbidden = Some(page.overlap_forbidden);
             route.transparency = if page.translucent { 3 } else { 0 };
             route.active &= page.move_type == 6;
             route.set_stop_maximum(if page.move_type == 6 {
@@ -193,6 +195,10 @@ impl RouteStepper {
         self.through
     }
 
+    pub(in crate::world) fn overlap_forbidden(&self) -> Option<bool> {
+        self.overlap_forbidden
+    }
+
     pub(crate) fn frequency(&self) -> u32 {
         self.frequency
     }
@@ -243,6 +249,7 @@ impl RouteStepper {
             return;
         };
         self.through = route_through;
+        self.overlap_forbidden = Some(page.overlap_forbidden);
         let mut next = Self::from_event_page(Some(page));
         let previous = if self.forced {
             self.suspended.take()

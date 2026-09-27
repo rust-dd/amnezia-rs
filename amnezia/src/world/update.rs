@@ -7,7 +7,15 @@ pub(crate) struct EventStep;
 pub(crate) struct HeroRouteStep;
 
 #[derive(Resource, Default)]
-struct CharacterUpdates;
+struct CharacterUpdates {
+    processed: std::collections::HashSet<Entity>,
+}
+
+pub(crate) fn begin(world: &mut World) {
+    if let Some(mut updates) = world.get_resource_mut::<CharacterUpdates>() {
+        updates.processed.clear();
+    }
+}
 
 pub(crate) fn register(app: &mut App) {
     app.init_resource::<TouchEvents>()
@@ -48,12 +56,17 @@ pub(crate) fn event(world: &mut World, id: u32) {
         crate::interpreter::foreground::queue_autorun(world, id);
         return;
     };
+    if !world
+        .resource_mut::<CharacterUpdates>()
+        .processed
+        .insert(entity)
+    {
+        return;
+    }
     let stopped = world
         .get::<MoveQueue>(entity)
         .is_none_or(|queue| !queue.busy());
-    world
-        .run_system_cached_with(route::route_event, (Some(id), Some(true)))
-        .unwrap();
+    route::route_event(world, Some(id), Some(true));
     world
         .run_system_cached_with(touch::trigger_event, (Some(id), false))
         .unwrap();
@@ -64,15 +77,11 @@ pub(crate) fn event(world: &mut World, id: u32) {
             .run_system_cached_with(touch::trigger_event, (Some(id), true))
             .unwrap();
     }
-    world
-        .run_system_cached_with(route::route_event, (Some(id), Some(false)))
-        .unwrap();
+    route::route_event(world, Some(id), Some(false));
     world
         .run_system_cached_with(touch::trigger_event, (Some(id), false))
         .unwrap();
-    world
-        .run_system_cached_with(autonomy::advance_event, Some(id))
-        .unwrap();
+    autonomy::advance_event(world, Some(id));
     world
         .run_system_cached_with(touch::trigger_event, (Some(id), false))
         .unwrap();

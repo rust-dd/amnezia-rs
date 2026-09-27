@@ -5,18 +5,19 @@ impl RouteStepper {
         &mut self,
         ch: &mut C,
         hero: (i32, i32),
-        can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
         program: &MoveRouteDef,
+        turn: &Turn,
     ) -> Step {
-        let end = program.commands[self.index + 1..]
+        let start = turn.index(self);
+        let end = program.commands[start + 1..]
             .iter()
             .position(|cmd| cmd.code == 25)
-            .map(|offset| self.index + 1 + offset);
+            .map(|offset| start + 1 + offset);
         let (mut dx, mut dy) = (0, 0);
         let previous = self.direction(ch);
         let previous_facing = ch.dir();
         let mut direction = previous;
-        for index in self.index + 1..end.unwrap_or(program.commands.len()) {
+        for index in start + 1..end.unwrap_or(program.commands.len()) {
             let code = program.commands[index].code;
             match code {
                 0..=7 => direction = code,
@@ -38,7 +39,7 @@ impl RouteStepper {
         }
         self.direction = Some(direction);
         let Some(end) = end else {
-            self.index = program.commands.len() - 1;
+            turn.set_index(self, program.commands.len() - 1);
             return Step::Next;
         };
         let direction = if dx.abs() > dy.abs() {
@@ -55,27 +56,16 @@ impl RouteStepper {
         {
             ch.set_dir(direction);
         }
-        if (dx != 0 || dy != 0) && !can_step(ch, dx, dy, true, self.through) {
-            if program.skippable {
-                self.direction = Some(previous);
-                ch.set_dir(previous_facing);
-                self.index = end;
-                return Step::Next;
-            }
-            return Step::Retry;
-        }
-        self.index = end;
-        self.set_stop_maximum(stop_clock::step(self.frequency));
-        let per_frame = [8_u32, 12, 16, 24, 32, 64][(self.speed - 1) as usize];
-        let seconds = 256_u32.div_ceil(per_frame) as f32 / FPS;
-        Step::Gate(Some((
-            RouteAction::Jump {
-                dx,
-                dy,
-                face: ch.dir(),
-            },
-            seconds,
-        )))
+        turn.set_index(self, end);
+        Step::Attempt(Attempt {
+            origin: ch.tile(),
+            delta: (dx, dy),
+            jumping: true,
+            previous,
+            facing: previous_facing,
+            forward: false,
+            start,
+        })
     }
 }
 

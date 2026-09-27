@@ -98,6 +98,7 @@ pub struct MoveQueue {
     steps: VecDeque<RouteAction>,
     active: Option<Tween>,
     step_secs: f32,
+    jump_attempt: bool,
 }
 
 impl Default for MoveQueue {
@@ -106,6 +107,7 @@ impl Default for MoveQueue {
             steps: VecDeque::new(),
             active: None,
             step_secs: STEP_DURATION,
+            jump_attempt: false,
         }
     }
 }
@@ -131,7 +133,7 @@ impl MoveQueue {
     /// Whether a step is tweening or pending; the interpreter waits on this and
     /// the sprite systems yield rendering to [`walk`] while it holds.
     pub fn busy(&self) -> bool {
-        self.active.is_some() || !self.steps.is_empty()
+        self.jump_attempt || self.active.is_some() || !self.steps.is_empty()
     }
 
     pub(crate) fn render_position<C: Character>(&self, ch: &C, data: &MapData) -> Vec2 {
@@ -153,7 +155,11 @@ impl MoveQueue {
     }
 
     pub(crate) fn jumping(&self) -> bool {
-        self.active.as_ref().is_some_and(|t| t.jumping)
+        self.jump_attempt || self.active.as_ref().is_some_and(|t| t.jumping)
+    }
+
+    pub(in crate::world) fn set_jump_attempt(&mut self, jumping: bool) {
+        self.jump_attempt = jumping;
     }
 
     /// Advance the current step by `dt`, applying instant actions in order and
@@ -185,10 +191,20 @@ impl MoveQueue {
     /// (so y-sorting and lookups use the destination), face the move, and start
     /// the pixel tween from the old center to the new one.
     fn begin_step<C: Character>(&mut self, ch: &mut C, data: &MapData, action: RouteAction) {
+        self.begin_from(ch, data, ch.tile(), action);
+    }
+
+    pub(crate) fn begin_from<C: Character>(
+        &mut self,
+        ch: &mut C,
+        data: &MapData,
+        origin: (i32, i32),
+        action: RouteAction,
+    ) {
         let (dx, dy) = action.delta();
         let jumping = matches!(action, RouteAction::Jump { .. });
         let (RouteAction::Step { face, .. } | RouteAction::Jump { face, .. }) = action;
-        let (x, y) = ch.tile();
+        let (x, y) = origin;
         let from = center(data, x, y);
         let (nx, ny) = (x + dx, y + dy);
         let (tile_x, tile_y) = data.normalize_tile(nx, ny);

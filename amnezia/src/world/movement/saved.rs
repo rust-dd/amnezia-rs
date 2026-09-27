@@ -60,6 +60,7 @@ impl MotionState {
 
     pub(crate) fn into_queue(self) -> MoveQueue {
         MoveQueue {
+            jump_attempt: false,
             steps: self.steps,
             active: self.active.map(|step| Tween {
                 from: Vec2::from_array(step.from),

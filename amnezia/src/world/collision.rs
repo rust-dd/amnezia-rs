@@ -4,6 +4,22 @@ use crate::tiles::{ABOVE_HERO_BIT, PASS_ALL, passable_mask};
 use amnezia_data::{Event, EventPage};
 use std::collections::HashMap;
 
+mod make_way;
+pub(in crate::world) use make_way::{event as make_way, failed_walk};
+
+pub(super) enum Entry {
+    Blocked,
+    Clear,
+    Check(Passage),
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct Passage {
+    destination: (i32, i32),
+    self_conflict: bool,
+    bit_to: u8,
+}
+
 #[derive(Clone, Copy)]
 pub(crate) struct Mover {
     id: u32,
@@ -35,6 +51,7 @@ impl Mover {
 #[derive(Default)]
 pub(crate) struct CollisionBodies {
     events: HashMap<u32, Mover>,
+    overlaps: HashMap<u32, bool>,
     vehicles: Vec<((i32, i32), bool)>,
     pub(crate) hero_through: bool,
 }
@@ -43,23 +60,26 @@ impl CollisionBodies {
     pub(crate) fn from_events<'a>(
         events: impl Iterator<Item = (&'a EventSprite, Option<&'a RouteStepper>)>,
     ) -> Self {
-        Self {
-            events: events
-                .map(|(event, route)| {
-                    (
-                        event.id,
-                        Mover::event(event, route.is_some_and(RouteStepper::through)),
-                    )
-                })
-                .collect(),
-            hero_through: false,
-            vehicles: Vec::new(),
+        let mut bodies = Self::default();
+        for (event, route) in events {
+            bodies.events.insert(
+                event.id,
+                Mover::event(event, route.is_some_and(RouteStepper::through)),
+            );
+            if let Some(forbidden) = route.and_then(RouteStepper::overlap_forbidden) {
+                bodies.overlaps.insert(event.id, forbidden);
+            }
         }
+        bodies
     }
 
+    #[cfg(test)]
     pub(crate) fn update(&mut self, event: &EventSprite, route: &RouteStepper) {
         self.events
             .insert(event.id, Mover::event(event, route.through()));
+        if let Some(forbidden) = route.overlap_forbidden() {
+            self.overlaps.insert(event.id, forbidden);
+        }
     }
 
     pub(crate) fn include_vehicles(
@@ -123,6 +143,24 @@ impl<'a> MapCollision<'a> {
             .unwrap_or(0)
     }
 
+    fn body(&self, event: &Event) -> Option<(Mover, bool)> {
+        if let Some(page) = self.page(event) {
+            return Some((
+                self.bodies.event(event, page),
+                self.bodies
+                    .overlaps
+                    .get(&event.id)
+                    .copied()
+                    .unwrap_or(page.overlap_forbidden),
+            ));
+        }
+        self.bodies
+            .events
+            .get(&event.id)
+            .copied()
+            .zip(self.bodies.overlaps.get(&event.id).copied())
+    }
+
     fn tile_passable(&self, position: (i32, i32), bit: u8, self_id: u32) -> bool {
         if !self.data.contains_tile(position.0, position.1) {
             return false;
@@ -136,8 +174,7 @@ impl<'a> MapCollision<'a> {
                 if event.id == self_id || (event.x as i32, event.y as i32) != position {
                     return None;
                 }
-                let page = self.page(event)?;
-                let body = self.bodies.event(event, page);
+                let (body, _) = self.body(event)?;
                 if body.layer != 0 || body.through {
                     return None;
                 }
@@ -155,24 +192,34 @@ impl<'a> MapCollision<'a> {
     }
 
     fn event_blocks_at(&self, mover: Mover, position: (i32, i32), self_conflict: bool) -> bool {
+        self.events
+            .events
+            .iter()
+            .any(|event| self.event_blocks(mover, event, position, self_conflict))
+    }
+
+    fn event_blocks(
+        &self,
+        mover: Mover,
+        event: &Event,
+        position: (i32, i32),
+        self_conflict: bool,
+    ) -> bool {
+        if mover.through || event.id == mover.id || (event.x as i32, event.y as i32) != position {
+            return false;
+        }
         let forbidden = self
             .events
             .events
             .iter()
             .find(|event| event.id == mover.id)
-            .and_then(|event| self.page(event))
-            .is_some_and(|page| page.overlap_forbidden);
-        self.events.events.iter().any(|event| {
-            if event.id == mover.id || (event.x as i32, event.y as i32) != position {
-                return false;
-            }
-            self.page(event).is_some_and(|page| {
-                let other = self.bodies.event(event, page);
-                !other.through
-                    && (other.layer == mover.layer
-                        || (self_conflict && other.layer == 1)
-                        || (mover.id != 0 && (forbidden || page.overlap_forbidden)))
-            })
+            .and_then(|event| self.body(event))
+            .is_some_and(|(_, forbidden)| forbidden);
+        self.body(event).is_some_and(|(other, other_forbidden)| {
+            !other.through
+                && (other.layer == mover.layer
+                    || (self_conflict && other.layer == 1)
+                    || (mover.id != 0 && (forbidden || other_forbidden)))
         })
     }
 
@@ -192,11 +239,22 @@ impl<'a> MapCollision<'a> {
                 || (self.can_move(from, horizontal, mover, hero, false)
                     && self.can_move(horizontal, to, mover, hero, false));
         }
+        match self.enter(from, to, mover, jumping) {
+            Entry::Blocked => false,
+            Entry::Clear => true,
+            Entry::Check(passage) => {
+                !self.event_blocks_at(mover, passage.destination, passage.self_conflict)
+                    && self.finish(mover, hero, passage)
+            }
+        }
+    }
+
+    fn enter(&self, from: (i32, i32), to: (i32, i32), mover: Mover, jumping: bool) -> Entry {
         if !self.data.contains_tile(to.0, to.1) {
-            return false;
+            return Entry::Blocked;
         }
         if mover.through {
-            return true;
+            return Entry::Clear;
         }
         let bit_from = passable_mask(from.0, from.1, to.0, to.1);
         let bit_to = if jumping {
@@ -205,24 +263,35 @@ impl<'a> MapCollision<'a> {
             passable_mask(to.0, to.1, from.0, from.1)
         };
         if !jumping && !self.tile_passable(from, bit_from, mover.id) {
-            return false;
+            return Entry::Blocked;
         }
         let self_conflict = !jumping
             && mover.layer == 0
             && mover
                 .tile
                 .is_some_and(|tile| tile > 0 && self.passage(tile) & bit_from == 0);
-        let destination = self.data.normalize_tile(to.0, to.1);
-        if self.event_blocks_at(mover, destination, self_conflict)
-            || self.bodies.vehicles.iter().any(|&(tile, airship)| {
+        Entry::Check(Passage {
+            destination: self.data.normalize_tile(to.0, to.1),
+            self_conflict,
+            bit_to,
+        })
+    }
+
+    fn finish(&self, mover: Mover, hero: Option<(i32, i32)>, passage: Passage) -> bool {
+        let Passage {
+            destination,
+            self_conflict,
+            bit_to,
+        } = passage;
+        if !mover.through
+            && (self.bodies.vehicles.iter().any(|&(tile, airship)| {
                 tile == destination
                     && (mover.layer == 1 || self_conflict)
                     && (mover.id != 0 || !airship)
-            })
-            || (mover.id != 0
+            }) || (mover.id != 0
                 && !self.bodies.hero_through
                 && hero == Some(destination)
-                && (mover.layer == 1 || self_conflict))
+                && (mover.layer == 1 || self_conflict)))
         {
             return false;
         }
@@ -232,6 +301,9 @@ impl<'a> MapCollision<'a> {
 
 #[cfg(test)]
 mod passage_tests;
+
+#[cfg(test)]
+mod make_way_tests;
 
 #[cfg(test)]
 mod route_tests;

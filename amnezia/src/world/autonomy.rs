@@ -4,7 +4,6 @@ mod decisions;
 mod driver;
 pub(super) use driver::advance_event;
 
-use super::collision::{CollisionBodies, MapCollision, Mover};
 use super::movement::{dir_delta, step_secs_for_speed};
 use super::route::RouteStepper;
 use super::{EventSprite, MapData, MapEvents, MoveQueue, RouteAction};
@@ -15,6 +14,7 @@ use crate::interpreter::RunningEvent;
 use crate::menu::MenuOpen;
 use crate::player::Player;
 use crate::shop::ShopOpen;
+#[cfg(test)]
 use crate::state::{Inventory, Party, Switches, Variables};
 use crate::teleport::Fade;
 use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
@@ -130,8 +130,12 @@ impl AutoMove {
     }
 
     pub(super) fn set_stop_maximum(&mut self, route: &mut RouteStepper) {
+        self.set_stop_maximum_for(self.move_type, route);
+    }
+
+    fn set_stop_maximum_for(&mut self, move_type: u32, route: &mut RouteStepper) {
         let base = super::stop_clock::step(route.frequency());
-        let maximum = if self.move_type == 1 {
+        let maximum = if move_type == 1 {
             base * (next_rand(&mut self.rng) % 4 + 3) / 5
         } else {
             base
@@ -177,9 +181,7 @@ fn reverse(dir: u32) -> u32 {
 
 #[cfg(test)]
 pub(crate) fn autonomous_movement(world: &mut World) {
-    world
-        .run_system_cached_with(driver::advance_event, None)
-        .unwrap();
+    driver::advance_event(world, None);
 }
 
 #[cfg(test)]

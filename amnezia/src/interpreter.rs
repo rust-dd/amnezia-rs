@@ -33,6 +33,7 @@ pub(crate) mod tests;
 
 pub(crate) use event_rng::EventRng;
 use frame::Frame;
+pub(crate) use parallel::map_event as update_map_event;
 use params::Blockers;
 
 pub(crate) use commands::{actor_targets, apply_control_switches, operate_value};

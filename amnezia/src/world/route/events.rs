@@ -1,9 +1,7 @@
 use super::*;
+use stepper::{Attempt, Boundary, Progress};
 
-pub(in crate::world) fn route_event(
-    In((target, forced)): In<(Option<u32>, Option<bool>)>,
-    world: &mut World,
-) {
+pub(in crate::world) fn route_event(world: &mut World, target: Option<u32>, forced: Option<bool>) {
     let mut ids = world
         .query::<&EventSprite>()
         .iter(world)
@@ -13,14 +11,37 @@ pub(in crate::world) fn route_event(
     ids.sort_unstable();
     for id in ids {
         let mut turn = None;
-        loop {
-            turn = world
-                .run_system_cached_with(part, (id, forced, turn))
-                .unwrap();
-            if turn.is_none() {
-                break;
+        while let Some((current, boundary)) = world
+            .run_system_cached_with(part, (id, forced, turn))
+            .unwrap()
+        {
+            match boundary {
+                Boundary::Ready(Progress::Refresh) => {
+                    crate::world::update::refresh_route_switch(world);
+                    turn = Some(current);
+                }
+                Boundary::Attempt(attempt) => {
+                    let success = crate::world::collision::make_way(
+                        world,
+                        id,
+                        attempt.origin,
+                        attempt.delta,
+                        attempt.jumping,
+                    );
+                    if !success && !attempt.jumping {
+                        crate::world::collision::failed_walk(world, id);
+                    }
+                    let (current, done) = world
+                        .run_system_cached_with(resolve, (id, current, attempt, success))
+                        .unwrap();
+                    if done {
+                        break;
+                    }
+                    turn = Some(current);
+                }
+                Boundary::Ready(Progress::Done) => break,
+                Boundary::Ready(Progress::Move(..)) => unreachable!(),
             }
-            crate::world::update::refresh_route_switch(world);
         }
     }
 }
@@ -29,114 +50,75 @@ pub(in crate::world) fn route_event(
 fn part(
     In((target, forced, turn)): In<(u32, Option<bool>, Option<Turn>)>,
     data: Res<MapData>,
-    mut map_events: ResMut<MapEvents>,
     mut switches: ResMut<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
     guards: crate::world::MoveGuards,
-    mut touches: Option<ResMut<crate::world::TouchEvents>>,
     mut audio: MessageWriter<AudioRequest>,
-    players: Query<(&Player, Option<&RouteStepper>), Without<EventSprite>>,
-    vehicles: Option<Res<crate::vehicles::Vehicles>>,
-    mut movers: Query<
-        (
-            &mut EventSprite,
-            &mut MoveQueue,
-            &mut RouteStepper,
-            &mut Sprite,
-        ),
-        Without<Player>,
-    >,
-) -> Option<Turn> {
+    players: Query<&Player>,
+    mut movers: Query<(
+        &mut EventSprite,
+        &mut MoveQueue,
+        &mut RouteStepper,
+        &mut Sprite,
+    )>,
+) -> Option<(Turn, Boundary)> {
     if turn.is_none() && guards.forced_route_paused() {
         return None;
     }
-    let hero = players
-        .single()
-        .map(|(p, _)| (p.tile_x, p.tile_y))
-        .unwrap_or((-1, -1));
-    let mut bodies = CollisionBodies::from_events(
-        movers
-            .iter()
-            .map(|(event, _, route, _)| (event, Some(route))),
-    );
-    bodies.hero_through = players
-        .single()
-        .ok()
-        .and_then(|(_, route)| route)
-        .is_some_and(RouteStepper::through);
-    bodies.include_vehicles(vehicles.as_deref(), data.map_id);
-    for (mut sprite_c, mut queue, mut stepper, mut sprite) in &mut movers {
-        if target != sprite_c.id
-            || (turn.is_none() && forced.is_some_and(|forced| forced != stepper.forced()))
-        {
-            continue;
-        }
-        if turn.is_none() && !stepper.forced() && guards.autonomous_paused(sprite_c.id) {
-            return None;
-        }
-        let (ex, ey) = (sprite_c.tile_x, sprite_c.tile_y);
-        let self_id = sprite_c.id;
-        let layer = sprite_c.layer;
-        let delta = data.tile_delta((ex, ey), hero);
-        let near_hero = (ex + delta.0, ey + delta.1);
-        let touched = std::cell::Cell::new(false);
-        let (driven, turn) = {
-            let collision = MapCollision::new(
-                &data,
-                &map_events,
-                (&switches, &variables, &party, &inventory),
-                &bodies,
-            );
-            let can_step =
-                |character: &EventSprite, dx: i32, dy: i32, jumping: bool, through: bool| {
-                    let passable = collision.can_move(
-                        (ex, ey),
-                        (ex + dx, ey + dy),
-                        Mover::event(character, through),
-                        Some(hero),
-                        jumping,
-                    );
-                    // The failure hook uses cardinal-only front coordinates, even for diagonals.
-                    let front = if dx != 0 && dy != 0 {
-                        (ex, ey)
-                    } else {
-                        (ex + dx, ey + dy)
-                    };
-                    if !passable
-                        && !jumping
-                        && layer == 1
-                        && data.normalize_tile(front.0, front.1) == hero
-                    {
-                        touched.set(true);
-                    }
-                    passable
-                };
-            drive_part(
-                &mut *sprite_c,
-                &mut queue,
-                &mut stepper,
-                near_hero,
-                can_step,
-                turn,
-            )
-        };
-        bodies.update(&sprite_c, &stepper);
-        if touched.get()
-            && let Some(touches) = touches.as_mut()
-        {
-            touches.0.push(self_id);
-        }
-        if let Some((dx, dy)) = driven.moved
-            && let Some(event) = map_events.events.iter_mut().find(|e| e.id == self_id)
-        {
-            let (x, y) = data.normalize_tile(ex + dx, ey + dy);
-            event.x = x.max(0) as u32;
-            event.y = y.max(0) as u32;
-        }
-        apply_effects(driven.effects, &mut switches, &mut audio, &mut sprite);
-        return turn;
+    let (mut character, mut queue, mut stepper, mut sprite) =
+        movers.iter_mut().find(|(event, ..)| event.id == target)?;
+    if queue.busy() {
+        return None;
     }
-    None
+    if turn.is_none()
+        && (forced.is_some_and(|forced| forced != stepper.forced())
+            || (!stepper.forced() && guards.autonomous_paused(target))
+            || stepper.settle_movement()
+            || !stepper.active())
+    {
+        return None;
+    }
+    if stepper.stop_active() {
+        return None;
+    }
+    let hero = players.single().map_or((-1, -1), Character::tile);
+    let (x, y) = character.tile();
+    let delta = data.tile_delta((x, y), hero);
+    let mut turn = turn.unwrap_or_else(|| Turn::new(&mut stepper));
+    let mut effects = Vec::new();
+    let boundary = stepper.prepare_turn(
+        &mut *character,
+        (x + delta.0, y + delta.1),
+        &mut effects,
+        &mut turn,
+    );
+    if let Boundary::Attempt(attempt) = &boundary {
+        queue.set_jump_attempt(attempt.jumping);
+    }
+    apply_effects(effects, &mut switches, &mut audio, &mut sprite);
+    Some((turn, boundary))
+}
+
+fn resolve(
+    In((id, mut turn, attempt, success)): In<(u32, Turn, Attempt, bool)>,
+    data: Res<MapData>,
+    mut events: ResMut<MapEvents>,
+    mut movers: Query<(&mut EventSprite, &mut MoveQueue, &mut RouteStepper)>,
+) -> (Turn, bool) {
+    let Some((mut character, mut queue, mut stepper)) =
+        movers.iter_mut().find(|(event, ..)| event.id == id)
+    else {
+        return (turn, true);
+    };
+    queue.set_jump_attempt(false);
+    let progress = stepper.resolve_turn(&mut *character, attempt, success, &mut turn);
+    let done = progress.is_some();
+    if let Some(Progress::Move(action, seconds)) = progress {
+        queue.set_step_secs(seconds);
+        queue.begin_from(&mut *character, &data, attempt.origin, action);
+        if let Some(event) = events.events.iter_mut().find(|event| event.id == id) {
+            event.x = character.tile_x.max(0) as u32;
+            event.y = character.tile_y.max(0) as u32;
+        }
+    }
+    (turn, done)
 }

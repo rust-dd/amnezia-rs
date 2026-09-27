@@ -19,6 +19,7 @@ use bevy::prelude::*;
 mod pages;
 mod update;
 pub(super) use pages::PageOwner;
+pub(crate) use update::map_event;
 
 /// The database's common events, read once at boot. Autostart (trigger 3) events
 /// run foreground-style from `autorun`; parallel (trigger 4) events run in the

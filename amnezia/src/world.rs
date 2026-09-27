@@ -25,6 +25,8 @@ mod scene_pause;
 mod screen;
 pub(crate) mod stop_clock;
 mod terrain;
+#[cfg(test)]
+mod test_support;
 mod topology;
 mod touch;
 mod triggers;
