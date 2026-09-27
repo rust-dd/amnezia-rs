@@ -4,6 +4,8 @@ use crate::world::{MainCamera, MapData, MoveQueue};
 use bevy::prelude::*;
 
 pub(crate) mod saved;
+mod walking;
+pub(super) use walking::{WalkScroll, apply_walk, prepare_walk};
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct CameraFollow;

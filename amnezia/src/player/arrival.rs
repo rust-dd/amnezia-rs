@@ -4,9 +4,16 @@ use super::*;
 struct InFlight(bool);
 
 pub(super) fn register(app: &mut App) {
-    app.init_resource::<InFlight>();
+    app.init_resource::<InFlight>()
+        .init_resource::<camera::WalkScroll>();
     update::character(app, || {
-        (remember, walk::<Player>, trigger)
+        (
+            remember,
+            camera::prepare_walk,
+            walk::<Player>,
+            camera::apply_walk,
+            trigger,
+        )
             .chain()
             .in_set(PlayerStep)
             .after(crate::vehicles::VehicleInput)

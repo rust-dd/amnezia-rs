@@ -106,6 +106,27 @@ impl MoveQueue {
         self.jump_attempt || self.active.is_some() || !self.steps.is_empty()
     }
 
+    pub(crate) fn walking_scroll_pixels(&self, dt: f32) -> Option<f32> {
+        let motion = self.kinematics?;
+        let counter = if let Some(tween) = &self.active {
+            if tween.jumping {
+                return None;
+            }
+            tween.subpixels?
+        } else if matches!(self.steps.front(), Some(RouteAction::Step { .. })) {
+            Subpixels {
+                remaining: 256,
+                fraction: 0.0,
+            }
+        } else {
+            return None;
+        };
+        let amount = 1_u32 << (1 + motion.speed);
+        let frames = (counter.fraction + f64::from(dt.max(0.0)) * 60.0 + 0.000001).floor();
+        let ticks = (frames as u32).min(u32::from(counter.remaining).div_ceil(amount));
+        Some((amount * ticks) as f32 / 16.0)
+    }
+
     pub(crate) fn render_position<C: Character>(&self, ch: &C, data: &MapData) -> Vec2 {
         let mut point = self.ground_position(ch, data);
         if let Some(tween) = &self.active

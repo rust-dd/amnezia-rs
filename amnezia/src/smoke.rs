@@ -469,6 +469,8 @@ fn drive(world: &mut World) {
             crate::transitions::smoke::verify_finished(world);
         } else if scenario == "screen-events" {
             crate::transitions::event_smoke::verify_finished(world);
+        } else if scenario == "camera" {
+            camera::verify_finished(world);
         } else if scenario == "save-screen" {
             crate::save::screen_smoke::verify_finished(world);
         } else if scenario == "save-weather" {

@@ -1,6 +1,9 @@
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
+mod walking;
+pub(super) use walking::verify_finished;
+
 #[derive(Resource)]
 struct Checkpoint(Vec2);
 
@@ -18,6 +21,7 @@ pub(super) fn entry() -> Vec<EventCommand> {
 }
 
 pub(super) fn drive(world: &mut World, frame: u32) {
+    walking::drive(world, frame);
     if frame == 260 {
         assert!(
             !world

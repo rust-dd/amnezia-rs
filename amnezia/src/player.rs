@@ -87,8 +87,7 @@ pub(crate) struct InputPhase {
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<CameraPan>()
-            .init_resource::<HeroHidden>()
+        app.init_resource::<HeroHidden>()
             .add_systems(
                 Update,
                 update_player_sprite
@@ -114,7 +113,8 @@ impl Plugin for PlayerPlugin {
 
 fn register_movement(app: &mut App) {
     update::register(app);
-    app.init_resource::<InputPhase>();
+    app.init_resource::<CameraPan>()
+        .init_resource::<InputPhase>();
     update::character(app, || {
         move_player
             .in_set(PlayerInput)
