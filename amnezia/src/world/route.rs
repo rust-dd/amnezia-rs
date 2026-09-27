@@ -33,7 +33,7 @@ impl Driven {
 }
 
 /// Drive one character's stepper for a frame: yield (nothing) while it is
-/// inactive, mid-step (queue busy), or still in its inter-command delay; otherwise
+/// inactive, mid-step (queue busy), or below its stop threshold; otherwise
 /// advance the route, enqueue any resulting step, and return its delta and side
 /// effects for the caller to apply. The effects are returned rather than applied
 /// here so `can_step` — which borrows the switches and events — is dropped before
@@ -43,7 +43,6 @@ pub(crate) fn drive<C: Character>(
     queue: &mut MoveQueue,
     stepper: &mut RouteStepper,
     hero: (i32, i32),
-    dt: f32,
     can_step: impl Fn(&C, i32, i32, bool, bool) -> bool,
 ) -> Driven {
     if queue.busy() {
@@ -52,7 +51,7 @@ pub(crate) fn drive<C: Character>(
     if stepper.settle_movement() || !stepper.active() {
         return Driven::idle();
     }
-    if !stepper.tick_ready(dt) {
+    if stepper.stop_active() {
         return Driven::idle();
     }
     let mut effects = Vec::new();
@@ -133,7 +132,6 @@ pub(super) fn route_events(world: &mut World) {
 /// as event routes; the hero is `self_id` 0 (no event) for the collision test.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn route_hero(
-    time: Res<Time>,
     data: Res<MapData>,
     map_events: Res<MapEvents>,
     mut switches: ResMut<Switches>,
@@ -161,7 +159,6 @@ pub(super) fn route_hero(
     };
     let (ex, ey) = (player.tile_x, player.tile_y);
     let pos = (ex, ey);
-    let dt = time.delta_secs();
     let mut bodies = CollisionBodies::from_events(events.iter());
     bodies.include_vehicles(vehicles.as_deref(), data.map_id);
     let driven = {
@@ -174,7 +171,7 @@ pub(super) fn route_hero(
         let can_step = |_: &Player, dx: i32, dy: i32, jumping: bool, through: bool| {
             collision.can_move(pos, (ex + dx, ey + dy), Mover::hero(through), None, jumping)
         };
-        drive(&mut *player, &mut queue, &mut stepper, pos, dt, can_step)
+        drive(&mut *player, &mut queue, &mut stepper, pos, can_step)
     };
     // The hero is not a map event, so only its side effects need applying — its
     // tile is tracked by the `Player` component that `walk` updates.

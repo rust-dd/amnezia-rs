@@ -52,7 +52,6 @@ fn boarding_uses_the_heros_direction_even_when_its_facing_is_locked() {
         &mut queue,
         &mut route,
         (0, 0),
-        1.0 / 60.0,
         |_, _, _, _, _| true,
     );
     route.set_direction(&mut *hero, DIR_DOWN);

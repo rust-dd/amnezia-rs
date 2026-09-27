@@ -100,6 +100,16 @@ impl EventTriggers<'_, '_> {
             .any(|(sprite, _, queue)| sprite.id == id && queue.is_none_or(|queue| !queue.busy()))
     }
 
+    pub(crate) fn reset_stop_count(&mut self, id: u32) {
+        if let Some((_, Some(mut route), _)) = self
+            .sprites
+            .iter_mut()
+            .find(|(sprite, _, _)| sprite.id == id)
+        {
+            route.set_stop_count(0);
+        }
+    }
+
     pub(crate) fn bodies(&self) -> CollisionBodies {
         CollisionBodies::from_events(
             self.sprites

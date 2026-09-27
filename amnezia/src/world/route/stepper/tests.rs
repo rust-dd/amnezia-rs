@@ -82,7 +82,7 @@ fn blocked(_ch: &TestChar, _dx: i32, _dy: i32, _jumping: bool, through: bool) ->
 #[test]
 fn move_command_steps_in_the_faced_direction() {
     let mut ch = TestChar::new();
-    let mut s = stepper(&[3], false, false); // move-left
+    let mut s = stepper(&[3], false, false);
     let mut fx = Vec::new();
     let action = s.advance(&mut ch, (0, 0), &open, &mut fx);
     assert!(matches!(
@@ -102,35 +102,32 @@ fn move_command_steps_in_the_faced_direction() {
 
 #[test]
 fn blocked_skippable_move_skips_to_next_command() {
-    // move-left (blocked) then face-up: the skippable route skips the move
-    // (index past it, facing restored) and runs the face.
     let mut ch = TestChar::new();
     let mut s = stepper(&[3, 12], false, true);
     let mut fx = Vec::new();
     let action = s.advance(&mut ch, (0, 0), &blocked, &mut fx);
-    assert!(action.is_none()); // ended on the face (a turn gates without a step)
+    assert!(action.is_none());
     assert_eq!(ch.dir(), DIR_UP);
     assert_eq!(s.index, 2);
 }
 
 #[test]
 fn blocked_nonskippable_move_waits_on_the_command() {
-    // A non-skippable blocked move faces the obstacle and stays on the command.
     let mut ch = TestChar::new();
     let mut s = stepper(&[3], false, false);
-    s.frequency = 3; // freq 8 has a zero step delay; use 3 for a real countdown
+    s.frequency = 3;
     let mut fx = Vec::new();
     let action = s.advance(&mut ch, (0, 0), &blocked, &mut fx);
     assert!(action.is_none());
-    assert_eq!(ch.dir(), DIR_LEFT); // faced the wall
-    assert_eq!(s.index, 0); // did not advance — retries next tick
-    assert!(s.timer > 0.0);
+    assert_eq!(ch.dir(), DIR_LEFT);
+    assert_eq!(s.index, 0);
+    assert!(!s.stop_active());
 }
 
 #[test]
 fn face_command_turns_without_moving() {
     let mut ch = TestChar::new();
-    let mut s = stepper(&[12], false, false); // face-up
+    let mut s = stepper(&[12], false, false);
     let mut fx = Vec::new();
     let action = s.advance(&mut ch, (0, 0), &open, &mut fx);
     assert!(action.is_none());
@@ -142,22 +139,22 @@ fn face_command_turns_without_moving() {
 fn wait_command_arms_the_delay() {
     let mut ch = TestChar::new();
     let mut s = stepper(&[23], false, false);
-    s.frequency = 3; // freq 8 has a zero wait; use 3 for a real countdown
+    s.frequency = 3;
     let mut fx = Vec::new();
     let action = s.advance(&mut ch, (0, 0), &open, &mut fx);
     assert!(action.is_none());
-    assert!(s.timer > 0.0);
+    assert_eq!(s.stop_maximum(), 52);
+    assert_eq!(s.stop_count(), 0);
     assert_eq!(s.index, 1);
 }
 
 #[test]
 fn repeat_route_loops_back_to_the_start() {
     let mut ch = TestChar::new();
-    let mut s = stepper(&[2], true, false); // move-down, repeating
+    let mut s = stepper(&[2], true, false);
     let mut fx = Vec::new();
     assert!(s.advance(&mut ch, (0, 0), &open, &mut fx).is_some());
     assert_eq!(s.index, 1);
-    // Still active and wraps: the next advance re-runs the one command.
     assert!(s.active());
     assert!(s.advance(&mut ch, (0, 0), &open, &mut fx).is_some());
     assert_eq!(s.index, 1);
@@ -169,15 +166,12 @@ fn oneshot_route_stops_at_the_end() {
     let mut s = stepper(&[2], false, false);
     let mut fx = Vec::new();
     assert!(s.advance(&mut ch, (0, 0), &open, &mut fx).is_some());
-    // Draining the last command deactivates the stepper.
     assert!(s.advance(&mut ch, (0, 0), &open, &mut fx).is_none());
     assert!(!s.active());
 }
 
 #[test]
 fn instant_commands_apply_then_reach_the_gate() {
-    // switch-on (32), change-graphic (34) "Ron"/2, then move-down: the two
-    // instant commands apply and the move gates, all in one advance.
     let mut ch = TestChar::new();
     let commands = vec![
         MoveCommandDef {
@@ -208,7 +202,6 @@ fn instant_commands_apply_then_reach_the_gate() {
 
 #[test]
 fn through_ignores_a_block() {
-    // walk-everywhere-on (36) then a blocked move still steps.
     let mut ch = TestChar::new();
     let mut s = stepper(&[36, 3], false, false);
     let mut fx = Vec::new();
@@ -221,7 +214,6 @@ fn through_ignores_a_block() {
 
 #[test]
 fn decode_move_event_reads_flags_and_commands() {
-    // [hero, freq 8, repeat 1, skip 0, move-left, face-up]
     let s = RouteStepper::from_move_event(&[10001, 8, 1, 0, 3, 12]);
     assert!(s.repeat && !s.skippable);
     assert_eq!(s.frequency, 8);
@@ -232,7 +224,6 @@ fn decode_move_event_reads_flags_and_commands() {
 
 #[test]
 fn decode_move_event_reads_change_graphic_string() {
-    // change_graphic "Torch" (len 5, one byte per int) frame 1, then face-left.
     let params = vec![10005, 8, 0, 0, 34, 5, 84, 111, 114, 99, 104, 1, 15];
     let s = RouteStepper::from_move_event(&params);
     assert_eq!(s.commands.len(), 2);
@@ -244,7 +235,6 @@ fn decode_move_event_reads_change_graphic_string() {
 
 #[test]
 fn toward_and_away_pick_opposite_directions() {
-    // Hero three tiles right of the NPC at (5,5): toward = right, away = left.
     assert_eq!(toward_dir((8, 5), (5, 5)), DIR_RIGHT);
     assert_eq!(away_dir((8, 5), (5, 5)), DIR_LEFT);
 }

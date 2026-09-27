@@ -1,15 +1,10 @@
-//! The [`RouteStepper`] itself: the RM2000 move-route state machine, decoded from
-//! a page's custom route or a `MoveEvent` command, that a character advances one
-//! command per idle tick. Mirrors EasyRPG's `Game_Character::UpdateMoveRoute`:
-//! instant commands (speed/frequency/switch/graphic/sound/through/transparency)
-//! run back-to-back, and the first gating command — a move, a turn, or a wait —
-//! ends the tick. A blocked move is skipped on a `skippable` route and waited on
-//! otherwise; a `repeat` route loops, a one-shot route stops at the end. The Bevy
-//! systems that pump this each frame live in the parent module.
+//! Character move routes, sharing the original stop count with autonomous movement.
+//! Commands chain until movement starts or the current stop threshold blocks them.
 
 use super::super::movement::{dir_delta, step_secs_for_speed};
 use super::super::{Character, RouteAction};
 use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
+use crate::world::stop_clock::{self, StopClock};
 use amnezia_data::{MoveCommandDef, MoveRouteDef};
 use bevy::prelude::Component;
 
@@ -18,6 +13,7 @@ mod facing;
 mod jump;
 mod lifecycle;
 mod saved;
+mod stops;
 
 /// Logical frames per second the RM2000 stop-count delays are measured in.
 const FPS: f32 = 60.0;
@@ -48,8 +44,14 @@ pub struct RouteStepper {
     through: bool,
     /// Transparency level 0 (opaque) … 7, adjusted by commands 40/41.
     transparency: u8,
-    /// Seconds until the next command may run — RM2000's inter-command stop count.
-    timer: f32,
+    #[serde(default)]
+    stop: Option<StopClock>,
+    #[serde(
+        default,
+        rename = "timer",
+        skip_serializing_if = "stop_clock::legacy_empty"
+    )]
+    legacy_timer: f32,
     rng: u32,
     active: bool,
     /// True for a forced route from a `MoveEvent` (11330), false for a page's own
@@ -63,7 +65,8 @@ pub struct RouteStepper {
     page_present: bool,
     first_pass_complete: bool,
     moving: bool,
-    autonomy_reset: bool,
+    #[serde(default, rename = "autonomy_reset", skip_serializing)]
+    legacy_autonomy_reset: bool,
 }
 
 impl Default for RouteStepper {
@@ -73,18 +76,9 @@ impl Default for RouteStepper {
 }
 
 impl RouteStepper {
-    /// Count down the inter-command delay by `dt` and report whether the next
-    /// command may run now. Called by the driving system only while the character
-    /// stands idle, so the delay measures idle frames as RM2000's stop count does.
-    pub(super) fn tick_ready(&mut self, dt: f32) -> bool {
-        self.timer -= dt;
-        self.timer <= 0.0
-    }
-
-    /// Advance the route: apply instant commands until the first gating command,
-    /// mutating `ch`'s facing/graphic and pushing switch/sound/transparency
-    /// `effects`. Returns the tile step to enqueue (with its tween seconds) for a
-    /// move, or `None` for a turn/wait/finish/blocked-wait.
+    /// Apply commands until movement starts, the stop threshold blocks execution,
+    /// or the route finishes. Zero-delay turns continue within the same update.
+    /// Returns the movement and tween duration, collecting shared-state effects.
     /// The movement gate receives the live graphic and through state, including
     /// instant commands executed earlier in this same route tick.
     pub(super) fn advance<C: Character>(
@@ -100,31 +94,37 @@ impl RouteStepper {
             self.finish_pass();
             return None;
         }
-        // At most one full pass per call: instant commands chain, a gate returns,
-        // and an all-instant route can't spin the loop forever.
-        for processed in 0..=len {
+        let start_index = self.index;
+        loop {
+            if self.stop_active() {
+                return None;
+            }
             if self.index >= len {
                 let repeat = self.repeat;
                 self.finish_pass();
                 if !repeat {
                     return None;
                 }
-            }
-            if processed == len {
-                return None;
+                if self.index == start_index {
+                    return None;
+                }
             }
             let cmd = self.commands[self.index].clone();
             match self.step_one(ch, hero, can_step, effects, &cmd) {
                 Step::Gate(action) => {
                     self.index += 1;
                     self.moving = action.is_some();
-                    return action;
+                    if action.is_some() {
+                        return action;
+                    }
                 }
                 Step::Retry => return None,
                 Step::Next => self.index += 1,
             }
+            if self.index == start_index {
+                return None;
+            }
         }
-        None
     }
 
     fn step_one<C: Character>(
@@ -165,7 +165,8 @@ impl RouteStepper {
             21 => self.turn_to(ch, toward_dir(hero, ch.tile())),
             22 => self.turn_to(ch, away_dir(hero, ch.tile())),
             23 => {
-                self.timer = wait_delay_secs(self.frequency);
+                self.set_stop_maximum(stop_clock::wait(self.frequency));
+                self.set_stop_count(0);
                 Step::Gate(None)
             }
             24 => self.begin_jump(ch, hero, can_step),
@@ -249,7 +250,7 @@ impl RouteStepper {
             if new_dir.is_none() {
                 ch.set_dir(prev_facing);
             }
-            self.timer = step_delay_secs(self.frequency);
+            self.set_stop_maximum(stop_clock::step(self.frequency));
             Step::Gate(Some((
                 RouteAction::Step {
                     dx,
@@ -261,9 +262,9 @@ impl RouteStepper {
         } else if self.skippable {
             self.direction = Some(prev);
             ch.set_dir(prev_facing);
+            self.set_stop_maximum(stop_clock::step(self.frequency));
             Step::Next
         } else {
-            self.timer = step_delay_secs(self.frequency);
             Step::Retry
         }
     }
@@ -279,7 +280,8 @@ impl RouteStepper {
     }
 
     fn gate_turn(&mut self) -> Step {
-        self.timer = turn_delay_secs(self.frequency);
+        self.set_stop_maximum(stop_clock::turn(self.frequency));
+        self.set_stop_count(0);
         Step::Gate(None)
     }
 
@@ -305,9 +307,7 @@ impl RouteStepper {
     }
 }
 
-/// A single command's outcome for [`RouteStepper::advance`]: gate this tick
-/// (optionally enqueuing a step), retry the same command next tick (blocked and
-/// not skippable), or move straight on to the next command.
+/// Movement or a new stop threshold, a blocked retry, or an instant command.
 enum Step {
     Gate(Option<(RouteAction, f32)>),
     Retry,
@@ -316,27 +316,6 @@ enum Step {
 
 fn switch_id(cmd: &MoveCommandDef) -> u32 {
     cmd.params.first().copied().unwrap_or(0).max(0) as u32
-}
-
-/// RM2000 `GetMaxStopCountForStep`: frames between route steps at `freq` (1 slow …
-/// 8 fast), as seconds. This is the extra idle delay *after* a step's tween.
-fn step_delay_secs(freq: u32) -> f32 {
-    stop_frames(freq, 9) as f32 / FPS
-}
-
-/// RM2000 `GetMaxStopCountForTurn`: a turn's idle delay (half a step's).
-fn turn_delay_secs(freq: u32) -> f32 {
-    stop_frames(freq, 8) as f32 / FPS
-}
-
-/// RM2000 `GetMaxStopCountForWait`: 20 frames plus a turn's delay.
-fn wait_delay_secs(freq: u32) -> f32 {
-    (20 + stop_frames(freq, 8)) as f32 / FPS
-}
-
-fn stop_frames(freq: u32, base_shift: u32) -> u32 {
-    let f = freq.clamp(1, 8);
-    if f >= 8 { 0 } else { 1 << (base_shift - f) }
 }
 
 /// The cardinal direction stepping toward `hero` from `me` (dominant axis first,

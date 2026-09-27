@@ -20,7 +20,6 @@ fn vehicle_collision_reads_live_route_through_state() {
         &mut motion.queue,
         &mut motion.route,
         (0, 0),
-        1.0 / 60.0,
         |_, _, _, _, _| true,
     );
     assert_eq!(vehicles.collision_tiles(13).count(), 0);
@@ -110,10 +109,14 @@ fn original_airship_move_route_advances_character_and_survives_save() {
             &mut motion.queue,
             &mut motion.route,
             (55, 100),
-            1.0 / 60.0,
             |_, _, _, _, _| true,
         );
+        let moving = motion.queue.busy();
         motion.queue.advance(vehicle, &data, 1.0 / 60.0);
+        if moving && !motion.queue.busy() {
+            motion.route.settle_movement();
+        }
+        motion.route.advance_stop_clock(moving, true);
     }
     assert!(!vehicles.routes_pending());
     assert_eq!(vehicles.character(10004), Some((53, 101, DIR_DOWN)));
@@ -141,10 +144,14 @@ fn original_fortress_flight_finishes_before_its_four_second_wait() {
             &mut motion.queue,
             &mut motion.route,
             (55, 100),
-            1.0 / 60.0,
             |_, _, _, _, _| true,
         );
+        let moving = motion.queue.busy();
         motion.queue.advance(vehicle, &data, 1.0 / 60.0);
+        if moving && !motion.queue.busy() {
+            motion.route.settle_movement();
+        }
+        motion.route.advance_stop_clock(moving, true);
     }
     assert_eq!(vehicles.character(10004), Some((28, 100, DIR_LEFT)));
     assert!(!vehicles.routes_pending());

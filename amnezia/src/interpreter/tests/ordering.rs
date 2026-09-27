@@ -13,6 +13,7 @@ mod input;
 mod menu;
 mod npcs;
 mod scenes;
+mod stops;
 mod triggers;
 mod unpause;
 

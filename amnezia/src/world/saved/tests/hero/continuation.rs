@@ -8,12 +8,15 @@ fn tick(hero: &mut Player, state: &mut HeroState, data: &MapData, dt: f32) -> Ve
         &mut queue,
         &mut state.route,
         (10, 10),
-        dt,
         |_, _, _, _, _| true,
     )
     .effects;
     let moving = queue.busy();
     queue.advance(hero, data, dt);
+    if moving && !queue.busy() {
+        state.route.settle_movement();
+    }
+    state.route.advance_stop_clock(moving, true);
     state
         .route
         .animation
@@ -76,15 +79,20 @@ fn saved_hero_motion_and_animation_resume_without_replaying_route_commands_at_fo
             let mut loaded_hero = copy_player(app.world().get::<Player>(entity).unwrap());
             assert_eq!(actual, expected);
             let mut effects = Vec::new();
+            let mut clock = crate::timing::GameFrames::default();
             for _ in 0..fps * 4 {
-                let got = tick(&mut loaded_hero, &mut actual, &data, 1.0 / fps as f32);
-                assert_eq!(got, tick(&mut hero, &mut expected, &data, 1.0 / fps as f32));
-                assert_eq!(actual, expected, "{fps} FPS, jumping={jumping}");
-                assert_eq!(
-                    (loaded_hero.tile(), loaded_hero.dir),
-                    (hero.tile(), hero.dir)
-                );
-                effects.extend(got);
+                let before = clock.frame;
+                clock.advance(1.0 / f64::from(fps));
+                for _ in before..clock.frame {
+                    let got = tick(&mut loaded_hero, &mut actual, &data, 1.0 / 60.0);
+                    assert_eq!(got, tick(&mut hero, &mut expected, &data, 1.0 / 60.0));
+                    assert_eq!(actual, expected, "{fps} FPS, jumping={jumping}");
+                    assert_eq!(
+                        (loaded_hero.tile(), loaded_hero.dir),
+                        (hero.tile(), hero.dir)
+                    );
+                    effects.extend(got);
+                }
             }
             assert_eq!(effects, ["switch:8:true"]);
             assert!(!actual.route.pending() && !actual.route.forced());

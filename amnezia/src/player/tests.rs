@@ -143,7 +143,6 @@ fn keyboard_movement_uses_the_other_events_live_through_state() {
         &mut MoveQueue::default(),
         &mut route,
         (0, 0),
-        1.0 / 60.0,
         |_, _, _, _, _| true,
     );
     app.world_mut().spawn((character, route));
@@ -172,7 +171,6 @@ fn keyboard_movement_keeps_scripted_speed_through_and_facing_lock() {
         &mut queue,
         &mut route,
         (0, 0),
-        1.0 / 60.0,
         |_, _, _, _, through| through,
     );
     assert!(!route.forced());
@@ -297,17 +295,14 @@ fn continue_events_does_not_restore_player_input_during_dialogue() {
 
 #[test]
 fn pan_eases_toward_target_then_snaps() {
-    // A full step moves exactly `step` along the direction to the target.
     assert_eq!(
         ease_toward(Vec2::ZERO, Vec2::new(10.0, 0.0), 2.0),
         Vec2::new(2.0, 0.0)
     );
-    // Within one step of the target: snap onto it, no overshoot.
     assert_eq!(
         ease_toward(Vec2::new(9.0, 0.0), Vec2::new(10.0, 0.0), 5.0),
         Vec2::new(10.0, 0.0)
     );
-    // Already at the target: stay put (and don't normalise a zero delta).
     assert_eq!(
         ease_toward(Vec2::splat(4.0), Vec2::splat(4.0), 5.0),
         Vec2::splat(4.0)
@@ -316,12 +311,9 @@ fn pan_eases_toward_target_then_snaps() {
 
 #[test]
 fn camera_clamps_to_map_edges() {
-    // map half-extent 320, viewport half 160: the camera stops at ±160
     assert_eq!(clamp_to_map(1000.0, 320.0, 160.0), 160.0);
     assert_eq!(clamp_to_map(-1000.0, 320.0, 160.0), -160.0);
-    // well inside the map: follows the target exactly
     assert_eq!(clamp_to_map(50.0, 320.0, 160.0), 50.0);
-    // map narrower than the viewport: centered, no gray edge
     assert_eq!(clamp_to_map(1000.0, 100.0, 160.0), 0.0);
 }
 

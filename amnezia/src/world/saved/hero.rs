@@ -80,6 +80,7 @@ fn restore(
     player.frame = pending.state.frame;
     *queue = pending.state.motion.clone().into_queue();
     *route = pending.state.route.clone();
+    route.restore_stop_clock(None);
     let point = queue.render_position(&*player, &data);
     transform.translation = Vec3::new(
         point.x,

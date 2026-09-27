@@ -6,7 +6,7 @@
 //! autonomous NPC steps, and the hero's own keyboard steps all share this queue,
 //! so every kind of movement animates smoothly across a tile instead of
 //! teleport-snapping. The stepper applies a route's facing/graphic changes
-//! directly to the character and paces it via its own timer, so the queue itself
+//! directly to the character and uses its shared stop count, so the queue itself
 //! carries walking steps and complete jumps.
 
 use super::MapData;
@@ -57,6 +57,9 @@ pub trait Character {
     fn index(&self) -> u32;
     fn charset(&self) -> &str;
     fn set_graphic(&mut self, name: String, index: u32);
+    fn event_id(&self) -> Option<u32> {
+        None
+    }
     fn y_offset(&self) -> f32 {
         CHAR_Y_OFFSET
     }
@@ -249,6 +252,7 @@ pub(super) fn walk_selected<C: Character + Component<Mutability = Mutable>>(
     data: Res<MapData>,
     asset_server: Res<AssetServer>,
     scene: super::ScenePause,
+    stops: super::stop_clock::StopGates,
     mut movers: Query<(
         Entity,
         &mut C,
@@ -266,6 +270,9 @@ pub(super) fn walk_selected<C: Character + Component<Mutability = Mutable>>(
         if target.is_some_and(|target| entity != target) {
             continue;
         }
+        if route.as_ref().is_some_and(|route| !route.page_present()) {
+            continue;
+        }
         let moving = queue.busy();
         let facing = ch.dir();
         let position = if moving {
@@ -277,15 +284,17 @@ pub(super) fn walk_selected<C: Character + Component<Mutability = Mutable>>(
             if moving && !queue.busy() {
                 route.settle_movement();
             }
+            route.advance_stop_clock(moving, stops.advances(ch.event_id()));
             if route.animation.keeps_facing() && ch.dir() != facing {
                 ch.set_dir(facing);
             }
             let speed = route.speed();
             let previous = (ch.frame(), ch.dir());
+            let walking = route.stop_count() == 0;
             route.animation.advance(
                 ch.bypass_change_detection(),
                 speed,
-                moving,
+                walking,
                 queue.jumping(),
                 dt,
             );
@@ -306,6 +315,9 @@ pub(super) fn walk_selected<C: Character + Component<Mutability = Mutable>>(
 }
 
 impl Character for super::EventSprite {
+    fn event_id(&self) -> Option<u32> {
+        Some(self.id)
+    }
     fn y_offset(&self) -> f32 {
         if self.charset.is_empty() {
             0.0

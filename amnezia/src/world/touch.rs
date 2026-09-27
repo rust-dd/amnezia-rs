@@ -43,7 +43,7 @@ pub(super) fn trigger_event(
         let Some((index, page)) = triggers.page(event) else {
             continue;
         };
-        if page.trigger != 2 || page.commands.is_empty() {
+        if page.trigger != 2 {
             continue;
         }
         let collision = if page.layer == 1 {
@@ -56,10 +56,13 @@ pub(super) fn trigger_event(
                 && triggers.stopped(event.id)
         };
         if collision {
-            pending.push((event.id, index));
+            pending.push((event.id, index, !page.commands.is_empty()));
         }
     }
-    for (id, index) in pending {
-        triggers.queue(&mut running, id, index, (hero.tile_x, hero.tile_y), false);
+    for (id, index, has_commands) in pending {
+        triggers.reset_stop_count(id);
+        if has_commands {
+            triggers.queue(&mut running, id, index, (hero.tile_x, hero.tile_y), false);
+        }
     }
 }

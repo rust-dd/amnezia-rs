@@ -58,7 +58,6 @@ fn instant_route_graphic_and_through_changes_reach_the_collision_gate() {
             &mut MoveQueue::default(),
             &mut route,
             (3, 2),
-            1.0 / 60.0,
             |ch, dx, dy, jumping, through| {
                 assert!(ch.charset().is_empty());
                 assert_eq!(ch.index(), 3);
@@ -105,7 +104,6 @@ fn through_forced_steps_and_jumps_retry_at_nonlooping_boundaries() {
             &mut queue,
             &mut route,
             (0, 0),
-            1.0 / 60.0,
             |ch, dx, dy, jumping, through| {
                 collision.can_move(ch.tile(), (dx, 2 + dy), Mover::hero(through), None, jumping)
             },

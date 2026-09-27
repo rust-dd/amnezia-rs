@@ -3,7 +3,6 @@ use super::*;
 #[allow(clippy::too_many_arguments)]
 pub(in crate::world) fn route_event(
     In((target, forced)): In<(Option<u32>, Option<bool>)>,
-    time: Res<Time>,
     data: Res<MapData>,
     mut map_events: ResMut<MapEvents>,
     mut switches: ResMut<Switches>,
@@ -43,7 +42,6 @@ pub(in crate::world) fn route_event(
         .and_then(|(_, route)| route)
         .is_some_and(RouteStepper::through);
     bodies.include_vehicles(vehicles.as_deref(), data.map_id);
-    let dt = time.delta_secs();
     for (mut sprite_c, mut queue, mut stepper, mut sprite) in &mut movers {
         if target.is_some_and(|id| id != sprite_c.id)
             || forced.is_some_and(|forced| forced != stepper.forced())
@@ -68,27 +66,27 @@ pub(in crate::world) fn route_event(
             );
             let can_step =
                 |character: &EventSprite, dx: i32, dy: i32, jumping: bool, through: bool| {
-                    if !through
-                        && !bodies.hero_through
-                        && layer == 1
-                        && data.normalize_tile(ex + dx, ey + dy) == hero
-                    {
-                        touched.set(true);
-                    }
-                    collision.can_move(
+                    let passable = collision.can_move(
                         (ex, ey),
                         (ex + dx, ey + dy),
                         Mover::event(character, through),
                         Some(hero),
                         jumping,
-                    )
+                    );
+                    if !passable
+                        && !jumping
+                        && layer == 1
+                        && data.normalize_tile(ex + dx, ey + dy) == hero
+                    {
+                        touched.set(true);
+                    }
+                    passable
                 };
             drive(
                 &mut *sprite_c,
                 &mut queue,
                 &mut stepper,
                 near_hero,
-                dt,
                 can_step,
             )
         };

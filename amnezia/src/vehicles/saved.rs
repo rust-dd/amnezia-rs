@@ -51,7 +51,8 @@ impl State {
 }
 
 impl SavedMotion {
-    fn into_motion(self) -> Motion {
+    fn into_motion(mut self) -> Motion {
+        self.route.restore_stop_clock(None);
         Motion {
             queue: self.queue.into_queue(),
             alpha: self.route.alpha(),

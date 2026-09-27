@@ -55,7 +55,6 @@ impl RouteStepper {
             ch.set_dir(direction);
         }
         if (dx != 0 || dy != 0) && !can_step(ch, dx, dy, true, self.through) {
-            self.timer = step_delay_secs(self.frequency);
             if self.skippable {
                 self.direction = Some(previous);
                 ch.set_dir(previous_facing);
@@ -65,7 +64,7 @@ impl RouteStepper {
             return Step::Retry;
         }
         self.index = end;
-        self.timer = step_delay_secs(self.frequency);
+        self.set_stop_maximum(stop_clock::step(self.frequency));
         let per_frame = [8_u32, 12, 16, 24, 32, 64][(self.speed - 1) as usize];
         let seconds = 256_u32.div_ceil(per_frame) as f32 / FPS;
         Step::Gate(Some((

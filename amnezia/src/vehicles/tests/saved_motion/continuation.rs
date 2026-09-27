@@ -23,7 +23,6 @@ fn tick(vehicles: &mut Vehicles, data: &MapData, dt: f32) -> Vec<String> {
             &mut motion.queue,
             &mut motion.route,
             (20, 20),
-            dt,
             |_, _, _, _, _| true,
         );
         if routed {
@@ -45,6 +44,10 @@ fn tick(vehicles: &mut Vehicles, data: &MapData, dt: f32) -> Vec<String> {
         if let Some(pixel) = motion.queue.advance(vehicle, data, dt) {
             motion.pixel = Some(pixel);
         }
+        if moving && !motion.queue.busy() {
+            motion.route.settle_movement();
+        }
+        motion.route.advance_stop_clock(moving, true);
         let animated = !motion.queue.jumping() && (index != 2 || vehicles.save.riding == Some(2));
         motion
             .route
@@ -80,16 +83,21 @@ fn all_vehicle_routes_and_animation_clocks_resume_without_repeated_commands_at_f
         assert_eq!(actual.motion_snapshot(), expected.motion_snapshot());
         let data = app.world().resource::<MapData>();
         let mut effects = Vec::new();
+        let mut clock = crate::timing::GameFrames::default();
         for _ in 0..fps * 4 {
-            let got = tick(&mut actual, data, 1.0 / fps as f32);
-            assert_eq!(got, tick(&mut expected, data, 1.0 / fps as f32));
-            assert_eq!(
-                actual.motion_snapshot(),
-                expected.motion_snapshot(),
-                "{fps} FPS"
-            );
-            assert_eq!(actual.save, expected.save, "{fps} FPS");
-            effects.extend(got);
+            let before = clock.frame;
+            clock.advance(1.0 / f64::from(fps));
+            for _ in before..clock.frame {
+                let got = tick(&mut actual, data, 1.0 / 60.0);
+                assert_eq!(got, tick(&mut expected, data, 1.0 / 60.0));
+                assert_eq!(
+                    actual.motion_snapshot(),
+                    expected.motion_snapshot(),
+                    "{fps} FPS"
+                );
+                assert_eq!(actual.save, expected.save, "{fps} FPS");
+                effects.extend(got);
+            }
         }
         assert!(!actual.routes_pending());
         let mut switches = effects

@@ -41,7 +41,6 @@ fn original_airship_jump_crosses_the_gap_and_reaches_the_graphic_change() {
             &mut queue,
             &mut stepper,
             (9, 4),
-            1.0 / FPS,
             |_, dx, dy, jumping, _| {
                 if jumping {
                     landings.set(landings.get() + 1);
@@ -50,7 +49,12 @@ fn original_airship_jump_crosses_the_gap_and_reaches_the_graphic_change() {
                 true
             },
         );
+        let moving = queue.busy();
         queue.advance(&mut character, &data, 1.0 / FPS);
+        if moving && !queue.busy() {
+            stepper.settle_movement();
+        }
+        stepper.advance_stop_clock(moving, true);
     }
     assert_eq!(landings.get(), 1);
     assert_eq!(character.tile(), (15, 15));

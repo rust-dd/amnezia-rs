@@ -23,6 +23,7 @@ mod route;
 pub(crate) mod saved;
 mod scene_pause;
 mod screen;
+pub(crate) mod stop_clock;
 mod terrain;
 mod topology;
 mod touch;

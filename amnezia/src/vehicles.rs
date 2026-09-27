@@ -261,6 +261,7 @@ fn advance(
     time: Res<Time>,
     data: Res<MapData>,
     guards: MoveGuards,
+    stops: crate::world::stop_clock::StopGates,
     mut vehicles: ResMut<Vehicles>,
     mut switches: ResMut<Switches>,
     mut audio: MessageWriter<AudioRequest>,
@@ -314,7 +315,6 @@ fn advance(
             &mut motion.queue,
             &mut motion.route,
             (x, y),
-            time.delta_secs(),
             |_, dx, dy, _, through| {
                 data.contains_tile(x + dx, y + dy)
                     && (through || index != 2 || data.airship_passable(x + dx, y + dy))
@@ -341,10 +341,14 @@ fn advance(
         if moving && !motion.queue.busy() {
             motion.route.settle_movement();
         }
+        motion
+            .route
+            .advance_stop_clock(moving, stops.advances(None));
+        let walking = motion.route.stop_count() == 0;
         let animated = !motion.queue.jumping() && (index != 2 || vehicles.save.riding == Some(2));
         motion
             .route
             .animation
-            .advance_vehicle(vehicle, animated, moving, time.delta_secs());
+            .advance_vehicle(vehicle, animated, walking, time.delta_secs());
     }
 }

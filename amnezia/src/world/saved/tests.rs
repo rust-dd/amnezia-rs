@@ -4,6 +4,7 @@ use crate::save::{EventSaveRequest, LoadOutcome, LoadRequest, SavePlugin};
 mod hero;
 mod lifecycle;
 mod motion;
+mod stops;
 mod validation;
 
 fn app(tag: &str) -> (App, std::path::PathBuf) {
@@ -169,7 +170,6 @@ fn reloading_keeps_an_npcs_in_progress_step_and_forced_route() {
             &mut queue,
             &mut route,
             (10, 10),
-            1.0 / 60.0,
             |_, _, _, _, _| true,
         );
         queue.advance(&mut *event, &data, 0.04);

@@ -74,7 +74,9 @@ pub(super) fn spawn_event(
         index: page.map_or(0, |p| p.graphic_index),
         layer: page.map_or(0, |p| p.layer),
     };
-    let route = RouteStepper::from_event_page(page);
+    let mut route = RouteStepper::from_event_page(page);
+    let mut auto = auto_for(page, event.id);
+    auto.refresh(page, &mut route);
     let (mut sprite, visibility) = graphic(&character, tileset, server);
     sprite.color = sprite.color.with_alpha(route.alpha());
     let y_offset = if character.charset.is_empty() {
@@ -93,7 +95,7 @@ pub(super) fn spawn_event(
         visibility,
         PageState(index),
         MoveQueue::default(),
-        auto_for(page, event.id),
+        auto,
         route,
         MapScene,
     ));
@@ -144,8 +146,8 @@ pub(super) fn refresh_pages(
         let old = selected.0.and_then(|i| event.pages.get(i));
         let page = index.map(|i| &event.pages[i]);
         selected.0 = index;
-        *auto = auto_for(page, ch.id);
         route.refresh_page(page);
+        auto.refresh(page, &mut route);
         ch.charset = page.map_or_else(String::new, |p| p.graphic_name.clone());
         ch.index = page.map_or(0, |p| p.graphic_index);
         ch.layer = page.map_or(0, |p| p.layer);

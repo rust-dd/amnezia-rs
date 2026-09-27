@@ -36,6 +36,9 @@ fn page(codes: &[u32]) -> EventPage {
 }
 
 fn advance(route: &mut RouteStepper) -> Option<RouteAction> {
+    while route.stop_active() {
+        route.advance_stop_clock(false, true);
+    }
     route
         .advance(
             &mut player(),
@@ -108,7 +111,6 @@ fn forced_route_restores_page_index_and_frequency_but_keeps_live_speed() {
     route.force_route(RouteStepper::from_move_event(&[0, 8, 0, 0, 28, 12]));
     assert!(route.pending());
     assert!(advance(&mut route).is_none());
-    assert!(advance(&mut route).is_none());
     assert!(!route.forced());
     assert_eq!((route.frequency(), route.speed()), (5, 4));
     assert_eq!(advance(&mut route).unwrap().delta(), (-1, 0));
@@ -160,6 +162,9 @@ fn a_parameter_only_page_change_keeps_the_program_counter() {
     next.move_route.commands[1].params = vec![593];
     route.refresh_page(Some(&next));
     let mut effects = Vec::new();
+    while route.stop_active() {
+        route.advance_stop_clock(false, true);
+    }
     route.advance(&mut player(), (0, 0), &|_, _, _, _, _| true, &mut effects);
     assert!(matches!(
         effects.as_slice(),
@@ -193,10 +198,14 @@ fn final_move_finishes_on_landing_without_a_low_frequency_delay() {
             &mut queue,
             &mut route,
             (0, 0),
-            1.0 / 60.0,
             |_, _, _, _, _| true,
         );
+        let moving = queue.busy();
         queue.advance(&mut player, &data, 1.0 / 60.0);
+        if moving && !queue.busy() {
+            route.settle_movement();
+        }
+        route.advance_stop_clock(moving, true);
         if frame == 0 {
             assert!(route.pending());
             assert!(queue.busy());

@@ -8,12 +8,15 @@ fn tick(state: &mut EventState, data: &MapData, dt: f32) -> Vec<String> {
         &mut queue,
         &mut state.route,
         (10, 10),
-        dt,
         |_, _, _, _, _| true,
     )
     .effects;
     let moving = queue.busy();
     queue.advance(&mut state.character, data, dt);
+    if moving && !queue.busy() {
+        state.route.settle_movement();
+    }
+    state.route.advance_stop_clock(moving, true);
     let speed = state.route.speed();
     state
         .route
@@ -37,10 +40,8 @@ fn a_saved_jump_and_suspended_page_route_continue_without_replaying_effects() {
         let mut expected = snapshot(app.world_mut()).remove(0);
         expected.character.tile_x = 7;
         expected.character.tile_y = 8;
-        expected.autonomy = ron::from_str::<AutoMove>(
-            "(move_type:1,frequency:4,speed:2,timer:0.731,rng:123456789)",
-        )
-        .unwrap();
+        expected.autonomy =
+            ron::from_str::<AutoMove>("(move_type:1,frequency:4,speed:2,rng:123456789)").unwrap();
         expected.route = RouteStepper::from_page(
             &MoveRouteDef {
                 commands: vec![32, 23, 1, 32]
@@ -79,11 +80,16 @@ fn a_saved_jump_and_suspended_page_route_continue_without_replaying_effects() {
         let mut actual = snapshot(app.world_mut()).remove(0);
         assert_eq!(actual, expected);
         let mut effects = Vec::new();
+        let mut clock = crate::timing::GameFrames::default();
         for _ in 0..fps * 4 {
-            let got = tick(&mut actual, &data, 1.0 / fps as f32);
-            assert_eq!(got, tick(&mut expected, &data, 1.0 / fps as f32));
-            assert_eq!(actual, expected, "{fps} FPS");
-            effects.extend(got);
+            let before = clock.frame;
+            clock.advance(1.0 / f64::from(fps));
+            for _ in before..clock.frame {
+                let got = tick(&mut actual, &data, 1.0 / 60.0);
+                assert_eq!(got, tick(&mut expected, &data, 1.0 / 60.0));
+                assert_eq!(actual, expected, "{fps} FPS");
+                effects.extend(got);
+            }
         }
         assert!(!actual.route.active() && !actual.route.pending());
         assert!(!actual.motion.clone().into_queue().busy());

@@ -1,4 +1,4 @@
-use super::{MoveCommandDef, MoveRouteDef, RouteStepper, decode, step_delay_secs, turn_delay_secs};
+use super::{MoveCommandDef, MoveRouteDef, RouteStepper, StopClock, decode, stop_clock};
 use amnezia_data::EventPage;
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -58,7 +58,11 @@ impl RouteStepper {
             frequency: frequency.clamp(1, 8),
             through: false,
             transparency: 0,
-            timer: 0.0,
+            stop: Some(StopClock {
+                count: if forced { 0xFFFF } else { 0 },
+                maximum: 0,
+            }),
+            legacy_timer: 0.0,
             rng: 0x9E37_79B9,
             facing_lock: None,
             direction: None,
@@ -66,7 +70,7 @@ impl RouteStepper {
             page_present: true,
             first_pass_complete: false,
             moving: false,
-            autonomy_reset: false,
+            legacy_autonomy_reset: false,
         }
     }
 
@@ -107,11 +111,11 @@ impl RouteStepper {
             route.direction = Some(page.direction);
             route.transparency = if page.translucent { 3 } else { 0 };
             route.active &= page.move_type == 6;
-            route.timer = if page.move_type == 6 {
-                turn_delay_secs(route.frequency)
+            route.set_stop_maximum(if page.move_type == 6 {
+                stop_clock::turn(route.frequency)
             } else {
-                step_delay_secs(route.frequency)
-            };
+                stop_clock::step(route.frequency)
+            });
             route
         } else {
             Self {
@@ -143,12 +147,19 @@ impl RouteStepper {
         if !self.forced {
             self.suspended = Some(Suspended::take(self));
         }
+        let original_frequency = self
+            .suspended
+            .as_ref()
+            .map_or(self.frequency, |s| s.frequency);
         self.commands = std::mem::take(&mut route.commands);
         self.index = 0;
         self.repeat = route.repeat;
         self.skippable = route.skippable;
         self.frequency = route.frequency;
-        self.timer = 0.0;
+        self.set_stop_count(0xFFFF);
+        if self.frequency != original_frequency {
+            self.set_stop_maximum(stop_clock::step(self.frequency));
+        }
         self.forced = true;
         self.active = !self.commands.is_empty();
         self.first_pass_complete = false;
@@ -160,6 +171,10 @@ impl RouteStepper {
 
     pub fn active(&self) -> bool {
         self.active && self.page_present
+    }
+
+    pub(crate) fn page_present(&self) -> bool {
+        self.page_present
     }
 
     /// Forced routes keep advancing during an event or message; page routes pause.
@@ -180,10 +195,6 @@ impl RouteStepper {
         self.frequency
     }
 
-    pub(crate) fn take_autonomy_reset(&mut self) -> bool {
-        std::mem::take(&mut self.autonomy_reset)
-    }
-
     pub(crate) fn set_speed(&mut self, speed: u32) {
         self.speed = speed.clamp(1, 6);
     }
@@ -192,11 +203,10 @@ impl RouteStepper {
         self.forced = false;
         self.active = false;
         self.moving = false;
-        self.autonomy_reset = true;
         if let Some(suspended) = self.suspended.take() {
             suspended.restore(self);
         }
-        self.timer = step_delay_secs(self.frequency);
+        self.set_stop_maximum(stop_clock::step(self.frequency));
     }
 
     pub(super) fn finish_pass(&mut self) {
@@ -211,7 +221,7 @@ impl RouteStepper {
     }
 
     /// The last move ends the forced route when its tween lands, without an
-    /// additional route-frequency delay. Turns and waits still finish on their timer.
+    /// additional route-frequency delay. Turns and waits finish after their threshold.
     pub(crate) fn settle_movement(&mut self) -> bool {
         if self.moving {
             self.moving = false;
@@ -246,7 +256,7 @@ impl RouteStepper {
         self.speed = next.speed;
         self.animation.mode = next.animation.mode;
         self.frequency = next.frequency;
-        self.timer = next.timer;
+        self.set_stop_maximum(next.stop_maximum());
         self.transparency = next.transparency;
         self.facing_lock = None;
         if self.forced {

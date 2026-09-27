@@ -3,7 +3,6 @@ use super::*;
 #[allow(clippy::too_many_arguments)]
 pub(in crate::world) fn advance_event(
     In(target): In<Option<u32>>,
-    time: Res<Time>,
     data: Res<MapData>,
     mut map_events: ResMut<MapEvents>,
     switches: Res<Switches>,
@@ -19,7 +18,7 @@ pub(in crate::world) fn advance_event(
             &mut EventSprite,
             &mut MoveQueue,
             &mut AutoMove,
-            Option<&mut RouteStepper>,
+            &mut RouteStepper,
         ),
         Without<Player>,
     >,
@@ -28,9 +27,11 @@ pub(in crate::world) fn advance_event(
         return;
     };
     let (px, py) = (player.tile_x, player.tile_y);
-    let dt = time.delta_secs();
-    let mut bodies =
-        CollisionBodies::from_events(movers.iter().map(|(event, _, _, route)| (event, route)));
+    let mut bodies = CollisionBodies::from_events(
+        movers
+            .iter()
+            .map(|(event, _, _, route)| (event, Some(route))),
+    );
     bodies.hero_through = hero_route.is_some_and(RouteStepper::through);
     bodies.include_vehicles(vehicles.as_deref(), data.map_id);
     for (mut sprite, mut queue, mut auto, mut stepper) in &mut movers {
@@ -41,19 +42,13 @@ pub(in crate::world) fn advance_event(
             || auto.move_type == 0
             || auto.move_type == 6
             || queue.busy()
-            || stepper.as_ref().is_some_and(|route| route.active())
+            || stepper.active()
         {
             continue;
         }
-        if let Some(route) = stepper.as_mut() {
-            auto.frequency = route.frequency();
-            auto.speed = route.speed();
-            if route.take_autonomy_reset() {
-                auto.timer = stop_frames(auto.frequency) as f32 / FPS;
-            }
-        }
-        auto.timer -= dt;
-        if auto.timer > 0.0 {
+        auto.frequency = stepper.frequency();
+        auto.speed = stepper.speed();
+        if stepper.stop_active() {
             continue;
         }
 
@@ -73,7 +68,7 @@ pub(in crate::world) fn advance_event(
                 let (dx, dy) = dir_delta(dir);
                 let (nx, ny) = (ex + dx, ey + dy);
                 let destination = data.normalize_tile(nx, ny);
-                let through = stepper.as_ref().is_some_and(|route| route.through());
+                let through = stepper.through();
                 if !through && !bodies.hero_through && sprite.layer == 1 && destination == (px, py)
                 {
                     touched.set(true);
@@ -88,9 +83,7 @@ pub(in crate::world) fn advance_event(
             };
             decide(
                 auto.move_type,
-                stepper
-                    .as_ref()
-                    .map_or(sprite.dir, |route| route.direction(&*sprite)),
+                stepper.direction(&*sprite),
                 ex,
                 ey,
                 ex + hero_delta.0,
@@ -114,11 +107,7 @@ pub(in crate::world) fn advance_event(
                     event.x = nx as u32;
                     event.y = ny as u32;
                 }
-                if let Some(route) = stepper.as_mut() {
-                    route.set_direction(&mut *sprite, dir);
-                } else {
-                    sprite.dir = dir;
-                }
+                stepper.set_direction(&mut *sprite, dir);
                 queue.set_step_secs(step_secs_for_speed(auto.speed));
                 queue.enqueue_route([RouteAction::Step {
                     dx,
@@ -127,14 +116,10 @@ pub(in crate::world) fn advance_event(
                 }]);
             }
             Decision::Face(dir) => {
-                if let Some(route) = stepper.as_mut() {
-                    route.set_direction(&mut *sprite, dir);
-                } else {
-                    sprite.dir = dir;
-                }
+                stepper.set_direction(&mut *sprite, dir);
             }
             Decision::Idle => {}
         }
-        auto.timer = auto.next_delay();
+        auto.set_stop_maximum(&mut stepper);
     }
 }

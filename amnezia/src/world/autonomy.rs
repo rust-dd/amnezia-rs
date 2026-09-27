@@ -21,13 +21,13 @@ use crate::title::TitleActive;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-/// Logical frames per second the RM2000 stop-count delays are measured in.
-const FPS: f32 = 60.0;
-
 /// Shared movement gates for scenes, foreground events and input prompts.
 #[derive(SystemParam)]
 pub(crate) struct MoveGuards<'w> {
     transition: Option<Res<'w, crate::transitions::Transition>>,
+    frame: Option<Res<'w, crate::timing::SceneWait>>,
+    menu_flow: Option<Res<'w, crate::menu::SceneFlow>>,
+    shop_flow: Option<Res<'w, crate::shop::SceneFlow>>,
     prompts: crate::dialogue::InputPrompts<'w>,
     message_options: Option<Res<'w, crate::dialogue::MessageOptions>>,
     dialogue: Res<'w, Dialogue>,
@@ -75,6 +75,12 @@ impl MoveGuards<'_> {
     /// cutscene movement (the intro walking the hero in) plays while the event runs.
     pub(crate) fn forced_route_paused(&self) -> bool {
         self.fade.busy()
+            || self.frame.as_ref().is_some_and(|wait| wait.0)
+            || self
+                .menu_flow
+                .as_ref()
+                .is_some_and(|flow| flow.blocks_map())
+            || self.shop_flow.as_ref().is_some_and(|flow| flow.active())
             || self.transition.as_ref().is_some_and(|v| v.busy())
             || self.menu.0
             || self.shop.0
@@ -86,15 +92,18 @@ impl MoveGuards<'_> {
     }
 }
 
-/// An event's autonomous-movement state: the active page's move fields plus a
-/// countdown to the next step and a per-event RNG. Built by [`AutoMove::new`]
-/// from the page the NPC spawned with.
+/// Page movement settings and per-event randomness; the route owns the shared clock.
 #[derive(Component, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AutoMove {
     move_type: u32,
     frequency: u32,
     speed: u32,
-    timer: f32,
+    #[serde(
+        default,
+        rename = "timer",
+        skip_serializing_if = "super::stop_clock::legacy_empty"
+    )]
+    legacy_timer: f32,
     rng: u32,
 }
 
@@ -103,41 +112,51 @@ impl AutoMove {
         self.move_type <= 6
             && (1..=8).contains(&self.frequency)
             && (1..=6).contains(&self.speed)
-            && self.timer.is_finite()
+            && super::stop_clock::legacy_valid(self.legacy_timer)
     }
 
     /// Build from an active page's `move_type`/`move_frequency`/`move_speed`,
     /// seeding the RNG from the event id (so same-map random movers don't step
-    /// in lockstep) and arming the first step one full frequency delay out.
+    /// in lockstep).
     pub fn new(move_type: u32, frequency: u32, speed: u32, event_id: u32) -> Self {
         Self {
             move_type,
             frequency,
             speed,
-            timer: stop_frames(frequency) as f32 / FPS,
+            legacy_timer: 0.0,
             rng: event_id.wrapping_mul(2_654_435_761) | 1,
         }
     }
 
-    /// Seconds until the next step attempt. A random mover gets RM2000's
-    /// `SetMaxStopCountForRandom` jitter (`* (3..=6) / 5`) so its wandering
-    /// doesn't tick like a metronome; the rest use the flat frequency delay.
-    fn next_delay(&mut self) -> f32 {
-        let base = stop_frames(self.frequency) as f32 / FPS;
-        if self.move_type == 1 {
-            base * (next_rand(&mut self.rng) % 4 + 3) as f32 / 5.0
+    pub(super) fn set_stop_maximum(&mut self, route: &mut RouteStepper) {
+        let base = super::stop_clock::step(route.frequency());
+        let maximum = if self.move_type == 1 {
+            base * (next_rand(&mut self.rng) % 4 + 3) / 5
         } else {
             base
+        };
+        route.set_stop_maximum(maximum);
+    }
+
+    pub(super) fn refresh(
+        &mut self,
+        page: Option<&amnezia_data::EventPage>,
+        route: &mut RouteStepper,
+    ) {
+        self.move_type = page.map_or(0, |page| page.move_type);
+        self.frequency = route.frequency();
+        self.speed = route.speed();
+        if self.move_type == 1 {
+            self.set_stop_maximum(route);
         }
     }
-}
 
-/// RM2000 stop-count frames between steps for a move `frequency` (1 slowest … 8
-/// fastest): `GetMaxStopCountForStep`, `freq >= 8 ? 0 : 1 << (9 - freq)`. Higher
-/// frequency ⇒ fewer frames ⇒ more frequent steps.
-fn stop_frames(frequency: u32) -> u32 {
-    let f = frequency.clamp(1, 8);
-    if f >= 8 { 0 } else { 1 << (9 - f) }
+    pub(super) fn restore_clock(&mut self, route: &mut RouteStepper) {
+        let delay =
+            (!route.forced() && matches!(self.move_type, 1..=5)).then_some(self.legacy_timer);
+        route.restore_stop_clock(delay);
+        self.legacy_timer = 0.0;
+    }
 }
 
 /// xorshift32 — cheap deterministic per-event randomness, no `rand` dependency.

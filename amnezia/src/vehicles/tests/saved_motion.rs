@@ -3,6 +3,7 @@ use crate::save::{EventSaveRequest, LoadOutcome, LoadRequest, SavePlugin};
 
 mod continuation;
 mod lifecycle;
+mod stops;
 
 fn app(tag: &str) -> (App, std::path::PathBuf) {
     let path =
@@ -90,7 +91,6 @@ fn start(vehicles: &mut Vehicles, data: &MapData, index: usize, commands: &[i32]
         &mut motion.queue,
         &mut motion.route,
         (20, 20),
-        1.0 / 60.0,
         |_, _, _, _, _| true,
     )
     .effects

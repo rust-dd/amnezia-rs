@@ -11,10 +11,14 @@ fn step(app: &mut App) {
             &mut queue,
             &mut route,
             (0, 0),
-            1.0 / 60.0,
             |_, _, _, _, _| true,
         );
+        let moving = queue.busy();
         queue.advance(&mut *hero, &data, 1.0 / 60.0);
+        if moving && !queue.busy() {
+            route.settle_movement();
+        }
+        route.advance_stop_clock(moving, true);
     });
 }
 

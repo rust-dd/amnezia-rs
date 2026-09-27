@@ -28,14 +28,9 @@ fn a_moving_event_can_change_from_hidden_or_tile_graphics_to_a_character() {
         route.force_route(RouteStepper::from_move_event(&[
             1, 8, 0, 0, 34, 6, 67, 104, 97, 114, 97, 49, 1, 36, 1,
         ]));
-        crate::world::drive_route(
-            &mut *ch,
-            &mut queue,
-            &mut route,
-            (0, 0),
-            1.0 / 60.0,
-            |_, _, _, _, _| true,
-        );
+        crate::world::drive_route(&mut *ch, &mut queue, &mut route, (0, 0), |_, _, _, _, _| {
+            true
+        });
         app.update();
         let world = app.world_mut();
         let (ch, queue, sprite, visible) = world
@@ -71,14 +66,9 @@ fn translucent_pages_use_the_original_third_transparency_step() {
     route.force_route(RouteStepper::from_move_event(&[
         1, 8, 0, 0, 34, 6, 67, 104, 97, 114, 97, 50, 1,
     ]));
-    crate::world::drive_route(
-        &mut *ch,
-        &mut queue,
-        &mut route,
-        (0, 0),
-        1.0 / 60.0,
-        |_, _, _, _, _| true,
-    );
+    crate::world::drive_route(&mut *ch, &mut queue, &mut route, (0, 0), |_, _, _, _, _| {
+        true
+    });
     app.update();
     let world = app.world_mut();
     let (ch, sprite) = world
@@ -404,7 +394,6 @@ fn page_refresh_during_a_forced_route_installs_the_new_autonomous_program() {
         &mut queue,
         &mut route,
         (0, 0),
-        1.0 / 60.0,
         |_, _, _, _, _| true,
     );
     assert!(matches!(

@@ -16,11 +16,15 @@ fn drive_hero(
         &mut queue,
         &mut route,
         (0, 0),
-        1.0 / 60.0,
         |_, _, _, _, through| through,
     );
     effects.0.extend(driven.effects);
+    let moving = queue.busy();
     queue.advance(&mut *player, &data, 1.0 / 60.0);
+    if moving && !queue.busy() {
+        route.settle_movement();
+    }
+    route.advance_stop_clock(moving, true);
 }
 
 fn spawn_npc(app: &mut App, route: RouteStepper) -> Entity {

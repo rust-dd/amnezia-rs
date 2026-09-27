@@ -1,4 +1,5 @@
 use super::*;
+use crate::world::stop_clock::step as stop_frames;
 use amnezia_data::Event;
 
 fn chasing_app() -> App {
@@ -72,6 +73,7 @@ fn chasing_app() -> App {
         },
         MoveQueue::default(),
         AutoMove::new(4, 8, 4, 1),
+        RouteStepper::from_page(&amnezia_data::MoveRouteDef::default(), 4, 8),
     ));
     app
 }
@@ -248,7 +250,6 @@ fn autonomous_movement_keeps_scripted_through_facing_and_speed() {
         &mut queue,
         &mut route,
         (5, 5),
-        1.0 / 60.0,
         |_, _, _, _, through| through,
     );
     assert!(!route.forced());
@@ -282,29 +283,24 @@ fn block(blocked: &'static [u32]) -> impl Fn(u32) -> bool {
 
 #[test]
 fn frequency_gates_the_step_cadence() {
-    // Higher frequency ⇒ shorter delay ⇒ more frequent steps.
     assert!(stop_frames(1) > stop_frames(3));
     assert!(stop_frames(3) > stop_frames(6));
-    assert_eq!(stop_frames(3), 64); // 1 << (9 - 3)
-    assert_eq!(stop_frames(8), 0); // fastest: no wait
-    // Out-of-range frequencies clamp into 1..=8 rather than overflow-shifting.
+    assert_eq!(stop_frames(3), 64);
+    assert_eq!(stop_frames(8), 0);
     assert_eq!(stop_frames(0), stop_frames(1));
     assert_eq!(stop_frames(99), stop_frames(8));
 }
 
 #[test]
 fn speed_scales_the_tween_by_powers_of_two() {
-    // Each slower speed doubles the per-tile time; speed 4 is the hero anchor.
     assert!(step_secs_for_speed(3) > step_secs_for_speed(4));
     assert!((step_secs_for_speed(4) / step_secs_for_speed(5) - 2.0).abs() < 1e-6);
-    assert_eq!(step_secs_for_speed(0), step_secs_for_speed(1)); // clamps low
-    assert_eq!(step_secs_for_speed(9), step_secs_for_speed(6)); // clamps high
+    assert_eq!(step_secs_for_speed(0), step_secs_for_speed(1));
+    assert_eq!(step_secs_for_speed(9), step_secs_for_speed(6));
 }
 
 #[test]
 fn random_mover_steps_when_open_and_turns_when_blocked() {
-    // move_type 1 takes the pre-drawn direction: steps it when passable,
-    // otherwise just turns to face it (the RM2000 turn/idle fallback).
     assert_eq!(
         decide(1, DIR_DOWN, 2, 2, 9, 9, DIR_RIGHT, block(&[])),
         Decision::Step(DIR_RIGHT)
@@ -317,17 +313,14 @@ fn random_mover_steps_when_open_and_turns_when_blocked() {
 
 #[test]
 fn pace_mover_reverses_at_a_block() {
-    // Vertical pacer facing Down with Down blocked reverses and steps Up.
     assert_eq!(
         decide(2, DIR_DOWN, 2, 2, 2, 2, 0, block(&[DIR_DOWN])),
         Decision::Step(DIR_UP)
     );
-    // Boxed in on both ends: it still reverses its facing (to Up), no step.
     assert_eq!(
         decide(2, DIR_DOWN, 2, 2, 2, 2, 0, block(&[DIR_DOWN, DIR_UP])),
         Decision::Face(DIR_UP)
     );
-    // Horizontal pacer keeps its reverse heading when already facing Left.
     assert_eq!(
         decide(3, DIR_LEFT, 2, 2, 2, 2, 0, block(&[])),
         Decision::Step(DIR_LEFT)
@@ -336,7 +329,6 @@ fn pace_mover_reverses_at_a_block() {
 
 #[test]
 fn toward_mover_steps_closer_and_away_mover_steps_off() {
-    // Player three tiles to the right: toward steps Right (closer), away Left.
     assert_eq!(
         decide(4, DIR_DOWN, 2, 2, 5, 2, 0, block(&[])),
         Decision::Step(DIR_RIGHT)
@@ -345,14 +337,12 @@ fn toward_mover_steps_closer_and_away_mover_steps_off() {
         decide(5, DIR_DOWN, 2, 2, 5, 2, 0, block(&[])),
         Decision::Step(DIR_LEFT)
     );
-    // Diagonal: the dominant axis (vertical here, since |dy| >= |dx|) wins.
     assert_eq!(toward_candidates(1, 3), vec![DIR_DOWN, DIR_RIGHT]);
     assert_eq!(away_candidates(1, 3), vec![DIR_UP, DIR_LEFT]);
 }
 
 #[test]
 fn passability_blocks_a_step_no_wall_walking() {
-    // Toward the player but every neighbour blocked: it faces, never steps.
     let d = decide(
         4,
         DIR_DOWN,
@@ -367,7 +357,7 @@ fn passability_blocks_a_step_no_wall_walking() {
     assert!(!matches!(d, Decision::Step(_)));
 }
 
-fn app_with_mover(move_type: u32, timer: f32) -> App {
+fn app_with_mover(move_type: u32, stops_left: u32) -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     app.insert_resource(MapData::for_test(10, 10));
@@ -401,6 +391,8 @@ fn app_with_mover(move_type: u32, timer: f32) -> App {
         charset: "C".into(),
         index: 0,
     });
+    let mut route = RouteStepper::from_page(&amnezia_data::MoveRouteDef::default(), 3, 3);
+    route.set_stop_maximum(stops_left);
     app.world_mut().spawn((
         EventSprite {
             id: 1,
@@ -417,9 +409,10 @@ fn app_with_mover(move_type: u32, timer: f32) -> App {
             move_type,
             frequency: 3,
             speed: 3,
-            timer,
+            legacy_timer: 0.0,
             rng: 1,
         },
+        route,
     ));
     app
 }
@@ -431,10 +424,7 @@ fn event_tile(app: &App) -> (u32, u32) {
 
 #[test]
 fn ready_toward_mover_updates_logical_tile_and_queues_the_step() {
-    // A toward-hero mover whose timer is already up steps Right toward the
-    // player at (5,2): the logical MapEvents tile advances to (3,2), the
-    // sprite faces Right, and its queue holds the tween.
-    let mut app = app_with_mover(4, 0.0);
+    let mut app = app_with_mover(4, 0);
     app.update();
     assert_eq!(event_tile(&app), (3, 2));
     let world = app.world_mut();
@@ -446,8 +436,7 @@ fn ready_toward_mover_updates_logical_tile_and_queues_the_step() {
 
 #[test]
 fn mover_with_time_remaining_stays_put() {
-    // The same mover, but a long countdown gates it: no step this frame.
-    let mut app = app_with_mover(4, 100.0);
+    let mut app = app_with_mover(4, 100);
     app.update();
     assert_eq!(event_tile(&app), (2, 2));
     let world = app.world_mut();

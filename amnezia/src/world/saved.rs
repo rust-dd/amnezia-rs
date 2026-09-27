@@ -168,14 +168,17 @@ fn restore(
             event.y = ch.tile_y as u32;
         }
         let queue = saved.motion.clone().into_queue();
+        let mut route = saved.route.clone();
+        let mut autonomy = saved.autonomy.clone();
+        autonomy.restore_clock(&mut route);
         let position = queue.render_position(ch, &data);
         let (mut sprite, visible) = pages::graphic(ch, &tileset.0, &server);
         sprite.color = sprite.color.with_alpha(saved.route.alpha());
         commands.entity(entity).insert((
             ch.clone(),
             queue,
-            saved.route.clone(),
-            saved.autonomy.clone(),
+            route,
+            autonomy,
             saved.page.clone(),
             sprite,
             visible,

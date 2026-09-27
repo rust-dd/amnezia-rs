@@ -37,7 +37,7 @@ fn start_motion(world: &mut World, jumping: bool) {
         program.extend(if jumping { vec![24, 1, 1, 2, 25] } else { vec![1] });
         program.extend([23, 27, 37, 1]);
         route.force_route(RouteStepper::from_move_event(&program));
-        drive_route(&mut *hero, &mut queue, &mut route, (10, 10), 1.0 / 60.0, |_, _, _, _, _| true);
+        drive_route(&mut *hero, &mut queue, &mut route, (10, 10), |_, _, _, _, _| true);
         queue.advance(&mut *hero, &data, 0.04);
         route.animation.paused = true;
         hero.frame = 2;
