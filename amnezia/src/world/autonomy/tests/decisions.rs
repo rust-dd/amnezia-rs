@@ -48,6 +48,32 @@ fn random_walking_uses_original_relative_direction_weights() {
 }
 
 #[test]
+fn blocked_autonomous_retries_retain_the_original_diagonal_sprite_facing() {
+    for kind in 1..=5 {
+        for direction in 4..8 {
+            let (mut app, entity) = fixture(kind, direction, 64, 64, 8);
+            for x in 1..=3 {
+                for y in 1..=3 {
+                    if (x, y) != (2, 2) {
+                        wall(&mut app, x, y);
+                    }
+                }
+            }
+            app.update();
+            assert_eq!(event_tile(&app), (2, 2));
+            let character = app.world().get::<EventSprite>(entity).unwrap();
+            let route = app.world().get::<RouteStepper>(entity).unwrap();
+            assert_eq!(route.direction(character), direction);
+            assert_eq!(
+                character.dir, direction,
+                "kind {kind}, direction {direction}"
+            );
+            assert!(!app.world().get::<MoveQueue>(entity).unwrap().busy());
+        }
+    }
+}
+
+#[test]
 fn random_idle_draws_replace_only_the_elapsed_count() {
     for (seed, count, rng) in [(2, 35, 134253570), (1, 44, 67634689)] {
         let (mut app, entity) = fixture(1, DIR_UP, 100, 64, seed);

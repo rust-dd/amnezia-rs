@@ -94,12 +94,12 @@ pub(crate) fn valid(events: &[EventState], map: &Map) -> bool {
     events.iter().all(|saved| {
         let ch = &saved.character;
         ids.insert(ch.id)
-            && ch.dir < 4
+            && ch.dir < 8
             && ch.frame < 4
             && ch.layer <= 2
             && ch.index < if ch.charset.is_empty() { 144 } else { 8 }
-            && saved.motion.valid()
-            && saved.route.valid()
+            && saved.motion.valid_for_event()
+            && saved.route.valid_for_event()
             && saved.autonomy.valid()
             && map
                 .events

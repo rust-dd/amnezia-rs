@@ -59,7 +59,7 @@ fn invalid_npc_snapshots_leave_the_live_session_and_save_untouched() {
         let expected = snapshot(app.world_mut());
         let mut bad = expected.clone();
         match case {
-            0 => bad[0].character.dir = 4,
+            0 => bad[0].character.dir = 8,
             1 => bad[0].character.frame = 4,
             2 => bad[0].character.layer = 3,
             3 => {

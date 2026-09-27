@@ -36,7 +36,10 @@ fn hero_and_npc_share_their_exact_saved_stop_threshold_and_elapsed_count() {
         before_hero
     );
     let encoded = std::fs::read_to_string(&path).unwrap();
-    assert!(encoded.contains("format_version: 20"));
+    assert!(encoded.contains(&format!(
+        "format_version: {}",
+        crate::save::SAVE_FORMAT_VERSION
+    )));
     let npc = npc(app.world_mut());
     for entity in [hero, npc] {
         let mut route = app.world_mut().get_mut::<RouteStepper>(entity).unwrap();

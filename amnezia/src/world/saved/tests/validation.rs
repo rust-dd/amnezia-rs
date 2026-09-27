@@ -67,7 +67,7 @@ fn invalid_motion_route_and_animation_values_are_rejected() {
         ("stop:Some", "timer:inf,stop:Some"),
         ("maximum:0", "maximum:309"),
         ("stop:Some((count:0", "stop:Some((count:2147483648"),
-        ("facing_lock:None", "facing_lock:Some(4)"),
+        ("facing_lock:None", "facing_lock:Some(8)"),
         ("direction:None", "direction:Some(8)"),
         ("count:0", "count:24"),
         ("fraction:0.0", "fraction:NaN"),
@@ -79,7 +79,7 @@ fn invalid_motion_route_and_animation_values_are_rejected() {
 }
 
 #[test]
-fn saved_npcs_accept_diagonal_movement_but_only_cardinal_sprite_faces() {
+fn saved_npcs_accept_diagonal_movement_and_retry_faces_but_reject_unknown_directions() {
     let (mut app, _) = app("diagonal-fields");
     let mut base = snapshot(app.world_mut()).remove(0);
     base.route = RouteStepper::default();
@@ -91,6 +91,8 @@ fn saved_npcs_accept_diagonal_movement_but_only_cardinal_sprite_faces() {
         assert_eq!(saved.route.direction(&saved.character), direction);
         assert!(valid(&[saved.clone()], &map));
         saved.character.dir = direction;
+        assert!(valid(&[saved.clone()], &map));
+        saved.character.dir = 8;
         assert!(!valid(&[saved], &map));
     }
 }

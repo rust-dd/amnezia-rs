@@ -33,12 +33,20 @@ impl MoveQueue {
 
 impl MotionState {
     pub(crate) fn valid(&self) -> bool {
+        self.valid_with_facings(4)
+    }
+
+    pub(crate) fn valid_for_event(&self) -> bool {
+        self.valid_with_facings(8)
+    }
+
+    fn valid_with_facings(&self, facings: u32) -> bool {
         self.step_secs.is_finite()
             && self.step_secs > 0.0
             && self.steps.iter().all(|step| {
                 let (RouteAction::Step { dx, dy, face } | RouteAction::Jump { dx, dy, face }) =
                     step;
-                *face < 4 && dx.checked_abs().is_some() && dy.checked_abs().is_some()
+                *face < facings && dx.checked_abs().is_some() && dy.checked_abs().is_some()
             })
             && self.active.as_ref().is_none_or(|step| {
                 (0.0..self.step_secs).contains(&step.elapsed)

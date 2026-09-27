@@ -29,6 +29,10 @@ pub(super) fn graphic(
     tileset: &Handle<Image>,
     server: &AssetServer,
 ) -> (Sprite, Visibility) {
+    // The original clips out-of-range facing rows to this character's subimage.
+    if !character.charset.is_empty() && character.dir >= 4 {
+        return (Sprite::default(), Visibility::Hidden);
+    }
     let (image, source, size) = if character.charset.is_empty() {
         let Some((x, y)) = tiles::upper_source(10000 + character.index as u16) else {
             return (Sprite::default(), Visibility::Hidden);
@@ -187,3 +191,6 @@ mod tests;
 
 #[cfg(test)]
 mod facing_tests;
+
+#[cfg(test)]
+mod invalid_facing_tests;

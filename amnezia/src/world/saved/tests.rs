@@ -3,6 +3,7 @@ use crate::save::{EventSaveRequest, LoadOutcome, LoadRequest, SavePlugin};
 
 mod autonomy;
 mod hero;
+mod invalid_facing;
 mod lifecycle;
 mod motion;
 mod stops;
