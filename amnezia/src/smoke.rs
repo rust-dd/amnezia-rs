@@ -511,6 +511,7 @@ fn drive(world: &mut World) {
                 .unwrap();
             assert_eq!((x, y), (28, 101));
         } else if scenario == "panorama" {
+            crate::panorama::smoke::verify_finished(world);
             assert_eq!(world.resource::<crate::world::MapData>().map_id, 94);
             assert!(world.resource::<crate::player::HeroHidden>().0);
             let (hero, visibility) = world

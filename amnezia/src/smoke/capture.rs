@@ -44,6 +44,7 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let saved_erasure_snapshot = crate::save::music_smoke::erasure::snapshot(world, label);
     let saved_picture_snapshot = crate::save::picture_smoke::snapshot(world, label);
     let jump_camera_snapshot = super::camera::snapshot(world, label);
+    let panorama_snapshot = crate::panorama::smoke::snapshot(world, label);
     let screen_flash_snapshot = crate::screenfx::flash_smoke::snapshot(world, label);
     let saved_screen_snapshot = crate::screenfx::saved::smoke::snapshot(world, label);
     let weather_snapshot = crate::screenfx::weather_smoke::snapshot(world, label);
@@ -176,6 +177,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &jump_camera_snapshot {
+                snapshot.verify(&capture.image);
+            }
+            if let Some(snapshot) = &panorama_snapshot {
                 snapshot.verify(&capture.image);
             }
             if let Some(snapshot) = &screen_flash_snapshot {

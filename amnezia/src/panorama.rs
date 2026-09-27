@@ -4,6 +4,8 @@ use amnezia_data::PanoramaDef;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+pub(crate) mod smoke;
+
 #[derive(Resource, Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Panorama {
     map_id: Option<u32>,
@@ -22,6 +24,18 @@ impl Panorama {
 #[derive(Component)]
 struct PanoramaTile(i32, i32);
 
+#[derive(Resource, Default)]
+struct BackgroundImage(Option<(String, Handle<Image>)>);
+
+impl BackgroundImage {
+    fn load(&mut self, server: &AssetServer, name: &str) -> &Handle<Image> {
+        if self.0.as_ref().is_none_or(|(previous, _)| previous != name) {
+            self.0 = Some((name.to_owned(), server.load(resolve_png("Panorama", name))));
+        }
+        &self.0.as_ref().unwrap().1
+    }
+}
+
 pub struct PanoramaPlugin;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -29,13 +43,15 @@ pub(crate) struct PanoramaDraw;
 
 impl Plugin for PanoramaPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<Panorama>().add_systems(
-            PostUpdate,
-            draw.in_set(PanoramaDraw)
-                .after(advance)
-                .after(crate::screenfx::ScreenShakeSet)
-                .before(bevy::transform::TransformSystems::Propagate),
-        );
+        app.init_resource::<Panorama>()
+            .init_resource::<BackgroundImage>()
+            .add_systems(
+                PostUpdate,
+                draw.in_set(PanoramaDraw)
+                    .after(advance)
+                    .after(crate::screenfx::ScreenShakeSet)
+                    .before(bevy::transform::TransformSystems::Propagate),
+            );
         crate::timing::logical::post(app, || advance);
     }
 }
@@ -73,13 +89,18 @@ fn advance(
     images: Res<Assets<Image>>,
     scene: ScenePause,
     mut panorama: ResMut<Panorama>,
+    mut texture: ResMut<BackgroundImage>,
 ) {
     if panorama.map_id != Some(data.map_id) {
         panorama.map_id = Some(data.map_id);
-        panorama.definition = data.panorama.clone();
+        panorama.definition = data
+            .panorama
+            .clone()
+            .filter(|definition| !definition.name.is_empty());
         panorama.scroll = (0.0, 0.0);
     }
     let Some(definition) = panorama.definition.clone() else {
+        texture.0 = None;
         return;
     };
     if !scene.paused() {
@@ -90,8 +111,8 @@ fn advance(
             panorama.scroll.1 += speed(definition.speed_y) * time.delta_secs();
         }
     }
-    let image = server.load(resolve_png("Panorama", &definition.name));
-    if let Some(image) = images.get(&image) {
+    let image = texture.load(&server, &definition.name);
+    if let Some(image) = images.get(image) {
         let size = image.size();
         if size.x != 0 && size.y != 0 {
             panorama.scroll.0 = panorama.scroll.0.rem_euclid(size.x as f32);
@@ -104,11 +125,11 @@ fn advance(
 fn draw(
     mut commands: Commands,
     data: Res<MapData>,
-    server: Res<AssetServer>,
+    texture: Res<BackgroundImage>,
     images: Res<Assets<Image>>,
     panorama: Res<Panorama>,
     pan: Option<Res<crate::player::CameraPan>>,
-    mut previous: Local<Option<(PanoramaDef, UVec2)>>,
+    mut previous: Local<Option<(String, UVec2)>>,
     camera: Query<&Transform, (With<MainCamera>, Without<PanoramaTile>)>,
     mut tiles: Query<(Entity, &PanoramaTile, &mut Transform), Without<MainCamera>>,
 ) {
@@ -120,32 +141,14 @@ fn draw(
         }
         return;
     };
-    let image = server.load(resolve_png("Panorama", &definition.name));
-    let Some(loaded) = images.get(&image) else {
+    let Some((name, image)) = &texture.0 else {
+        return;
+    };
+    let Some(loaded) = images.get(image) else {
         return;
     };
     let size = loaded.size();
     if size.x == 0 || size.y == 0 {
-        return;
-    }
-    if previous.as_ref() != Some(&(definition.clone(), size)) {
-        for (entity, _, _) in &tiles {
-            commands.entity(entity).despawn();
-        }
-        for y in -1..=(240 / size.y + 1) as i32 {
-            for x in -1..=(320 / size.x + 1) as i32 {
-                commands.spawn((
-                    PanoramaTile(x, y),
-                    Sprite {
-                        image: image.clone(),
-                        custom_size: Some(size.as_vec2()),
-                        ..default()
-                    },
-                    Transform::from_xyz(0.0, 0.0, -10.0),
-                ));
-            }
-        }
-        *previous = Some((definition.clone(), size));
         return;
     }
     let Ok(camera) = camera.single() else { return };
@@ -174,18 +177,43 @@ fn draw(
     );
     let x_offset = (x_scroll + panorama.scroll.0).rem_euclid(size.x as f32);
     let y_offset = (y_scroll + panorama.scroll.1).rem_euclid(size.y as f32);
-    for (_, tile, mut transform) in &mut tiles {
-        transform.translation = Vec3::new(
-            camera.translation.x - 160.0 + (tile.0 as f32 + 0.5) * size.x as f32 + x_offset,
-            camera.translation.y + 120.0 - (tile.1 as f32 + 0.5) * size.y as f32 - y_offset,
+    let translation = |x, y| {
+        Vec3::new(
+            camera.translation.x - 160.0 + (x as f32 + 0.5) * size.x as f32 + x_offset,
+            camera.translation.y + 120.0 - (y as f32 + 0.5) * size.y as f32 - y_offset,
             -10.0,
-        );
+        )
+    };
+    if previous.as_ref() != Some(&(name.clone(), size)) {
+        for (entity, _, _) in &tiles {
+            commands.entity(entity).despawn();
+        }
+        for y in -1..=(240 / size.y + 1) as i32 {
+            for x in -1..=(320 / size.x + 1) as i32 {
+                commands.spawn((
+                    PanoramaTile(x, y),
+                    Sprite {
+                        image: image.clone(),
+                        custom_size: Some(size.as_vec2()),
+                        ..default()
+                    },
+                    Transform::from_translation(translation(x, y)),
+                ));
+            }
+        }
+        *previous = Some((name.clone(), size));
+        return;
+    }
+    for (_, tile, mut transform) in &mut tiles {
+        transform.translation = translation(tile.0, tile.1);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    mod loading;
 
     #[test]
     fn parallax_speed_and_camera_tracking_match_original_subpixels() {
