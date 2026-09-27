@@ -5,13 +5,13 @@ struct InFlight(bool);
 
 pub(super) fn register(app: &mut App) {
     app.init_resource::<InFlight>()
-        .init_resource::<camera::WalkScroll>();
+        .init_resource::<camera::MotionScroll>();
     update::character(app, || {
         (
             remember,
-            camera::prepare_walk,
+            camera::prepare_scroll,
             walk::<Player>,
-            camera::apply_walk,
+            camera::apply_scroll,
             trigger,
         )
             .chain()

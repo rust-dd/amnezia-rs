@@ -14,6 +14,8 @@ pub(crate) struct CameraState {
     pub position: Option<[f32; 2]>,
     /// Unwrapped tracking position keeps the next follow step continuous on looping maps.
     pub previous_player: Option<[f32; 2]>,
+    #[serde(default)]
+    pub(super) tracking: Option<super::tracking::Tracking>,
 }
 
 impl CameraPan {
@@ -25,6 +27,7 @@ impl CameraPan {
             locked: self.locked,
             position: self.position.map(|value| value.to_array()),
             previous_player: self.previous_player.map(|value| value.to_array()),
+            tracking: self.tracking.clone(),
         }
     }
 }
@@ -32,6 +35,10 @@ impl CameraPan {
 impl CameraState {
     pub(crate) fn valid(&self) -> bool {
         self.speed.is_finite()
+            && self
+                .tracking
+                .as_ref()
+                .is_none_or(super::tracking::Tracking::valid)
             && self.speed > 0.0
             && self
                 .offset
@@ -50,6 +57,7 @@ impl CameraState {
             locked: self.locked,
             position: self.position.map(Vec2::from_array),
             previous_player: self.previous_player.map(Vec2::from_array),
+            tracking: self.tracking,
         }
     }
 }

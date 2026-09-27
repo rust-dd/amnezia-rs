@@ -55,11 +55,12 @@ fn camera_scroll(
     image_size: f32,
     looping: bool,
 ) -> f32 {
-    let offset = (position + (map_size - view_size) / 2.0).max(0.0);
+    let offset = position + (map_size - view_size) / 2.0;
     if looping {
         -offset / 2.0
     } else if image_size > view_size && map_size > view_size {
-        -offset * (image_size - view_size) / (map_size - view_size)
+        -offset.max(0.0) * (image_size - view_size).min(map_size - view_size)
+            / (map_size - view_size)
     } else {
         0.0
     }
@@ -106,6 +107,7 @@ fn draw(
     server: Res<AssetServer>,
     images: Res<Assets<Image>>,
     panorama: Res<Panorama>,
+    pan: Option<Res<crate::player::CameraPan>>,
     mut previous: Local<Option<(PanoramaDef, UVec2)>>,
     camera: Query<&Transform, (With<MainCamera>, Without<PanoramaTile>)>,
     mut tiles: Query<(Entity, &PanoramaTile, &mut Transform), Without<MainCamera>>,
@@ -147,19 +149,28 @@ fn draw(
         return;
     }
     let Ok(camera) = camera.single() else { return };
+    let tracked = pan
+        .as_ref()
+        .and_then(|pan| pan.panorama_position(&data, [definition.loop_x, definition.loop_y]));
+    let point = tracked.map_or(camera.translation.truncate(), |display| {
+        Vec2::new(
+            display.x - (data.width as f32 * 16.0 - 320.0) / 2.0,
+            (data.height as f32 * 16.0 - 240.0) / 2.0 - display.y,
+        )
+    });
     let x_scroll = camera_scroll(
-        camera.translation.x,
+        point.x,
         data.width as f32 * 16.0,
         320.0,
         size.x as f32,
-        definition.loop_x,
+        definition.loop_x || data.loops_x(),
     );
     let y_scroll = camera_scroll(
-        -camera.translation.y,
+        -point.y,
         data.height as f32 * 16.0,
         240.0,
         size.y as f32,
-        definition.loop_y,
+        definition.loop_y || data.loops_y(),
     );
     let x_offset = (x_scroll + panorama.scroll.0).rem_euclid(size.x as f32);
     let y_offset = (y_scroll + panorama.scroll.1).rem_euclid(size.y as f32);
@@ -194,5 +205,12 @@ mod tests {
         panorama.scroll = (12.0, 8.0);
         let restored = ron::from_str::<Panorama>(&ron::to_string(&panorama).unwrap()).unwrap();
         assert_eq!(restored, panorama);
+    }
+
+    #[test]
+    fn scrolling_backgrounds_keep_negative_phase_and_bounded_ones_cap_their_ratio() {
+        assert_eq!(camera_scroll(-170.0, 640.0, 320.0, 320.0, true), 5.0);
+        assert_eq!(camera_scroll(0.0, 640.0, 320.0, 960.0, false), -160.0);
+        assert_eq!(camera_scroll(0.0, 640.0, 320.0, 480.0, false), -80.0);
     }
 }

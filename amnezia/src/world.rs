@@ -39,7 +39,7 @@ pub(crate) use autonomy::MoveGuards;
 pub(crate) use bush::BushBottom;
 pub(crate) use cameras::{HudCamera, setup as setup_cameras};
 pub use movement::{Character, MoveQueue, RouteAction, walk};
-pub(crate) use movement::{dir_delta, step_secs_for_speed};
+pub(crate) use movement::{ScrollStep, dir_delta, step_secs_for_speed};
 use relocation::apply_relocate;
 pub use route::RouteStepper;
 #[cfg(test)]

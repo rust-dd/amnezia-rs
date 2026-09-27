@@ -4,8 +4,9 @@ use crate::world::{MainCamera, MapData, MoveQueue};
 use bevy::prelude::*;
 
 pub(crate) mod saved;
-mod walking;
-pub(super) use walking::{WalkScroll, apply_walk, prepare_walk};
+mod scroll;
+mod tracking;
+pub(super) use scroll::{MotionScroll, apply_scroll, prepare_scroll};
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct CameraFollow;
@@ -18,6 +19,7 @@ pub struct CameraPan {
     pub locked: bool,
     pub(crate) position: Option<Vec2>,
     previous_player: Option<Vec2>,
+    tracking: Option<tracking::Tracking>,
 }
 
 impl Default for CameraPan {
@@ -29,6 +31,7 @@ impl Default for CameraPan {
             locked: false,
             position: None,
             previous_player: None,
+            tracking: None,
         }
     }
 }
@@ -69,6 +72,7 @@ impl CameraPan {
         self.position = None;
         self.previous_player = None;
         if map_changed {
+            self.tracking = None;
             self.offset = Vec2::ZERO;
             self.target = Vec2::ZERO;
             self.speed = 60.0;
@@ -78,9 +82,10 @@ impl CameraPan {
     fn update(&mut self, data: &MapData, player: Vec2, half_view: Vec2, dt: f32) -> Vec2 {
         let player = data.world_near(player, self.previous_player.unwrap_or(player));
         let focus = player + Vec2::X * 8.0 + self.offset;
-        let mut position = self
-            .position
-            .unwrap_or_else(|| clamp_position(data, focus, half_view));
+        if self.position.is_none() {
+            self.initialize_position(data, clamp_position(data, focus, half_view), half_view);
+        }
+        let mut position = self.position.unwrap();
         if !self.locked
             && let Some(previous) = self.previous_player
         {
@@ -93,10 +98,11 @@ impl CameraPan {
             }
             position = clamp_position(data, position, half_view);
         }
+        self.scroll_to(data, position, half_view);
         let step = ease_toward(self.offset, self.target, self.speed * dt) - self.offset;
         let panned = clamp_position(data, position + step, half_view);
         self.offset += panned - position;
-        self.position = Some(panned);
+        self.scroll_to(data, panned, half_view);
         self.previous_player = Some(player);
         panned
     }

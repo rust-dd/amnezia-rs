@@ -47,7 +47,7 @@ pub(super) fn track_scroll(
     if changed.read().count() != 0 {
         scroll.previous = None;
     }
-    let position = camera.as_ref().and_then(|pan| pan.position);
+    let position = camera.as_ref().and_then(|pan| pan.effects_position());
     if let Some(position) = position {
         if let Some(previous) = scroll.previous {
             let moved = (position - previous) * Vec2::new(-1.0, 1.0);

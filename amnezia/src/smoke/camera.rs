@@ -1,8 +1,9 @@
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
+mod jumping;
 mod walking;
-pub(super) use walking::verify_finished;
+pub(super) use jumping::snapshot;
 
 #[derive(Resource)]
 struct Checkpoint(Vec2);
@@ -22,6 +23,7 @@ pub(super) fn entry() -> Vec<EventCommand> {
 
 pub(super) fn drive(world: &mut World, frame: u32) {
     walking::drive(world, frame);
+    jumping::drive(world, frame);
     if frame == 260 {
         assert!(
             !world
@@ -70,4 +72,9 @@ pub(super) fn drive(world: &mut World, frame: u32) {
         assert_eq!((hero.tile_x, hero.tile_y), (64, 60));
         super::capture(world, "camera-returned");
     }
+}
+
+pub(super) fn verify_finished(world: &World) {
+    walking::verify_finished(world);
+    jumping::verify_finished(world);
 }

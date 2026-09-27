@@ -110,3 +110,27 @@ pub(crate) fn entity(app: &mut App, id: u32) -> Entity {
         .unwrap()
         .0
 }
+
+pub(crate) fn camera_app(tile: (i32, i32)) -> (App, Entity) {
+    let mut app = app(vec![], false);
+    app.insert_resource(MapData::for_test(40, 30));
+    let world = app.world_mut();
+    let hero = world
+        .query_filtered::<Entity, With<Player>>()
+        .single(world)
+        .unwrap();
+    world
+        .get_mut::<Player>(hero)
+        .unwrap()
+        .set_tile(tile.0, tile.1);
+    world.spawn((
+        MainCamera,
+        Transform::default(),
+        Projection::Orthographic(OrthographicProjection {
+            area: Rect::new(-160.0, -120.0, 160.0, 120.0),
+            ..OrthographicProjection::default_2d()
+        }),
+    ));
+    app.update();
+    (app, hero)
+}

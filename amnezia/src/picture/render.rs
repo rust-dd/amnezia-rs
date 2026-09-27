@@ -68,17 +68,15 @@ pub(super) fn setup_picture_mesh(mut commands: Commands, mut meshes: ResMut<Asse
     commands.insert_resource(PictureMesh(meshes.add(Rectangle::new(1.0, 1.0))));
 }
 
-/// Spawn, retarget, or despawn picture quads as commands arrive. A map-fixed
-/// picture records its world anchor from the (pre-shake) camera here so it stays
-/// pinned to the map; a `Move` on a legacy map-fixed picture keeps its position
-/// (RM2000 ignores the target coordinates for those).
+/// Map-fixed anchors accumulate real scrolling, excluding jump-landing camera
+/// corrections. Legacy map-fixed pictures ignore `Move` target coordinates.
 pub(super) fn apply_commands(world: &mut World) {
     if !world.contains_resource::<PictureMesh>() {
         return;
     }
     let camera_base = world
         .get_resource::<crate::player::CameraPan>()
-        .and_then(|pan| pan.position)
+        .and_then(|pan| pan.effects_position())
         .or_else(|| {
             world
                 .query_filtered::<&Transform, With<MainCamera>>()
@@ -229,8 +227,8 @@ pub(super) fn size_pictures(
     }
 }
 
-/// Position pictures against the unshaken map origin; the picture camera applies
-/// screen shake to both anchor modes. Wave clipping uses the displayed viewport.
+/// Place pictures using scroll-only anchors and the unshaken camera. The picture
+/// camera applies shake to both modes; wave clipping uses the displayed viewport.
 pub(super) fn place_pictures(
     pan: Option<Res<crate::player::CameraPan>>,
     cameras: Query<&Transform, (With<MainCamera>, Without<Picture>)>,
@@ -242,8 +240,13 @@ pub(super) fn place_pictures(
     };
     let base = camera.translation.truncate();
     let unshaken = pan.as_ref().and_then(|pan| pan.position).unwrap_or(base);
+    let scrolled = pan
+        .as_ref()
+        .and_then(|pan| pan.effects_position())
+        .unwrap_or(unshaken);
     for (pic, mut transform, handle) in &mut pictures {
-        let pos = picture_translation(unshaken, pic.x, pic.y, pic.world_anchor);
+        let anchor = pic.world_anchor.map(|anchor| anchor + unshaken - scrolled);
+        let pos = picture_translation(unshaken, pic.x, pic.y, anchor);
         transform.translation = pos.extend(picture_z(pic.id));
         transform.rotation = Quat::from_rotation_z(pic.effect.angle());
         let mut wave_uniform = Vec4::ZERO;

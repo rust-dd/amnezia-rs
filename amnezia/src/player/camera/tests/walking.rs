@@ -1,29 +1,10 @@
 use super::*;
-use crate::world::{Character, RouteStepper};
+use crate::world::RouteStepper;
 
 mod logical;
 
-fn fixture(tile: (i32, i32)) -> (App, Entity, Vec2) {
-    let mut app = crate::world::test_support::app(vec![], false);
-    app.insert_resource(MapData::for_test(40, 30));
-    let world = app.world_mut();
-    let hero = world
-        .query_filtered::<Entity, With<Player>>()
-        .single(world)
-        .unwrap();
-    world
-        .get_mut::<Player>(hero)
-        .unwrap()
-        .set_tile(tile.0, tile.1);
-    world.spawn((
-        MainCamera,
-        Transform::default(),
-        Projection::Orthographic(OrthographicProjection {
-            area: Rect::new(-160.0, -120.0, 160.0, 120.0),
-            ..OrthographicProjection::default_2d()
-        }),
-    ));
-    app.update();
+pub(super) fn fixture(tile: (i32, i32)) -> (App, Entity, Vec2) {
+    let (app, hero) = crate::world::test_support::camera_app(tile);
     let position = app.world().resource::<CameraPan>().position.unwrap();
     (app, hero, position)
 }

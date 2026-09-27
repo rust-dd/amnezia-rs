@@ -1,5 +1,6 @@
 use super::*;
 
+mod jumping;
 mod walking;
 
 const HALF_VIEW: Vec2 = Vec2::new(160.0, 120.0);

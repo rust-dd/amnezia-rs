@@ -8,6 +8,7 @@ use bevy::prelude::*;
 
 mod queue;
 pub use queue::MoveQueue;
+pub(crate) use queue::ScrollStep;
 
 pub(super) mod saved;
 

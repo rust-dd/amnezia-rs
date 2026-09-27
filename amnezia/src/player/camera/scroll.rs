@@ -1,21 +1,21 @@
 use super::*;
-use crate::world::RouteStepper;
+use crate::world::{RouteStepper, ScrollStep};
 
 #[derive(Resource, Default)]
-pub(in crate::player) struct WalkScroll(Option<Frame>);
+pub(in crate::player) struct MotionScroll(Option<Frame>);
 
 struct Frame {
-    pixels: f32,
+    step: ScrollStep,
     direction: u32,
     half_view: Vec2,
 }
 
-pub(in crate::player) fn prepare_walk(
+pub(in crate::player) fn prepare_scroll(
     time: Res<Time>,
     data: Res<MapData>,
     scene: ScenePause,
     mut pan: ResMut<CameraPan>,
-    mut frame: ResMut<WalkScroll>,
+    mut frame: ResMut<MotionScroll>,
     mut heroes: Query<(&Player, &mut MoveQueue, &RouteStepper)>,
     cameras: Query<&Projection, With<MainCamera>>,
 ) {
@@ -31,7 +31,7 @@ pub(in crate::player) fn prepare_walk(
     };
     let direction = route.direction(hero);
     queue.use_character_motion(route.speed(), direction);
-    let Some(pixels) = queue.walking_scroll_pixels(time.delta_secs()) else {
+    let Some(step) = queue.scroll_step(time.delta_secs()) else {
         return;
     };
     let half_view = view.area.size() / 2.0;
@@ -39,16 +39,16 @@ pub(in crate::player) fn prepare_walk(
         pan.update(&data, queue.subpixel_position(hero, &data), half_view, 0.0);
     }
     frame.0 = Some(Frame {
-        pixels,
+        step,
         direction,
         half_view,
     });
 }
 
-pub(in crate::player) fn apply_walk(
+pub(in crate::player) fn apply_scroll(
     data: Res<MapData>,
     mut pan: ResMut<CameraPan>,
-    mut frame: ResMut<WalkScroll>,
+    mut frame: ResMut<MotionScroll>,
     heroes: Query<(&Player, &MoveQueue)>,
 ) {
     let Some(frame) = frame.0.take() else {
@@ -69,15 +69,26 @@ pub(in crate::player) fn apply_walk(
         for axis in 0..2 {
             gap[axis] =
                 (gap[axis] + period[axis] / 2.0).rem_euclid(period[axis]) - period[axis] / 2.0;
-            if gap[axis] * direction[axis] > 0.0 {
-                moved[axis] = gap[axis].signum() * frame.pixels;
+            let sign = if gap[axis] == 0.0 {
+                0.0
+            } else {
+                gap[axis].signum()
+            };
+            if let Some(delta) = frame.step.jump_delta {
+                moved[axis] = sign * delta[axis] * frame.step.pixels;
+            } else if gap[axis] * direction[axis] > 0.0 {
+                moved[axis] = sign * frame.step.pixels;
             }
         }
-        pan.position = Some(clamp_position(
+        let position = clamp_position(
             &data,
             position + moved * Vec2::new(1.0, -1.0),
             frame.half_view,
-        ));
+        );
+        pan.scroll_to(&data, position, frame.half_view);
+        if frame.step.landing {
+            pan.round_jump(&data, frame.half_view);
+        }
     }
     let point = queue.subpixel_position(hero, &data);
     pan.previous_player = Some(data.world_near(point, pan.previous_player.unwrap_or(point)));

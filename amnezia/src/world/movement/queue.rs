@@ -9,6 +9,22 @@ pub(super) struct Kinematics {
     pub direction: u32,
 }
 
+impl Kinematics {
+    fn amount(self, jumping: bool) -> u32 {
+        if jumping {
+            [8, 12, 16, 24, 32, 64][(self.speed - 1) as usize]
+        } else {
+            1 << (1 + self.speed)
+        }
+    }
+}
+
+pub(crate) struct ScrollStep {
+    pub pixels: f32,
+    pub jump_delta: Option<Vec2>,
+    pub landing: bool,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub(super) struct Subpixels {
     pub remaining: u16,
@@ -16,15 +32,11 @@ pub(super) struct Subpixels {
 }
 
 impl Subpixels {
-    fn advance(&mut self, speed: u32, jumping: bool, dt: f32) {
+    fn advance(&mut self, motion: Kinematics, jumping: bool, dt: f32) {
         let frames = self.fraction + f64::from(dt.max(0.0)) * 60.0;
         let whole = (frames + 0.000001).floor();
         self.fraction = (frames - whole).max(0.0);
-        let amount = if jumping {
-            [8_u32, 12, 16, 24, 32, 64][(speed - 1) as usize]
-        } else {
-            1 << (1 + speed)
-        };
+        let amount = motion.amount(jumping);
         self.remaining =
             u32::from(self.remaining).saturating_sub(amount.saturating_mul(whole as u32)) as u16;
     }
@@ -106,25 +118,35 @@ impl MoveQueue {
         self.jump_attempt || self.active.is_some() || !self.steps.is_empty()
     }
 
-    pub(crate) fn walking_scroll_pixels(&self, dt: f32) -> Option<f32> {
+    pub(crate) fn scroll_step(&self, dt: f32) -> Option<ScrollStep> {
         let motion = self.kinematics?;
-        let counter = if let Some(tween) = &self.active {
-            if tween.jumping {
-                return None;
-            }
-            tween.subpixels?
-        } else if matches!(self.steps.front(), Some(RouteAction::Step { .. })) {
-            Subpixels {
-                remaining: 256,
-                fraction: 0.0,
-            }
+        let (counter, jump_delta) = if let Some(tween) = &self.active {
+            (
+                tween.subpixels?,
+                tween
+                    .jumping
+                    .then_some((tween.to - tween.from).abs() / 16.0),
+            )
         } else {
-            return None;
+            let action = self.steps.front()?;
+            let (dx, dy) = action.delta();
+            (
+                Subpixels {
+                    remaining: 256,
+                    fraction: 0.0,
+                },
+                matches!(action, RouteAction::Jump { .. })
+                    .then_some(Vec2::new(dx as f32, dy as f32).abs()),
+            )
         };
-        let amount = 1_u32 << (1 + motion.speed);
+        let amount = motion.amount(jump_delta.is_some());
         let frames = (counter.fraction + f64::from(dt.max(0.0)) * 60.0 + 0.000001).floor();
         let ticks = (frames as u32).min(u32::from(counter.remaining).div_ceil(amount));
-        Some((amount * ticks) as f32 / 16.0)
+        Some(ScrollStep {
+            pixels: (amount * ticks) as f32 / 16.0,
+            jump_delta,
+            landing: jump_delta.is_some() && amount * ticks >= u32::from(counter.remaining),
+        })
     }
 
     pub(crate) fn render_position<C: Character>(&self, ch: &C, data: &MapData) -> Vec2 {
@@ -207,7 +229,7 @@ impl MoveQueue {
         let tween = self.active.as_mut().unwrap();
         let finished =
             if let (Some(subpixels), Some(kinematics)) = (&mut tween.subpixels, self.kinematics) {
-                subpixels.advance(kinematics.speed, tween.jumping, dt);
+                subpixels.advance(kinematics, tween.jumping, dt);
                 tween.elapsed = self.step_secs * (1.0 - f32::from(subpixels.remaining) / 256.0);
                 subpixels.remaining == 0
             } else {

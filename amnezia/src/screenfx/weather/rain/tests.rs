@@ -1,6 +1,7 @@
 use super::*;
 
 mod ordering;
+mod scroll;
 mod transfers;
 
 fn app(fps: u32) -> App {

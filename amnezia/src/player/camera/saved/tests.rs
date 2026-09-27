@@ -90,3 +90,22 @@ fn clearing_the_session_cancels_a_waiting_camera_restore() {
         CameraPan::default().snapshot()
     );
 }
+
+#[test]
+fn legacy_camera_snapshots_start_effect_tracking_without_rewriting_their_position() {
+    let text = "(offset:(8.25,0.0),target:(16.0,0.0),speed:15.0,locked:true,position:Some((24.25,-8.0)),previous_player:Some((8.0,-8.0)))";
+    let saved = ron::from_str::<CameraState>(text).unwrap();
+    assert!(saved.valid());
+    assert!(saved.tracking.is_none());
+    let mut pan = saved.into_pan();
+    assert_eq!(pan.effects_position(), Some(Vec2::new(24.25, -8.0)));
+    pan.update(
+        &MapData::for_test(40, 30),
+        Vec2::new(8.0, -8.0),
+        Vec2::new(160.0, 120.0),
+        1.0 / 60.0,
+    );
+    assert_eq!(pan.position, Some(Vec2::new(24.5, -8.0)));
+    assert_eq!(pan.effects_position(), pan.position);
+    assert!(pan.snapshot().valid());
+}
