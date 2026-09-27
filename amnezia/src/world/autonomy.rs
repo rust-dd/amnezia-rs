@@ -1,5 +1,6 @@
 //! Autonomous movement decisions and shared map-scene pause conditions.
 
+mod decisions;
 mod driver;
 pub(super) use driver::advance_event;
 
@@ -172,109 +173,6 @@ fn next_rand(state: &mut u32) -> u32 {
 /// The opposite of a facing (Up↔Down, Left↔Right).
 fn reverse(dir: u32) -> u32 {
     (dir + 2) % 4
-}
-
-/// One event's decided action for a movement tick.
-#[derive(Clone, Copy, PartialEq, Debug)]
-enum Decision {
-    /// Step one tile in this direction.
-    Step(u32),
-    /// Blocked or turning in place: face this direction without moving.
-    Face(u32),
-    /// Nothing to do (stationary, or no candidate direction).
-    Idle,
-}
-
-/// Decide an event's next action for `move_type`, given its `facing`, its tile
-/// `(ex, ey)`, the player's tile `(px, py)`, a pre-drawn random direction (used
-/// only by the random type), and a `passable` test for a candidate direction.
-#[allow(clippy::too_many_arguments)]
-fn decide(
-    move_type: u32,
-    facing: u32,
-    ex: i32,
-    ey: i32,
-    px: i32,
-    py: i32,
-    rand_dir: u32,
-    passable: impl Fn(u32) -> bool,
-) -> Decision {
-    match move_type {
-        1 => {
-            if passable(rand_dir) {
-                Decision::Step(rand_dir)
-            } else {
-                Decision::Face(rand_dir)
-            }
-        }
-        2 => cycle(facing, DIR_DOWN, passable),
-        3 => cycle(facing, DIR_RIGHT, passable),
-        4 => seek(&toward_candidates(px - ex, py - ey), passable),
-        5 => seek(&away_candidates(px - ex, py - ey), passable),
-        _ => Decision::Idle,
-    }
-}
-
-/// Pace along `default_dir`↔its reverse: keep going the way the event faces, and
-/// on a block reverse — turning even when boxed in. Mirrors `MoveTypeCycle`.
-fn cycle(facing: u32, default_dir: u32, passable: impl Fn(u32) -> bool) -> Decision {
-    let primary = if facing == reverse(default_dir) {
-        reverse(default_dir)
-    } else {
-        default_dir
-    };
-    if passable(primary) {
-        return Decision::Step(primary);
-    }
-    let back = reverse(primary);
-    if passable(back) {
-        Decision::Step(back)
-    } else {
-        Decision::Face(back)
-    }
-}
-
-/// Step the first passable candidate; if none is passable, face the preferred
-/// one and idle. Shared by the toward/away movers.
-fn seek(candidates: &[u32], passable: impl Fn(u32) -> bool) -> Decision {
-    for &dir in candidates {
-        if passable(dir) {
-            return Decision::Step(dir);
-        }
-    }
-    match candidates.first() {
-        Some(&dir) => Decision::Face(dir),
-        None => Decision::Idle,
-    }
-}
-
-/// Directions stepping toward `(dx, dy)` = player minus event, dominant axis
-/// first, skipping an axis the event is already aligned on. Mirrors EasyRPG's
-/// `GetDirectionToCharacter`, whose ties favour the vertical axis.
-fn toward_candidates(dx: i32, dy: i32) -> Vec<u32> {
-    use std::cmp::Ordering::{Equal, Greater, Less};
-    let horiz = match dx.cmp(&0) {
-        Greater => Some(DIR_RIGHT),
-        Less => Some(DIR_LEFT),
-        Equal => None,
-    };
-    let vert = match dy.cmp(&0) {
-        Greater => Some(DIR_DOWN),
-        Less => Some(DIR_UP),
-        Equal => None,
-    };
-    let (first, second) = if dx.abs() > dy.abs() {
-        (horiz, vert)
-    } else {
-        (vert, horiz)
-    };
-    first.into_iter().chain(second).collect()
-}
-
-/// Directions stepping away from the player: the reverse of each toward
-/// direction, in the same dominant-axis order.
-fn away_candidates(dx: i32, dy: i32) -> Vec<u32> {
-    toward_candidates(dx, dy).into_iter().map(reverse).collect()
 }
 
 #[cfg(test)]

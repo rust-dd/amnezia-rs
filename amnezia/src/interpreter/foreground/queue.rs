@@ -31,6 +31,10 @@ impl Queue {
         self.events.values().any(|entry| entry.waiting)
     }
 
+    pub(in crate::interpreter) fn waiting_for(&self, id: u32) -> bool {
+        self.events.get(&id).is_some_and(|entry| entry.waiting)
+    }
+
     #[cfg(test)]
     pub(super) fn waiting_ids(&self) -> Vec<u32> {
         self.events
@@ -140,8 +144,11 @@ mod tests {
         queue.schedule(3, 1, 0, false);
         queue.unpause(1);
         assert!(queue.waiting());
+        assert!(queue.waiting_for(1));
+        assert!(!queue.waiting_for(2));
         assert!(!queue.paused(1));
         assert_eq!(queue.take_next(), Some((1, 0, false)));
+        assert!(!queue.waiting_for(1));
         queue.unpause(1);
         assert_eq!(queue, Queue::default());
     }

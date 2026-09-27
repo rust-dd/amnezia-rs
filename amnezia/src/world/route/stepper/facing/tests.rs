@@ -63,3 +63,25 @@ fn saving_an_npcs_temporary_facing_retains_the_direction_used_when_it_finishes()
     route.update_facing(&mut ch);
     assert_eq!(ch.dir, DIR_RIGHT);
 }
+
+#[test]
+fn an_autonomous_retry_restores_cardinal_facing_even_when_spinning_but_respects_locks() {
+    for mode in 0..=6 {
+        for locked in [false, true] {
+            let mut route = RouteStepper::default();
+            route.animation.mode = mode;
+            route.facing_lock = locked.then_some(DIR_RIGHT);
+            let mut character = character();
+            route.restore_retry_direction(&mut character, DIR_UP);
+            assert_eq!(route.direction(&character), DIR_UP);
+            assert_eq!(
+                character.dir,
+                if locked || (2..=4).contains(&mode) {
+                    DIR_RIGHT
+                } else {
+                    DIR_UP
+                }
+            );
+        }
+    }
+}

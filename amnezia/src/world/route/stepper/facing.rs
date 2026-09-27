@@ -32,6 +32,18 @@ impl RouteStepper {
         self.direction(ch)
     }
 
+    pub(crate) fn restore_retry_direction<C: Character>(&mut self, ch: &mut C, direction: u32) {
+        self.direction = Some(direction);
+        if self.facing_lock.is_none() && !matches!(self.animation.mode, 2..=4) {
+            if direction < 4 {
+                ch.set_dir(direction);
+            } else {
+                // Diagonal headings have no sprite row.
+                self.update_facing(ch);
+            }
+        }
+    }
+
     pub(crate) fn face_toward<C: Character>(&mut self, ch: &mut C, hero: (i32, i32)) {
         self.direction = Some(self.direction(ch));
         if self.facing_lock.is_none() && !self.animation.keeps_facing() {

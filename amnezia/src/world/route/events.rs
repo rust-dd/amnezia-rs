@@ -73,10 +73,16 @@ pub(in crate::world) fn route_event(
                         Some(hero),
                         jumping,
                     );
+                    // The failure hook uses cardinal-only front coordinates, even for diagonals.
+                    let front = if dx != 0 && dy != 0 {
+                        (ex, ey)
+                    } else {
+                        (ex + dx, ey + dy)
+                    };
                     if !passable
                         && !jumping
                         && layer == 1
-                        && data.normalize_tile(ex + dx, ey + dy) == hero
+                        && data.normalize_tile(front.0, front.1) == hero
                     {
                         touched.set(true);
                     }

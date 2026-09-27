@@ -158,6 +158,23 @@ fn blocked_jumps_do_not_trigger_walk_failure_contacts_or_reset_the_stop_count() 
     assert_eq!(count(&app, entity), 65536);
 }
 
+#[test]
+fn failed_diagonals_do_not_treat_their_destination_as_a_cardinal_front_contact() {
+    let mut app = app();
+    hero_at(&mut app, 2, 0);
+    let entity = npcs::npc(&mut app, 1, 1, vec![], &[1, 1, 0, 0, 4]);
+    {
+        let mut events = app.world_mut().resource_mut::<MapEvents>();
+        events.events[0].pages[0].trigger = 2;
+        events.events[0].pages[0].commands = vec![switch_cmd(7, 0, 0)];
+    }
+    app.update();
+    assert!(!switch_on(&app, 7));
+    assert_eq!(x(&app, entity), 1);
+    assert_eq!(count(&app, entity), 65536);
+    assert!(!app.world().get::<MoveQueue>(entity).unwrap().busy());
+}
+
 #[derive(Resource, Default)]
 struct Trace(Vec<(i32, u32, u32, bool)>);
 

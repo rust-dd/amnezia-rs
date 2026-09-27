@@ -2,6 +2,9 @@ use super::*;
 use crate::world::stop_clock::step as stop_frames;
 use amnezia_data::Event;
 
+mod contacts;
+mod decisions;
+
 fn chasing_app() -> App {
     let mut page = crate::assets::load_ron::<amnezia_data::Map>(&format!(
         "{}/maps/map_0001.ron",
@@ -276,11 +279,6 @@ fn autonomous_movement_keeps_scripted_through_facing_and_speed() {
     );
 }
 
-/// A passability closure that blocks the listed directions and allows the rest.
-fn block(blocked: &'static [u32]) -> impl Fn(u32) -> bool {
-    move |dir| !blocked.contains(&dir)
-}
-
 #[test]
 fn frequency_gates_the_step_cadence() {
     assert!(stop_frames(1) > stop_frames(3));
@@ -297,64 +295,6 @@ fn speed_scales_the_tween_by_powers_of_two() {
     assert!((step_secs_for_speed(4) / step_secs_for_speed(5) - 2.0).abs() < 1e-6);
     assert_eq!(step_secs_for_speed(0), step_secs_for_speed(1));
     assert_eq!(step_secs_for_speed(9), step_secs_for_speed(6));
-}
-
-#[test]
-fn random_mover_steps_when_open_and_turns_when_blocked() {
-    assert_eq!(
-        decide(1, DIR_DOWN, 2, 2, 9, 9, DIR_RIGHT, block(&[])),
-        Decision::Step(DIR_RIGHT)
-    );
-    assert_eq!(
-        decide(1, DIR_DOWN, 2, 2, 9, 9, DIR_UP, block(&[DIR_UP])),
-        Decision::Face(DIR_UP)
-    );
-}
-
-#[test]
-fn pace_mover_reverses_at_a_block() {
-    assert_eq!(
-        decide(2, DIR_DOWN, 2, 2, 2, 2, 0, block(&[DIR_DOWN])),
-        Decision::Step(DIR_UP)
-    );
-    assert_eq!(
-        decide(2, DIR_DOWN, 2, 2, 2, 2, 0, block(&[DIR_DOWN, DIR_UP])),
-        Decision::Face(DIR_UP)
-    );
-    assert_eq!(
-        decide(3, DIR_LEFT, 2, 2, 2, 2, 0, block(&[])),
-        Decision::Step(DIR_LEFT)
-    );
-}
-
-#[test]
-fn toward_mover_steps_closer_and_away_mover_steps_off() {
-    assert_eq!(
-        decide(4, DIR_DOWN, 2, 2, 5, 2, 0, block(&[])),
-        Decision::Step(DIR_RIGHT)
-    );
-    assert_eq!(
-        decide(5, DIR_DOWN, 2, 2, 5, 2, 0, block(&[])),
-        Decision::Step(DIR_LEFT)
-    );
-    assert_eq!(toward_candidates(1, 3), vec![DIR_DOWN, DIR_RIGHT]);
-    assert_eq!(away_candidates(1, 3), vec![DIR_UP, DIR_LEFT]);
-}
-
-#[test]
-fn passability_blocks_a_step_no_wall_walking() {
-    let d = decide(
-        4,
-        DIR_DOWN,
-        2,
-        2,
-        5,
-        2,
-        0,
-        block(&[DIR_UP, DIR_DOWN, DIR_LEFT, DIR_RIGHT]),
-    );
-    assert!(matches!(d, Decision::Face(_)));
-    assert!(!matches!(d, Decision::Step(_)));
 }
 
 fn app_with_mover(move_type: u32, stops_left: u32) -> App {

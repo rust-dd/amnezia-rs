@@ -79,6 +79,10 @@ impl RunningEvent {
     pub(crate) fn waiting(&self) -> bool {
         self.queue.waiting()
     }
+
+    pub(crate) fn event_waiting(&self, id: u32) -> bool {
+        self.queue.waiting_for(id)
+    }
 }
 
 pub struct InterpreterPlugin;

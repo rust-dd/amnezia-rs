@@ -1,3 +1,4 @@
+use super::decisions::Decision;
 use super::*;
 
 #[allow(clippy::too_many_arguments)]
@@ -12,6 +13,7 @@ pub(in crate::world) fn advance_event(
     guards: MoveGuards,
     mut touches: Option<ResMut<crate::world::TouchEvents>>,
     players: Query<(&Player, Option<&RouteStepper>), Without<EventSprite>>,
+    cameras: Query<&Transform, With<crate::world::MainCamera>>,
     vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut movers: Query<
         (
@@ -27,6 +29,9 @@ pub(in crate::world) fn advance_event(
         return;
     };
     let (px, py) = (player.tile_x, player.tile_y);
+    let camera = cameras
+        .single()
+        .map_or(Vec2::ZERO, |transform| transform.translation.truncate());
     let mut bodies = CollisionBodies::from_events(
         movers
             .iter()
@@ -39,8 +44,7 @@ pub(in crate::world) fn advance_event(
             continue;
         }
         if guards.autonomous_paused(sprite.id)
-            || auto.move_type == 0
-            || auto.move_type == 6
+            || !matches!(auto.move_type, 1..=5)
             || queue.busy()
             || stepper.active()
         {
@@ -54,71 +58,82 @@ pub(in crate::world) fn advance_event(
 
         let (ex, ey) = (sprite.tile_x, sprite.tile_y);
         let self_id = sprite.id;
-        let rand_dir = next_rand(&mut auto.rng) % 4;
         let hero_delta = data.tile_delta((ex, ey), (px, py));
-        let touched = std::cell::Cell::new(false);
-        let decision = {
+        let previous = stepper.direction(&*sprite);
+        let visible = decisions::visible(
+            data.screen_position(queue.render_position(&*sprite, &data), camera),
+        );
+        let decision = auto.decide(previous, hero_delta, visible, stepper.stop_maximum());
+        let direction = match decision {
+            Decision::Move(direction) | Decision::Cycle(direction) => direction,
+            Decision::Idle(count) => {
+                stepper.set_stop_count(count);
+                continue;
+            }
+        };
+        let mut waiting = guards.running.event_waiting(self_id);
+        let contact = (!guards.running.active())
+            .then(|| {
+                let event = map_events.events.iter().find(|event| event.id == self_id)?;
+                let page =
+                    crate::state::active_page(event, &switches, &variables, &party, &inventory)?;
+                (page.trigger == 2 && page.layer == 1).then_some(!page.commands.is_empty())
+            })
+            .flatten();
+        let moved = {
             let collision = MapCollision::new(
                 &data,
                 &map_events,
                 (&switches, &variables, &party, &inventory),
                 &bodies,
             );
-            let passable = |dir: u32| {
+            let mut attempt = |dir: u32, sprite: &mut EventSprite, stepper: &mut RouteStepper| {
+                stepper.set_direction(sprite, dir);
                 let (dx, dy) = dir_delta(dir);
                 let (nx, ny) = (ex + dx, ey + dy);
-                let destination = data.normalize_tile(nx, ny);
                 let through = stepper.through();
-                if !through && !bodies.hero_through && sprite.layer == 1 && destination == (px, py)
-                {
-                    touched.set(true);
-                }
-                collision.can_move(
+                let moved = collision.can_move(
                     (ex, ey),
                     (nx, ny),
-                    Mover::event(&sprite, through),
+                    Mover::event(sprite, through),
                     Some((px, py)),
                     false,
-                )
-            };
-            decide(
-                auto.move_type,
-                stepper.direction(&*sprite),
-                ex,
-                ey,
-                ex + hero_delta.0,
-                ey + hero_delta.1,
-                rand_dir,
-                passable,
-            )
-        };
-
-        if touched.get()
-            && let Some(touches) = touches.as_mut()
-        {
-            touches.0.push(self_id);
-        }
-
-        match decision {
-            Decision::Step(dir) => {
-                let (dx, dy) = dir_delta(dir);
-                let (nx, ny) = data.normalize_tile(ex + dx, ey + dy);
-                if let Some(event) = map_events.events.iter_mut().find(|e| e.id == self_id) {
-                    event.x = nx as u32;
-                    event.y = ny as u32;
+                );
+                let front = if dir < 4 { (nx, ny) } else { (ex, ey) };
+                if !moved
+                    && data.normalize_tile(front.0, front.1) == (px, py)
+                    && let Some(has_commands) = contact
+                {
+                    stepper.set_stop_count(0);
+                    waiting |= has_commands;
+                    if let Some(touches) = touches.as_mut() {
+                        touches.0.push(self_id);
+                    }
                 }
-                stepper.set_direction(&mut *sprite, dir);
-                queue.set_step_secs(step_secs_for_speed(auto.speed));
-                queue.enqueue_route([RouteAction::Step {
-                    dx,
-                    dy,
-                    face: sprite.dir,
-                }]);
+                moved
+            };
+            attempt(direction, &mut sprite, &mut stepper)
+                || (matches!(decision, Decision::Cycle(_))
+                    && stepper.stop_count() >= stepper.stop_maximum() + 20
+                    && attempt(reverse(direction), &mut sprite, &mut stepper))
+        };
+        if moved {
+            let (dx, dy) = dir_delta(stepper.direction(&*sprite));
+            let (nx, ny) = data.normalize_tile(ex + dx, ey + dy);
+            if let Some(event) = map_events.events.iter_mut().find(|e| e.id == self_id) {
+                event.x = nx as u32;
+                event.y = ny as u32;
             }
-            Decision::Face(dir) => {
-                stepper.set_direction(&mut *sprite, dir);
-            }
-            Decision::Idle => {}
+            queue.set_step_secs(step_secs_for_speed(auto.speed));
+            queue.enqueue_route([RouteAction::Step {
+                dx,
+                dy,
+                face: sprite.dir,
+            }]);
+        } else if waiting || stepper.stop_count() >= stepper.stop_maximum() + 60 {
+            stepper.set_stop_count(0);
+        } else {
+            stepper.restore_retry_direction(&mut *sprite, previous);
         }
         auto.set_stop_maximum(&mut stepper);
     }

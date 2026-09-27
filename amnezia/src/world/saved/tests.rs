@@ -1,6 +1,7 @@
 use super::*;
 use crate::save::{EventSaveRequest, LoadOutcome, LoadRequest, SavePlugin};
 
+mod autonomy;
 mod hero;
 mod lifecycle;
 mod motion;
