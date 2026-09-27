@@ -5,7 +5,14 @@ use super::{Blockers, Fade, RunningEvent};
 use bevy::prelude::*;
 
 pub(super) fn foreground(world: &mut World) {
-    let mut remaining = MAX_STEPS_PER_FRAME;
+    let mut remaining = if world
+        .get_resource::<crate::menu::SceneFlow>()
+        .is_some_and(|flow| flow.requested())
+    {
+        1
+    } else {
+        MAX_STEPS_PER_FRAME
+    };
     loop {
         if run(world, None, &mut remaining) != RunOutcome::Finished || remaining == 0 {
             return;
@@ -82,7 +89,7 @@ fn step_foreground(
         return (RunOutcome::Finished, None);
     }
     if std::mem::take(&mut running.fresh) && !blockers.battle_active() {
-        exec.dialogue.face = default();
+        exec.begin_map_event();
     }
     let scene_blocked = exec.scene_owns_flow(fade.busy(), blockers.any());
     let base_id = running.frame.base_event_id();

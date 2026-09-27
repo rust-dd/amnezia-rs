@@ -143,7 +143,7 @@ pub(super) fn select_next(
     if common.is_none() && map.is_none() {
         return false;
     }
-    exec.dialogue.face = default();
+    exec.begin_map_event();
     running.queued_owner = true;
     if let Some(common) = common {
         running.frame.start(0, common.commands.clone());

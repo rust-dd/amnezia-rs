@@ -29,10 +29,11 @@ fn fixture(open: bool, cursor: usize, screen: MenuScreen) -> App {
         .add_systems(PreUpdate, capture_wait.in_set(FrameClockSet))
         .add_systems(
             Update,
-            (crate::menu::view::clocks::update, observe_pause)
+            crate::menu::view::clocks::update
                 .in_set(MenuView)
                 .after(crate::menu::MenuInput),
-        );
+        )
+        .add_systems(PostUpdate, observe_pause);
     scene::register(&mut app);
     app.update();
     app
@@ -153,6 +154,15 @@ fn every_menu_scene_changes_only_between_two_six_frame_fades() {
     for (open, cursor, before, key, next_open, next) in cases {
         let mut app = fixture(open, cursor, before);
         tick(&mut app, &[key]);
+        if !open {
+            assert!(!app.world().resource::<SceneFlow>().active());
+            assert!(
+                app.world_mut()
+                    .resource_mut::<crate::menu::Calling>()
+                    .consume()
+            );
+            tick(&mut app, &[]);
+        }
         for age in 0..6 {
             assert!(app.world().resource::<MapPaused>().0);
             assert_eq!(screen(&app), (open, before));

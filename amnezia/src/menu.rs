@@ -41,6 +41,7 @@ mod view;
 pub(crate) use command_navigation::smoke as navigation_smoke;
 pub(crate) use equip::Switch as EquipmentSwitch;
 pub(crate) use equip::layout_smoke as equipment_smoke;
+pub(crate) use input::map::Calling;
 pub(crate) use items::smoke as item_smoke;
 pub(crate) use list_navigation::Input as DirectionInput;
 #[cfg(test)]
@@ -152,33 +153,11 @@ impl Plugin for MenuPlugin {
         equip::register_switching(app);
         scene::register(app);
         crate::windowskin::background::register(app);
-        app.init_resource::<MenuOpen>()
-            .init_resource::<MenuAccess>()
-            .init_resource::<MenuState>()
-            .init_resource::<list_navigation::Input>()
-            .init_resource::<items::List>()
-            .init_resource::<skills::List>()
-            .init_resource::<equip::Scene>()
-            .init_resource::<targets::Navigation>()
-            .init_resource::<view::clocks::Clock>()
+        register_input(app);
+        app.init_resource::<view::clocks::Clock>()
             .init_resource::<view::end_game::Clock>()
             .init_resource::<view::target::Clock>()
             .add_systems(Startup, view::spawn_ui)
-            .add_systems(
-                Update,
-                (
-                    list_navigation::update_input,
-                    items::update,
-                    skills::update,
-                    equip::update,
-                    targets::update,
-                    command_navigation::update,
-                    input::menu_input,
-                    equip::refresh_actor,
-                )
-                    .chain()
-                    .in_set(MenuInput),
-            )
             .add_systems(
                 Update,
                 (
@@ -194,4 +173,38 @@ impl Plugin for MenuPlugin {
                     .after(MenuInput),
             );
     }
+}
+
+fn register_input(app: &mut App) {
+    input::map::register(app);
+    app.init_resource::<MenuOpen>()
+        .init_resource::<MenuAccess>()
+        .init_resource::<MenuState>()
+        .init_resource::<list_navigation::Input>()
+        .init_resource::<items::List>()
+        .init_resource::<skills::List>()
+        .init_resource::<equip::Scene>()
+        .init_resource::<targets::Navigation>()
+        .add_systems(
+            Update,
+            (
+                list_navigation::update_input,
+                items::update,
+                skills::update,
+                equip::update,
+                targets::update,
+                command_navigation::update,
+                input::menu_input,
+                equip::refresh_actor,
+            )
+                .chain()
+                .in_set(MenuInput),
+        );
+}
+
+#[cfg(test)]
+pub(crate) fn register_map_input(app: &mut App) {
+    register_input(app);
+    scene::register(app);
+    app.init_resource::<save_files::SaveFiles>();
 }

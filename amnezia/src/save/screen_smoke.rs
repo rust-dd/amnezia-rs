@@ -91,8 +91,14 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             return Some("save-screen-restored");
         }
         451 => {
+            assert!(!world.resource::<crate::menu::SceneFlow>().active());
+            let before = saved::snapshot(world);
+            world.resource_mut::<Fixture>().paused = Some(before);
+        }
+        452 => {
             assert!(world.resource::<crate::menu::SceneFlow>().active());
             let paused = saved::snapshot(world);
+            assert_ne!(Some(&paused), world.resource::<Fixture>().paused.as_ref());
             world.resource_mut::<Fixture>().paused = Some(paused);
         }
         470 => {

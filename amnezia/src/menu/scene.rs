@@ -64,6 +64,22 @@ impl Flow {
     pub(crate) fn active(&self) -> bool {
         !matches!(self.stage, Stage::Idle)
     }
+
+    pub(crate) fn requested(&self) -> bool {
+        matches!(self.stage, Stage::Requested(_))
+    }
+
+    pub(crate) fn blocks_map(&self) -> bool {
+        self.active() && !self.requested()
+    }
+
+    pub(in crate::menu) fn request_main_menu(&mut self) {
+        self.stage = Stage::Requested(Snapshot {
+            open: true,
+            screen: MenuScreen::Command,
+            cursor: 0,
+        });
+    }
 }
 
 #[derive(SystemParam)]
@@ -94,7 +110,13 @@ pub(super) fn register(app: &mut App) {
             )
                 .in_set(MenuInput),
         )
-        .add_systems(Update, begin.after(MenuView));
+        .add_systems(
+            Update,
+            begin
+                .after(MenuView)
+                .after(input::map::request)
+                .after(crate::interpreter::InterpreterStep),
+        );
 }
 
 fn remember(mut flow: ResMut<Flow>, open: Res<MenuOpen>, state: Res<MenuState>) {

@@ -10,6 +10,7 @@ mod decision;
 mod facing;
 mod immediate;
 mod input;
+mod menu;
 mod npcs;
 mod triggers;
 mod unpause;

@@ -27,6 +27,7 @@ use super::nav::{
 };
 use super::{MenuAccess, MenuOpen, MenuScreen, MenuState, command, equip, items, skills, use_item};
 
+pub(super) mod map;
 mod sounds;
 use sounds::MenuSfx;
 
@@ -79,8 +80,7 @@ pub(super) struct MenuGates<'w> {
     save_access: Res<'w, SaveAccess>,
 }
 
-/// Toggle the menu on Escape (backing out of a sub-screen first) and drive the
-/// active screen: move the cursor and confirm into the next screen, apply a field
+/// Drive an open menu: back out of a sub-screen, confirm the next screen, apply a field
 /// item or skill, request a save, or return to the title on End Game.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn menu_input(
@@ -101,7 +101,8 @@ pub(super) fn menu_input(
     mut sfx: MenuSfx,
     mut skill_rng: Local<crate::interpreter::EventRng>,
 ) {
-    if save_files.active()
+    if !open.0
+        || save_files.active()
         || gates.switch.as_ref().is_some_and(|switch| switch.active())
         || gates.scene.as_ref().is_some_and(|scene| scene.active())
         || blockers.frame.as_ref().is_some_and(|frame| frame.0)
@@ -116,38 +117,16 @@ pub(super) fn menu_input(
     {
         return;
     }
-    // These guards block opening; an existing menu must remain usable and closable.
-    if !open.0
-        && (gates.shop.0 || gates.battle.0 || title.0 || !gates.menu_access.0 || blockers.any())
-    {
-        return;
-    }
     if keys.just_pressed(KeyCode::Escape)
-        && !(open.0
-            && matches!(
-                state.screen,
-                MenuScreen::ItemTarget { .. } | MenuScreen::SkillTarget { .. }
-            ))
+        && !matches!(
+            state.screen,
+            MenuScreen::ItemTarget { .. } | MenuScreen::SkillTarget { .. }
+        )
     {
-        let was_open = open.0;
-        let (next_open, next_screen) = if matches!(state.screen, MenuScreen::ItemTarget { .. }) {
-            (open.0, item_list.return_to_list(&data, &inventory))
-        } else {
-            escape_transition(open.0, state.screen)
-        };
-        if next_open && !was_open {
-            sfx.decision();
-        } else {
-            sfx.cancel();
-        }
+        let (next_open, next_screen) = escape_transition(open.0, state.screen);
+        sfx.cancel();
         open.0 = next_open;
         state.screen = next_screen;
-        if next_open && !was_open {
-            state.cursor = 0;
-        }
-        return;
-    }
-    if !open.0 {
         return;
     }
     if gates.save_access.0 && keys.just_pressed(KeyCode::KeyS) {

@@ -9,6 +9,13 @@ pub(crate) struct CharacterAnimation {
 }
 
 impl CharacterAnimation {
+    pub(crate) fn reset<C: Character>(&mut self, character: &mut C) {
+        self.count = 0;
+        if self.mode != 4 {
+            character.set_frame(1);
+        }
+    }
+
     pub(super) fn valid(&self) -> bool {
         self.mode <= 6 && self.count < 24 && (0.0..1.0).contains(&self.fraction)
     }

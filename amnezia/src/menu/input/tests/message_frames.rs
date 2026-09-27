@@ -27,12 +27,14 @@ fn a_message_choice_or_number_close_cannot_reuse_cancel_to_open_the_menu() {
         app.add_systems(Update, close_prompts.before(menu_input));
         press_frame(&mut app, KeyCode::Escape);
         assert!(!app.world().resource::<MenuOpen>().0, "prompt {kind}");
+        assert!(!app.world().resource::<crate::menu::Calling>().pending());
         assert!(
             app.world()
                 .resource::<ButtonInput<KeyCode>>()
                 .pressed(KeyCode::Escape)
         );
         press_frame(&mut app, KeyCode::Escape);
-        assert!(app.world().resource::<MenuOpen>().0);
+        assert!(app.world().resource::<crate::menu::Calling>().pending());
+        assert!(!app.world().resource::<MenuOpen>().0);
     }
 }

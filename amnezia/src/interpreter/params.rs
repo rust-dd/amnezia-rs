@@ -51,7 +51,7 @@ impl Blockers<'_> {
             || self.shop.0
             || self.battle.0
             || self.frame.as_ref().is_some_and(|v| v.0)
-            || self.menu_flow.as_ref().is_some_and(|v| v.active())
+            || self.menu_flow.as_ref().is_some_and(|v| v.blocks_map())
             || self.shop_flow.as_ref().is_some_and(|v| v.active())
     }
 }
@@ -82,6 +82,7 @@ pub(super) struct MapFx<'w> {
 /// opened ([`MenuAccess`], opcode 11960). Bundled to stay within the cap.
 #[derive(SystemParam)]
 pub(super) struct AccessFlags<'w> {
+    pub(super) menu_calling: Option<ResMut<'w, crate::menu::Calling>>,
     pub(super) save_access: ResMut<'w, SaveAccess>,
     pub(super) menu_access: ResMut<'w, MenuAccess>,
 }

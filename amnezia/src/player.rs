@@ -171,20 +171,33 @@ fn move_player(
     mut phase: ResMut<InputPhase>,
     mut players: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper), Without<EventSprite>>,
     vehicles: Option<Res<crate::vehicles::Vehicles>>,
+    mut calling: Option<ResMut<crate::menu::Calling>>,
 ) {
     phase.blocked = true;
     let Ok((mut player, mut queue, mut stepper)) = players.single_mut() else {
         return;
     };
-    if dialogue.active || prompts.active() || running.active() || scene.paused() || stepper.active()
-    {
+    if scene.paused() {
         return;
     }
     if queue.busy()
         || vehicles
             .as_ref()
-            .is_some_and(|vehicles| vehicles.rider_moving())
+            .is_some_and(|vehicles| vehicles.rider_moving() || vehicles.airship_transitioning())
     {
+        return;
+    }
+    if running.active() {
+        if let Some(calling) = &mut calling {
+            calling.cancel();
+        }
+        return;
+    }
+    if dialogue.active || prompts.active() || stepper.active() {
+        return;
+    }
+    if calling.as_mut().is_some_and(|calling| calling.consume()) {
+        stepper.animation.reset(&mut *player);
         return;
     }
     if !scene.airship() {

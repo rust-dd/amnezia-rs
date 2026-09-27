@@ -65,8 +65,10 @@ fn app_on(cursor: usize, screen: MenuScreen) -> App {
                 menu_input,
                 equip::refresh_actor,
             )
-                .chain(),
+                .chain()
+                .in_set(crate::menu::MenuInput),
         );
+    map::register(&mut app);
     app
 }
 
@@ -121,6 +123,7 @@ fn menu_stays_closed_when_menu_access_is_disabled() {
     app.world_mut().insert_resource(MenuOpen(false));
     app.world_mut().insert_resource(MenuAccess(false));
     confirm(&mut app, KeyCode::Escape);
+    assert!(!app.world().resource::<crate::menu::Calling>().pending());
     assert!(
         !app.world().resource::<MenuOpen>().0,
         "the menu must stay closed while access is disabled"
@@ -133,6 +136,7 @@ fn menu_will_not_open_while_a_dialogue_is_active() {
     app.world_mut().insert_resource(MenuOpen(false));
     app.world_mut().resource_mut::<Dialogue>().active = true;
     confirm(&mut app, KeyCode::Escape);
+    assert!(!app.world().resource::<crate::menu::Calling>().pending());
     assert!(
         !app.world().resource::<MenuOpen>().0,
         "the menu must refuse to open while a dialogue is showing"

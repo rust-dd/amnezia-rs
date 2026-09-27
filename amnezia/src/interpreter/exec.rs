@@ -51,6 +51,13 @@ pub(super) struct Exec<'w, 's> {
 }
 
 impl Exec<'_, '_> {
+    pub(super) fn begin_map_event(&mut self) {
+        self.dialogue.face = default();
+        if let Some(calling) = &mut self.subsystems.access.menu_calling {
+            calling.cancel();
+        }
+    }
+
     /// Foreground execution waits on every message; parallel frames wait only
     /// for their own prompt or for commands that require a free message window.
     pub(super) fn scene_owns_flow(&self, fade_busy: bool, overlay_open: bool) -> bool {

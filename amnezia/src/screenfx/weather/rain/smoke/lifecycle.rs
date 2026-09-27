@@ -42,7 +42,15 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             world.write_message(crate::screenfx::ScreenEffect::shake(&[0, 0, 0, 0]));
         }
         451 => {
+            assert!(!world.resource::<crate::menu::SceneFlow>().active());
+            hold(world);
+        }
+        452 => {
             assert!(world.resource::<crate::menu::SceneFlow>().active());
+            assert_ne!(
+                world.resource::<Rain>().drops,
+                world.resource::<Trace>().held
+            );
             hold(world);
         }
         470 => {

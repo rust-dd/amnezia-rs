@@ -26,7 +26,7 @@ impl ScenePause<'_> {
     pub(crate) fn screen_effects_paused(&self) -> bool {
         self.fade.as_ref().is_some_and(|v| v.busy())
             || self.frame.as_ref().is_some_and(|v| v.0)
-            || self.menu_flow.as_ref().is_some_and(|v| v.active())
+            || self.menu_flow.as_ref().is_some_and(|v| v.blocks_map())
             || self.shop_flow.as_ref().is_some_and(|v| v.active())
             || self.transition.as_ref().is_some_and(|v| v.busy())
             || self.menu.as_ref().is_some_and(|v| v.0)
