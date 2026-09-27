@@ -41,11 +41,10 @@ fn part(
         (&mut Player, &mut MoveQueue, &mut RouteStepper, &mut Sprite),
         Without<EventSprite>,
     >,
-    vehicles: Option<Res<crate::vehicles::Vehicles>>,
+    mut vehicles: Option<ResMut<crate::vehicles::Vehicles>>,
 ) -> Option<(Turn, Boundary)> {
     if turn.is_none()
-        && (guards.forced_route_paused()
-            || vehicles.as_ref().is_some_and(|v| v.airship_transitioning()))
+        && (guards.forced_route_paused() || vehicles.as_ref().is_some_and(|v| v.blocks_movement()))
     {
         return None;
     }
@@ -59,7 +58,11 @@ fn part(
     let position = hero.tile();
     let mut turn = turn.unwrap_or_else(|| Turn::new(&mut stepper));
     let mut effects = Vec::new();
-    let boundary = stepper.prepare_turn(&mut *hero, position, &mut effects, &mut turn);
+    let mut character = crate::vehicles::rider::Graphic {
+        hero: &mut hero,
+        vehicles: vehicles.as_deref_mut(),
+    };
+    let boundary = stepper.prepare_turn(&mut character, position, &mut effects, &mut turn);
     if let Boundary::Attempt(attempt) = &boundary {
         queue.set_jump_attempt(attempt.jumping);
     }

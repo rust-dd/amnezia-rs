@@ -39,7 +39,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-pub(crate) const SAVE_FORMAT_VERSION: u32 = 27;
+pub(crate) const SAVE_FORMAT_VERSION: u32 = 28;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -370,6 +370,12 @@ fn save_or_load(
                 );
                 return;
             }
+            crate::vehicles::saved::migrate_rider(
+                game.format_version,
+                &mut game.vehicles,
+                &mut game.vehicle_motion,
+                &mut game.hero_motion,
+            );
             save_io.commands.queue(crate::session::clear_for_reload);
             let map_id = game.map_id;
             save_io.commands.queue(move |world: &mut World| {
@@ -478,6 +484,7 @@ fn valid_destination(game: &SaveGame, animation: &crate::animation::saved::Captu
         .ok()
         .and_then(|text| ron::from_str::<amnezia_data::Map>(&text).ok());
     !game.party.is_empty()
+        && game.vehicles.valid()
         && game
             .foreground
             .as_ref()

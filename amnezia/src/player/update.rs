@@ -31,7 +31,7 @@ pub(super) fn register(app: &mut App) {
                 finish
                     .in_set(CameraFollow)
                     .after(PlayerStep)
-                    .after(crate::vehicles::VehicleSync)
+                    .before(crate::vehicles::VehicleStep)
                     .before(crate::screenfx::ScreenShakeSet)
                     .before(crate::dialogue::MessageUpdate),
             ),

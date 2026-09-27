@@ -62,7 +62,11 @@ impl Exec<'_, '_> {
     /// Foreground execution waits on every message; parallel frames wait only
     /// for their own prompt or for commands that require a free message window.
     pub(super) fn scene_owns_flow(&self, fade_busy: bool, overlay_open: bool) -> bool {
-        self.scene_paused(fade_busy, overlay_open) || self.message_pending()
+        self.scene_paused(fade_busy, overlay_open)
+            || self.message_pending()
+            || self.subsystems.mapfx.vehicles.save.boarding
+            || self.subsystems.mapfx.vehicles.save.unboarding
+            || self.subsystems.mapfx.vehicles.airship_transitioning()
     }
 
     pub(super) fn scene_paused(&self, fade_busy: bool, overlay_open: bool) -> bool {
@@ -147,10 +151,7 @@ pub(super) fn resolve_character(
     if (10002..=10004).contains(&char_ref) {
         vehicles.character(char_ref)
     } else if char_ref == 10001 {
-        players
-            .single()
-            .ok()
-            .map(|p| vehicles.hero_position((p.tile_x, p.tile_y, p.dir)))
+        players.single().ok().map(|p| (p.tile_x, p.tile_y, p.dir))
     } else {
         let id = if char_ref == 10005 {
             this_event as i32

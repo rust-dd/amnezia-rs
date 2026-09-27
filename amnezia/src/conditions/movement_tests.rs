@@ -105,8 +105,8 @@ fn unboarding_does_not_become_a_manual_step_on_the_next_update() {
     let mut app = fixture();
     let mut vehicles = app.world_mut().resource_mut::<Vehicles>();
     vehicles.set_location(0, 0, 5, 5);
-    vehicles.save.vehicles[0].dir = 1;
     vehicles.save.riding = Some(0);
+    crate::vehicles::test_support::direction(&mut app, 1);
     tick(&mut app, None);
     poison(&mut app);
     tick(&mut app, Some(KeyCode::Enter));

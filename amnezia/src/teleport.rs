@@ -128,6 +128,17 @@ fn drive_fade(
                     y,
                     fade.reload,
                 );
+                commands.queue(move |world: &mut World| {
+                    if let Some(mut vehicles) =
+                        world.get_resource_mut::<crate::vehicles::Vehicles>()
+                        && let Some(index) = vehicles.save.riding
+                    {
+                        vehicles.set_location(index, map_id, x, y);
+                    }
+                    if let Some(mut calling) = world.get_resource_mut::<crate::menu::Calling>() {
+                        calling.cancel();
+                    }
+                });
                 if rebuilt {
                     map_rebuilt.write(MapRebuilt);
                 }

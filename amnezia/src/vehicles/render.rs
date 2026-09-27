@@ -1,69 +1,11 @@
 use super::Vehicles;
 use crate::assets::resolve_png;
-use crate::player::Player;
 use crate::tiles::{self, CHAR_Y_OFFSET};
-use crate::world::{Character, MainCamera, MapData, MoveQueue, RouteStepper};
+use crate::world::{Character, MainCamera, MapData};
 use bevy::prelude::*;
 
 #[derive(Component)]
 pub(crate) struct VehicleSprite(pub(crate) usize);
-
-pub(super) fn sync_hero(
-    data: Res<MapData>,
-    mut vehicles: ResMut<Vehicles>,
-    mut players: Query<(
-        &mut Player,
-        &mut Transform,
-        &mut MoveQueue,
-        Option<&mut RouteStepper>,
-    )>,
-) {
-    let Ok((mut hero, mut transform, mut queue, mut route)) = players.single_mut() else {
-        return;
-    };
-    let transferred = vehicles.last_map.is_some_and(|id| id != data.map_id);
-    vehicles.last_map = Some(data.map_id);
-    if let Some(index) = vehicles.save.riding {
-        if transferred {
-            vehicles.set_location(
-                index,
-                data.map_id,
-                hero.tile_x.max(0) as u32,
-                hero.tile_y.max(0) as u32,
-            );
-        }
-        let vehicle = &vehicles.save.vehicles[index];
-        if vehicle.definition.map_id != data.map_id {
-            return;
-        }
-        let (x, y) = vehicle.tile();
-        hero.tile_x = x;
-        hero.tile_y = y;
-        if let Some(route) = route.as_mut() {
-            route.set_direction(&mut *hero, vehicles.motion[index].route.direction(vehicle));
-        }
-        hero.dir = vehicle.dir;
-        let (wx, wy) = data.tile_center(x, y);
-        let pixel = vehicles.motion[index].pixel.unwrap_or(Vec2::new(wx, wy));
-        transform.translation.x = pixel.x;
-        transform.translation.y = pixel.y + CHAR_Y_OFFSET;
-        *queue = default();
-    } else {
-        if let Some(pose) = vehicles.disembark.take() {
-            let (x, y) = pose.tile;
-            hero.tile_x = x;
-            hero.tile_y = y;
-            if let Some(route) = route.as_mut() {
-                route.set_direction(&mut *hero, pose.direction);
-            }
-            hero.dir = pose.facing;
-            let (wx, wy) = data.tile_center(x, y);
-            transform.translation.x = wx;
-            transform.translation.y = wy + CHAR_Y_OFFSET;
-            *queue = default();
-        }
-    }
-}
 
 pub(super) fn draw(
     mut commands: Commands,

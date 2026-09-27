@@ -87,6 +87,13 @@ pub(crate) fn flush(world: &mut World) {
     }
 }
 
+pub(crate) fn reset_player(world: &mut World) {
+    if let Some(mut inbox) = world.get_resource_mut::<Inbox>() {
+        inbox.player = None;
+    }
+    flush(world);
+}
+
 fn apply_sprite_change(
     messages: Res<Messages<SpriteChange>>,
     transfers: Res<Messages<MapChanged>>,

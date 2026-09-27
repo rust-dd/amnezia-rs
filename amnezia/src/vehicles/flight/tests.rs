@@ -1,5 +1,4 @@
 use super::*;
-use crate::tiles::DIR_RIGHT;
 use crate::vehicles::VehicleSave;
 use bevy::prelude::Vec2;
 
@@ -11,21 +10,20 @@ fn airborne() -> Vehicles {
 }
 
 #[test]
-fn boarding_and_landing_take_32_ticks_with_original_integer_altitude() {
+fn ascent_and_descent_take_32_ticks_with_original_integer_altitude() {
     let data = MapData::for_test(10, 10);
     let mut vehicles = airborne();
-    vehicles.save.riding = None;
-    assert!(vehicles.toggle(&data, (4, 4, DIR_RIGHT), |_, _| false));
+    vehicles.save.airship_flight.ascend();
     for tick in 0..32 {
         assert_eq!(vehicles.airship_altitude(), (tick / 2) as f32);
-        assert!(!vehicles.toggle(&data, (4, 4, DIR_RIGHT), |_, _| false));
+        assert!(vehicles.airship_transitioning());
         assert!(!vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false));
     }
     assert_eq!(vehicles.airship_altitude(), 16.0);
     assert!(!vehicles.airship_transitioning());
     let ground = Vec2::from(data.tile_center(4, 4));
     assert_eq!(vehicles.pixel(10004, &data), Some(ground + Vec2::Y * 16.0));
-    assert!(vehicles.toggle(&data, (4, 4, DIR_RIGHT), |_, _| false));
+    vehicles.save.airship_flight.descend();
     for tick in 0..32 {
         assert_eq!(vehicles.airship_altitude(), ((32 - tick) / 2) as f32);
         assert_eq!(
@@ -35,14 +33,6 @@ fn boarding_and_landing_take_32_ticks_with_original_integer_altitude() {
     }
     assert!(!vehicles.riding());
     assert_eq!(vehicles.airship_altitude(), 0.0);
-    assert_eq!(
-        vehicles.disembark,
-        Some(crate::vehicles::model::DisembarkPose {
-            tile: (4, 4),
-            direction: DIR_RIGHT,
-            facing: DIR_DOWN
-        })
-    );
     assert_eq!(vehicles.save.vehicles[2].dir, DIR_LEFT);
 }
 
@@ -51,7 +41,7 @@ fn blocked_landings_descend_then_reascend_and_recheck_only_at_the_end() {
     let data = MapData::for_test(10, 10);
     for blocked_at_end in [false, true] {
         let mut vehicles = airborne();
-        assert!(vehicles.toggle(&data, (4, 4, DIR_RIGHT), |_, _| true));
+        vehicles.save.airship_flight.descend();
         for _ in 0..31 {
             assert!(!vehicles.advance_flight(1.0 / 60.0, &data, |_, _| panic!("too early")));
         }

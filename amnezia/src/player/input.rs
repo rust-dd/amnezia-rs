@@ -34,7 +34,7 @@ fn prepare(
         || queue.busy()
         || vehicles
             .as_ref()
-            .is_some_and(|vehicles| vehicles.rider_moving() || vehicles.airship_transitioning())
+            .is_some_and(|vehicles| vehicles.blocks_movement())
     {
         return None;
     }
@@ -59,9 +59,6 @@ fn prepare(
         return None;
     }
     phase.blocked = false;
-    if scene.riding() {
-        return None;
-    }
     let direction = [
         (KeyCode::ArrowUp, DIR_UP),
         (KeyCode::ArrowDown, DIR_DOWN),

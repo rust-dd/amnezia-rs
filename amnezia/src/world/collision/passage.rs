@@ -1,6 +1,23 @@
 use super::*;
 
 impl MapCollision<'_> {
+    pub(crate) fn can_embark(&self, from: (i32, i32), to: (i32, i32)) -> bool {
+        self.tile_passable(from, passable_mask(from.0, from.1, to.0, to.1), 0)
+    }
+
+    pub(crate) fn can_disembark(&self, from: (i32, i32), to: (i32, i32)) -> bool {
+        if !self.data.contains_tile(to.0, to.1) {
+            return false;
+        }
+        let position = self.data.normalize_tile(to.0, to.1);
+        !self.events.events.iter().any(|event| {
+            (event.x as i32, event.y as i32) == position
+                && self
+                    .page(event)
+                    .is_some_and(|page| self.bodies.event(event, page).layer == 1)
+        }) && self.tile_passable(position, passable_mask(to.0, to.1, from.0, from.1), 0)
+    }
+
     pub(super) fn tile_passable(&self, position: (i32, i32), bit: u8, self_id: u32) -> bool {
         if !self.data.contains_tile(position.0, position.1) {
             return false;

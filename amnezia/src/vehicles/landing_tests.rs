@@ -1,12 +1,5 @@
 use super::*;
-use crate::battle::BattleActive;
-use crate::dialogue::Dialogue;
-use crate::gameover::GameOverActive;
-use crate::interpreter::RunningEvent;
 use crate::menu::MenuOpen;
-use crate::shop::ShopOpen;
-use crate::teleport::Fade;
-use crate::title::TitleActive;
 use amnezia_data::Map;
 
 #[derive(Resource, Default)]
@@ -26,46 +19,12 @@ fn landing_keyboard_blocks_every_active_event_layer_and_releases_after_page_remo
         event.pages.truncate(1);
         event.pages[0].layer = layer;
         event.pages[0].condition = default();
-        let mut app = App::new();
-        app.add_plugins(MinimalPlugins)
-            .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
-                std::time::Duration::from_secs_f64(1.0 / 60.0),
-            ))
-            .insert_resource(MapData::for_test(10, 10))
-            .insert_resource(MapEvents {
-                events: vec![event],
-            })
-            .init_resource::<Switches>()
-            .init_resource::<Variables>()
-            .init_resource::<Party>()
-            .init_resource::<Inventory>()
-            .init_resource::<Dialogue>()
-            .init_resource::<Fade>()
-            .init_resource::<MenuOpen>()
-            .init_resource::<ShopOpen>()
-            .init_resource::<BattleActive>()
-            .init_resource::<GameOverActive>()
-            .init_resource::<RunningEvent>()
-            .insert_resource(TitleActive(false))
-            .init_resource::<ButtonInput<KeyCode>>()
-            .init_resource::<CurrentBgm>()
-            .init_resource::<crate::system_bgm::SystemBgm>()
-            .insert_resource(VehicleMusic(std::array::from_fn(|_| default())))
-            .init_resource::<Vehicles>()
-            .add_message::<AudioRequest>()
-            .init_resource::<AudioLog>()
-            .add_systems(Update, (keyboard, advance, collect_audio).chain());
-        app.world_mut().spawn((
-            Player {
-                tile_x: 4,
-                tile_y: 4,
-                dir: DIR_DOWN,
-                frame: 1,
-                charset: "Chara1".into(),
-                index: 0,
-            },
-            MoveQueue::default(),
-        ));
+        let (mut app, hero) = test_support::rider_app(MapData::for_test(10, 10), (4, 4));
+        app.insert_resource(MapEvents {
+            events: vec![event],
+        })
+        .init_resource::<AudioLog>()
+        .add_systems(Update, collect_audio.after(VehicleStep));
         let mut vehicles = app.world_mut().resource_mut::<Vehicles>();
         vehicles.set_location(2, 0, 4, 4);
         vehicles.save.riding = Some(2);
@@ -83,10 +42,10 @@ fn landing_keyboard_blocks_every_active_event_layer_and_releases_after_page_remo
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::ArrowRight);
-        app.world_mut().resource_mut::<Vehicles>().set_route(
-            10004,
-            crate::world::RouteStepper::from_move_event(&[10004, 8, 0, 0, 32, 8, 1]),
-        );
+        app.world_mut()
+            .get_mut::<RouteStepper>(hero)
+            .unwrap()
+            .force_route(RouteStepper::from_move_event(&[10001, 8, 0, 0, 32, 8, 1]));
         app.world_mut().resource_mut::<MenuOpen>().0 = true;
         for _ in 0..5 {
             app.update();
@@ -110,12 +69,20 @@ fn landing_keyboard_blocks_every_active_event_layer_and_releases_after_page_remo
         for _ in 0..32 {
             app.update();
         }
+        // A keyboard decision requires a stopped hero without a forced route.
+        *app.world_mut().get_mut::<RouteStepper>(hero).unwrap() = default();
+        *app.world_mut().resource_mut::<ButtonInput<KeyCode>>() = default();
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::Enter);
         app.update();
+        assert!(app.world().resource::<Vehicles>().airship_transitioning());
+        app.world_mut()
+            .get_mut::<RouteStepper>(hero)
+            .unwrap()
+            .force_route(RouteStepper::from_move_event(&[10001, 8, 0, 0, 32, 8, 1]));
         *app.world_mut().resource_mut::<ButtonInput<KeyCode>>() = default();
-        for _ in 0..30 {
+        for _ in 0..31 {
             app.update();
         }
         assert!(app.world().resource::<AudioLog>().0.is_empty());
@@ -140,7 +107,7 @@ fn airship_cannot_land_on_a_boat_or_ship_even_without_an_event() {
         vehicles.set_location(2, 0, 4, 4);
         vehicles.set_location(index, 0, 4, 4);
         vehicles.save.riding = Some(2);
-        assert!(vehicles.toggle(&data, (4, 4, DIR_DOWN), |_, _| false));
+        vehicles.save.airship_flight.descend();
         for _ in 0..32 {
             vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
         }
@@ -149,7 +116,7 @@ fn airship_cannot_land_on_a_boat_or_ship_even_without_an_event() {
         for _ in 0..32 {
             vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
         }
-        assert!(vehicles.toggle(&data, (4, 4, DIR_DOWN), |_, _| false));
+        vehicles.save.airship_flight.descend();
         for _ in 0..32 {
             vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
         }

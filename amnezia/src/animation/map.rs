@@ -28,7 +28,6 @@ pub(super) struct Targets<'w, 's> {
         ),
     >,
     map: Option<Res<'w, MapData>>,
-    vehicles: Option<Res<'w, crate::vehicles::Vehicles>>,
 }
 
 impl Targets<'_, '_> {
@@ -37,11 +36,7 @@ impl Targets<'_, '_> {
         let ground = match target {
             AnimTarget::Hero => {
                 let (hero, transform, queue) = self.hero.single().ok()?;
-                self.ground(
-                    hero,
-                    transform,
-                    queue.filter(|_| !self.vehicles.as_ref().is_some_and(|v| v.riding())),
-                )
+                self.ground(hero, transform, queue)
             }
             AnimTarget::Event(id) => {
                 let (event, transform, queue) =

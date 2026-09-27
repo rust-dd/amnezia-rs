@@ -12,6 +12,7 @@ struct State {
     vehicles: VehicleSave,
     motion: saved::State,
     camera: CameraState,
+    hero: crate::world::saved::hero::HeroState,
 }
 
 #[derive(Resource)]
@@ -65,11 +66,13 @@ fn black_stage(world: &mut World) {
 }
 
 fn remember(world: &mut World, phase: u8) {
+    let hero = crate::world::saved::hero::snapshot(world).unwrap();
     let vehicles = world.resource::<Vehicles>();
     let saved = State {
         vehicles: vehicles.save.clone(),
         motion: vehicles.motion_snapshot(),
         camera: world.resource::<CameraPan>().snapshot(),
+        hero,
     };
     let mut fixture = world.resource_mut::<Fixture>();
     fixture.saved = Some(saved);
@@ -130,6 +133,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             assert_eq!(game.vehicle_motion.as_ref(), Some(&expected.motion));
             assert_eq!(game.vehicles, expected.vehicles);
             assert_eq!(game.camera.as_ref(), Some(&expected.camera));
+            assert_eq!(game.hero_motion.as_ref(), Some(&expected.hero));
         }
         310 | 490 | 840 => world.resource_mut::<LoadRequest>().0 = true,
         430 => {
@@ -151,6 +155,12 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             ],
         ),
         800 => {
+            assert!(
+                !crate::world::saved::hero::snapshot(world)
+                    .unwrap()
+                    .route
+                    .pending()
+            );
             let vehicles = world.resource::<Vehicles>();
             assert!(!vehicles.routes_pending());
             for (index, tile) in [(56, 62), (66, 63), (62, 60)].into_iter().enumerate() {
@@ -164,6 +174,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         820 => {
             let mut game = read_save(&path).unwrap();
             game.format_version = 10;
+            game.hero_motion = None;
             let state = ron::to_string(&game.vehicle_motion).unwrap();
             let original = ron::to_string(&game)
                 .unwrap()
@@ -176,6 +187,8 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             black_stage(world);
             assert_eq!(world.resource::<LoadOutcome>().0, Some(true));
             assert!(!world.resource::<Fade>().busy());
+            let hero = crate::world::saved::hero::snapshot(world).unwrap();
+            assert!(!hero.route.pending() && !hero.motion.into_queue().busy());
             let vehicles = world.resource::<Vehicles>();
             assert!(!vehicles.routes_pending());
             assert_eq!(vehicles.save.riding, Some(2));

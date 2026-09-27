@@ -159,9 +159,7 @@ pub(super) fn camera_follow(
         return;
     };
     let mut point = transform.translation.truncate() - Vec2::Y * CHAR_Y_OFFSET;
-    if !scene.riding()
-        && let Some(queue) = queue
-    {
+    if let Some(queue) = queue {
         point = queue.subpixel_position(player, &data);
     }
     let half_view = view.area.size() / 2.0;

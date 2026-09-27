@@ -64,7 +64,6 @@ impl MapData {
 #[allow(clippy::type_complexity)]
 pub(super) fn wrap_scene(
     data: Res<MapData>,
-    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     cameras: Query<&Transform, With<MainCamera>>,
     mut tiles: Query<(&MapTile, &mut Transform), Without<MainCamera>>,
     mut characters: Query<
@@ -93,11 +92,7 @@ pub(super) fn wrap_scene(
     }
     for (player, event, queue, mut transform) in &mut characters {
         if let Some(player) = player {
-            let point = if vehicles.as_ref().is_some_and(|v| v.riding()) {
-                transform.translation.truncate() - Vec2::Y * player.y_offset()
-            } else {
-                queue.render_position(player, &data)
-            };
+            let point = queue.render_position(player, &data);
             position_character(player, point, &data, camera, &mut transform);
         } else if let Some(event) = event {
             position_character(
@@ -143,6 +138,57 @@ fn shortest_delta(delta: i32, period: i32, looping: bool) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_riders_wrapped_sprite_uses_its_own_motion_instead_of_a_stale_transform() {
+        let mut data = MapData::for_test(140, 140);
+        data.scroll_type = 3;
+        let mut app = App::new();
+        app.insert_resource(data)
+            .init_resource::<crate::vehicles::Vehicles>()
+            .add_systems(Update, wrap_scene);
+        app.world_mut()
+            .resource_mut::<crate::vehicles::Vehicles>()
+            .save
+            .riding = Some(0);
+        app.world_mut()
+            .spawn((MainCamera, Transform::from_xyz(1120.0, -1120.0, 0.0)));
+        let hero = app
+            .world_mut()
+            .spawn((
+                Player {
+                    tile_x: 0,
+                    tile_y: 0,
+                    dir: 0,
+                    frame: 1,
+                    charset: "Chara1".into(),
+                    index: 0,
+                },
+                MoveQueue::default(),
+                Transform::default(),
+            ))
+            .id();
+        app.update();
+        let point = app
+            .world()
+            .get::<Transform>(hero)
+            .unwrap()
+            .translation
+            .truncate();
+        assert_eq!(
+            point,
+            Vec2::new(1128.0, -1128.0 + crate::tiles::CHAR_Y_OFFSET)
+        );
+        app.update();
+        assert_eq!(
+            app.world()
+                .get::<Transform>(hero)
+                .unwrap()
+                .translation
+                .truncate(),
+            point
+        );
+    }
 
     #[test]
     fn periodic_rendering_keeps_one_entity_and_sorts_characters_across_the_seam() {

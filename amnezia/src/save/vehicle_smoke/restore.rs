@@ -12,7 +12,12 @@ pub(super) fn check(world: &mut World, frame: u32) -> Option<&'static str> {
     let phase = world.resource::<Fixture>().phase;
     let resumed = 2 << (phase * 2);
     if world.resource::<Fade>().busy() {
-        let expected = world.resource::<Fixture>().saved.as_ref().unwrap().clone();
+        let mut expected = world.resource::<Fixture>().saved.as_ref().unwrap().clone();
+        expected.hero.route.reset_transparency();
+        assert_eq!(
+            crate::world::saved::hero::snapshot(world).unwrap(),
+            expected.hero
+        );
         let vehicles = world.resource::<Vehicles>();
         assert_eq!(vehicles.save, expected.vehicles);
         assert_eq!(vehicles.motion_snapshot(), expected.motion);
@@ -33,7 +38,16 @@ pub(super) fn check(world: &mut World, frame: u32) -> Option<&'static str> {
             .unwrap()
             .translation
             .truncate();
-        assert_eq!(camera, Vec2::from_array(expected.camera.position.unwrap()));
+        let logical = Vec2::from_array(expected.camera.position.unwrap());
+        let (origin_x, origin_y) = world.resource::<MapData>().tile_center(0, 0);
+        let corner = Vec2::new(origin_x - 8.0, origin_y + 8.0);
+        assert_eq!(
+            camera,
+            Vec2::new(
+                (logical.x - corner.x - 160.0).trunc() + corner.x + 160.0,
+                corner.y - 120.0 - (corner.y - logical.y - 120.0).trunc(),
+            )
+        );
         black_stage(world);
         if phase == 1 {
             world.resource_mut::<Switches>().set(7, false);

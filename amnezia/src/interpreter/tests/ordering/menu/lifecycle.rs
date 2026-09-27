@@ -9,10 +9,10 @@ fn airship_ascent_holds_a_menu_latch_until_a_later_stopped_update() {
     app.add_plugins(VehiclePlugin)
         .init_resource::<crate::audio::CurrentBgm>();
     app.world_mut()
-        .resource_scope(|world, mut vehicles: Mut<Vehicles>| {
-            vehicles.set_location(2, 0, 5, 5);
-            assert!(vehicles.toggle(world.resource::<MapData>(), (5, 5, 2), |_, _| false));
-        });
+        .resource_mut::<Vehicles>()
+        .set_location(2, 0, 5, 5);
+    crate::vehicles::test_support::toggle(&mut app);
+    assert_eq!(app.world().resource::<Vehicles>().save.riding, Some(2));
     tick(&mut app, &[KeyCode::Escape]);
     assert!(app.world().resource::<Calling>().pending());
     for _ in 0..31 {

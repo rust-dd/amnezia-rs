@@ -25,6 +25,20 @@ pub(crate) fn character(
 }
 
 fn leg(world: &mut World, id: u32, from: (i32, i32), to: (i32, i32), jumping: bool) -> bool {
+    let (id, jumping) = if id == 0 {
+        world
+            .get_resource::<crate::vehicles::Vehicles>()
+            .filter(|vehicles| vehicles.aboard())
+            .and_then(|vehicles| {
+                vehicles
+                    .save
+                    .riding
+                    .map(|index| (10002 + index as u32, vehicles.jumping(index)))
+            })
+            .unwrap_or((id, jumping))
+    } else {
+        (id, jumping)
+    };
     let passage = match world
         .run_system_cached_with(enter, (id, from, to, jumping))
         .unwrap()

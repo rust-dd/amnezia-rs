@@ -217,6 +217,13 @@ impl RouteStepper {
         self.set_stop_maximum(stop_clock::step(self.frequency));
     }
 
+    pub(crate) fn cancel_for_rider(&mut self) {
+        if self.forced {
+            self.cancel_forced();
+        }
+        self.first_pass_complete = false;
+    }
+
     pub(super) fn finish_pass(&mut self) {
         self.first_pass_complete = true;
         if self.repeat && !self.commands.is_empty() {

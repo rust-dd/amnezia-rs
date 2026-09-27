@@ -19,6 +19,11 @@ pub(crate) fn water_map(width: i32, height: i32) -> MapData {
     data
 }
 
+pub(crate) fn block_tile(data: &mut MapData, tile: (i32, i32)) {
+    data.upper[(tile.1 * data.width + tile.0) as usize] = 10001;
+    data.passages_up[1] = 0;
+}
+
 pub(crate) fn page(commands: Vec<MoveCommandDef>) -> EventPage {
     let mut page = crate::assets::load_ron::<amnezia_data::Map>(&format!(
         "{}/maps/map_0001.ron",

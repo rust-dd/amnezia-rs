@@ -63,7 +63,7 @@ fn invalid_vehicle_motion_numbers_are_rejected_without_mutating_the_session_or_s
 
 #[test]
 fn invalid_vehicle_pose_rider_and_flight_fields_are_rejected_without_mutation() {
-    for case in 0..9 {
+    for case in 0..12 {
         let (mut app, path) = app(&format!("invalid-vehicle-{case}"));
         let vehicles = app.world().resource::<Vehicles>();
         let state = vehicles.motion_snapshot();
@@ -86,6 +86,9 @@ fn invalid_vehicle_pose_rider_and_flight_fields_are_rejected_without_mutation() 
                 assert!(encoded.contains(from));
                 base = ron::from_str::<VehicleSave>(&encoded.replace(from, to)).unwrap();
             }
+            9 => base.preboard_speed = 0,
+            10 => base.preboard_speed = 7,
+            11 => base.boarding = true,
             _ => unreachable!(),
         }
         rejects(&mut app, &path, state, base);

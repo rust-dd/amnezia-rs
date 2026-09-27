@@ -3,6 +3,7 @@ use crate::save::{EventSaveRequest, LoadOutcome, LoadRequest, SavePlugin};
 
 mod continuation;
 mod lifecycle;
+mod migration;
 mod relocation;
 mod stops;
 
@@ -15,8 +16,14 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
         .init_resource::<Vehicles>()
         .init_resource::<crate::interpreter::RunningEvent>()
         .init_resource::<MapEvents>()
+        .init_resource::<crate::menu::MenuOpen>()
+        .insert_resource(crate::timing::SceneWait(true))
+        .init_resource::<crate::shop::ShopOpen>()
+        .init_resource::<crate::battle::BattleActive>()
+        .insert_resource(crate::title::TitleActive(false))
+        .init_resource::<crate::gameover::GameOverActive>()
         .add_systems(Update, rebuild.in_set(crate::teleport::MapTransfer))
-        .add_systems(PostUpdate, render::sync_hero);
+        .add_systems(PostUpdate, rider::sync);
     let mut data = MapData::for_test(140, 140);
     data.map_id = 13;
     app.insert_resource(data);
@@ -163,6 +170,24 @@ fn loading_a_boarded_airship_restores_the_riders_mid_step_position_before_camera
         let mut vehicles = world.resource_mut::<Vehicles>();
         start(&mut vehicles, &data, 2, &[1, 23, 1]);
         vehicles.save.riding = Some(2);
+        let tile = vehicles.save.vehicles[2].tile();
+        let queue = vehicles.motion[2].queue.clone();
+        let route = vehicles.motion[2].route.clone();
+        vehicles.motion[2].route.cancel_for_rider();
+        let (mut hero, mut hero_queue, mut hero_route, mut transform) = world
+            .query::<(
+                &mut Player,
+                &mut MoveQueue,
+                &mut RouteStepper,
+                &mut Transform,
+            )>()
+            .single_mut(world)
+            .unwrap();
+        hero.set_tile(tile.0, tile.1);
+        *hero_queue = queue;
+        *hero_route = route;
+        let point = hero_queue.render_position(&*hero, &data);
+        transform.translation = Vec3::new(point.x, point.y + hero.y_offset(), hero.draw_z(tile.1));
     });
     app.update();
     let expected = app

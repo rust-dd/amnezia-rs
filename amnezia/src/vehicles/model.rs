@@ -50,6 +50,12 @@ impl Character for VehicleState {
 pub struct VehicleSave {
     pub vehicles: [VehicleState; 3],
     pub riding: Option<usize>,
+    #[serde(default)]
+    pub boarding: bool,
+    #[serde(default)]
+    pub unboarding: bool,
+    #[serde(default = "preboard_speed")]
+    pub preboard_speed: u32,
     pub before_music: Option<BgmTrack>,
     #[serde(default)]
     pub(super) airship_flight: super::flight::AirshipFlight,
@@ -66,10 +72,17 @@ impl Default for VehicleSave {
                 frame: 1,
             }),
             riding: None,
+            boarding: false,
+            unboarding: false,
+            preboard_speed: preboard_speed(),
             before_music: None,
             airship_flight: default(),
         }
     }
+}
+
+fn preboard_speed() -> u32 {
+    4
 }
 
 #[derive(Clone)]
@@ -95,16 +108,10 @@ impl Default for Motion {
 pub struct Vehicles {
     pub save: VehicleSave,
     pub(super) motion: [Motion; 3],
-    pub(super) disembark: Option<DisembarkPose>,
     pub(super) consumed_action: bool,
-    pub(super) last_map: Option<u32>,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(super) struct DisembarkPose {
-    pub tile: (i32, i32),
-    pub direction: u32,
-    pub facing: u32,
+    pub(super) movement_blocked: bool,
+    pub(crate) toggle_pending: bool,
+    pub(crate) relocate_pending: Option<(u32, u32)>,
 }
 
 impl Vehicles {
@@ -138,33 +145,16 @@ impl Vehicles {
         self.save.riding.is_some()
     }
 
-    pub fn hero_position(&self, fallback: (i32, i32, u32)) -> (i32, i32, u32) {
-        self.save
-            .riding
-            .and_then(|index| self.character(10002 + index as i32))
-            .or(self
-                .disembark
-                .map(|pose| (pose.tile.0, pose.tile.1, pose.facing)))
-            .unwrap_or(fallback)
+    pub(crate) fn aboard(&self) -> bool {
+        self.riding() && !self.save.boarding
     }
 
-    pub(crate) fn rider_direction(&self) -> Option<u32> {
-        let index = self.save.riding?;
-        Some(
-            self.motion[index]
-                .route
-                .direction(&self.save.vehicles[index]),
-        )
+    pub(crate) fn blocks_movement(&self) -> bool {
+        self.movement_blocked || self.airship_transitioning()
     }
 
     pub fn blocks_action(&self) -> bool {
-        self.save.riding == Some(2) || self.rider_moving() || self.consumed_action
-    }
-
-    pub(crate) fn rider_moving(&self) -> bool {
-        self.save
-            .riding
-            .is_some_and(|index| self.motion[index].queue.busy())
+        self.save.riding == Some(2) || self.consumed_action
     }
 
     pub fn character(&self, reference: i32) -> Option<(i32, i32, u32)> {
@@ -222,8 +212,9 @@ impl Vehicles {
 
     pub fn clear_motion(&mut self) {
         self.motion = std::array::from_fn(|_| default());
-        self.disembark = None;
         self.consumed_action = false;
-        self.last_map = None;
+        self.movement_blocked = false;
+        self.toggle_pending = false;
+        self.relocate_pending = None;
     }
 }

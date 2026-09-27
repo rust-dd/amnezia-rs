@@ -42,6 +42,7 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let data = world.resource::<MapData>();
     let mut pixels = Vec::new();
     for (id, sprite, transform, visible) in sprites {
+        let opacity = if id.0 == 2 { 1.0 } else { opacity };
         let vehicle = &vehicles.save.vehicles[id.0];
         let (name, index) = match id.0 {
             0 if label != "saved-vehicles-ascent-resumed" => ("Chara1", 2),

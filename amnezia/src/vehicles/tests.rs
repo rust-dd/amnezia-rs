@@ -27,70 +27,99 @@ fn vehicle_collision_reads_live_route_through_state() {
 
 #[test]
 fn boarding_and_disembarking_wrap_the_facing_tile() {
-    let mut data = MapData::for_test(140, 140);
+    use test_support::{direction, rider_app, ticks, toggle};
+    let mut data = crate::world::test_support::water_map(140, 140);
     data.scroll_type = 3;
-    let mut vehicles = Vehicles::default();
-    vehicles.set_location(0, 0, 139, 2);
-    assert!(vehicles.toggle(&data, (0, 2, DIR_LEFT), |_, _| false));
-    vehicles.motion[0]
-        .route
-        .set_direction(&mut vehicles.save.vehicles[0], DIR_RIGHT);
-    assert!(!vehicles.toggle(&data, (139, 2, DIR_RIGHT), |x, y| (x, y) == (0, 2)));
-    assert!(vehicles.toggle(&data, (139, 2, DIR_RIGHT), |_, _| false));
+    let (mut app, hero) = rider_app(data, (0, 2));
+    app.world_mut()
+        .resource_mut::<Vehicles>()
+        .set_location(0, 0, 139, 2);
+    direction(&mut app, DIR_LEFT);
+    toggle(&mut app);
+    assert!(app.world().resource::<Vehicles>().save.boarding);
+    assert_eq!(app.world().get::<Player>(hero).unwrap().tile(), (139, 2));
+    ticks(&mut app, 8);
+    direction(&mut app, DIR_RIGHT);
+    crate::world::test_support::block_tile(&mut app.world_mut().resource_mut::<MapData>(), (0, 2));
+    toggle(&mut app);
+    assert!(app.world().resource::<Vehicles>().aboard());
+    let mut data = crate::world::test_support::water_map(140, 140);
+    data.scroll_type = 3;
+    app.insert_resource(data);
+    toggle(&mut app);
+    assert!(!app.world().resource::<Vehicles>().riding());
+    assert!(app.world().get::<MoveQueue>(hero).unwrap().busy());
+    assert_eq!(app.world().get::<Player>(hero).unwrap().tile(), (0, 2));
+    assert_eq!(app.world().get::<Player>(hero).unwrap().dir, DIR_RIGHT);
     assert_eq!(
-        vehicles.disembark,
-        Some(model::DisembarkPose {
-            tile: (0, 2),
-            direction: DIR_RIGHT,
-            facing: DIR_RIGHT
-        })
+        app.world().resource::<Vehicles>().character(10002),
+        Some((139, 2, DIR_LEFT))
     );
 }
 
 #[test]
 fn airship_boards_on_its_tile_and_lands_at_its_live_position() {
-    let mut vehicles = Vehicles::default();
+    use test_support::{direction, rider_app, ticks, toggle};
     let mut data = MapData::for_test(100, 110);
     data.map_id = 13;
-    vehicles.set_location(2, 13, 55, 100);
-    assert!(!vehicles.toggle(&data, (54, 100, DIR_RIGHT), |_, _| false));
-    assert!(vehicles.toggle(&data, (55, 100, DIR_DOWN), |_, _| false));
-    for _ in 0..32 {
-        vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
-    }
-    assert_eq!(vehicles.character(10004), Some((55, 100, DIR_LEFT)));
-    assert_eq!(vehicles.rider_direction(), Some(DIR_DOWN));
-    vehicles.set_location(2, 13, 28, 100);
-    assert_eq!(vehicles.rider_direction(), Some(DIR_DOWN));
-    assert!(vehicles.toggle(&data, (55, 100, DIR_DOWN), |_, _| false));
-    for _ in 0..32 {
-        vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
-    }
+    let (mut app, hero) = rider_app(data, (54, 100));
+    app.world_mut()
+        .resource_mut::<Vehicles>()
+        .set_location(2, 13, 55, 100);
+    toggle(&mut app);
+    assert!(!app.world().resource::<Vehicles>().riding());
+    app.world_mut()
+        .get_mut::<Player>(hero)
+        .unwrap()
+        .set_tile(55, 100);
+    direction(&mut app, DIR_DOWN);
+    toggle(&mut app);
+    assert!(app.world().resource::<Vehicles>().aboard());
+    ticks(&mut app, 32);
     assert_eq!(
-        vehicles.disembark,
-        Some(model::DisembarkPose {
-            tile: (28, 100),
-            direction: DIR_DOWN,
-            facing: DIR_DOWN
-        })
+        app.world().resource::<Vehicles>().character(10004),
+        Some((55, 100, DIR_LEFT))
     );
-    assert!(!vehicles.riding());
+    app.world_mut()
+        .get_mut::<Player>(hero)
+        .unwrap()
+        .set_tile(28, 100);
+    app.world_mut()
+        .resource_mut::<Vehicles>()
+        .set_location(2, 13, 28, 100);
+    toggle(&mut app);
+    ticks(&mut app, 32);
+    assert!(!app.world().resource::<Vehicles>().riding());
+    assert_eq!(app.world().get::<Player>(hero).unwrap().tile(), (28, 100));
+    assert_eq!(app.world().get::<Player>(hero).unwrap().dir, DIR_DOWN);
+    assert_eq!(
+        app.world()
+            .get::<RouteStepper>(hero)
+            .unwrap()
+            .direction(app.world().get::<Player>(hero).unwrap()),
+        DIR_DOWN
+    );
 }
 
 #[test]
 fn airship_cannot_land_on_a_solid_event() {
-    let data = MapData::for_test(10, 10);
-    let mut vehicles = Vehicles::default();
-    vehicles.set_location(2, 0, 4, 4);
-    assert!(vehicles.toggle(&data, (4, 4, DIR_DOWN), |_, _| false));
-    for _ in 0..32 {
-        vehicles.advance_flight(1.0 / 60.0, &data, |_, _| true);
-    }
-    assert!(vehicles.toggle(&data, (4, 4, DIR_DOWN), |_, _| true));
-    for _ in 0..32 {
-        vehicles.advance_flight(1.0 / 60.0, &data, |_, _| true);
-    }
-    assert!(vehicles.riding());
+    use test_support::{rider_app, ticks, toggle};
+    let (mut app, _) = rider_app(MapData::for_test(10, 10), (4, 4));
+    app.world_mut()
+        .resource_mut::<Vehicles>()
+        .set_location(2, 0, 4, 4);
+    let mut event =
+        crate::world::test_support::event(1, 4, vec![crate::world::test_support::page(vec![])]);
+    event.y = 4;
+    app.world_mut()
+        .resource_mut::<MapEvents>()
+        .events
+        .push(event);
+    toggle(&mut app);
+    ticks(&mut app, 32);
+    toggle(&mut app);
+    ticks(&mut app, 32);
+    assert!(app.world().resource::<Vehicles>().riding());
 }
 
 #[test]

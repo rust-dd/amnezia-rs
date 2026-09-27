@@ -109,6 +109,7 @@ impl MoveQueue {
         self.steps.extend(actions);
     }
 
+    #[cfg(test)]
     pub fn push_step(&mut self, action: RouteAction) {
         self.steps.push_back(action);
     }
@@ -255,6 +256,55 @@ impl MoveQueue {
         } else {
             self.active = None;
         }
+    }
+
+    pub(crate) fn sync_remaining<C: Character>(
+        &mut self,
+        rider: &Self,
+        previous_tile: (i32, i32),
+        character: &C,
+        data: &MapData,
+    ) {
+        let remaining = rider.active.as_ref().map_or(0, |tween| {
+            tween.subpixels.map_or_else(
+                || {
+                    (256.0 * (1.0 - tween.elapsed / rider.step_secs))
+                        .round()
+                        .clamp(0.0, 256.0) as u16
+                },
+                |clock| clock.remaining,
+            )
+        });
+        self.steps.clear();
+        let previous = self.active.take();
+        let jumping = previous.as_ref().is_some_and(|tween| tween.jumping);
+        if remaining == 0 && !jumping {
+            return;
+        }
+        let jump_origin = previous.as_ref().filter(|_| jumping).map(|tween| {
+            tween.jump_origin.unwrap_or_else(|| {
+                let delta = (tween.to - tween.from) / 16.0;
+                (
+                    previous_tile.0.saturating_sub(delta.x as i32),
+                    previous_tile.1.saturating_add(delta.y as i32),
+                )
+            })
+        });
+        let to = center(data, character.tile().0, character.tile().1);
+        let fraction = previous
+            .and_then(|tween| tween.subpixels)
+            .map_or(0.0, |clock| clock.fraction);
+        self.active = Some(Tween {
+            from: jump_origin.map_or(to, |origin| center(data, origin.0, origin.1)),
+            to,
+            elapsed: self.step_secs * (1.0 - f32::from(remaining) / 256.0),
+            jumping,
+            subpixels: Some(Subpixels {
+                remaining,
+                fraction,
+            }),
+            jump_origin,
+        });
     }
 
     /// Advances at most one move; its successor belongs to the next character update.

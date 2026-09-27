@@ -23,15 +23,10 @@ fn airship_minimap_condition_is_false_when_walking() {
 }
 
 #[test]
-fn locate_board_and_query_airship_in_one_interpreter_frame() {
-    let mut app = interp_app();
+fn locating_and_boarding_an_airship_holds_following_commands_until_ascent_finishes() {
     let mut data = MapData::for_test(100, 110);
     data.map_id = 13;
-    app.insert_resource(data);
-    let world = app.world_mut();
-    let mut hero = world.query::<&mut Player>().single_mut(world).unwrap();
-    hero.tile_x = 55;
-    hero.tile_y = 100;
+    let (mut app, _) = crate::vehicles::test_support::rider_app(data, (55, 100));
     app.world_mut().resource_mut::<Variables>().set(48, 13);
     app.world_mut().resource_mut::<Variables>().set(49, 55);
     app.world_mut().resource_mut::<Variables>().set(50, 100);
@@ -49,10 +44,24 @@ fn locate_board_and_query_airship_in_one_interpreter_frame() {
     app.update();
     let vehicles = app.world().resource::<Vehicles>();
     assert!(vehicles.riding());
-    assert!(vehicles.routes_pending());
+    assert!(!vehicles.routes_pending());
     assert_eq!(
         vehicles.character(10004),
         Some((55, 100, crate::tiles::DIR_LEFT))
     );
+    for _ in 0..31 {
+        assert!(!app.world().resource::<Switches>().get(800));
+        app.update();
+    }
+    assert!(!app.world().resource::<Switches>().get(800));
+    app.update();
     assert!(app.world().resource::<Switches>().get(800));
+    let world = app.world_mut();
+    assert!(
+        world
+            .query_filtered::<&RouteStepper, With<Player>>()
+            .single(world)
+            .unwrap()
+            .pending()
+    );
 }

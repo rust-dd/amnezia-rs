@@ -271,13 +271,8 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                 && let Ok(player) = x.subsystems.flow.players.single()
             {
                 x.variables.set(*vm as u32, map.map_id as i32);
-                let (px, py, _) = x.subsystems.mapfx.vehicles.hero_position((
-                    player.tile_x,
-                    player.tile_y,
-                    player.dir,
-                ));
-                x.variables.set(*vx as u32, px);
-                x.variables.set(*vy as u32, py);
+                x.variables.set(*vx as u32, player.tile_x);
+                x.variables.set(*vy as u32, player.tile_y);
             }
             frame.ip += 1;
             Flow::Advance

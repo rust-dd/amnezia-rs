@@ -165,7 +165,6 @@ pub fn spawn_player(
 pub(crate) fn update_player_sprite(
     data: Res<MapData>,
     asset_server: Res<AssetServer>,
-    vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut players: Query<(&Player, &MoveQueue, &mut Sprite, &mut Transform), Changed<Player>>,
 ) {
     for (player, queue, mut sprite, mut transform) in &mut players {
@@ -175,7 +174,7 @@ pub(crate) fn update_player_sprite(
         sprite.image = asset_server.load(resolve_png("CharSet", &player.charset));
         let (sx, sy) = tiles::charset_source(player.index, player.dir, player.frame);
         sprite.rect = Some(Rect::new(sx, sy, sx + tiles::CHAR_W, sy + tiles::CHAR_H));
-        if queue.busy() || vehicles.as_ref().is_some_and(|vehicles| vehicles.riding()) {
+        if queue.busy() {
             continue;
         }
         let (world_x, world_y) = data.tile_center(player.tile_x, player.tile_y);
@@ -190,7 +189,7 @@ fn update_hero_hidden(
     vehicles: Option<Res<crate::vehicles::Vehicles>>,
     mut players: Query<(&Player, &mut Visibility)>,
 ) {
-    let invisible = hidden.0 || vehicles.as_ref().is_some_and(|v| v.riding());
+    let invisible = hidden.0 || vehicles.as_ref().is_some_and(|v| v.aboard());
     for (player, mut visibility) in &mut players {
         *visibility = if invisible || player.charset.is_empty() {
             Visibility::Hidden

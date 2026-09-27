@@ -20,7 +20,7 @@ pub(in crate::player) fn prepare_scroll(
     cameras: Query<&Projection, With<MainCamera>>,
 ) {
     frame.0 = None;
-    if scene.paused() || scene.riding() {
+    if scene.paused() {
         return;
     }
     let Ok((hero, mut queue, route)) = heroes.single_mut() else {

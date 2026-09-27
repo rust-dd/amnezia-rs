@@ -2,7 +2,7 @@ use super::*;
 mod route;
 
 #[derive(Resource, Default)]
-pub(super) struct Updates([bool; 3]);
+pub(super) struct Updates(pub(super) [bool; 3]);
 
 pub(crate) fn begin_update(world: &mut World) {
     let Some(data) = world.get_resource::<MapData>() else {
@@ -33,7 +33,7 @@ pub(crate) fn early(world: &mut World, index: usize) {
     if world.contains_resource::<Updates>()
         && world.run_system_cached_with(eligible, index).unwrap()
     {
-        character(world, index, false);
+        character(world, index);
     }
 }
 
@@ -43,21 +43,19 @@ fn eligible(
     vehicles: Res<Vehicles>,
     guards: MoveGuards,
 ) -> bool {
-    !guards.forced_route_paused()
-        && vehicles.save.riding != Some(index)
-        && vehicles.save.vehicles[index].definition.map_id == data.map_id
+    !guards.forced_route_paused() && vehicles.save.vehicles[index].definition.map_id == data.map_id
 }
 
 pub(super) fn advance(world: &mut World) {
-    let Some(transitioning) = world.run_system_cached(begin).unwrap() else {
+    if !world.run_system_cached(begin).unwrap() {
         return;
     };
     for index in 0..3 {
-        character(world, index, transitioning);
+        character(world, index);
     }
 }
 
-fn character(world: &mut World, index: usize, transitioning: bool) {
+fn character(world: &mut World, index: usize) {
     if world.resource::<Vehicles>().save.vehicles[index]
         .definition
         .map_id
@@ -66,50 +64,16 @@ fn character(world: &mut World, index: usize, transitioning: bool) {
     {
         return;
     }
-    if index != 2 || !transitioning {
-        route::advance(world, index);
-    }
-    world
-        .run_system_cached_with(finish, (index, transitioning))
-        .unwrap();
+    route::advance(world, index);
+    world.run_system_cached_with(finish, index).unwrap();
 }
 
-#[allow(clippy::too_many_arguments)]
-fn begin(
-    time: Res<Time>,
-    data: Res<MapData>,
-    guards: MoveGuards,
-    mut vehicles: ResMut<Vehicles>,
-    switches: Res<Switches>,
-    mut audio: MessageWriter<AudioRequest>,
-    map_events: Res<MapEvents>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
-) -> Option<bool> {
-    if guards.forced_route_paused() {
-        return None;
-    }
-    let transitioning = vehicles.airship_transitioning();
-    if vehicles.advance_flight(time.delta_secs(), &data, |x, y| {
-        map_events.events.iter().any(|event| {
-            (event.x as i32, event.y as i32) == (x, y)
-                && active_page(event, &switches, &variables, &party, &inventory).is_some()
-        })
-    }) {
-        audio.write(
-            vehicles
-                .save
-                .before_music
-                .as_ref()
-                .map_or(AudioRequest::StopBgm, |music| music.replay()),
-        );
-    }
-    Some(transitioning)
+fn begin(guards: MoveGuards) -> bool {
+    !guards.forced_route_paused()
 }
 
 fn finish(
-    In((index, transitioning)): In<(usize, bool)>,
+    In(index): In<usize>,
     time: Res<Time>,
     data: Res<MapData>,
     stops: crate::world::stop_clock::StopGates,
@@ -119,15 +83,6 @@ fn finish(
     let vehicle = &mut vehicles.save.vehicles[index];
     let motion = &mut vehicles.motion[index];
     if vehicle.definition.map_id != data.map_id {
-        return;
-    }
-    if index == 2 && transitioning {
-        motion.route.animation.advance_vehicle(
-            vehicle,
-            vehicles.save.riding == Some(2),
-            false,
-            time.delta_secs(),
-        );
         return;
     }
     let moving = motion.queue.busy();

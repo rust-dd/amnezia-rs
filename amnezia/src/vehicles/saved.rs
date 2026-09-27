@@ -3,6 +3,9 @@ use crate::world::{MapData, MapRebuilt, RouteStepper, saved::MotionState};
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+mod migration;
+pub(crate) use migration::migrate_rider;
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct SavedMotion {
     queue: MotionState,
@@ -32,20 +35,28 @@ impl Vehicles {
 
 impl State {
     pub(crate) fn valid(&self, vehicles: &super::VehicleSave) -> bool {
-        vehicles.riding.is_none_or(|index| index < 3)
-            && vehicles.airship_flight.valid()
-            && vehicles.vehicles.iter().all(|vehicle| {
+        vehicles.valid()
+            && self.motion.iter().all(|motion| {
+                motion.queue.valid()
+                    && motion.route.valid()
+                    && motion.pixel.iter().flatten().all(|value| value.is_finite())
+            })
+    }
+}
+
+impl super::VehicleSave {
+    pub(crate) fn valid(&self) -> bool {
+        self.riding.is_none_or(|index| index < 3)
+            && (!self.boarding || self.riding.is_some())
+            && (1..=6).contains(&self.preboard_speed)
+            && self.airship_flight.valid()
+            && self.vehicles.iter().all(|vehicle| {
                 vehicle.dir < 4
                     && vehicle.frame < 4
                     && (1..=6).contains(&vehicle.speed)
                     && vehicle.definition.index < 8
                     && vehicle.definition.x <= i32::MAX as u32
                     && vehicle.definition.y <= i32::MAX as u32
-            })
-            && self.motion.iter().all(|motion| {
-                motion.queue.valid()
-                    && motion.route.valid()
-                    && motion.pixel.iter().flatten().all(|value| value.is_finite())
             })
     }
 }
@@ -105,6 +116,5 @@ fn restore(
         return;
     }
     vehicles.motion = pending.state.motion.clone().map(SavedMotion::into_motion);
-    vehicles.last_map = Some(data.map_id);
     commands.remove_resource::<Pending>();
 }

@@ -149,8 +149,13 @@ fn a_riders_current_tile_and_tween_are_available_before_foreground_queries() {
         let mut vehicles = app.world_mut().resource_mut::<crate::vehicles::Vehicles>();
         vehicles.set_location(0, 0, 5, 5);
         vehicles.save.riding = Some(0);
-        vehicles.set_route(10002, RouteStepper::from_move_event(&[10002, 8, 0, 0, 1]));
     }
+    let world = app.world_mut();
+    world
+        .query_filtered::<&mut RouteStepper, With<Player>>()
+        .single_mut(world)
+        .unwrap()
+        .force_route(RouteStepper::from_move_event(&[10001, 8, 0, 0, 1]));
     app.world_mut().resource_mut::<RunningEvent>().start(
         0,
         vec![
@@ -172,7 +177,7 @@ fn a_riders_current_tile_and_tween_are_available_before_foreground_queries() {
         .tile_center(player.tile_x, player.tile_y);
     assert!(
         transform.translation.x < destination.0,
-        "the rider must retain the boat's sub-tile position"
+        "the rider must retain its own sub-tile position"
     );
 }
 

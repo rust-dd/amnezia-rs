@@ -119,28 +119,35 @@ fn event_head_center_and_feet_anchors_do_not_depend_on_charset_or_tile_graphics(
 
 #[test]
 fn a_jumping_target_keeps_the_animation_on_its_interpolated_ground_position() {
-    let (mut app, hero, _) = map_app(60);
-    let data = MapData::for_test(20, 15);
-    let mut queue = MoveQueue::default();
-    queue.set_step_secs(1.0);
-    queue.enqueue_route([RouteAction::Jump {
-        dx: 2,
-        dy: 0,
-        face: 1,
-    }]);
-    let mut player = app.world_mut().get_mut::<Player>(hero).unwrap();
-    queue.advance(&mut *player, &data, 0.0);
-    queue.advance(&mut *player, &data, 0.5);
-    let ground = queue.ground_position(&*player, &data);
-    let elevated = queue.render_position(&*player, &data);
-    assert!(elevated.y > ground.y);
-    let position = elevated + Vec2::Y * player.y_offset();
-    app.world_mut()
-        .entity_mut(hero)
-        .insert((queue, Transform::from_xyz(position.x, position.y, 0.0)));
-    app.insert_resource(data);
-    play(&mut app, AnimTarget::Hero, false);
-    assert_eq!(positions(&mut app)[0].1, ground + Vec2::Y * 4.0);
+    for riding in [None, Some(0), Some(1), Some(2)] {
+        let (mut app, hero, _) = map_app(60);
+        app.init_resource::<crate::vehicles::Vehicles>();
+        app.world_mut()
+            .resource_mut::<crate::vehicles::Vehicles>()
+            .save
+            .riding = riding;
+        let data = MapData::for_test(20, 15);
+        let mut queue = MoveQueue::default();
+        queue.set_step_secs(1.0);
+        queue.enqueue_route([RouteAction::Jump {
+            dx: 2,
+            dy: 0,
+            face: 1,
+        }]);
+        let mut player = app.world_mut().get_mut::<Player>(hero).unwrap();
+        queue.advance(&mut *player, &data, 0.0);
+        queue.advance(&mut *player, &data, 0.5);
+        let ground = queue.ground_position(&*player, &data);
+        let elevated = queue.render_position(&*player, &data);
+        assert!(elevated.y > ground.y);
+        let position = elevated + Vec2::Y * player.y_offset();
+        app.world_mut()
+            .entity_mut(hero)
+            .insert((queue, Transform::from_xyz(position.x, position.y, 0.0)));
+        app.insert_resource(data);
+        play(&mut app, AnimTarget::Hero, false);
+        assert_eq!(positions(&mut app)[0].1, ground + Vec2::Y * 4.0);
+    }
 }
 
 #[test]

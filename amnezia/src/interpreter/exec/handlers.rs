@@ -182,15 +182,19 @@ pub(super) fn change_event_location(
 pub(super) fn move_event(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -> Flow {
     let target = command.params.first().copied().unwrap_or(0);
     let route = RouteStepper::from_move_event(&command.params);
-    if (10002..=10004).contains(&target) {
-        x.subsystems.mapfx.vehicles.set_route(target, route);
-    } else if target == 10001 && x.subsystems.mapfx.vehicles.riding() {
-        let target = 10002 + x.subsystems.mapfx.vehicles.save.riding.unwrap() as i32;
-        x.subsystems.mapfx.vehicles.set_route(target, route);
-    } else if target == 10001 {
+    let rider = x
+        .subsystems
+        .mapfx
+        .vehicles
+        .save
+        .riding
+        .is_some_and(|index| target == 10002 + index as i32);
+    if target == 10001 || rider {
         if let Ok((_, mut stepper)) = x.hero_queue.single_mut() {
             stepper.force_route(route);
         }
+    } else if (10002..=10004).contains(&target) {
+        x.subsystems.mapfx.vehicles.set_route(target, route);
     } else {
         let id = if target == 10005 {
             frame.event_id as i32

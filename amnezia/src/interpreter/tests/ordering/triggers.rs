@@ -236,6 +236,12 @@ fn touches_queued_by_the_current_move_attempt_do_not_prevent_boarding() {
             .riding,
         Some(0)
     );
+    assert_eq!(value(&app), 0);
+    for _ in 0..6 {
+        press(&mut app, &[]);
+        assert_eq!(value(&app), 0);
+    }
+    press(&mut app, &[]);
     assert_eq!(value(&app), 1);
 }
 
@@ -257,10 +263,13 @@ fn a_moving_boat_cannot_accept_actions_or_idle_floor_collisions() {
     });
     press(&mut app, &[KeyCode::Enter]);
     assert_eq!(value(&app), 0);
+    let world = app.world_mut();
     assert!(
-        app.world()
-            .resource::<crate::vehicles::Vehicles>()
-            .rider_moving()
+        world
+            .query_filtered::<&MoveQueue, With<Player>>()
+            .single(world)
+            .unwrap()
+            .busy()
     );
     assert!(!app.world().resource::<RunningEvent>().active());
 }

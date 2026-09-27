@@ -73,7 +73,6 @@ fn all_vehicle_routes_and_animation_clocks_resume_without_repeated_commands_at_f
                 commands.extend([23, 27, 41, 37, 32, 8, 1]);
                 start(&mut vehicles, &data, index, &commands);
             }
-            vehicles.save.riding = Some(2);
         });
         app.update();
         let mut expected = copy(app.world().resource::<Vehicles>());

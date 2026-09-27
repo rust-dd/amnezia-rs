@@ -40,7 +40,7 @@ impl Obstacles<'_, '_> {
         )
     }
 
-    pub(super) fn blocks_disembarking(&self, tile: (i32, i32), switches: &Switches) -> bool {
+    pub(super) fn blocks_landing(&self, tile: (i32, i32), switches: &Switches) -> bool {
         self.events.events.iter().any(|event| {
             (event.x as i32, event.y as i32) == tile
                 && active_page(
@@ -50,7 +50,7 @@ impl Obstacles<'_, '_> {
                     &self.party,
                     &self.inventory,
                 )
-                .is_some_and(|page| page.layer == 1)
+                .is_some()
         })
     }
 }

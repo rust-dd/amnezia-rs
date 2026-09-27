@@ -37,10 +37,6 @@ impl ScenePause<'_> {
             || self.files.as_ref().is_some_and(|v| v.active())
     }
 
-    pub(crate) fn riding(&self) -> bool {
-        self.vehicles.as_ref().is_some_and(|v| v.riding())
-    }
-
     pub(crate) fn airship(&self) -> bool {
         self.vehicles
             .as_ref()

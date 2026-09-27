@@ -11,19 +11,18 @@ fn command(code: u32, params: Vec<i32>) -> EventCommand {
 }
 
 pub(super) fn entry() -> Vec<EventCommand> {
-    vec![command(10810, vec![13, 0, 0])]
+    vec![
+        command(10810, vec![13, 0, 0]),
+        command(10850, vec![2, 0, 13, 0, 0]),
+        command(10840, vec![]),
+        command(11330, vec![10004, 8, 0, 0, 3, 0]),
+        command(11340, vec![]),
+    ]
 }
 
 pub(super) fn drive(world: &mut World, frame: u32) {
     if frame == 220 {
         assert_eq!(world.resource::<crate::world::MapData>().map_id, 13);
-        let mut vehicles = world.resource_mut::<crate::vehicles::Vehicles>();
-        vehicles.set_location(2, 13, 0, 0);
-        vehicles.save.riding = Some(2);
-        vehicles.set_route(
-            10004,
-            crate::world::RouteStepper::from_move_event(&[10004, 8, 0, 0, 3, 0]),
-        );
     }
     if frame == 350 {
         let position = world
@@ -31,6 +30,15 @@ pub(super) fn drive(world: &mut World, frame: u32) {
             .character(10004)
             .unwrap();
         assert_eq!((position.0, position.1), (139, 139));
+        let hero = world
+            .query::<&crate::player::Player>()
+            .single(world)
+            .unwrap();
+        assert_eq!((hero.tile_x, hero.tile_y), (139, 139));
+        assert_eq!(
+            world.resource::<crate::vehicles::Vehicles>().save.riding,
+            Some(2)
+        );
         super::capture(world, "looping-world-corner");
     }
     if frame == 500 {
