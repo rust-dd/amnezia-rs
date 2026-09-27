@@ -5,7 +5,8 @@ use crate::state::{Inventory, Party, Switches, Variables};
 use crate::tiles::CHAR_Y_OFFSET;
 use crate::transitions::{Kind, TransitionIo};
 use crate::world::{
-    MapChanged, MapData, MapEvents, MapRebuilt, MapScene, MoveQueue, RouteStepper, load_map,
+    Character, MapChanged, MapData, MapEvents, MapRebuilt, MapScene, MoveQueue, RouteStepper,
+    load_map,
 };
 use bevy::prelude::*;
 
@@ -173,9 +174,6 @@ fn swap_map(
     reload: bool,
 ) -> bool {
     let (tile_x, tile_y) = (x as i32, y as i32);
-    // A teleport whose destination is the current map (RM2000 same-map transfer)
-    // keeps the loaded map, its events, and their state — only the hero moves.
-    // Rebuilding the scene would reset every event's position and page state.
     if map_id == map_data.map_id && !reload {
         reposition_hero(players, map_data, tile_x, tile_y);
         pan.recenter(false);
@@ -194,6 +192,11 @@ fn swap_map(
         map_id,
     );
     reposition_hero(players, &data, tile_x, tile_y);
+    if map_id != map_data.map_id
+        && let Ok((mut player, _, _, mut route)) = players.single_mut()
+    {
+        route.animation.reset(&mut *player);
+    }
     *map_data = data;
     *map_events = events;
     pan.recenter(true);
@@ -214,9 +217,8 @@ fn reposition_hero(
     tile_x: i32,
     tile_y: i32,
 ) {
-    if let Ok((mut player, mut transform, mut queue, mut route)) = players.single_mut() {
-        *queue = MoveQueue::default();
-        *route = RouteStepper::default();
+    if let Ok((mut player, mut transform, mut queue, _)) = players.single_mut() {
+        queue.relocate(player.tile());
         player.tile_x = tile_x;
         player.tile_y = tile_y;
         let (world_x, world_y) = data.tile_center(tile_x, tile_y);
@@ -228,6 +230,9 @@ fn reposition_hero(
 
 #[cfg(test)]
 mod transition_tests;
+
+#[cfg(test)]
+mod relocation_tests;
 
 #[cfg(test)]
 mod tests {
@@ -255,10 +260,9 @@ mod tests {
         let mut app = App::new();
         app.add_plugins(MinimalPlugins);
         app.insert_resource(MapData::for_test(10, 10));
-        // Three scene entities that a full reload would despawn.
-        let scene: Vec<Entity> = (0..3)
+        let scene = (0..3)
             .map(|_| app.world_mut().spawn(MapScene).id())
-            .collect();
+            .collect::<Vec<_>>();
         let hero = app
             .world_mut()
             .spawn((
@@ -279,14 +283,12 @@ mod tests {
         app.add_systems(Update, run_reposition);
         app.update();
 
-        // The hero moved to the target tile and its transform snapped there.
         let player = app.world().entity(hero).get::<Player>().unwrap();
         assert_eq!((player.tile_x, player.tile_y), (4, 6));
         let (cx, cy) = app.world().resource::<MapData>().tile_center(4, 6);
         let transform = app.world().entity(hero).get::<Transform>().unwrap();
         assert_eq!(transform.translation.x, cx);
         assert_eq!(transform.translation.y, cy + CHAR_Y_OFFSET);
-        // No scene entity was despawned — the same map is still standing.
         for entity in scene {
             assert!(app.world().get_entity(entity).is_ok());
         }

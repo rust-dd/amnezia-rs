@@ -5,6 +5,7 @@ use crate::player::Player;
 mod continuation;
 mod diagonals;
 mod lifecycle;
+mod relocation;
 
 fn hero_app(tag: &str) -> (App, std::path::PathBuf, Entity) {
     let (mut app, path) = app(tag);

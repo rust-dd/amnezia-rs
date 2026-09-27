@@ -192,10 +192,11 @@ impl Vehicles {
         let Some(vehicle) = self.save.vehicles.get_mut(index) else {
             return;
         };
+        self.motion[index].queue.relocate(vehicle.tile());
         vehicle.definition.map_id = map_id;
         vehicle.definition.x = x;
         vehicle.definition.y = y;
-        self.motion[index] = default();
+        self.motion[index].pixel = None;
     }
 
     pub fn set_route(&mut self, reference: i32, route: RouteStepper) {

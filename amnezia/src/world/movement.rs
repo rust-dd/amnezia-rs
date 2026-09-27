@@ -16,6 +16,8 @@ pub(super) mod saved;
 mod geometry_tests;
 #[cfg(test)]
 mod original_tests;
+#[cfg(test)]
+mod relocation_tests;
 
 /// Seconds a character spends tweening across one tile at RM2000 move speed 4
 /// (the hero's pace, and every scripted route's). Autonomous event movement

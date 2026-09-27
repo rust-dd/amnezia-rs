@@ -20,6 +20,8 @@ struct StepState {
     jumping: bool,
     #[serde(default)]
     subpixels: Option<Subpixels>,
+    #[serde(default)]
+    jump_origin: Option<(i32, i32)>,
 }
 
 impl MoveQueue {
@@ -32,6 +34,7 @@ impl MoveQueue {
                 elapsed: step.elapsed,
                 jumping: step.jumping,
                 subpixels: step.subpixels,
+                jump_origin: step.jump_origin,
             }),
             step_secs: self.step_secs,
             kinematics: self.kinematics,
@@ -60,7 +63,8 @@ impl MotionState {
                 *face < facings && dx.checked_abs().is_some() && dy.checked_abs().is_some()
             })
             && self.active.as_ref().is_none_or(|step| {
-                (0.0..self.step_secs).contains(&step.elapsed)
+                ((0.0..self.step_secs).contains(&step.elapsed)
+                    || (step.jumping && step.elapsed == self.step_secs))
                     && step
                         .from
                         .iter()
@@ -68,7 +72,9 @@ impl MotionState {
                         .all(|value| value.is_finite())
                     && step.subpixels.is_none_or(|clock| {
                         self.kinematics.is_some()
-                            && (1..=256).contains(&clock.remaining)
+                            && clock.remaining <= 256
+                            && (clock.remaining > 0
+                                || (step.jumping && step.elapsed == self.step_secs))
                             && (0.0..1.0).contains(&clock.fraction)
                     })
             })
@@ -85,6 +91,7 @@ impl MotionState {
                 elapsed: step.elapsed,
                 jumping: step.jumping,
                 subpixels: step.subpixels,
+                jump_origin: step.jump_origin,
             }),
             step_secs: self.step_secs,
         }

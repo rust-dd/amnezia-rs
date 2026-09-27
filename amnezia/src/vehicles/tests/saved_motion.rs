@@ -3,6 +3,7 @@ use crate::save::{EventSaveRequest, LoadOutcome, LoadRequest, SavePlugin};
 
 mod continuation;
 mod lifecycle;
+mod relocation;
 mod stops;
 
 fn app(tag: &str) -> (App, std::path::PathBuf) {

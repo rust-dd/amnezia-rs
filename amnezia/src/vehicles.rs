@@ -8,6 +8,8 @@ mod landing_tests;
 mod make_way_tests;
 mod model;
 mod obstacles;
+#[cfg(test)]
+mod relocation_tests;
 mod render;
 pub(crate) mod saved;
 #[cfg(test)]

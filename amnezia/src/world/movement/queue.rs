@@ -60,6 +60,25 @@ pub(super) struct Tween {
     pub elapsed: f32,
     pub jumping: bool,
     pub subpixels: Option<Subpixels>,
+    pub jump_origin: Option<(i32, i32)>,
+}
+
+impl Tween {
+    fn finished(&self, seconds: f32) -> bool {
+        self.subpixels
+            .map_or(self.elapsed >= seconds, |clock| clock.remaining == 0)
+    }
+
+    fn jump_delta(&self, tile: (i32, i32)) -> Vec2 {
+        self.jump_origin
+            .map_or((self.to - self.from) / 16.0, |origin| {
+                Vec2::new(
+                    tile.0 as f32 - origin.0 as f32,
+                    tile.1 as f32 - origin.1 as f32,
+                )
+            })
+            .abs()
+    }
 }
 
 /// Pending moves and the original character's remaining-step counter.
@@ -108,7 +127,8 @@ impl MoveQueue {
             tween.subpixels.get_or_insert_with(|| Subpixels {
                 remaining: (256.0 * (1.0 - tween.elapsed / self.step_secs))
                     .round()
-                    .clamp(1.0, 256.0) as u16,
+                    .clamp(if tween.jumping { 0.0 } else { 1.0 }, 256.0)
+                    as u16,
                 fraction: 0.0,
             });
         }
@@ -118,14 +138,12 @@ impl MoveQueue {
         self.jump_attempt || self.active.is_some() || !self.steps.is_empty()
     }
 
-    pub(crate) fn scroll_step(&self, dt: f32) -> Option<ScrollStep> {
+    pub(crate) fn scroll_step(&self, tile: (i32, i32), dt: f32) -> Option<ScrollStep> {
         let motion = self.kinematics?;
         let (counter, jump_delta) = if let Some(tween) = &self.active {
             (
                 tween.subpixels?,
-                tween
-                    .jumping
-                    .then_some((tween.to - tween.from).abs() / 16.0),
+                tween.jumping.then(|| tween.jump_delta(tile)),
             )
         } else {
             let action = self.steps.front()?;
@@ -141,7 +159,7 @@ impl MoveQueue {
         };
         let amount = motion.amount(jump_delta.is_some());
         let frames = (counter.fraction + f64::from(dt.max(0.0)) * 60.0 + 0.000001).floor();
-        let ticks = (frames as u32).min(u32::from(counter.remaining).div_ceil(amount));
+        let ticks = (frames as u32).min(u32::from(counter.remaining).div_ceil(amount).max(1));
         Some(ScrollStep {
             pixels: (amount * ticks) as f32 / 16.0,
             jump_delta,
@@ -175,7 +193,7 @@ impl MoveQueue {
         let Some(tween) = &self.active else {
             return point;
         };
-        if tween.subpixels.is_none() {
+        if tween.subpixels.is_none() || tween.finished(self.step_secs) {
             return point;
         }
         // RPG_RT divides canonical map coordinates before wrapping screen positions.
@@ -191,6 +209,9 @@ impl MoveQueue {
         let Some(tween) = &self.active else {
             return center(data, ch.tile().0, ch.tile().1);
         };
+        if tween.finished(self.step_secs) {
+            return center(data, ch.tile().0, ch.tile().1);
+        }
         if let Some(subpixels) = tween.subpixels {
             let remaining = f32::from(subpixels.remaining) / 256.0;
             if !tween.jumping
@@ -215,6 +236,27 @@ impl MoveQueue {
         self.jump_attempt = jumping;
     }
 
+    pub(crate) fn relocate(&mut self, previous_tile: (i32, i32)) {
+        self.steps.clear();
+        if let Some(tween) = &mut self.active
+            && tween.jumping
+        {
+            tween.jump_origin.get_or_insert_with(|| {
+                let delta = (tween.to - tween.from) / 16.0;
+                (
+                    previous_tile.0.saturating_sub(delta.x as i32),
+                    previous_tile.1.saturating_add(delta.y as i32),
+                )
+            });
+            tween.elapsed = self.step_secs;
+            if let Some(clock) = &mut tween.subpixels {
+                clock.remaining = 0;
+            }
+        } else {
+            self.active = None;
+        }
+    }
+
     /// Advances at most one move; its successor belongs to the next character update.
     pub(crate) fn advance<C: Character>(
         &mut self,
@@ -227,6 +269,7 @@ impl MoveQueue {
             self.begin_from(ch, data, ch.tile(), action);
         }
         let tween = self.active.as_mut().unwrap();
+        let relocated = tween.finished(self.step_secs);
         let finished =
             if let (Some(subpixels), Some(kinematics)) = (&mut tween.subpixels, self.kinematics) {
                 subpixels.advance(kinematics, tween.jumping, dt);
@@ -237,7 +280,11 @@ impl MoveQueue {
                 tween.elapsed >= self.step_secs
             };
         if finished {
-            let end = tween.to;
+            let end = if relocated {
+                center(data, ch.tile().0, ch.tile().1)
+            } else {
+                tween.to
+            };
             self.active = None;
             Some(end)
         } else {
@@ -265,6 +312,7 @@ impl MoveQueue {
             to: center(data, nx, ny),
             elapsed: 0.0,
             jumping,
+            jump_origin: jumping.then_some((tile_x - dx, tile_y - dy)),
             subpixels: self.kinematics.map(|_| Subpixels {
                 remaining: 256,
                 fraction: 0.0,

@@ -59,7 +59,9 @@ fn airship_boards_on_its_tile_and_lands_at_its_live_position() {
         vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
     }
     assert_eq!(vehicles.character(10004), Some((55, 100, DIR_LEFT)));
+    assert_eq!(vehicles.rider_direction(), Some(DIR_DOWN));
     vehicles.set_location(2, 13, 28, 100);
+    assert_eq!(vehicles.rider_direction(), Some(DIR_DOWN));
     assert!(vehicles.toggle(&data, (55, 100, DIR_DOWN), |_, _| false));
     for _ in 0..32 {
         vehicles.advance_flight(1.0 / 60.0, &data, |_, _| false);
@@ -68,7 +70,7 @@ fn airship_boards_on_its_tile_and_lands_at_its_live_position() {
         vehicles.disembark,
         Some(model::DisembarkPose {
             tile: (28, 100),
-            direction: DIR_LEFT,
+            direction: DIR_DOWN,
             facing: DIR_DOWN
         })
     );

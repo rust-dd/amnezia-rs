@@ -1,5 +1,5 @@
 use super::*;
-use crate::world::{RouteStepper, ScrollStep};
+use crate::world::{Character, RouteStepper, ScrollStep};
 
 #[derive(Resource, Default)]
 pub(in crate::player) struct MotionScroll(Option<Frame>);
@@ -31,7 +31,7 @@ pub(in crate::player) fn prepare_scroll(
     };
     let direction = route.direction(hero);
     queue.use_character_motion(route.speed(), direction);
-    let Some(step) = queue.scroll_step(time.delta_secs()) else {
+    let Some(step) = queue.scroll_step(hero.tile(), time.delta_secs()) else {
         return;
     };
     let half_view = view.area.size() / 2.0;

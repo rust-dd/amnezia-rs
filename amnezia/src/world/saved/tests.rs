@@ -6,6 +6,7 @@ mod hero;
 mod invalid_facing;
 mod lifecycle;
 mod motion;
+mod relocation;
 mod stops;
 mod validation;
 
