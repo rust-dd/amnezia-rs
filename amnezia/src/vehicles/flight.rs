@@ -64,6 +64,10 @@ impl AirshipFlight {
 }
 
 impl Vehicles {
+    pub(crate) fn airship_ascent_remaining(&self) -> u16 {
+        self.save.airship_flight.ascent
+    }
+
     pub(crate) fn airship_transitioning(&self) -> bool {
         self.save.riding == Some(2) && self.save.airship_flight.active()
     }

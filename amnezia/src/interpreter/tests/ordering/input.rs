@@ -1,5 +1,4 @@
 use super::*;
-use crate::world::RouteAction;
 
 fn vehicle_app() -> App {
     let mut app = app();
@@ -19,13 +18,7 @@ fn press(app: &mut App, keys: &[KeyCode]) {
 
 fn start_two_frame_step(app: &mut App) {
     let world = app.world_mut();
-    let mut queue = world.query::<&mut MoveQueue>().single_mut(world).unwrap();
-    queue.set_step_secs(2.0 / 60.0);
-    queue.push_step(RouteAction::Step {
-        dx: 1,
-        dy: 0,
-        face: crate::tiles::DIR_RIGHT,
-    });
+    queue_hero_step(world, crate::tiles::DIR_RIGHT, 6);
     app.update();
     let world = app.world_mut();
     assert!(world.query::<&MoveQueue>().single(world).unwrap().busy());

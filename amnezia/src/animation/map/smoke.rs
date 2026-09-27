@@ -78,17 +78,26 @@ fn start_case(world: &mut World, case: u32) {
         hero.set_tile(60, 60);
         *queue = motion(case == 1, case != 2);
         *route = default();
+        route.set_speed(if case == 1 { 1 } else { 2 });
+        route.set_direction(&mut *hero, 1);
         transform.translation.x = x;
         transform.translation.y = y + hero.y_offset();
     }
-    for (mut event, mut queue, mut transform) in world
-        .query::<(&mut EventSprite, &mut MoveQueue, &mut Transform)>()
+    for (mut event, mut queue, mut route, mut transform) in world
+        .query::<(
+            &mut EventSprite,
+            &mut MoveQueue,
+            &mut RouteStepper,
+            &mut Transform,
+        )>()
         .iter_mut(world)
     {
         if event.id != 9000 {
             continue;
         }
         event.set_tile(60, 60);
+        route.set_speed(2);
+        route.set_direction(&mut *event, 1);
         *queue = motion(false, case == 2);
         transform.translation.x = x;
         transform.translation.y = y + event.y_offset();
@@ -118,7 +127,6 @@ fn start_case(world: &mut World, case: u32) {
 
 fn motion(jumping: bool, moving: bool) -> MoveQueue {
     let mut queue = MoveQueue::default();
-    queue.set_step_secs(0.5);
     if moving {
         queue.enqueue_route((0..4).map(|_| {
             if jumping {

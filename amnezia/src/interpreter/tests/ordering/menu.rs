@@ -2,7 +2,6 @@ use super::*;
 use crate::menu::SceneFlow;
 use crate::timing::TimingPlugin;
 use crate::transitions::{Transition, TransitionPlugin};
-use crate::world::RouteAction;
 
 mod arbitration;
 mod lifecycle;
@@ -101,13 +100,7 @@ fn a_short_arrival_event_discards_cancel_captured_on_the_final_step_tick() {
     let mut app = fixture();
     floor_event(&mut app, 1, 6);
     let world = app.world_mut();
-    let mut queue = world.query::<&mut MoveQueue>().single_mut(world).unwrap();
-    queue.set_step_secs(2.0 / 60.0);
-    queue.push_step(RouteAction::Step {
-        dx: 1,
-        dy: 0,
-        face: crate::tiles::DIR_RIGHT,
-    });
+    queue_hero_step(world, crate::tiles::DIR_RIGHT, 6);
     tick(&mut app, &[]);
     tick(&mut app, &[KeyCode::Escape]);
     assert!(switch_on(&app, 10));

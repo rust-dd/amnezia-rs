@@ -174,7 +174,10 @@ fn idle_continuous_pages_update_the_displayed_sprite_at_the_original_rate() {
 
 #[test]
 fn changing_to_a_fixed_page_during_movement_immediately_installs_its_direction_and_pose() {
+    let mut original = page("Chara1", 0);
+    original.move_speed = 4;
     let mut fixed = page("Chara1", 1);
+    fixed.move_speed = 4;
     fixed.animation_type = 4;
     fixed.pattern = 0;
     fixed.direction = 3;
@@ -185,7 +188,7 @@ fn changing_to_a_fixed_page_during_movement_immediately_installs_its_direction_a
         x: 3,
         y: 4,
         name: String::new(),
-        pages: vec![page("Chara1", 0), fixed],
+        pages: vec![original, fixed],
     });
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
         std::time::Duration::from_secs_f64(1.0 / 60.0),
@@ -197,15 +200,16 @@ fn changing_to_a_fixed_page_during_movement_immediately_installs_its_direction_a
             .before(super::super::update_event_sprites),
     );
     let world = app.world_mut();
-    world
-        .query::<&mut MoveQueue>()
+    let (mut character, mut queue, mut route) = world
+        .query::<(&mut EventSprite, &mut MoveQueue, &mut RouteStepper)>()
         .single_mut(world)
-        .unwrap()
-        .enqueue_route([crate::world::RouteAction::Step {
-            dx: 1,
-            dy: 0,
-            face: 1,
-        }]);
+        .unwrap();
+    route.set_direction(&mut *character, 1);
+    queue.enqueue_route([crate::world::RouteAction::Step {
+        dx: 1,
+        dy: 0,
+        face: 1,
+    }]);
     app.update();
     app.world_mut().resource_mut::<Switches>().set(8, true);
     app.update();
@@ -217,6 +221,11 @@ fn changing_to_a_fixed_page_during_movement_immediately_installs_its_direction_a
     assert!(queue.busy());
     assert_eq!((event.frame, event.dir), (0, 3));
     assert_eq!(sprite.rect.unwrap().min, Vec2::new(72.0, 96.0));
+    let data = world.resource::<MapData>();
+    assert_eq!(
+        queue.ground_position(event, data),
+        Vec2::from(data.tile_center(4, 4)) - Vec2::X * 12.0
+    );
 }
 
 pub(super) fn page(graphic: &str, index: u32) -> EventPage {

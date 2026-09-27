@@ -3,6 +3,29 @@ use super::*;
 const HALF_VIEW: Vec2 = Vec2::new(160.0, 120.0);
 
 #[test]
+fn camera_rasterization_truncates_map_display_coordinates_without_losing_pan_fraction() {
+    let data = MapData::for_test(40, 30);
+    let mut pan = CameraPan::default();
+    pan.update(&data, Vec2::ZERO, HALF_VIEW, 0.0);
+    pan.command(&[2, 1, 1, 1, 0]);
+    for frame in 1..=8 {
+        let raw = pan.update(&data, Vec2::ZERO, HALF_VIEW, 1.0 / 60.0);
+        assert_eq!(raw.x, 8.0 + frame as f32 / 4.0);
+        assert_eq!(
+            raster_position(&data, raw, HALF_VIEW).x,
+            8.0 + (frame / 4) as f32
+        );
+        assert_eq!(pan.offset.x, frame as f32 / 4.0);
+    }
+    let corner = Vec2::from(data.tile_center(0, 0)) + Vec2::new(-8.0, 8.0);
+    let raw = corner + Vec2::new(HALF_VIEW.x - 0.25, -HALF_VIEW.y + 0.25);
+    assert_eq!(
+        raster_position(&data, raw, HALF_VIEW),
+        raw + Vec2::new(0.25, -0.25)
+    );
+}
+
+#[test]
 fn original_long_cutscene_pans_keep_their_full_wait_even_at_the_map_edge() {
     for (map_id, expected_frames) in [(96, 400.0), (211, 1600.0), (222, 800.0), (275, 1600.0)] {
         let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(

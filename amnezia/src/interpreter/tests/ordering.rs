@@ -47,6 +47,21 @@ fn hero_x(app: &mut App) -> i32 {
     world.query::<&Player>().single(world).unwrap().tile_x
 }
 
+fn queue_hero_step(world: &mut World, direction: u32, speed: u32) {
+    let (mut hero, mut queue, mut route) = world
+        .query::<(&mut Player, &mut MoveQueue, &mut RouteStepper)>()
+        .single_mut(world)
+        .unwrap();
+    *route = route.clone().with_speed(speed);
+    route.set_direction(&mut *hero, direction);
+    let (dx, dy) = crate::world::dir_delta(direction);
+    queue.push_step(crate::world::RouteAction::Step {
+        dx,
+        dy,
+        face: hero.dir,
+    });
+}
+
 #[test]
 fn a_foreground_move_route_starts_on_the_following_character_update() {
     let mut app = app();

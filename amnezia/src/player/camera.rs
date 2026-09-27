@@ -149,7 +149,7 @@ pub(super) fn camera_follow(
     if !scene.riding()
         && let Some(queue) = queue
     {
-        point = queue.ground_position(player, &data);
+        point = queue.subpixel_position(player, &data);
     }
     let half_view = view.area.size() / 2.0;
     let point = if scene.paused()
@@ -168,8 +168,17 @@ pub(super) fn camera_follow(
             },
         )
     };
-    camera.translation.x = point.x;
-    camera.translation.y = point.y;
+    let rendered = raster_position(&data, point, half_view);
+    camera.translation.x = rendered.x;
+    camera.translation.y = rendered.y;
+}
+
+fn raster_position(data: &MapData, point: Vec2, half_view: Vec2) -> Vec2 {
+    let corner = Vec2::from(data.tile_center(0, 0)) + Vec2::new(-8.0, 8.0);
+    Vec2::new(
+        (point.x - corner.x - half_view.x).trunc() + corner.x + half_view.x,
+        corner.y - half_view.y - (corner.y - point.y - half_view.y).trunc(),
+    )
 }
 
 #[cfg(test)]

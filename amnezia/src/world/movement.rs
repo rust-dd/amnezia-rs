@@ -1,22 +1,20 @@
-//! Shared tile-to-tile movement for the hero and event NPCs: a per-character
-//! queue that tweens one tile per step, and the generic [`walk`] system that
-//! drives any [`Character`].
-//!
-//! Forced routes (from the route stepper, driving `MoveEvent` and `move_type` 6),
-//! autonomous NPC steps, and the hero's own keyboard steps all share this queue,
-//! so every kind of movement animates smoothly across a tile instead of
-//! teleport-snapping. The stepper applies a route's facing/graphic changes
-//! directly to the character and uses its shared stop count, so the queue itself
-//! carries walking steps and complete jumps.
+//! Shared character movement, original subpixel geometry, and sprite updates.
 
 use super::MapData;
 use crate::assets::resolve_png;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use bevy::ecs::component::Mutable;
 use bevy::prelude::*;
-use std::collections::VecDeque;
+
+mod queue;
+pub use queue::MoveQueue;
 
 pub(super) mod saved;
+
+#[cfg(test)]
+mod geometry_tests;
+#[cfg(test)]
+mod original_tests;
 
 /// Seconds a character spends tweening across one tile at RM2000 move speed 4
 /// (the hero's pace, and every scripted route's). Autonomous event movement
@@ -68,165 +66,6 @@ pub trait Character {
     /// band for its page layer (below/same/above the hero).
     fn draw_z(&self, tile_y: i32) -> f32 {
         tiles::character_z(tile_y)
-    }
-}
-
-/// An in-progress walk or jump between tile centers.
-#[derive(Clone)]
-struct Tween {
-    from: Vec2,
-    to: Vec2,
-    elapsed: f32,
-    jumping: bool,
-}
-
-impl Tween {
-    fn position(&self, duration: f32) -> Vec2 {
-        let progress = (self.elapsed / duration).clamp(0.0, 1.0);
-        let mut pos = self.from.lerp(self.to, progress);
-        if self.jumping {
-            pos.y += jump_height(progress);
-        }
-        pos
-    }
-}
-
-/// A character's pending steps and current tween. Animation timing belongs to
-/// the character, independently of individual steps and route boundaries.
-#[derive(Component, Clone)]
-pub struct MoveQueue {
-    steps: VecDeque<RouteAction>,
-    active: Option<Tween>,
-    step_secs: f32,
-    jump_attempt: bool,
-}
-
-impl Default for MoveQueue {
-    fn default() -> Self {
-        Self {
-            steps: VecDeque::new(),
-            active: None,
-            step_secs: STEP_DURATION,
-            jump_attempt: false,
-        }
-    }
-}
-
-impl MoveQueue {
-    /// Append the movements of a scripted route.
-    pub fn enqueue_route(&mut self, actions: impl IntoIterator<Item = RouteAction>) {
-        self.steps.extend(actions);
-    }
-
-    /// Queue a single keyboard step.
-    pub fn push_step(&mut self, action: RouteAction) {
-        self.steps.push_back(action);
-    }
-
-    /// Set the per-tile tween duration for the steps that follow (RM2000 move
-    /// speed, via [`step_secs_for_speed`]); the autonomous mover sets this from
-    /// the event's speed before enqueuing its step.
-    pub fn set_step_secs(&mut self, secs: f32) {
-        self.step_secs = secs;
-    }
-
-    /// Whether a step is tweening or pending; the interpreter waits on this and
-    /// the sprite systems yield rendering to [`walk`] while it holds.
-    pub fn busy(&self) -> bool {
-        self.jump_attempt || self.active.is_some() || !self.steps.is_empty()
-    }
-
-    pub(crate) fn render_position<C: Character>(&self, ch: &C, data: &MapData) -> Vec2 {
-        self.active.as_ref().map_or_else(
-            || center(data, ch.tile().0, ch.tile().1),
-            |tween| tween.position(self.step_secs),
-        )
-    }
-
-    pub(crate) fn ground_position<C: Character>(&self, ch: &C, data: &MapData) -> Vec2 {
-        self.active.as_ref().map_or_else(
-            || center(data, ch.tile().0, ch.tile().1),
-            |tween| {
-                tween
-                    .from
-                    .lerp(tween.to, (tween.elapsed / self.step_secs).clamp(0.0, 1.0))
-            },
-        )
-    }
-
-    pub(crate) fn jumping(&self) -> bool {
-        self.jump_attempt || self.active.as_ref().is_some_and(|t| t.jumping)
-    }
-
-    pub(in crate::world) fn set_jump_attempt(&mut self, jumping: bool) {
-        self.jump_attempt = jumping;
-    }
-
-    /// Advance the current step by `dt`, applying instant actions in order and
-    /// starting the next tween. Returns the world-space tile-center position to
-    /// render at this frame, or `None` when the character is idle.
-    pub(crate) fn advance<C: Character>(
-        &mut self,
-        ch: &mut C,
-        data: &MapData,
-        dt: f32,
-    ) -> Option<Vec2> {
-        let step = self.step_secs;
-        loop {
-            if let Some(tween) = self.active.as_mut() {
-                tween.elapsed += dt;
-                if tween.elapsed < step {
-                    return Some(tween.position(step));
-                }
-                let end = tween.to;
-                self.active = None;
-                return Some(end);
-            }
-            let action = self.steps.pop_front()?;
-            self.begin_step(ch, data, action);
-        }
-    }
-
-    /// Commit a move to its destination: update the logical tile immediately
-    /// (so y-sorting and lookups use the destination), face the move, and start
-    /// the pixel tween from the old center to the new one.
-    fn begin_step<C: Character>(&mut self, ch: &mut C, data: &MapData, action: RouteAction) {
-        self.begin_from(ch, data, ch.tile(), action);
-    }
-
-    pub(crate) fn begin_from<C: Character>(
-        &mut self,
-        ch: &mut C,
-        data: &MapData,
-        origin: (i32, i32),
-        action: RouteAction,
-    ) {
-        let (dx, dy) = action.delta();
-        let jumping = matches!(action, RouteAction::Jump { .. });
-        let (RouteAction::Step { face, .. } | RouteAction::Jump { face, .. }) = action;
-        let (x, y) = origin;
-        let from = center(data, x, y);
-        let (nx, ny) = (x + dx, y + dy);
-        let (tile_x, tile_y) = data.normalize_tile(nx, ny);
-        ch.set_tile(tile_x, tile_y);
-        ch.set_dir(face);
-        self.active = Some(Tween {
-            from,
-            to: center(data, nx, ny),
-            elapsed: 0.0,
-            jumping,
-        });
-    }
-}
-
-fn jump_height(progress: f32) -> f32 {
-    let height = (progress.min(1.0 - progress) * 32.0).floor().max(0.0);
-    if height < 5.0 {
-        height * 2.0
-    } else if height < 13.0 {
-        height + 4.0
-    } else {
-        16.0
     }
 }
 
@@ -291,6 +130,9 @@ pub(super) fn walk_selected<C: Character + Component<Mutability = Mutable>>(
         }
         let moving = queue.busy();
         let facing = ch.dir();
+        if let Some(route) = route.as_ref() {
+            queue.use_character_motion(route.speed(), route.direction(&*ch));
+        }
         let position = if moving {
             queue.advance(&mut *ch, &data, dt)
         } else {

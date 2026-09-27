@@ -37,6 +37,8 @@ pub(super) fn check(world: &mut World, frame: u32) -> Option<&'static str> {
         black_stage(world);
         if phase == 1 {
             world.resource_mut::<Switches>().set(7, false);
+        } else {
+            ascent::arm(world);
         }
         let mut fixture = world.resource_mut::<Fixture>();
         fixture.held += 1;

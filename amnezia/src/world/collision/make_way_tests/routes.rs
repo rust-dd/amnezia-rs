@@ -48,7 +48,7 @@ fn a_callback_relocation_does_not_replace_the_captured_move_origin() {
         assert_eq!(character.tile(), (2, 1));
         let queue = app.world().get::<MoveQueue>(npc).unwrap();
         let data = app.world().resource::<MapData>();
-        let elapsed = if jumping { 16.0 / 11.0 } else { 2.0 };
+        let elapsed = if jumping { 1.0 } else { 2.0 };
         let pixels = queue.ground_position(character, data).x - data.tile_center(1, 1).0;
         assert!((pixels - elapsed).abs() < 0.00001);
         assert_eq!(queue.jumping(), jumping);
@@ -149,8 +149,13 @@ fn callback_page_changes_apply_live_collision_speed_and_stopping_dependent_poses
         assert_eq!(character.dir, if jumping { 1 } else { 0 });
         let queue = app.world().get::<MoveQueue>(npc).unwrap();
         let data = app.world().resource::<MapData>();
-        let pixels = queue.ground_position(character, data).x - data.tile_center(1, 1).0;
-        assert!((pixels - 1.0).abs() < 0.00001);
+        let ground = queue.ground_position(character, data);
+        let expected = if jumping {
+            Vec2::from(data.tile_center(1, 1)) + Vec2::X
+        } else {
+            Vec2::from(data.tile_center(2, 1)) - Vec2::Y * 15.0
+        };
+        assert_eq!(ground, expected);
     }
 }
 

@@ -105,13 +105,7 @@ fn arriving_during_a_foreground_wait_retains_all_floor_touches_for_later() {
     world
         .resource_mut::<RunningEvent>()
         .start(0, vec![cmd(11410, 0, vec![100])]);
-    let mut queue = world.query::<&mut MoveQueue>().single_mut(world).unwrap();
-    queue.set_step_secs(2.0 / 60.0);
-    queue.push_step(RouteAction::Step {
-        dx: 0,
-        dy: 1,
-        face: crate::tiles::DIR_DOWN,
-    });
+    queue_hero_step(world, crate::tiles::DIR_DOWN, 6);
     app.update();
     app.update();
     assert_eq!(value(&app), 0);

@@ -1,5 +1,4 @@
 use super::*;
-use crate::world::RouteAction;
 
 #[test]
 fn a_floor_touch_runs_in_the_update_that_completes_the_step() {
@@ -18,13 +17,7 @@ fn a_floor_touch_runs_in_the_update_that_completes_the_step() {
                 .single_mut(world)
                 .unwrap() = RouteStepper::from_move_event(&[10001, 8, 0, 0, 1]).with_speed(6);
         } else {
-            let mut queue = world.query::<&mut MoveQueue>().single_mut(world).unwrap();
-            queue.set_step_secs(2.0 / 60.0);
-            queue.push_step(RouteAction::Step {
-                dx: 1,
-                dy: 0,
-                face: crate::tiles::DIR_RIGHT,
-            });
+            queue_hero_step(world, crate::tiles::DIR_RIGHT, 6);
         }
         app.update();
         assert!(!switch_on(&app, 1));

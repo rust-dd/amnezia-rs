@@ -46,7 +46,13 @@ fn position(world: &mut World) -> Vec2 {
         .unwrap()
         .translation
         .truncate();
-    assert!(logical.abs_diff_eq(rendered, 0.001));
+    let (origin_x, origin_y) = world.resource::<MapData>().tile_center(0, 0);
+    let corner = Vec2::new(origin_x - 8.0, origin_y + 8.0);
+    let expected = Vec2::new(
+        (logical.x - corner.x - 160.0).trunc() + corner.x + 160.0,
+        corner.y - 120.0 - (corner.y - logical.y - 120.0).trunc(),
+    );
+    assert_eq!(rendered, expected);
     logical
 }
 

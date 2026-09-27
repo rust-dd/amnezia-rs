@@ -3,6 +3,7 @@ use crate::player::{CameraPan, saved_camera::CameraState};
 use crate::vehicles::{VehicleSave, Vehicles, saved};
 use crate::world::{Character, MapScene};
 
+mod ascent;
 pub(crate) mod pixels;
 mod restore;
 
@@ -24,6 +25,7 @@ struct Fixture {
 }
 
 pub(crate) fn configure(app: &mut App) {
+    ascent::configure(app);
     let slot = super::smoke_slot::Slot::new(app, "save-vehicles");
     app.insert_resource(Fixture {
         slot,
@@ -130,13 +132,11 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             assert_eq!(game.camera.as_ref(), Some(&expected.camera));
         }
         310 | 490 | 840 => world.resource_mut::<LoadRequest>().0 = true,
-        401 => {
-            let vehicles = world.resource::<Vehicles>();
-            assert!(!vehicles.airship_transitioning());
-            assert_eq!(vehicles.airship_altitude(), 16.0);
+        430 => {
+            ascent::finish(world);
             world.resource_mut::<Fixture>().checks |= 16;
+            start(world, routes());
         }
-        430 => start(world, routes()),
         450 => {
             assert!(world.resource::<Vehicles>().jumping(1));
             remember(world, 1);

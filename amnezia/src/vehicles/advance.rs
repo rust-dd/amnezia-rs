@@ -122,6 +122,9 @@ fn finish(
         return;
     }
     let moving = motion.queue.busy();
+    motion
+        .queue
+        .use_character_motion(vehicle.speed, motion.route.direction(vehicle));
     if let Some(pixel) = motion.queue.advance(vehicle, &data, time.delta_secs()) {
         motion.pixel = Some(pixel);
     }
