@@ -9,19 +9,19 @@ pub(crate) struct Turn {
     stopped: bool,
 }
 
-pub(in crate::world) enum Progress {
+pub(crate) enum Progress {
     Done,
     Refresh,
     Move(RouteAction, f32),
 }
 
-pub(in crate::world) enum Boundary {
+pub(crate) enum Boundary {
     Ready(Progress),
     Attempt(Attempt),
 }
 
 impl Turn {
-    pub(in crate::world) fn new(route: &mut RouteStepper) -> Self {
+    pub(crate) fn new(route: &mut RouteStepper) -> Self {
         route.moving = false;
         Self {
             // A page replacement keeps the current call's original command parameters.
@@ -73,6 +73,7 @@ impl Turn {
 }
 
 impl RouteStepper {
+    #[cfg(test)]
     pub(in crate::world) fn advance_turn<C: Character>(
         &mut self,
         ch: &mut C,
@@ -96,7 +97,7 @@ impl RouteStepper {
         }
     }
 
-    pub(in crate::world) fn prepare_turn<C: Character>(
+    pub(crate) fn prepare_turn<C: Character>(
         &mut self,
         ch: &mut C,
         hero: (i32, i32),
@@ -155,7 +156,7 @@ impl RouteStepper {
         }
     }
 
-    pub(in crate::world) fn resolve_turn<C: Character>(
+    pub(crate) fn resolve_turn<C: Character>(
         &mut self,
         ch: &mut C,
         attempt: Attempt,

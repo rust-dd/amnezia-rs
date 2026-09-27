@@ -44,7 +44,10 @@ use relocation::apply_relocate;
 pub use route::RouteStepper;
 #[cfg(test)]
 pub(crate) use route::drive as drive_route;
-pub(crate) use route::{StepEffect, Turn as RouteTurn, drive_part as drive_route_part};
+pub(crate) use route::{
+    Attempt as RouteAttempt, Boundary as RouteBoundary, Progress as RouteProgress, StepEffect,
+    Turn as RouteTurn,
+};
 pub(crate) use scene_pause::ScenePause;
 pub(crate) use screen::MapScreen;
 pub(crate) use touch::TouchEvents;

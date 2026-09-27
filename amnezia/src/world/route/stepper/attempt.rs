@@ -1,10 +1,10 @@
 use super::*;
 
 #[derive(Clone, Copy)]
-pub(in crate::world) struct Attempt {
-    pub(in crate::world) origin: (i32, i32),
-    pub(in crate::world) delta: (i32, i32),
-    pub(in crate::world) jumping: bool,
+pub(crate) struct Attempt {
+    pub(crate) origin: (i32, i32),
+    pub(crate) delta: (i32, i32),
+    pub(crate) jumping: bool,
     pub(super) previous: u32,
     pub(super) facing: u32,
     pub(super) forward: bool,

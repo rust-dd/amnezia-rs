@@ -17,17 +17,18 @@ use crate::state::Switches;
 #[cfg(test)]
 use crate::state::{Inventory, Party, Variables};
 use bevy::prelude::*;
-pub(crate) use stepper::StepEffect;
-pub(crate) use stepper::Turn;
+pub(crate) use stepper::{Attempt, Boundary, Progress, StepEffect, Turn};
 
 /// One frame of a character's stepper: the tile delta of the step it enqueued
 /// this tick (for the caller to sync the logical event tile), plus the side
 /// effects to apply.
+#[cfg(test)]
 pub(crate) struct Driven {
     pub(crate) moved: Option<(i32, i32)>,
     pub(crate) effects: Vec<StepEffect>,
 }
 
+#[cfg(test)]
 impl Driven {
     /// Nothing happened this tick (inactive, mid-step, or still in its delay).
     fn idle() -> Self {
@@ -71,34 +72,6 @@ pub(crate) fn drive<C: Character>(
             delta
         });
     Driven { moved, effects }
-}
-
-pub(crate) fn drive_part<C: Character>(
-    ch: &mut C,
-    queue: &mut MoveQueue,
-    stepper: &mut RouteStepper,
-    hero: (i32, i32),
-    can_step: impl Fn(&C, i32, i32, bool, bool) -> bool,
-    turn: Option<Turn>,
-) -> (Driven, Option<Turn>) {
-    if queue.busy()
-        || (turn.is_none() && (stepper.settle_movement() || !stepper.active()))
-        || stepper.stop_active()
-    {
-        return (Driven::idle(), None);
-    }
-    let mut turn = turn.unwrap_or_else(|| Turn::new(stepper));
-    let mut driven = Driven::idle();
-    match stepper.advance_turn(ch, hero, &can_step, &mut driven.effects, &mut turn) {
-        stepper::Progress::Refresh => return (driven, Some(turn)),
-        stepper::Progress::Move(action, seconds) => {
-            driven.moved = Some(action.delta());
-            queue.set_step_secs(seconds);
-            queue.enqueue_route([action]);
-        }
-        stepper::Progress::Done => {}
-    }
-    (driven, None)
 }
 
 /// Apply the side effects a route command produced: toggle a game switch, play a

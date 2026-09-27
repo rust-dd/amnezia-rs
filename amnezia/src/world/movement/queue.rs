@@ -211,7 +211,7 @@ impl MoveQueue {
         self.jump_attempt || self.active.as_ref().is_some_and(|tween| tween.jumping)
     }
 
-    pub(in crate::world) fn set_jump_attempt(&mut self, jumping: bool) {
+    pub(crate) fn set_jump_attempt(&mut self, jumping: bool) {
         self.jump_attempt = jumping;
     }
 

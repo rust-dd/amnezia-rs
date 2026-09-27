@@ -1,25 +1,77 @@
 use super::*;
-use crate::world::{RouteTurn, drive_route_part};
+mod route;
+
+#[derive(Resource, Default)]
+pub(super) struct Updates([bool; 3]);
+
+pub(crate) fn begin_update(world: &mut World) {
+    let Some(data) = world.get_resource::<MapData>() else {
+        return;
+    };
+    let Some(vehicles) = world.get_resource::<Vehicles>() else {
+        return;
+    };
+    let active = std::array::from_fn::<_, 3, _>(|index| {
+        vehicles.save.vehicles[index].definition.map_id == data.map_id
+    });
+    if let Some(mut updates) = world.get_resource_mut::<Updates>() {
+        for (processed, active) in updates.0.iter_mut().zip(active) {
+            if active {
+                *processed = false;
+            }
+        }
+    }
+}
+
+fn claim(world: &mut World, index: usize) -> bool {
+    world
+        .get_resource_mut::<Updates>()
+        .is_none_or(|mut updates| !std::mem::replace(&mut updates.0[index], true))
+}
+
+pub(crate) fn early(world: &mut World, index: usize) {
+    if world.contains_resource::<Updates>()
+        && world.run_system_cached_with(eligible, index).unwrap()
+    {
+        character(world, index, false);
+    }
+}
+
+fn eligible(
+    In(index): In<usize>,
+    data: Res<MapData>,
+    vehicles: Res<Vehicles>,
+    guards: MoveGuards,
+) -> bool {
+    !guards.forced_route_paused()
+        && vehicles.save.riding != Some(index)
+        && vehicles.save.vehicles[index].definition.map_id == data.map_id
+}
 
 pub(super) fn advance(world: &mut World) {
     let Some(transitioning) = world.run_system_cached(begin).unwrap() else {
         return;
     };
     for index in 0..3 {
-        if index != 2 || !transitioning {
-            let mut turn = None;
-            loop {
-                turn = world.run_system_cached_with(part, (index, turn)).unwrap();
-                if turn.is_none() {
-                    break;
-                }
-                crate::world::update::refresh_route_switch(world);
-            }
-        }
-        world
-            .run_system_cached_with(finish, (index, transitioning))
-            .unwrap();
+        character(world, index, transitioning);
     }
+}
+
+fn character(world: &mut World, index: usize, transitioning: bool) {
+    if world.resource::<Vehicles>().save.vehicles[index]
+        .definition
+        .map_id
+        != world.resource::<MapData>().map_id
+        || !claim(world, index)
+    {
+        return;
+    }
+    if index != 2 || !transitioning {
+        route::advance(world, index);
+    }
+    world
+        .run_system_cached_with(finish, (index, transitioning))
+        .unwrap();
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -54,67 +106,6 @@ fn begin(
         );
     }
     Some(transitioning)
-}
-
-fn part(
-    In((index, turn)): In<(usize, Option<RouteTurn>)>,
-    data: Res<MapData>,
-    mut vehicles: ResMut<Vehicles>,
-    mut switches: ResMut<Switches>,
-    mut audio: MessageWriter<AudioRequest>,
-    obstacles: obstacles::Obstacles,
-    players: Query<(&Player, Option<&RouteStepper>)>,
-) -> Option<RouteTurn> {
-    let hero = players.single().ok();
-    let bodies = obstacles.bodies(
-        &vehicles,
-        data.map_id,
-        hero.and_then(|(_, route)| route)
-            .is_some_and(RouteStepper::through),
-    );
-    let collision = obstacles.collision(&data, &switches, &bodies);
-    let vehicles = &mut *vehicles;
-    let vehicle = &mut vehicles.save.vehicles[index];
-    let motion = &mut vehicles.motion[index];
-    if vehicle.definition.map_id != data.map_id {
-        return None;
-    }
-    let (x, y) = vehicle.tile();
-    let target = hero.map_or((x, y), |(hero, _)| hero.tile());
-    let delta = data.tile_delta((x, y), target);
-    let routed = motion.route.active();
-    let (driven, turn) = drive_route_part(
-        vehicle,
-        &mut motion.queue,
-        &mut motion.route,
-        (x + delta.0, y + delta.1),
-        |character, dx, dy, jumping, through| {
-            let from = character.tile();
-            collision.can_move(
-                from,
-                (from.0 + dx, from.1 + dy),
-                crate::world::collision::Mover::vehicle(index, through),
-                hero.map(|(hero, _)| hero.tile()),
-                jumping,
-            )
-        },
-        turn,
-    );
-    if routed {
-        vehicle.speed = motion.route.speed();
-    }
-    for effect in driven.effects {
-        match effect {
-            StepEffect::Switch(id, on) => switches.set(id, on),
-            StepEffect::Sound { name, params } => {
-                audio.write(AudioRequest::play_sound(&name, &params));
-            }
-            StepEffect::Transparency(level) => {
-                motion.alpha = crate::tiles::character_alpha(level);
-            }
-        }
-    }
-    turn
 }
 
 fn finish(

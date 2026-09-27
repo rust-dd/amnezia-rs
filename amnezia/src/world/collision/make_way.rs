@@ -70,7 +70,37 @@ fn leg(world: &mut World, id: u32, from: (i32, i32), to: (i32, i32), jumping: bo
     {
         crate::player::update::early(world);
     }
-    world.run_system_cached_with(finish, (id, passage)).unwrap()
+    if world
+        .run_system_cached_with(hero_blocks, (id, passage))
+        .unwrap()
+    {
+        return false;
+    }
+    for index in 0..3 {
+        if id == 10002 + index as u32 || (id == 0 && index == 2) {
+            continue;
+        }
+        let map_id = world.resource::<MapData>().map_id;
+        let at_destination = world
+            .get_resource::<crate::vehicles::Vehicles>()
+            .is_some_and(|vehicles| {
+                let vehicle = &vehicles.save.vehicles[index];
+                vehicle.definition.map_id == map_id && vehicle.tile() == passage.destination
+            });
+        if !at_destination {
+            continue;
+        }
+        crate::vehicles::early(world, index);
+        if world
+            .run_system_cached_with(vehicle_blocks, (id, index, passage))
+            .unwrap()
+        {
+            return false;
+        }
+    }
+    world
+        .run_system_cached_with(finish_tile, (id, passage))
+        .unwrap()
 }
 
 #[derive(SystemParam)]
@@ -96,6 +126,8 @@ impl Context<'_, '_> {
         let mover = if id == 0 {
             let (_, route) = hero?;
             Mover::hero(route.is_some_and(RouteStepper::through))
+        } else if let Some(index) = vehicle_index(id) {
+            Mover::vehicle(index, self.vehicles.as_ref()?.route_through(index))
         } else {
             let (character, route) = self.characters.iter().find(|(event, _)| event.id == id)?;
             Mover::event(character, route.is_some_and(RouteStepper::through))
@@ -147,10 +179,26 @@ fn blocks(In((id, other, passage)): In<(u32, u32, Passage)>, context: Context) -
         .unwrap_or(false)
 }
 
-fn finish(In((id, passage)): In<(u32, Passage)>, context: Context) -> bool {
+fn hero_blocks(In((id, passage)): In<(u32, Passage)>, context: Context) -> bool {
     context
         .with(id, |collision, mover, hero| {
-            collision.finish(mover, hero, passage)
+            collision.hero_blocks(mover, hero, passage)
+        })
+        .unwrap_or(false)
+}
+
+fn vehicle_blocks(In((id, index, passage)): In<(u32, usize, Passage)>, context: Context) -> bool {
+    context
+        .with(id, |collision, mover, _| {
+            collision.vehicle_blocks(mover, index, passage)
+        })
+        .unwrap_or(false)
+}
+
+fn finish_tile(In((id, passage)): In<(u32, Passage)>, context: Context) -> bool {
+    context
+        .with(id, |collision, mover, _| {
+            collision.finish_tile(mover, passage)
         })
         .unwrap_or(false)
 }

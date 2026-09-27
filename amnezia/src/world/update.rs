@@ -12,6 +12,7 @@ struct CharacterUpdates {
 }
 
 pub(crate) fn begin(world: &mut World) {
+    crate::vehicles::begin_update(world);
     if let Some(mut updates) = world.get_resource_mut::<CharacterUpdates>() {
         updates.processed.clear();
     }

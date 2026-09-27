@@ -1,8 +1,11 @@
 mod advance;
 use advance::advance;
+pub(crate) use advance::{begin_update, early};
 mod flight;
 #[cfg(test)]
 mod landing_tests;
+#[cfg(test)]
+mod make_way_tests;
 mod model;
 mod obstacles;
 mod render;
@@ -58,6 +61,7 @@ impl Plugin for VehiclePlugin {
                 .before(crate::player::PlayerStep)
         });
         app.init_resource::<Vehicles>()
+            .init_resource::<advance::Updates>()
             .insert_resource(VehicleMusic([
                 system.boat_music,
                 system.ship_music,

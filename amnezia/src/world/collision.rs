@@ -273,25 +273,29 @@ impl<'a> MapCollision<'a> {
     }
 
     fn finish(&self, mover: Mover, hero: Option<(i32, i32)>, passage: Passage) -> bool {
-        let Passage {
-            destination,
-            self_conflict,
-            bit_to,
-        } = passage;
-        if !mover.through
-            && (self.bodies.vehicles.iter().any(|&(index, tile)| {
-                tile == destination
-                    && mover.vehicle_index() != Some(index)
-                    && (mover.layer == 1 || self_conflict)
-                    && (mover.id != 0 || index != 2)
-            }) || (mover.id != 0
-                && !self.bodies.hero_through
-                && hero == Some(destination)
-                && (mover.layer == 1 || self_conflict)))
-        {
-            return false;
-        }
-        self.tile_passable(destination, bit_to, mover.id)
+        !self.hero_blocks(mover, hero, passage)
+            && !(0..3).any(|index| self.vehicle_blocks(mover, index, passage))
+            && self.finish_tile(mover, passage)
+    }
+
+    fn hero_blocks(&self, mover: Mover, hero: Option<(i32, i32)>, passage: Passage) -> bool {
+        !mover.through
+            && mover.id != 0
+            && !self.bodies.hero_through
+            && hero == Some(passage.destination)
+            && (mover.layer == 1 || passage.self_conflict)
+    }
+
+    fn vehicle_blocks(&self, mover: Mover, index: usize, passage: Passage) -> bool {
+        !mover.through
+            && mover.vehicle_index() != Some(index)
+            && (mover.layer == 1 || passage.self_conflict)
+            && (mover.id != 0 || index != 2)
+            && self.bodies.vehicles.contains(&(index, passage.destination))
+    }
+
+    fn finish_tile(&self, mover: Mover, passage: Passage) -> bool {
+        self.tile_passable(passage.destination, passage.bit_to, mover.id)
     }
 }
 

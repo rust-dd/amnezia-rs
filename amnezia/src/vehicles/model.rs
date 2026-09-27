@@ -108,6 +108,10 @@ pub(super) struct DisembarkPose {
 }
 
 impl Vehicles {
+    pub(crate) fn route_through(&self, index: usize) -> bool {
+        self.motion[index].route.through()
+    }
+
     pub(crate) fn collision_tiles(
         &self,
         map_id: u32,

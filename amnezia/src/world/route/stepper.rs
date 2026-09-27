@@ -16,9 +16,9 @@ mod lifecycle;
 mod saved;
 mod stops;
 mod turn;
-pub(in crate::world) use attempt::Attempt;
-pub(in crate::world) use turn::Boundary;
-pub(in crate::world) use turn::Progress;
+pub(crate) use attempt::Attempt;
+pub(crate) use turn::Boundary;
+pub(crate) use turn::Progress;
 pub(crate) use turn::Turn;
 
 /// Logical frames per second the RM2000 stop-count delays are measured in.
