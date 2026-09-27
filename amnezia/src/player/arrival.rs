@@ -11,6 +11,7 @@ pub(super) fn register(app: &mut App) {
             remember,
             camera::prepare_scroll,
             walk::<Player>,
+            crate::picture::apply_pending,
             camera::apply_scroll,
             trigger,
         )

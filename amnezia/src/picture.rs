@@ -6,9 +6,9 @@
 //! Each picture carries a palette-space colour [`Tone`] (saturation + hard light, so a
 //! grayscale or tinted picture renders as one — see [`render`]) and honours the
 //! RM2000 fixed-to-map flag: a screen-pinned picture re-centres on the unshaken
-//! camera every frame, a map-fixed one holds a world anchor and scrolls with the
-//! map. Pictures inherit screen shake but not screen tint. Rebuilding the map
-//! clears the previous scene's pictures; same-map repositioning preserves them.
+//! camera every frame, a map-fixed one accumulates actual map scrolling but not
+//! jump-landing corrections. Pictures inherit shake but not screen tint.
+//! Rebuilding the map clears its pictures; same-map repositioning preserves them.
 
 use crate::screenfx::ScreenShakeSet;
 use crate::world::MapRebuilt;
@@ -18,6 +18,7 @@ use bevy::transform::TransformSystems;
 
 mod effects;
 mod render;
+pub(crate) use render::apply_commands as apply_pending;
 pub(crate) mod saved;
 pub(crate) mod smoke;
 pub use effects::Effect;
@@ -160,7 +161,7 @@ struct Picture {
     use_transparent_color: bool,
     /// Anchored to the map (scrolls with it) rather than pinned to the screen.
     fixed_to_map: bool,
-    /// The fixed world position of a map-anchored picture, sampled at show time.
+    /// Show-time position in the camera's scroll-only coordinate space.
     world_anchor: Option<Vec2>,
     /// The native texture size, filled once the image loads.
     base_size: Option<Vec2>,

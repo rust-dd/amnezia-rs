@@ -81,6 +81,7 @@ fn advance(world: &mut World) {
 }
 
 fn finish(world: &mut World) {
+    crate::picture::apply_pending(world);
     // Pan and Cancel capture also run on repeated MakeWay visits.
     world.run_schedule(PlayerPostUpdate);
 }

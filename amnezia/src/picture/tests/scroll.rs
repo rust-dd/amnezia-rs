@@ -3,7 +3,7 @@ use crate::player::{CameraPan, Player};
 use crate::world::{Character, RouteStepper};
 use bevy::ecs::system::RunSystemOnce;
 
-fn relative_positions(world: &mut World) -> Vec<Vec2> {
+pub(super) fn relative_positions(world: &mut World) -> Vec<Vec2> {
     let camera = world.resource::<CameraPan>().position.unwrap();
     let mut pictures = world
         .query::<(&Picture, &Transform)>()
@@ -16,7 +16,7 @@ fn relative_positions(world: &mut World) -> Vec<Vec2> {
         .collect()
 }
 
-fn fixture() -> (App, Entity) {
+pub(super) fn fixture() -> (App, Entity) {
     let (mut app, hero) = crate::world::test_support::camera_app((20, 15));
     app.init_asset::<Mesh>()
         .init_asset::<render::PictureMaterial>()

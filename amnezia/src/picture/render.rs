@@ -70,8 +70,19 @@ pub(super) fn setup_picture_mesh(mut commands: Commands, mut meshes: ResMut<Asse
 
 /// Map-fixed anchors accumulate real scrolling, excluding jump-landing camera
 /// corrections. Legacy map-fixed pictures ignore `Move` target coordinates.
-pub(super) fn apply_commands(world: &mut World) {
+pub(crate) fn apply_commands(world: &mut World) {
     if !world.contains_resource::<PictureMesh>() {
+        return;
+    }
+    world.init_resource::<Inbox>();
+    let requests = world.resource_scope(|world, mut inbox: Mut<Inbox>| {
+        inbox
+            .0
+            .read(world.resource::<Messages<PictureCommand>>())
+            .cloned()
+            .collect::<Vec<_>>()
+    });
+    if requests.is_empty() {
         return;
     }
     let camera_base = world
@@ -84,14 +95,6 @@ pub(super) fn apply_commands(world: &mut World) {
                 .map(|t| t.translation.truncate())
                 .ok()
         });
-    world.init_resource::<Inbox>();
-    let requests = world.resource_scope(|world, mut inbox: Mut<Inbox>| {
-        inbox
-            .0
-            .read(world.resource::<Messages<PictureCommand>>())
-            .cloned()
-            .collect::<Vec<_>>()
-    });
     for request in requests {
         match request {
             PictureCommand::Show {
