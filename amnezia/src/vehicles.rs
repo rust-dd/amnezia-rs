@@ -4,8 +4,11 @@ mod flight;
 #[cfg(test)]
 mod landing_tests;
 mod model;
+mod obstacles;
 mod render;
 pub(crate) mod saved;
+#[cfg(test)]
+pub(crate) mod test_support;
 #[cfg(test)]
 mod tests;
 
@@ -154,12 +157,9 @@ impl Vehicles {
 fn keyboard(
     keys: Res<ButtonInput<KeyCode>>,
     data: Option<Res<MapData>>,
-    map_events: Res<MapEvents>,
     guards: MoveGuards,
     switches: Res<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
+    obstacles: obstacles::Obstacles,
     music: Res<VehicleMusic>,
     system_bgm: Res<crate::system_bgm::SystemBgm>,
     bgm: Res<CurrentBgm>,
@@ -187,7 +187,13 @@ fn keyboard(
     {
         return;
     }
-    if move_rider(&keys, &data, &mut vehicles) {
+    let bodies = obstacles.bodies(
+        &vehicles,
+        data.map_id,
+        route.as_ref().is_some_and(|route| route.through()),
+    );
+    let collision = obstacles.collision(&data, &switches, &bodies);
+    if move_rider(&keys, &mut vehicles, &collision, hero.tile()) {
         if let Some(mut steps) = steps {
             steps.record();
         }
@@ -199,12 +205,7 @@ fn keyboard(
             .as_mut()
             .map_or(hero.dir, |route| route.normalize_direction(hero));
         if vehicles.toggle(&data, (hero.tile_x, hero.tile_y, direction), |x, y| {
-            map_events.events.iter().any(|event| {
-                event.x as i32 == x
-                    && event.y as i32 == y
-                    && active_page(event, &switches, &variables, &party, &inventory)
-                        .is_some_and(|p| p.layer == 1)
-            })
+            obstacles.blocks_disembarking((x, y), &switches)
         }) {
             vehicles.consumed_action = true;
             if !was_riding {
@@ -226,7 +227,12 @@ fn keyboard(
     }
 }
 
-fn move_rider(keys: &ButtonInput<KeyCode>, data: &MapData, vehicles: &mut Vehicles) -> bool {
+fn move_rider(
+    keys: &ButtonInput<KeyCode>,
+    vehicles: &mut Vehicles,
+    collision: &crate::world::collision::MapCollision,
+    hero: (i32, i32),
+) -> bool {
     let Some(index) = vehicles.save.riding else {
         return false;
     };
@@ -248,9 +254,9 @@ fn move_rider(keys: &ButtonInput<KeyCode>, data: &MapData, vehicles: &mut Vehicl
         vehicles.motion[index]
             .route
             .set_direction(&mut vehicles.save.vehicles[index], dir);
-        if data.contains_tile(x + dx, y + dy)
-            && (index != 2 || data.airship_passable(x + dx, y + dy))
-        {
+        let mover =
+            crate::world::collision::Mover::vehicle(index, vehicles.motion[index].route.through());
+        if collision.can_move((x, y), (x + dx, y + dy), mover, Some(hero), false) {
             let speed = vehicles.save.vehicles[index].speed;
             vehicles.motion[index]
                 .queue

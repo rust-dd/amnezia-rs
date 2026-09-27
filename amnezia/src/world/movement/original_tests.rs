@@ -109,6 +109,7 @@ fn page_speed_changes_affect_the_current_step_without_restarting_it() {
 #[test]
 fn hero_and_vehicle_jumps_use_the_same_subpixel_clock() {
     let mut app = app(vec![], false);
+    app.insert_resource(crate::world::test_support::water_map(10, 10));
     app.init_resource::<crate::audio::CurrentBgm>()
         .add_plugins(crate::vehicles::VehiclePlugin);
     let world = app.world_mut();
@@ -119,7 +120,7 @@ fn hero_and_vehicle_jumps_use_the_same_subpixel_clock() {
         .force_route(RouteStepper::from_move_event(&[10001, 8, 0, 0, 24, 1, 25]));
     let mut vehicles = world.resource_mut::<crate::vehicles::Vehicles>();
     for index in 0..3 {
-        vehicles.set_location(index, 0, 2 + index as u32, 3);
+        vehicles.set_location(index, 0, 2 + index as u32 * 2, 3);
         vehicles.save.vehicles[index].speed = 4;
         vehicles.set_route(
             10002 + index as i32,
@@ -143,7 +144,7 @@ fn hero_and_vehicle_jumps_use_the_same_subpixel_clock() {
                 .resource::<crate::vehicles::Vehicles>()
                 .pixel(10002 + index, data)
                 .unwrap(),
-            Vec2::from(data.tile_center(2 + index, 3)) + Vec2::new(1.0, 6.0)
+            Vec2::from(data.tile_center(2 + index * 2, 3)) + Vec2::new(1.0, 6.0)
         );
     }
 }

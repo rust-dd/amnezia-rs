@@ -111,7 +111,7 @@ impl Vehicles {
     pub(crate) fn collision_tiles(
         &self,
         map_id: u32,
-    ) -> impl Iterator<Item = ((i32, i32), bool)> + '_ {
+    ) -> impl Iterator<Item = (usize, (i32, i32))> + '_ {
         self.save
             .vehicles
             .iter()
@@ -120,7 +120,7 @@ impl Vehicles {
                 (vehicle.definition.map_id == map_id
                     && !self.motion[index].route.through()
                     && !(index == 2 && self.save.riding == Some(2)))
-                .then_some((vehicle.tile(), index == 2))
+                .then_some((index, vehicle.tile()))
             })
     }
 

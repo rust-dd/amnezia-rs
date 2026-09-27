@@ -42,6 +42,7 @@ fn boarding_normalizes_a_diagonal_direction_to_the_heros_facing_first() {
 #[test]
 fn a_diagonal_boat_route_is_normalized_before_disembarking() {
     let mut app = app();
+    app.insert_resource(crate::world::test_support::water_map(10, 10));
     app.add_plugins(crate::vehicles::VehiclePlugin)
         .init_resource::<crate::audio::CurrentBgm>();
     let mut vehicles = app.world_mut().resource_mut::<crate::vehicles::Vehicles>();

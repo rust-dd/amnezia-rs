@@ -8,7 +8,7 @@ fn vehicle_collision_reads_live_route_through_state() {
     vehicles.set_location(0, 13, 4, 4);
     assert_eq!(
         vehicles.collision_tiles(13).collect::<Vec<_>>(),
-        [((4, 4), false)]
+        [(0, (4, 4))]
     );
     vehicles.set_route(
         10002,

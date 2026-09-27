@@ -34,6 +34,7 @@ fn foreground_movement_wait_resumes_on_the_last_tween_update() {
     for vehicle in [false, true] {
         let mut app = app();
         if vehicle {
+            app.insert_resource(crate::world::test_support::water_map(10, 10));
             app.add_plugins(crate::vehicles::VehiclePlugin)
                 .init_resource::<crate::audio::CurrentBgm>();
             let mut vehicles = app.world_mut().resource_mut::<crate::vehicles::Vehicles>();

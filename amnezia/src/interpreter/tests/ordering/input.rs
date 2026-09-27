@@ -39,6 +39,7 @@ fn put_action_event(app: &mut App) {
 #[test]
 fn a_boat_moves_before_processing_a_simultaneous_disembark_button() {
     let mut app = vehicle_app();
+    app.insert_resource(crate::world::test_support::water_map(10, 10));
     {
         let mut vehicles = app.world_mut().resource_mut::<crate::vehicles::Vehicles>();
         vehicles.set_location(0, 0, 5, 5);

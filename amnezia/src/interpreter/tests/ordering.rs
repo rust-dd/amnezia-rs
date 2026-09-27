@@ -142,6 +142,7 @@ fn field_steps_are_visible_to_foreground_work_in_the_movement_update() {
 #[test]
 fn a_riders_current_tile_and_tween_are_available_before_foreground_queries() {
     let mut app = app();
+    app.insert_resource(crate::world::test_support::water_map(10, 10));
     app.add_plugins(crate::vehicles::VehiclePlugin)
         .init_resource::<crate::audio::CurrentBgm>();
     {

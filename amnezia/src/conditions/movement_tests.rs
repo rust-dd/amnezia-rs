@@ -86,6 +86,7 @@ fn manual_steps_across_both_loop_seams_count_and_apply_poison() {
 fn manual_vehicle_steps_apply_party_state_damage_for_every_vehicle_kind() {
     for index in 0..3 {
         let mut app = fixture();
+        app.insert_resource(crate::world::test_support::water_map(10, 10));
         let mut vehicles = app.world_mut().resource_mut::<Vehicles>();
         vehicles.set_location(index, 0, 5, 5);
         vehicles.save.riding = Some(index);

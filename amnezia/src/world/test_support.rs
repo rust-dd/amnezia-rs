@@ -11,6 +11,14 @@ pub(crate) fn command(code: u32, parameter: i32) -> MoveCommandDef {
     }
 }
 
+pub(crate) fn water_map(width: i32, height: i32) -> MapData {
+    let mut data = MapData::for_test(width, height);
+    data.terrains[0].boat_pass = true;
+    data.terrains[0].ship_pass = true;
+    data.passages_up[0] |= crate::tiles::ABOVE_HERO_BIT;
+    data
+}
+
 pub(crate) fn page(commands: Vec<MoveCommandDef>) -> EventPage {
     let mut page = crate::assets::load_ron::<amnezia_data::Map>(&format!(
         "{}/maps/map_0001.ron",

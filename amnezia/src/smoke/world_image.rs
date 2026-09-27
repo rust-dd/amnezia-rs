@@ -121,11 +121,15 @@ impl Snapshot {
     pub(super) fn verify(&self, image: &Image, label: &str) {
         for &(x, y, expected) in &self.pixels {
             let actual = crate::display::smoke::pixel_at(image, x, y);
+            let matches = actual[..3]
+                .iter()
+                .zip(expected)
+                .all(|(&a, b)| a.abs_diff(b) <= 1);
+            if !matches && !cfg!(test) {
+                save_failure(image, label);
+            }
             assert!(
-                actual[..3]
-                    .iter()
-                    .zip(expected)
-                    .all(|(&a, b)| a.abs_diff(b) <= 1),
+                matches,
                 "{label} at ({x},{y}): expected original map/hero {expected:?}, got {actual:?}"
             );
         }
@@ -134,6 +138,20 @@ impl Snapshot {
             "{label}: {} original map and hero pixels verified",
             self.pixels.len()
         );
+    }
+}
+
+fn save_failure(image: &Image, label: &str) {
+    let path = std::env::temp_dir().join(format!(
+        "amnezia-smoke-failed-{label}-{}.png",
+        std::process::id()
+    ));
+    match image.clone().try_into_dynamic() {
+        Ok(image) => match image.save(&path) {
+            Ok(()) => error!("failed {label} capture saved to {}", path.display()),
+            Err(error) => error!("cannot save failed {label} capture: {error}"),
+        },
+        Err(error) => error!("cannot convert failed {label} capture: {error}"),
     }
 }
 

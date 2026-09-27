@@ -5,6 +5,7 @@ use amnezia_data::{Event, EventPage};
 use std::collections::HashMap;
 
 mod make_way;
+mod passage;
 pub(crate) use make_way::character as make_way;
 pub(in crate::world) use make_way::failed_walk;
 
@@ -30,6 +31,19 @@ pub(crate) struct Mover {
 }
 
 impl Mover {
+    pub(crate) fn vehicle(index: usize, through: bool) -> Self {
+        Self {
+            id: 10002 + index as u32,
+            layer: 1,
+            tile: None,
+            through,
+        }
+    }
+
+    fn vehicle_index(self) -> Option<usize> {
+        vehicle_index(self.id)
+    }
+
     pub(crate) fn event(event: &EventSprite, through: bool) -> Self {
         Self {
             id: event.id,
@@ -53,7 +67,7 @@ impl Mover {
 pub(crate) struct CollisionBodies {
     events: HashMap<u32, Mover>,
     overlaps: HashMap<u32, bool>,
-    vehicles: Vec<((i32, i32), bool)>,
+    vehicles: Vec<(usize, (i32, i32))>,
     pub(crate) hero_through: bool,
 }
 
@@ -162,36 +176,6 @@ impl<'a> MapCollision<'a> {
             .zip(self.bodies.overlaps.get(&event.id).copied())
     }
 
-    fn tile_passable(&self, position: (i32, i32), bit: u8, self_id: u32) -> bool {
-        if !self.data.contains_tile(position.0, position.1) {
-            return false;
-        }
-        let position = self.data.normalize_tile(position.0, position.1);
-        let tile = self
-            .events
-            .events
-            .iter()
-            .filter_map(|event| {
-                if event.id == self_id || (event.x as i32, event.y as i32) != position {
-                    return None;
-                }
-                let (body, _) = self.body(event)?;
-                if body.layer != 0 || body.through {
-                    return None;
-                }
-                body.tile.map(|tile| (event.id, tile))
-            })
-            .max_by_key(|(id, _)| *id)
-            .map(|(_, tile)| tile);
-        if let Some(tile) = tile.filter(|tile| *tile > 0) {
-            let passage = self.passage(tile);
-            if passage & ABOVE_HERO_BIT == 0 {
-                return passage & bit != 0;
-            }
-        }
-        self.data.passable_dir(position.0, position.1, bit)
-    }
-
     fn event_blocks_at(&self, mover: Mover, position: (i32, i32), self_conflict: bool) -> bool {
         self.events
             .events
@@ -220,7 +204,7 @@ impl<'a> MapCollision<'a> {
             !other.through
                 && (other.layer == mover.layer
                     || (self_conflict && other.layer == 1)
-                    || (mover.id != 0 && (forbidden || other_forbidden)))
+                    || ((1..10000).contains(&mover.id) && (forbidden || other_forbidden)))
         })
     }
 
@@ -257,13 +241,23 @@ impl<'a> MapCollision<'a> {
         if mover.through {
             return Entry::Clear;
         }
+        if mover.vehicle_index() == Some(2) {
+            return if self.data.airship_passable(to.0, to.1) {
+                Entry::Clear
+            } else {
+                Entry::Blocked
+            };
+        }
         let bit_from = passable_mask(from.0, from.1, to.0, to.1);
         let bit_to = if jumping {
             PASS_ALL
         } else {
             passable_mask(to.0, to.1, from.0, from.1)
         };
-        if !jumping && !self.tile_passable(from, bit_from, mover.id) {
+        if !jumping
+            && mover.vehicle_index().is_none()
+            && !self.tile_passable(from, bit_from, mover.id)
+        {
             return Entry::Blocked;
         }
         let self_conflict = !jumping
@@ -285,10 +279,11 @@ impl<'a> MapCollision<'a> {
             bit_to,
         } = passage;
         if !mover.through
-            && (self.bodies.vehicles.iter().any(|&(tile, airship)| {
+            && (self.bodies.vehicles.iter().any(|&(index, tile)| {
                 tile == destination
+                    && mover.vehicle_index() != Some(index)
                     && (mover.layer == 1 || self_conflict)
-                    && (mover.id != 0 || !airship)
+                    && (mover.id != 0 || index != 2)
             }) || (mover.id != 0
                 && !self.bodies.hero_through
                 && hero == Some(destination)
@@ -300,8 +295,17 @@ impl<'a> MapCollision<'a> {
     }
 }
 
+fn vehicle_index(id: u32) -> Option<usize> {
+    id.checked_sub(10002)
+        .filter(|index| *index < 3)
+        .map(|index| index as usize)
+}
+
 #[cfg(test)]
 mod passage_tests;
+
+#[cfg(test)]
+mod vehicle_tests;
 
 #[cfg(test)]
 mod make_way_tests;

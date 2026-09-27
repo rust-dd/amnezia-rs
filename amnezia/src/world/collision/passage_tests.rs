@@ -244,6 +244,21 @@ fn live_route_graphic_replaces_the_page_tile_for_collision() {
 }
 
 #[test]
+fn inactive_retained_tile_graphics_cannot_override_map_geometry() {
+    let mut f = Fixture::new();
+    f.wall();
+    let mut event = event(2, 0, Some(2));
+    event.pages[0].condition.flags = 1;
+    event.pages[0].condition.switch_a = 8;
+    f.events.events.push(event);
+    f.bodies.events.insert(2, npc(2, 0, Some(2)));
+    f.bodies.overlaps.insert(2, false);
+    assert!(!f.enter(Mover::hero(false)));
+    f.switches.set(8, true);
+    assert!(f.enter(Mover::hero(false)));
+}
+
+#[test]
 fn self_conflicting_tiles_block_same_layer_occupants_only_while_walking() {
     let mut f = Fixture::new();
     f.data.passages_up[2] = PASS_LEFT;

@@ -62,7 +62,17 @@ fn part(
     mut vehicles: ResMut<Vehicles>,
     mut switches: ResMut<Switches>,
     mut audio: MessageWriter<AudioRequest>,
+    obstacles: obstacles::Obstacles,
+    players: Query<(&Player, Option<&RouteStepper>)>,
 ) -> Option<RouteTurn> {
+    let hero = players.single().ok();
+    let bodies = obstacles.bodies(
+        &vehicles,
+        data.map_id,
+        hero.and_then(|(_, route)| route)
+            .is_some_and(RouteStepper::through),
+    );
+    let collision = obstacles.collision(&data, &switches, &bodies);
     let vehicles = &mut *vehicles;
     let vehicle = &mut vehicles.save.vehicles[index];
     let motion = &mut vehicles.motion[index];
@@ -70,15 +80,23 @@ fn part(
         return None;
     }
     let (x, y) = vehicle.tile();
+    let target = hero.map_or((x, y), |(hero, _)| hero.tile());
+    let delta = data.tile_delta((x, y), target);
     let routed = motion.route.active();
     let (driven, turn) = drive_route_part(
         vehicle,
         &mut motion.queue,
         &mut motion.route,
-        (x, y),
-        |_, dx, dy, _, through| {
-            data.contains_tile(x + dx, y + dy)
-                && (through || index != 2 || data.airship_passable(x + dx, y + dy))
+        (x + delta.0, y + delta.1),
+        |character, dx, dy, jumping, through| {
+            let from = character.tile();
+            collision.can_move(
+                from,
+                (from.0 + dx, from.1 + dy),
+                crate::world::collision::Mover::vehicle(index, through),
+                hero.map(|(hero, _)| hero.tile()),
+                jumping,
+            )
         },
         turn,
     );

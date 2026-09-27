@@ -242,6 +242,7 @@ fn touches_queued_by_the_current_move_attempt_do_not_prevent_boarding() {
 #[test]
 fn a_moving_boat_cannot_accept_actions_or_idle_floor_collisions() {
     let mut app = app();
+    app.insert_resource(crate::world::test_support::water_map(10, 10));
     crate::dialogue::testing::register_actions(&mut app);
     app.add_plugins(crate::vehicles::VehiclePlugin)
         .init_resource::<crate::audio::CurrentBgm>();
