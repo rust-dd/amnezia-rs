@@ -24,13 +24,17 @@ impl RouteStepper {
     }
 
     pub(crate) fn advance_stop_clock(&mut self, moving: bool, allowed: bool) {
-        self.restore_stop_clock(None);
         if self.page_present {
-            self.stop
-                .as_mut()
-                .unwrap()
-                .advance(moving, self.forced, allowed);
+            self.finish_stop_update(moving, allowed);
         }
+    }
+
+    pub(crate) fn finish_stop_update(&mut self, moving: bool, allowed: bool) {
+        self.restore_stop_clock(None);
+        self.stop
+            .as_mut()
+            .unwrap()
+            .advance(moving, self.forced, allowed);
     }
 
     fn stop_clock(&self) -> StopClock {

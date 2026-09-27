@@ -6,8 +6,9 @@ impl RouteStepper {
         ch: &mut C,
         hero: (i32, i32),
         can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
+        program: &MoveRouteDef,
     ) -> Step {
-        let end = self.commands[self.index + 1..]
+        let end = program.commands[self.index + 1..]
             .iter()
             .position(|cmd| cmd.code == 25)
             .map(|offset| self.index + 1 + offset);
@@ -15,8 +16,8 @@ impl RouteStepper {
         let previous = self.direction(ch);
         let previous_facing = ch.dir();
         let mut direction = previous;
-        for index in self.index + 1..end.unwrap_or(self.commands.len()) {
-            let code = self.commands[index].code;
+        for index in self.index + 1..end.unwrap_or(program.commands.len()) {
+            let code = program.commands[index].code;
             match code {
                 0..=7 => direction = code,
                 8 | 20 => direction = self.random_dir(),
@@ -37,7 +38,7 @@ impl RouteStepper {
         }
         self.direction = Some(direction);
         let Some(end) = end else {
-            self.index = self.commands.len() - 1;
+            self.index = program.commands.len() - 1;
             return Step::Next;
         };
         let direction = if dx.abs() > dy.abs() {
@@ -55,7 +56,7 @@ impl RouteStepper {
             ch.set_dir(direction);
         }
         if (dx != 0 || dy != 0) && !can_step(ch, dx, dy, true, self.through) {
-            if self.skippable {
+            if program.skippable {
                 self.direction = Some(previous);
                 ch.set_dir(previous_facing);
                 self.index = end;

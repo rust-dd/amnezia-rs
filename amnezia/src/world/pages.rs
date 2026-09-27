@@ -105,8 +105,17 @@ pub(super) fn spawn_event(
     ));
 }
 
+pub(super) fn refresh_pages(world: &mut World) {
+    world.run_system_cached_with(apply_refresh, false).unwrap();
+}
+
+pub(super) fn refresh_switch(world: &mut World) {
+    world.run_system_cached_with(apply_refresh, true).unwrap();
+}
+
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-pub(super) fn refresh_pages(
+fn apply_refresh(
+    In(force): In<bool>,
     server: Res<AssetServer>,
     data: Res<MapData>,
     events: Res<MapEvents>,
@@ -129,6 +138,11 @@ pub(super) fn refresh_pages(
     let Some(tileset) = tileset else {
         return;
     };
+    let conditions_changed = force
+        || switches.is_changed()
+        || variables.is_changed()
+        || party.is_changed()
+        || inventory.is_changed();
     for (
         mut ch,
         mut selected,
@@ -144,7 +158,7 @@ pub(super) fn refresh_pages(
             continue;
         };
         let index = active_page_index(event, &switches, &variables, &party, &inventory);
-        if selected.0 == index {
+        if selected.0 == index && (index.is_some() || !conditions_changed) {
             continue;
         }
         let old = selected.0.and_then(|i| event.pages.get(i));
@@ -152,24 +166,25 @@ pub(super) fn refresh_pages(
         selected.0 = index;
         route.refresh_page(page);
         auto.refresh(page, &mut route);
-        ch.charset = page.map_or_else(String::new, |p| p.graphic_name.clone());
-        ch.index = page.map_or(0, |p| p.graphic_index);
-        ch.layer = page.map_or(0, |p| p.layer);
+        let Some(page) = page else {
+            *visibility = Visibility::Hidden;
+            continue;
+        };
+        ch.charset = page.graphic_name.clone();
+        ch.index = page.graphic_index;
+        ch.layer = page.layer;
         if !queue.busy()
-            && let Some(page) = page
             && old.is_none_or(|p| (p.direction, p.pattern) != (page.direction, page.pattern))
         {
             route.set_direction(&mut *ch, page.direction);
             ch.dir = page.direction;
             ch.frame = page.pattern;
         }
-        if let Some(page) = page {
-            if matches!(page.animation_type, 2..=4) {
-                ch.dir = page.direction;
-            }
-            if matches!(page.animation_type, 4 | 5) {
-                ch.frame = page.pattern;
-            }
+        if matches!(page.animation_type, 2..=4) {
+            ch.dir = page.direction;
+        }
+        if matches!(page.animation_type, 4 | 5) {
+            ch.frame = page.pattern;
         }
         (*sprite, *visibility) = graphic(&ch, &tileset.0, &server);
         sprite.color = sprite.color.with_alpha(route.alpha());

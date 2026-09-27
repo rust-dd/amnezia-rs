@@ -29,7 +29,7 @@ mod present;
 pub(crate) mod saved;
 pub(crate) mod scenes;
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 pub(crate) use event_rng::EventRng;
 use frame::Frame;
@@ -86,6 +86,15 @@ impl RunningEvent {
 }
 
 pub struct InterpreterPlugin;
+
+pub(crate) fn refresh_map_pages(world: &mut World) {
+    if world.contains_resource::<ParallelPool>() {
+        world
+            .run_system_cached(parallel::refresh_map_pages)
+            .unwrap();
+        foreground::refresh(world);
+    }
+}
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct InterpreterStep;

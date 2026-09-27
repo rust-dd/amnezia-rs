@@ -115,7 +115,7 @@ fn map_event(id: u32, trigger: u32, commands: Vec<EventCommand>) -> Event {
 
 /// Build a headless app carrying every resource the interpreter systems read,
 /// with an empty map and no common events; tests insert their own scripts.
-fn interp_app() -> App {
+pub(crate) fn interp_app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
         .add_plugins(InterpreterPlugin);

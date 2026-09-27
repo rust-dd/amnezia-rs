@@ -57,6 +57,7 @@ impl RouteStepper {
             speed: speed.clamp(1, 6),
             frequency: frequency.clamp(1, 8),
             through: false,
+            route_through: Some(false),
             transparency: 0,
             stop: Some(StopClock {
                 count: if forced { 0xFFFF } else { 0 },
@@ -120,6 +121,7 @@ impl RouteStepper {
         } else {
             Self {
                 page_present: false,
+                through: true,
                 ..Self::default()
             }
         }
@@ -199,7 +201,7 @@ impl RouteStepper {
         self.speed = speed.clamp(1, 6);
     }
 
-    fn cancel_forced(&mut self) {
+    pub(super) fn cancel_forced(&mut self) {
         self.forced = false;
         self.active = false;
         self.moving = false;
@@ -234,10 +236,13 @@ impl RouteStepper {
     }
 
     pub(crate) fn refresh_page(&mut self, page: Option<&EventPage>) {
+        let route_through = *self.route_through.get_or_insert(self.through);
         self.page_present = page.is_some();
         let Some(page) = page else {
+            self.through = true;
             return;
         };
+        self.through = route_through;
         let mut next = Self::from_event_page(Some(page));
         let previous = if self.forced {
             self.suspended.take()

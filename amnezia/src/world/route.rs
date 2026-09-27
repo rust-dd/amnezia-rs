@@ -13,6 +13,7 @@ use crate::player::Player;
 use crate::state::{Inventory, Party, Switches, Variables};
 use bevy::prelude::*;
 pub(crate) use stepper::StepEffect;
+pub(crate) use stepper::Turn;
 
 /// One frame of a character's stepper: the tile delta of the step it enqueued
 /// this tick (for the caller to sync the logical event tile), plus the side
@@ -38,6 +39,7 @@ impl Driven {
 /// effects for the caller to apply. The effects are returned rather than applied
 /// here so `can_step` — which borrows the switches and events — is dropped before
 /// the caller mutates them.
+#[cfg(test)]
 pub(crate) fn drive<C: Character>(
     ch: &mut C,
     queue: &mut MoveQueue,
@@ -66,11 +68,39 @@ pub(crate) fn drive<C: Character>(
     Driven { moved, effects }
 }
 
+pub(crate) fn drive_part<C: Character>(
+    ch: &mut C,
+    queue: &mut MoveQueue,
+    stepper: &mut RouteStepper,
+    hero: (i32, i32),
+    can_step: impl Fn(&C, i32, i32, bool, bool) -> bool,
+    turn: Option<Turn>,
+) -> (Driven, Option<Turn>) {
+    if queue.busy()
+        || (turn.is_none() && (stepper.settle_movement() || !stepper.active()))
+        || stepper.stop_active()
+    {
+        return (Driven::idle(), None);
+    }
+    let mut turn = turn.unwrap_or_else(|| Turn::new(stepper));
+    let mut driven = Driven::idle();
+    match stepper.advance_turn(ch, hero, &can_step, &mut driven.effects, &mut turn) {
+        stepper::Progress::Refresh => return (driven, Some(turn)),
+        stepper::Progress::Move(action, seconds) => {
+            driven.moved = Some(action.delta());
+            queue.set_step_secs(seconds);
+            queue.enqueue_route([action]);
+        }
+        stepper::Progress::Done => {}
+    }
+    (driven, None)
+}
+
 /// Apply the side effects a route command produced: toggle a game switch, play a
 /// sound, or set the character's sprite transparency.
 fn apply_effects(
     effects: Vec<StepEffect>,
-    switches: &mut Switches,
+    switches: &mut ResMut<Switches>,
     audio: &mut MessageWriter<AudioRequest>,
     sprite: &mut Sprite,
 ) {
@@ -130,8 +160,20 @@ pub(super) fn route_events(world: &mut World) {
 
 /// Step the hero's forced route (a `MoveEvent` targeting the hero). Same guards
 /// as event routes; the hero is `self_id` 0 (no event) for the collision test.
+pub(super) fn route_hero(world: &mut World) {
+    let mut turn = None;
+    loop {
+        turn = world.run_system_cached_with(hero_part, turn).unwrap();
+        if turn.is_none() {
+            break;
+        }
+        crate::world::update::refresh_route_switch(world);
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
-pub(super) fn route_hero(
+fn hero_part(
+    In(turn): In<Option<Turn>>,
     data: Res<MapData>,
     map_events: Res<MapEvents>,
     mut switches: ResMut<Switches>,
@@ -146,22 +188,22 @@ pub(super) fn route_hero(
     >,
     events: Query<(&EventSprite, Option<&RouteStepper>), Without<Player>>,
     vehicles: Option<Res<crate::vehicles::Vehicles>>,
-) {
-    // The hero's only routes come from a `MoveEvent`, which is always forced, so they
-    // must keep advancing through the very cutscene that issued them — RM2000 steps
-    // an overwritten route even while the event interpreter runs and a message shows.
-    if guards.forced_route_paused() || vehicles.as_ref().is_some_and(|v| v.airship_transitioning())
+) -> Option<Turn> {
+    // Forced routes keep advancing during the foreground cutscene that assigned them.
+    if turn.is_none()
+        && (guards.forced_route_paused()
+            || vehicles.as_ref().is_some_and(|v| v.airship_transitioning()))
     {
-        return;
+        return None;
     }
     let Ok((mut player, mut queue, mut stepper, mut sprite)) = hero.single_mut() else {
-        return;
+        return None;
     };
     let (ex, ey) = (player.tile_x, player.tile_y);
     let pos = (ex, ey);
     let mut bodies = CollisionBodies::from_events(events.iter());
     bodies.include_vehicles(vehicles.as_deref(), data.map_id);
-    let driven = {
+    let (driven, turn) = {
         let collision = MapCollision::new(
             &data,
             &map_events,
@@ -171,12 +213,14 @@ pub(super) fn route_hero(
         let can_step = |_: &Player, dx: i32, dy: i32, jumping: bool, through: bool| {
             collision.can_move(pos, (ex + dx, ey + dy), Mover::hero(through), None, jumping)
         };
-        drive(&mut *player, &mut queue, &mut stepper, pos, can_step)
+        drive_part(&mut *player, &mut queue, &mut stepper, pos, can_step, turn)
     };
-    // The hero is not a map event, so only its side effects need applying — its
-    // tile is tracked by the `Player` component that `walk` updates.
     apply_effects(driven.effects, &mut switches, &mut audio, &mut sprite);
+    turn
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod refresh_tests;

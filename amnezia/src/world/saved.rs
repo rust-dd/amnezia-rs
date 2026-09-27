@@ -172,7 +172,10 @@ fn restore(
         let mut autonomy = saved.autonomy.clone();
         autonomy.restore_clock(&mut route);
         let position = queue.render_position(ch, &data);
-        let (mut sprite, visible) = pages::graphic(ch, &tileset.0, &server);
+        let (mut sprite, mut visible) = pages::graphic(ch, &tileset.0, &server);
+        if !route.page_present() {
+            visible = Visibility::Hidden;
+        }
         sprite.color = sprite.color.with_alpha(saved.route.alpha());
         commands.entity(entity).insert((
             ch.clone(),

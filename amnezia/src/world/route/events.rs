@@ -1,8 +1,33 @@
 use super::*;
 
-#[allow(clippy::too_many_arguments)]
 pub(in crate::world) fn route_event(
     In((target, forced)): In<(Option<u32>, Option<bool>)>,
+    world: &mut World,
+) {
+    let mut ids = world
+        .query::<&EventSprite>()
+        .iter(world)
+        .map(|event| event.id)
+        .filter(|&id| target.is_none_or(|target| target == id))
+        .collect::<Vec<_>>();
+    ids.sort_unstable();
+    for id in ids {
+        let mut turn = None;
+        loop {
+            turn = world
+                .run_system_cached_with(part, (id, forced, turn))
+                .unwrap();
+            if turn.is_none() {
+                break;
+            }
+            crate::world::update::refresh_route_switch(world);
+        }
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+fn part(
+    In((target, forced, turn)): In<(u32, Option<bool>, Option<Turn>)>,
     data: Res<MapData>,
     mut map_events: ResMut<MapEvents>,
     mut switches: ResMut<Switches>,
@@ -23,9 +48,9 @@ pub(in crate::world) fn route_event(
         ),
         Without<Player>,
     >,
-) {
-    if guards.forced_route_paused() {
-        return;
+) -> Option<Turn> {
+    if turn.is_none() && guards.forced_route_paused() {
+        return None;
     }
     let hero = players
         .single()
@@ -43,13 +68,13 @@ pub(in crate::world) fn route_event(
         .is_some_and(RouteStepper::through);
     bodies.include_vehicles(vehicles.as_deref(), data.map_id);
     for (mut sprite_c, mut queue, mut stepper, mut sprite) in &mut movers {
-        if target.is_some_and(|id| id != sprite_c.id)
-            || forced.is_some_and(|forced| forced != stepper.forced())
+        if target != sprite_c.id
+            || (turn.is_none() && forced.is_some_and(|forced| forced != stepper.forced()))
         {
             continue;
         }
-        if !stepper.forced() && guards.autonomous_paused(sprite_c.id) {
-            continue;
+        if turn.is_none() && !stepper.forced() && guards.autonomous_paused(sprite_c.id) {
+            return None;
         }
         let (ex, ey) = (sprite_c.tile_x, sprite_c.tile_y);
         let self_id = sprite_c.id;
@@ -57,7 +82,7 @@ pub(in crate::world) fn route_event(
         let delta = data.tile_delta((ex, ey), hero);
         let near_hero = (ex + delta.0, ey + delta.1);
         let touched = std::cell::Cell::new(false);
-        let driven = {
+        let (driven, turn) = {
             let collision = MapCollision::new(
                 &data,
                 &map_events,
@@ -88,12 +113,13 @@ pub(in crate::world) fn route_event(
                     }
                     passable
                 };
-            drive(
+            drive_part(
                 &mut *sprite_c,
                 &mut queue,
                 &mut stepper,
                 near_hero,
                 can_step,
+                turn,
             )
         };
         bodies.update(&sprite_c, &stepper);
@@ -110,5 +136,7 @@ pub(in crate::world) fn route_event(
             event.y = y.max(0) as u32;
         }
         apply_effects(driven.effects, &mut switches, &mut audio, &mut sprite);
+        return turn;
     }
+    None
 }

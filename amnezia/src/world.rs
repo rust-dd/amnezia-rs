@@ -40,7 +40,9 @@ pub use movement::{Character, MoveQueue, RouteAction, walk};
 pub(crate) use movement::{dir_delta, step_secs_for_speed};
 use relocation::apply_relocate;
 pub use route::RouteStepper;
-pub(crate) use route::{StepEffect, drive as drive_route};
+#[cfg(test)]
+pub(crate) use route::drive as drive_route;
+pub(crate) use route::{StepEffect, Turn as RouteTurn, drive_part as drive_route_part};
 pub(crate) use scene_pause::ScenePause;
 pub(crate) use screen::MapScreen;
 pub(crate) use touch::TouchEvents;
@@ -370,6 +372,7 @@ pub fn load_map(
 }
 
 /// Refresh changed NPC graphics and visibility. [`walk`] owns active-step placement.
+#[allow(clippy::type_complexity)]
 fn update_event_sprites(
     asset_server: Res<AssetServer>,
     data: Res<MapData>,
@@ -378,6 +381,7 @@ fn update_event_sprites(
         (
             &EventSprite,
             &MoveQueue,
+            Option<&RouteStepper>,
             &mut Sprite,
             &mut Visibility,
             &mut Transform,
@@ -388,11 +392,15 @@ fn update_event_sprites(
     let Some(tileset) = tileset else {
         return;
     };
-    for (event, queue, mut sprite, mut visibility, mut transform) in &mut sprites {
+    for (event, queue, route, mut sprite, mut visibility, mut transform) in &mut sprites {
         let (mut graphic, visible) = pages::graphic(event, &tileset.0, &asset_server);
         graphic.color = sprite.color;
         *sprite = graphic;
-        *visibility = visible;
+        *visibility = if route.is_some_and(|route| !route.page_present()) {
+            Visibility::Hidden
+        } else {
+            visible
+        };
         if queue.busy() {
             continue;
         }

@@ -85,6 +85,14 @@ pub(crate) fn refresh(world: &mut World) {
     if world.contains_resource::<CharacterUpdates>() {
         world.run_system_cached(pages::refresh_pages).unwrap();
     }
+    crate::interpreter::refresh_map_pages(world);
+}
+
+pub(crate) fn refresh_route_switch(world: &mut World) {
+    if world.contains_resource::<CharacterUpdates>() {
+        pages::refresh_switch(world);
+    }
+    crate::interpreter::refresh_map_pages(world);
 }
 
 pub(crate) fn flush(world: &mut World) {

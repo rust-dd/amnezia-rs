@@ -270,7 +270,7 @@ pub(super) fn walk_selected<C: Character + Component<Mutability = Mutable>>(
         if target.is_some_and(|target| entity != target) {
             continue;
         }
-        if route.as_ref().is_some_and(|route| !route.page_present()) {
+        if target.is_none() && route.as_ref().is_some_and(|route| !route.page_present()) {
             continue;
         }
         let moving = queue.busy();
@@ -284,7 +284,7 @@ pub(super) fn walk_selected<C: Character + Component<Mutability = Mutable>>(
             if moving && !queue.busy() {
                 route.settle_movement();
             }
-            route.advance_stop_clock(moving, stops.advances(ch.event_id()));
+            route.finish_stop_update(moving, stops.advances(ch.event_id()));
             if route.animation.keeps_facing() && ch.dir() != facing {
                 ch.set_dir(facing);
             }

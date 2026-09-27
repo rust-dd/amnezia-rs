@@ -14,6 +14,9 @@ mod jump;
 mod lifecycle;
 mod saved;
 mod stops;
+mod turn;
+pub(in crate::world) use turn::Progress;
+pub(crate) use turn::Turn;
 
 /// Logical frames per second the RM2000 stop-count delays are measured in.
 const FPS: f32 = 60.0;
@@ -42,6 +45,8 @@ pub struct RouteStepper {
     frequency: u32,
     /// Ignore passability while set (`walk everywhere`, commands 36/37).
     through: bool,
+    #[serde(default)]
+    route_through: Option<bool>,
     /// Transparency level 0 (opaque) … 7, adjusted by commands 40/41.
     transparency: u8,
     #[serde(default)]
@@ -81,6 +86,7 @@ impl RouteStepper {
     /// Returns the movement and tween duration, collecting shared-state effects.
     /// The movement gate receives the live graphic and through state, including
     /// instant commands executed earlier in this same route tick.
+    #[cfg(test)]
     pub(super) fn advance<C: Character>(
         &mut self,
         ch: &mut C,
@@ -88,41 +94,12 @@ impl RouteStepper {
         can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
         effects: &mut Vec<StepEffect>,
     ) -> Option<(RouteAction, f32)> {
-        let len = self.commands.len();
-        self.moving = false;
-        if len == 0 {
-            self.finish_pass();
-            return None;
-        }
-        let start_index = self.index;
+        let mut turn = Turn::new(self);
         loop {
-            if self.stop_active() {
-                return None;
-            }
-            if self.index >= len {
-                let repeat = self.repeat;
-                self.finish_pass();
-                if !repeat {
-                    return None;
-                }
-                if self.index == start_index {
-                    return None;
-                }
-            }
-            let cmd = self.commands[self.index].clone();
-            match self.step_one(ch, hero, can_step, effects, &cmd) {
-                Step::Gate(action) => {
-                    self.index += 1;
-                    self.moving = action.is_some();
-                    if action.is_some() {
-                        return action;
-                    }
-                }
-                Step::Retry => return None,
-                Step::Next => self.index += 1,
-            }
-            if self.index == start_index {
-                return None;
+            match self.advance_turn(ch, hero, can_step, effects, &mut turn) {
+                Progress::Done => return None,
+                Progress::Refresh => {}
+                Progress::Move(action, seconds) => return Some((action, seconds)),
             }
         }
     }
@@ -134,22 +111,35 @@ impl RouteStepper {
         can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
         effects: &mut Vec<StepEffect>,
         cmd: &MoveCommandDef,
+        program: &MoveRouteDef,
     ) -> Step {
         match cmd.code {
-            0..=7 => self.try_move(ch, Some(cmd.code), dir_delta(cmd.code), can_step),
+            0..=7 => self.try_move(
+                ch,
+                Some(cmd.code),
+                dir_delta(cmd.code),
+                can_step,
+                program.skippable,
+            ),
             8 => {
                 let dir = self.random_dir();
-                self.try_move(ch, Some(dir), dir_delta(dir), can_step)
+                self.try_move(ch, Some(dir), dir_delta(dir), can_step, program.skippable)
             }
             9 => {
                 let dir = toward_dir(hero, ch.tile());
-                self.try_move(ch, Some(dir), dir_delta(dir), can_step)
+                self.try_move(ch, Some(dir), dir_delta(dir), can_step, program.skippable)
             }
             10 => {
                 let dir = away_dir(hero, ch.tile());
-                self.try_move(ch, Some(dir), dir_delta(dir), can_step)
+                self.try_move(ch, Some(dir), dir_delta(dir), can_step, program.skippable)
             }
-            11 => self.try_move(ch, None, dir_delta(self.direction(ch)), can_step),
+            11 => self.try_move(
+                ch,
+                None,
+                dir_delta(self.direction(ch)),
+                can_step,
+                program.skippable,
+            ),
             12..=15 => self.turn_to(ch, cmd.code - 12),
             16 => self.turn(ch, 1),
             17 => self.turn(ch, 3),
@@ -169,7 +159,7 @@ impl RouteStepper {
                 self.set_stop_count(0);
                 Step::Gate(None)
             }
-            24 => self.begin_jump(ch, hero, can_step),
+            24 => self.begin_jump(ch, hero, can_step, program),
             26 => {
                 self.direction = Some(self.direction(ch));
                 self.facing_lock = Some(ch.dir());
@@ -209,10 +199,12 @@ impl RouteStepper {
             }
             36 => {
                 self.through = true;
+                self.route_through = Some(true);
                 Step::Next
             }
             37 => {
                 self.through = false;
+                self.route_through = Some(false);
                 Step::Next
             }
             38 | 39 => {
@@ -242,6 +234,7 @@ impl RouteStepper {
         new_dir: Option<u32>,
         (dx, dy): (i32, i32),
         can_step: &impl Fn(&C, i32, i32, bool, bool) -> bool,
+        skippable: bool,
     ) -> Step {
         let prev = self.direction(ch);
         let prev_facing = ch.dir();
@@ -259,7 +252,7 @@ impl RouteStepper {
                 },
                 step_secs_for_speed(self.speed),
             )))
-        } else if self.skippable {
+        } else if skippable {
             self.direction = Some(prev);
             ch.set_dir(prev_facing);
             self.set_stop_maximum(stop_clock::step(self.frequency));

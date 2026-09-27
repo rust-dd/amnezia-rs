@@ -95,6 +95,11 @@ fn a_page_less_character_does_not_advance_its_stop_clock() {
     let mut app = app();
     let entity = npcs::npc(&mut app, 1, 1, vec![], &[]);
     {
+        let mut events = app.world_mut().resource_mut::<MapEvents>();
+        events.events[0].pages[0].condition.flags = 1;
+        events.events[0].pages[0].condition.switch_a = 99;
+    }
+    {
         let mut route = app.world_mut().get_mut::<RouteStepper>(entity).unwrap();
         route.set_stop_count(7);
         route.refresh_page(None);

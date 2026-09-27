@@ -88,6 +88,17 @@ pub(super) fn run_parallel(world: &mut World) {
     update::run(world);
 }
 
+pub(super) fn refresh_map_pages(
+    mut pool: ResMut<ParallelPool>,
+    events: Res<MapEvents>,
+    switches: Res<Switches>,
+    variables: Res<Variables>,
+    party: Res<Party>,
+    inventory: Res<Inventory>,
+) {
+    pool.refresh_pages(Some(&events), &switches, &variables, &party, &inventory);
+}
+
 fn map_source(id: u32, exec: &Exec) -> Option<ParallelSource> {
     let events = exec.subsystems.flow.map_events.as_ref()?;
     let event = events.events.iter().find(|event| event.id == id)?;

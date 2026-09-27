@@ -1,3 +1,5 @@
+mod advance;
+use advance::advance;
 mod flight;
 #[cfg(test)]
 mod landing_tests;
@@ -15,9 +17,11 @@ use crate::audio::{AudioRequest, CurrentBgm};
 use crate::player::Player;
 use crate::state::{Inventory, Party, Switches, Variables, active_page};
 use crate::tiles::{DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
+#[cfg(test)]
+use crate::world::drive_route;
 use crate::world::{
     Character, MapData, MapEvents, MoveGuards, MoveQueue, RouteAction, RouteStepper, StepEffect,
-    dir_delta, drive_route, step_secs_for_speed,
+    dir_delta, step_secs_for_speed,
 };
 use amnezia_data::{MusicDef, SystemDef};
 use bevy::prelude::*;
@@ -254,101 +258,4 @@ fn move_rider(keys: &ButtonInput<KeyCode>, data: &MapData, vehicles: &mut Vehicl
         }
     }
     false
-}
-
-#[allow(clippy::too_many_arguments)]
-fn advance(
-    time: Res<Time>,
-    data: Res<MapData>,
-    guards: MoveGuards,
-    stops: crate::world::stop_clock::StopGates,
-    mut vehicles: ResMut<Vehicles>,
-    mut switches: ResMut<Switches>,
-    mut audio: MessageWriter<AudioRequest>,
-    map_events: Res<MapEvents>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
-) {
-    if guards.forced_route_paused() {
-        return;
-    }
-    let vehicles = &mut *vehicles;
-    let transitioning = vehicles.airship_transitioning();
-    if vehicles.advance_flight(time.delta_secs(), &data, |x, y| {
-        map_events.events.iter().any(|event| {
-            (event.x as i32, event.y as i32) == (x, y)
-                && active_page(event, &switches, &variables, &party, &inventory).is_some()
-        })
-    }) {
-        audio.write(
-            vehicles
-                .save
-                .before_music
-                .as_ref()
-                .map_or(AudioRequest::StopBgm, |m| m.replay()),
-        );
-    }
-    for (index, (vehicle, motion)) in vehicles
-        .save
-        .vehicles
-        .iter_mut()
-        .zip(&mut vehicles.motion)
-        .enumerate()
-    {
-        if vehicle.definition.map_id != data.map_id {
-            continue;
-        }
-        if index == 2 && transitioning {
-            motion.route.animation.advance_vehicle(
-                vehicle,
-                vehicles.save.riding == Some(2),
-                false,
-                time.delta_secs(),
-            );
-            continue;
-        }
-        let (x, y) = vehicle.tile();
-        let routed = motion.route.active();
-        let driven = drive_route(
-            vehicle,
-            &mut motion.queue,
-            &mut motion.route,
-            (x, y),
-            |_, dx, dy, _, through| {
-                data.contains_tile(x + dx, y + dy)
-                    && (through || index != 2 || data.airship_passable(x + dx, y + dy))
-            },
-        );
-        if routed {
-            vehicle.speed = motion.route.speed();
-        }
-        for effect in driven.effects {
-            match effect {
-                StepEffect::Switch(id, on) => switches.set(id, on),
-                StepEffect::Sound { name, params } => {
-                    audio.write(AudioRequest::play_sound(&name, &params));
-                }
-                StepEffect::Transparency(level) => {
-                    motion.alpha = crate::tiles::character_alpha(level)
-                }
-            }
-        }
-        let moving = motion.queue.busy();
-        if let Some(pixel) = motion.queue.advance(vehicle, &data, time.delta_secs()) {
-            motion.pixel = Some(pixel);
-        }
-        if moving && !motion.queue.busy() {
-            motion.route.settle_movement();
-        }
-        motion
-            .route
-            .advance_stop_clock(moving, stops.advances(None));
-        let walking = motion.route.stop_count() == 0;
-        let animated = !motion.queue.jumping() && (index != 2 || vehicles.save.riding == Some(2));
-        motion
-            .route
-            .animation
-            .advance_vehicle(vehicle, animated, walking, time.delta_secs());
-    }
 }
