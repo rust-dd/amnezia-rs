@@ -190,6 +190,11 @@ fn drive(world: &mut World) {
     {
         capture(world, label);
     }
+    if scenario == "normal-transfers"
+        && let Some(label) = crate::teleport::normal_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "camera" {
         camera::drive(world, frame);
     }
@@ -438,6 +443,8 @@ fn drive(world: &mut World) {
             crate::shop::inn::smoke::verify_finished(world);
         } else if scenario == "quick-transfers" {
             crate::teleport::smoke::verify_finished(world);
+        } else if scenario == "normal-transfers" {
+            crate::teleport::normal_smoke::verify_finished(world);
         } else if scenario == "shop" {
             crate::shop::smoke::verify_finished(world);
         } else if scenario == "save-slots" {

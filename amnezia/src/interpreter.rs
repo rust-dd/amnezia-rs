@@ -22,6 +22,7 @@ mod exec;
 mod flow;
 pub(crate) mod foreground;
 mod frame;
+mod map_change;
 mod opcodes;
 mod parallel;
 mod params;
@@ -33,6 +34,7 @@ pub(crate) mod tests;
 
 pub(crate) use event_rng::EventRng;
 use frame::Frame;
+pub(crate) use map_change::on_map_change;
 pub(crate) use parallel::map_event as update_map_event;
 use params::Blockers;
 

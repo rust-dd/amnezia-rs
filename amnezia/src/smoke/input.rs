@@ -112,6 +112,7 @@ fn run_script(world: &mut World) {
                 | "display"
                 | "actor-names"
                 | "ui-layers"
+                | "normal-transfers"
         )
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active

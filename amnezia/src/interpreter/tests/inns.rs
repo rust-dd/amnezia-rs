@@ -55,7 +55,7 @@ fn every_original_inn_request_keeps_its_second_wording_set_and_price() {
                 .drain()
                 .collect::<Vec<_>>();
             assert!(
-                matches!(requests.as_slice(), [ShopRequest::ShowInn { cost: actual, inn_type: 1 }] if *actual == cost)
+                matches!(requests.as_slice(), [ShopRequest::ShowInn { cost: actual, inn_type: 1, foreground: true }] if *actual == cost)
             );
             count += 1;
         }

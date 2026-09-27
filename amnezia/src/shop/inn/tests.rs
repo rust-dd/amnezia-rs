@@ -47,8 +47,11 @@ fn app() -> App {
 }
 
 fn open(app: &mut App, cost: i32) {
-    app.world_mut()
-        .write_message(ShopRequest::ShowInn { cost, inn_type: 1 });
+    app.world_mut().write_message(ShopRequest::ShowInn {
+        cost,
+        inn_type: 1,
+        foreground: true,
+    });
     app.update();
 }
 

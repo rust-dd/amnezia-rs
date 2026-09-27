@@ -8,6 +8,7 @@ pub(super) fn capture(world: &mut World, label: &str) {
     super::native::describe(world, label);
     let world_snapshot = super::world_image::snapshot(world, label);
     let quick_snapshot = crate::teleport::smoke::snapshot(world, label);
+    let normal_snapshot = crate::teleport::normal_smoke::snapshot(world, label);
     let rotation_snapshot = crate::picture::smoke::rotation::snapshot(world, label);
     let target = world.get_resource::<offscreen::Target>();
     let prefix = if target.is_some() {
@@ -74,6 +75,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
                     snapshot.verify(&capture.image, &label);
                 }
                 if let Some(snapshot) = &quick_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &normal_snapshot {
                     snapshot.verify(&capture.image);
                 }
                 if let Some(snapshot) = &rotation_snapshot {

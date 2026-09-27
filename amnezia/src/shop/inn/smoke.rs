@@ -18,6 +18,7 @@ use std::sync::{
 };
 
 mod animation;
+pub(crate) use animation::reference as animation_reference;
 mod clock;
 mod fixtures;
 mod observation;

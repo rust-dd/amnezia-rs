@@ -33,6 +33,12 @@ pub(crate) struct State {
 }
 
 impl State {
+    pub(crate) fn cancel_prompt(&mut self) {
+        if self.prompting() {
+            self.phase = Phase::Idle;
+        }
+    }
+
     pub(crate) fn active(&self) -> bool {
         !matches!(self.phase, Phase::Idle)
     }
@@ -47,6 +53,11 @@ impl State {
             Phase::Idle | Phase::Prompt { .. } | Phase::Closing
         )
     }
+}
+
+#[cfg(test)]
+pub(crate) fn open_pending(world: &mut World) {
+    world.run_system_cached(flow::open).unwrap();
 }
 
 pub(super) fn register(app: &mut App) {

@@ -238,6 +238,7 @@ pub fn debug_triggers(
         requests.write(ShopRequest::ShowInn {
             cost: 10,
             inn_type: 1,
+            foreground: true,
         });
     }
 }

@@ -28,6 +28,7 @@ pub(super) fn show(frame: &mut Frame, x: &mut Exec) -> Flow {
         }
     }
     x.dialogue.open(boxes);
+    x.dialogue.from_foreground = !frame.parallel;
     frame.message_pending = true;
     if run_len <= 4 {
         append_prompt(frame, x);
@@ -77,6 +78,7 @@ pub(super) fn choice(frame: &mut Frame, command: &EventCommand, x: &mut Exec) ->
         indent: command.indent,
         cancel: command.params.first().copied().unwrap_or(0),
     }) {
+        x.dialogue.from_foreground = !frame.parallel;
         frame.message_pending = true;
         frame.choice_pending = true;
         Flow::Yield

@@ -4,6 +4,7 @@ use crate::transitions::{Kind, TransitionIo};
 use crate::world::{MapEffectsReset, MapRebuilt};
 use bevy::prelude::*;
 
+pub(crate) mod normal_smoke;
 mod scene;
 pub(crate) mod smoke;
 #[cfg(test)]

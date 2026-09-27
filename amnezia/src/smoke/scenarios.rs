@@ -65,6 +65,8 @@ pub(super) fn start(world: &mut World, scenario: &str) {
         looping::entry()
     } else if scenario == "quick-transfers" {
         crate::teleport::smoke::entry()
+    } else if scenario == "normal-transfers" {
+        crate::teleport::normal_smoke::entry()
     } else if scenario == "airship" {
         let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(
             "{}/maps/map_0125.ron",
@@ -260,6 +262,8 @@ pub(super) fn selected() -> &'static str {
         "looping"
     } else if std::env::args().any(|arg| arg == "--smoke-quick-transfers") {
         "quick-transfers"
+    } else if std::env::args().any(|arg| arg == "--smoke-normal-transfers") {
+        "normal-transfers"
     } else if std::env::args().any(|arg| arg == "--smoke-airship") {
         "airship"
     } else if std::env::args().any(|arg| arg == "--smoke-battle") {

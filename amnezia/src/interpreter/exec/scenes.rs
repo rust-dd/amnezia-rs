@@ -53,10 +53,12 @@ pub(super) fn execute(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -
         SHOW_INN => {
             let cost = command.params.get(1).copied().unwrap_or(0);
             let inn_type = command.params.first().copied().unwrap_or(0).max(0) as u32;
-            x.subsystems
-                .merchant
-                .writer
-                .write(ShopRequest::ShowInn { cost, inn_type });
+            x.subsystems.merchant.writer.write(ShopRequest::ShowInn {
+                cost,
+                inn_type,
+                foreground: !frame.parallel,
+            });
+            frame.shop_transacted = None;
             frame.shop_pending = true;
         }
         OPEN_SAVE_MENU => {

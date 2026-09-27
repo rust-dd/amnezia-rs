@@ -43,6 +43,7 @@ mod message_handoff;
 mod message_options;
 mod message_ownership;
 mod movement;
+mod normal_transfers;
 mod ordering;
 mod outcomes;
 mod parallel_order;

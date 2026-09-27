@@ -41,6 +41,9 @@ impl Scene<'_, '_> {
     pub(super) fn perform(&mut self, target: (u32, u32, u32), reload: bool, quick: bool) {
         let (map_id, x, y) = target;
         let changed = map_id != self.data.map_id;
+        if changed && !reload && !quick {
+            self.commands.queue(crate::interpreter::on_map_change);
+        }
         if changed || reload {
             for entity in &self.scene {
                 self.commands.entity(entity).despawn();

@@ -47,6 +47,7 @@ pub struct Dialogue {
     pub boxes: Vec<MessageBox>,
     pub index: usize,
     pub active: bool,
+    pub(crate) from_foreground: bool,
     generation: u64,
     reveal: Option<Typewriter>,
     prompt: Option<embedded::Embedded>,
@@ -69,6 +70,7 @@ impl Dialogue {
 
     fn clear_message(&mut self) {
         self.active = false;
+        self.from_foreground = false;
         self.boxes.clear();
         self.index = 0;
         self.reveal = None;
@@ -79,6 +81,7 @@ impl Dialogue {
     /// then pauses until the player dismisses the last box (`active` clears).
     pub fn open(&mut self, boxes: Vec<MessageBox>) {
         self.lifecycle.open();
+        self.from_foreground = true;
         self.boxes = boxes
             .into_iter()
             .flat_map(|page| {
@@ -126,6 +129,16 @@ impl Dialogue {
     fn finish(&mut self, frame: u32) {
         self.clear_message();
         self.lifecycle.close(frame);
+    }
+
+    /// Close non-foreground windows, returning whether a pending message was discarded.
+    pub(crate) fn finish_parallel(&mut self, frame: u32) -> bool {
+        if !self.busy() || self.from_foreground {
+            return false;
+        }
+        let discarded = self.active;
+        self.finish(frame);
+        discarded
     }
 
     pub(crate) fn open_gold(&mut self) {

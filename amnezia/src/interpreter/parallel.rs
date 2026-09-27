@@ -73,6 +73,12 @@ pub struct ParallelPool {
 }
 
 impl ParallelPool {
+    pub(super) fn cancel_prompts(&mut self) {
+        for entry in &mut self.frames {
+            entry.frame.cancel_prompt();
+        }
+    }
+
     pub(crate) fn enter_map(&mut self, map_id: Option<u32>) {
         if self.last_map == map_id {
             return;

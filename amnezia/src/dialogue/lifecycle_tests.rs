@@ -119,6 +119,70 @@ fn opening_uses_logical_ticks_at_every_render_rate_without_charging_prior_time()
 }
 
 #[test]
+fn interrupted_parallel_messages_close_message_and_gold_in_seven_steps() {
+    let mut app = app();
+    app.update();
+    app.world_mut().resource_mut::<GameFrames>().frame = 7;
+    app.update();
+    {
+        let mut dialogue = app.world_mut().resource_mut::<Dialogue>();
+        assert!(!dialogue.finish_parallel(7));
+        assert!(dialogue.active);
+        dialogue.from_foreground = false;
+        dialogue.open_gold();
+        assert!(dialogue.finish_parallel(7));
+        assert!(!dialogue.active);
+        assert!(dialogue.boxes.is_empty());
+        assert!(dialogue.reveal.is_none());
+    }
+    for (index, (message, gold)) in [
+        (34, 13),
+        (28, 11),
+        (22, 9),
+        (17, 6),
+        (11, 4),
+        (5, 2),
+        (0, 0),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        app.world_mut().resource_mut::<GameFrames>().frame = 7 + index as u32;
+        app.update();
+        let dialogue = app.world().resource::<Dialogue>();
+        assert!(dialogue.busy());
+        assert_eq!(dialogue.lifecycle.message.half_height(80), message);
+        assert_eq!(dialogue.lifecycle.gold.half_height(32), gold);
+    }
+    app.world_mut().resource_mut::<GameFrames>().frame = 14;
+    app.update();
+    assert!(!app.world().resource::<Dialogue>().busy());
+}
+
+#[test]
+fn a_transfer_restarts_closing_after_either_message_owner_has_finished() {
+    for foreground in [false, true] {
+        let mut app = app();
+        app.update();
+        app.world_mut().resource_mut::<GameFrames>().frame = 7;
+        app.update();
+        {
+            let mut dialogue = app.world_mut().resource_mut::<Dialogue>();
+            dialogue.from_foreground = foreground;
+            dialogue.open_gold();
+            dialogue.finish(7);
+        }
+        app.world_mut().resource_mut::<GameFrames>().frame = 9;
+        app.update();
+        let mut dialogue = app.world_mut().resource_mut::<Dialogue>();
+        assert_eq!(dialogue.lifecycle.message.half_height(80), 22);
+        assert!(!dialogue.finish_parallel(9));
+        assert_eq!(dialogue.lifecycle.message.half_height(80), 34);
+        assert_eq!(dialogue.lifecycle.gold.half_height(32), 13);
+    }
+}
+
+#[test]
 fn battle_messages_have_no_window_animation() {
     let mut app = app();
     app.insert_resource(crate::battle::BattleActive(true));

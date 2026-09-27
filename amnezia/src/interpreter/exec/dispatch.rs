@@ -60,6 +60,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             let var_id = command.params.get(1).copied().unwrap_or(0) as u32;
             x.dialogue
                 .open_number(digits, var_id, &mut x.subsystems.input_number);
+            x.dialogue.from_foreground = !frame.parallel;
             frame.message_pending = true;
             frame.input_pending = true;
             Flow::Yield

@@ -44,7 +44,11 @@ pub enum ShopRequest {
     },
     /// Offer an overnight rest costing `cost` gold. Maps from the `ShowInn`
     /// command (code 10730).
-    ShowInn { cost: i32, inn_type: u32 },
+    ShowInn {
+        cost: i32,
+        inn_type: u32,
+        foreground: bool,
+    },
 }
 
 /// Whether a merchant screen (shop or inn) is showing; the movement/interpreter

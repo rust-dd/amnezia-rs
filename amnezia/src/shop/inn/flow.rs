@@ -27,7 +27,12 @@ pub(super) fn open(
     terms: Res<Terms>,
 ) {
     for request in requests.read() {
-        let ShopRequest::ShowInn { cost, inn_type } = request else {
+        let ShopRequest::ShowInn {
+            cost,
+            inn_type,
+            foreground,
+        } = request
+        else {
             continue;
         };
         let cost = (*cost).max(0);
@@ -51,6 +56,7 @@ pub(super) fn open(
             lines: vocabulary.greetings.into(),
         };
         dialogue.open(vec![page]);
+        dialogue.from_foreground = *foreground;
         dialogue.open_gold();
         dialogue.append_prompt(MessagePrompt::Choice {
             labels: vec![vocabulary.accept, vocabulary.cancel],

@@ -43,7 +43,7 @@ pub(super) fn capture(world: &mut World, step: Step, case: usize) -> Option<&'st
     fresh.then_some(LABELS[index])
 }
 
-pub(super) fn reference(world: &World, label: &str) -> Option<Vec<[u8; 4]>> {
+pub(crate) fn reference(world: &World, label: &str) -> Option<Vec<[u8; 4]>> {
     let index = LABELS.iter().position(|expected| *expected == label)?;
     let server = world.resource::<AssetServer>();
     let images = world.resource::<Assets<Image>>();
