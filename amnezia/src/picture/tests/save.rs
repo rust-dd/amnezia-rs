@@ -26,6 +26,7 @@ fn save_app(tag: &str) -> (App, std::path::PathBuf) {
     .init_resource::<crate::interpreter::RunningEvent>()
     .add_message::<PictureCommand>()
     .add_message::<MapRebuilt>()
+    .add_message::<MapEffectsReset>()
     .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
         std::time::Duration::ZERO,
     ))
@@ -112,6 +113,7 @@ fn restored_pictures_replace_the_previous_session_after_its_scene_is_cleared() {
     app.world_mut().resource_mut::<LoadRequest>().0 = true;
     app.update();
     app.world_mut().write_message(MapRebuilt);
+    app.world_mut().write_message(MapEffectsReset);
     app.update();
     assert_eq!(snapshot(app.world_mut()), expected);
     std::fs::remove_file(path).unwrap();
@@ -142,11 +144,13 @@ fn picture_restore_waits_for_a_rebuilt_destination_and_is_applied_only_once() {
     assert!(app.world().contains_resource::<saved::Pending>());
     app.world_mut().resource_mut::<MapData>().map_id = 3;
     app.world_mut().write_message(MapRebuilt);
+    app.world_mut().write_message(MapEffectsReset);
     app.update();
     assert_eq!(count_pictures(&mut app), 0);
     assert!(app.world().contains_resource::<saved::Pending>());
     app.world_mut().resource_mut::<MapData>().map_id = 2;
     app.world_mut().write_message(MapRebuilt);
+    app.world_mut().write_message(MapEffectsReset);
     app.update();
     assert_eq!(snapshot(app.world_mut()), expected);
     assert!(!app.world().contains_resource::<saved::Pending>());
@@ -154,6 +158,7 @@ fn picture_restore_waits_for_a_rebuilt_destination_and_is_applied_only_once() {
     app.update();
     assert_eq!(snapshot(app.world_mut()), expected);
     app.world_mut().write_message(MapRebuilt);
+    app.world_mut().write_message(MapEffectsReset);
     app.update();
     assert_eq!(count_pictures(&mut app), 0);
     std::fs::remove_file(path).unwrap();
@@ -169,6 +174,7 @@ fn a_saved_empty_picture_list_removes_the_previous_session_images() {
     app.world_mut().resource_mut::<LoadRequest>().0 = true;
     app.update();
     app.world_mut().write_message(MapRebuilt);
+    app.world_mut().write_message(MapEffectsReset);
     app.update();
     assert_eq!(count_pictures(&mut app), 0);
     assert_eq!(std::fs::read(&path).unwrap(), original);
@@ -191,6 +197,7 @@ fn legacy_saves_without_picture_data_start_empty_and_leave_the_slot_untouched() 
             Some(true)
         );
         app.world_mut().write_message(MapRebuilt);
+        app.world_mut().write_message(MapEffectsReset);
         app.update();
         assert_eq!(count_pictures(&mut app), 0);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), original);

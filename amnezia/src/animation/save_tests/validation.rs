@@ -80,14 +80,17 @@ fn a_pending_cast_waits_for_the_correct_rebuilt_map_and_is_applied_once() {
     assert!(app.world().contains_resource::<saved::Pending>());
     app.world_mut().resource_mut::<MapData>().map_id = 2;
     app.world_mut().write_message(MapRebuilt);
+    app.world_mut().write_message(crate::world::MapEffectsReset);
     app.update();
     assert!(app.world().contains_resource::<saved::Pending>());
     app.world_mut().resource_mut::<MapData>().map_id = 3;
     app.world_mut().write_message(MapRebuilt);
+    app.world_mut().write_message(crate::world::MapEffectsReset);
     app.update();
     assert_eq!(saved::snapshot(app.world_mut()), expected);
     assert!(!app.world().contains_resource::<saved::Pending>());
     app.world_mut().write_message(MapRebuilt);
+    app.world_mut().write_message(crate::world::MapEffectsReset);
     app.update();
     assert_eq!(saved::snapshot(app.world_mut()), default());
     std::fs::remove_file(path).unwrap();

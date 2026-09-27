@@ -1,5 +1,5 @@
 use super::*;
-use crate::world::{Character, MapChanged, MapData, MapRebuilt, MoveQueue, RouteAction};
+use crate::world::{Character, MapChanged, MapData, MapEffectsReset, MoveQueue, RouteAction};
 
 pub(super) fn map_app(fps: u32) -> (App, Entity, Entity) {
     let mut app = app(fps);
@@ -202,7 +202,7 @@ fn missing_targets_and_map_transfers_remove_map_cells() {
         let (mut app, hero, _) = map_app(60);
         play(&mut app, AnimTarget::Hero, false);
         if transfer {
-            app.world_mut().write_message(MapRebuilt);
+            app.world_mut().write_message(MapEffectsReset);
         } else {
             app.world_mut().despawn(hero);
         }

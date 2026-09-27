@@ -6,6 +6,7 @@ pub(super) fn relocate(world: &mut World) {
         .and_then(|mut vehicles| vehicles.relocate_pending.take());
     if let Some(target) = target {
         world.run_system_cached_with(relocate_hero, target).unwrap();
+        crate::player::relocate_camera(world);
         crate::appearance::reset_player(world);
     }
 }

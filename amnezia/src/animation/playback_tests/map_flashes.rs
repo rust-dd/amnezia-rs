@@ -168,7 +168,7 @@ fn replacing_the_target_or_canceling_a_map_animation_clears_the_old_character() 
 }
 
 #[test]
-fn map_rebuilds_and_new_sessions_clear_target_flashes_even_without_a_clock_tick() {
+fn map_effect_resets_and_new_sessions_clear_target_flashes_even_without_a_clock_tick() {
     for session in [false, true] {
         let (mut app, hero, _) = fixture(60);
         play(&mut app, AnimTarget::Hero);
@@ -180,7 +180,7 @@ fn map_rebuilds_and_new_sessions_clear_target_flashes_even_without_a_clock_tick(
         if session {
             playback::reset_transient(app.world_mut());
         } else {
-            app.world_mut().write_message(crate::world::MapRebuilt);
+            app.world_mut().write_message(crate::world::MapEffectsReset);
         }
         app.update();
         assert_eq!(color(&app, hero), [0; 4]);

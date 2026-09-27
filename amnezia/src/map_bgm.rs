@@ -38,23 +38,23 @@ impl Plugin for MapBgmPlugin {
         ))))
         .add_systems(
             Update,
-            play_map_bgm
+            flush
                 .in_set(MapMusic)
                 .after(crate::teleport::MapTransfer)
+                .before(crate::interpreter::ParallelStep)
                 .before(crate::interpreter::InterpreterStep),
         );
     }
 }
 
-/// Play the active map's BGM when the map becomes current. `MapData` is marked
-/// changed on its initial insert (world setup) and on every teleport swap
-/// (`teleport::swap_map` reassigns it), which is the trigger. While the title
-/// owns the screen the world is frozen behind it and the title theme plays, so
-/// the first map's BGM is deferred (`pending`) until the title releases the
-/// world. A type-2 map requests its track through [`AudioRequest::from_music`] —
-/// the audio layer skips a restart when it is already the playing track, so a
-/// same-map teleport does not restart it — while a type-1 map (or one resolving
-/// to a silent/rootless owner) leaves the current BGM untouched.
+pub(crate) fn flush(world: &mut World) {
+    if world.contains_resource::<MapInfoData>() {
+        world.run_system_cached(play_map_bgm).unwrap();
+    }
+}
+
+/// Map entry plays once after the title releases the world. Save restoration
+/// retains its recorded track instead of replaying the map's initial music.
 fn play_map_bgm(
     map_data: Res<MapData>,
     map_info: Res<MapInfoData>,
@@ -156,7 +156,6 @@ mod tests {
             requests(&app).is_empty(),
             "no map BGM while the title theme owns the screen"
         );
-        // The title dismisses (New Game / Continue): the deferred BGM now plays.
         app.insert_resource(TitleActive(false));
         app.update();
         let sent = requests(&app);

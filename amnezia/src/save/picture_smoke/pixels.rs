@@ -36,8 +36,8 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
                     .to_srgba()
                     .to_u8_array();
                 pixels.push((
-                    (center.x - 10.0 + col as f32 * 8.0).round() as u32,
-                    (center.y - 10.0 + row as f32 * 8.0).round() as u32,
+                    (center.x.trunc() - 6.0 + col as f32 * 8.0) as u32,
+                    (center.y.trunc() - 6.0 + row as f32 * 8.0) as u32,
                     [rgb[0], rgb[1], rgb[2]],
                 ));
             }

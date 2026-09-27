@@ -100,3 +100,49 @@ fn rebuilt_maps_clear_the_old_flash_but_keep_tone_and_shake() {
         assert_eq!(overlay.color, Color::NONE);
     }
 }
+
+#[test]
+fn quick_transfers_preserve_the_live_flash_tone_shake_and_weather_scroll() {
+    let mut app = app();
+    weather::rain::Scroll::restore(app.world_mut(), [12.25, 149.5]);
+    let expected = saved::snapshot(app.world());
+    app.world_mut()
+        .resource_mut::<PendingTeleport>()
+        .quick(4, 7, 6);
+    crate::teleport::flush_quick(app.world_mut());
+    app.update();
+    assert_eq!(app.world().resource::<MapData>().map_id, 4);
+    assert_eq!(saved::snapshot(app.world()), expected);
+    let overlay = app
+        .world_mut()
+        .query_filtered::<&Sprite, With<FlashOverlay>>()
+        .single(app.world())
+        .unwrap();
+    assert_ne!(overlay.color, Color::NONE);
+}
+
+#[test]
+fn quick_relocation_preserves_the_current_shake_in_immediate_screen_coordinates() {
+    let mut app = app();
+    let camera = app
+        .world_mut()
+        .spawn((MainCamera, Transform::default()))
+        .id();
+    let shake = app.world().resource::<Fx>().shake_offset;
+    assert_ne!(shake, Vec2::ZERO);
+    app.world_mut()
+        .resource_mut::<PendingTeleport>()
+        .quick(4, 7, 6);
+    crate::teleport::flush_quick(app.world_mut());
+    let position = app
+        .world()
+        .get::<Transform>(camera)
+        .unwrap()
+        .translation
+        .truncate();
+    assert_eq!(position, shake);
+    assert_eq!(
+        app.world().resource::<CameraPan>().position,
+        Some(Vec2::ZERO)
+    );
+}

@@ -207,7 +207,7 @@ pub(super) fn cancel(commands: &mut Commands, entity: Entity, animation: &mut Li
 }
 
 pub(super) fn clear_map_animations(
-    mut changes: MessageReader<crate::world::MapRebuilt>,
+    mut changes: MessageReader<crate::world::MapEffectsReset>,
     mut commands: Commands,
     mut animations: Query<(Entity, &mut LiveAnimation)>,
 ) {

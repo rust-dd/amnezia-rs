@@ -84,12 +84,7 @@ fn step(
 ) -> Progress {
     if matches!(phase, Phase::Begin) {
         let map_id = exec.subsystems.flow.map_data.as_deref().map(|m| m.map_id);
-        if pool.last_map != map_id {
-            pool.frames
-                .retain(|entry| !matches!(entry.source, ParallelSource::MapPage(..)));
-            pool.pages.clear();
-            pool.last_map = map_id;
-        }
+        pool.enter_map(map_id);
         reconcile(
             &mut pool,
             &common_events,

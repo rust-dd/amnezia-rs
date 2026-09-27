@@ -16,8 +16,9 @@ use bevy::render::render_resource::AsBindGroup;
 use bevy::shader::ShaderRef;
 use bevy::sprite_render::{AlphaMode2d, Material2d};
 
-/// RM2000 screen centre in its 320×240 viewport; a picture's `(x, y)` is its
-/// centre, so this maps to the camera centre.
+mod geometry;
+
+/// RM2000 viewport centre; picture origins use integer half-dimensions.
 const CENTER_X: f32 = 160.0;
 const CENTER_Y: f32 = 120.0;
 
@@ -146,7 +147,6 @@ pub(crate) fn apply_commands(world: &mut World) {
             } => {
                 for entity in picture_entities(world, id) {
                     let mut pic = world.get_mut::<Picture>(entity).unwrap();
-                    // Legacy map-fixed pictures ignore MovePicture coordinates.
                     let (tx, ty) = if pic.fixed_to_map {
                         (pic.x, pic.y)
                     } else {
@@ -251,7 +251,7 @@ pub(super) fn place_pictures(
         let anchor = pic.world_anchor.map(|anchor| anchor + unshaken - scrolled);
         let pos = picture_translation(unshaken, pic.x, pic.y, anchor);
         transform.translation = pos.extend(picture_z(pic.id));
-        transform.rotation = Quat::from_rotation_z(pic.effect.angle());
+        transform.rotation = Quat::from_rotation_z(-pic.effect.angle());
         let mut wave_uniform = Vec4::ZERO;
         if let Some(size) = pic.base_size {
             let zoom = (pic.zoom / 100.0).max(0.0);
@@ -262,7 +262,10 @@ pub(super) fn place_pictures(
                     (base + screen_offset(wave.center.x, wave.center.y)).extend(picture_z(pic.id));
                 wave_uniform = wave.uniform;
             } else {
-                transform.scale = (size * zoom).extend(1.0);
+                let (center, size) = geometry::quad(center, size, zoom, pic.effect.angle());
+                transform.scale = size.extend(1.0);
+                transform.translation =
+                    (base + screen_offset(center.x, center.y)).extend(picture_z(pic.id));
             }
         }
         if let Some(mut material) = materials.get_mut(&handle.0) {
@@ -367,8 +370,6 @@ mod tests {
 
     #[test]
     fn screen_pinned_picture_tracks_the_camera_and_stays_on_screen() {
-        // No anchor: the world position follows the camera base (so the picture
-        // holds its screen spot as the map scrolls).
         let at_origin = picture_translation(Vec2::ZERO, 160.0, 120.0, None);
         let panned = picture_translation(Vec2::new(48.0, -32.0), 160.0, 120.0, None);
         assert_eq!(at_origin, Vec2::ZERO);
@@ -377,8 +378,6 @@ mod tests {
 
     #[test]
     fn map_fixed_picture_holds_its_world_anchor_and_scrolls_with_the_map() {
-        // With an anchor the world position is fixed regardless of the camera,
-        // so the picture scrolls off with the map like a world sprite.
         let anchor = Vec2::new(7.0, 8.0);
         let a = picture_translation(Vec2::ZERO, 160.0, 120.0, Some(anchor));
         let b = picture_translation(Vec2::new(48.0, -32.0), 160.0, 120.0, Some(anchor));

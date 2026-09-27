@@ -185,6 +185,11 @@ fn drive(world: &mut World) {
     if scenario == "looping" {
         looping::drive(world, frame);
     }
+    if scenario == "quick-transfers"
+        && let Some(label) = crate::teleport::smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "camera" {
         camera::drive(world, frame);
     }
@@ -431,6 +436,8 @@ fn drive(world: &mut World) {
         }
         if scenario == "inn" {
             crate::shop::inn::smoke::verify_finished(world);
+        } else if scenario == "quick-transfers" {
+            crate::teleport::smoke::verify_finished(world);
         } else if scenario == "shop" {
             crate::shop::smoke::verify_finished(world);
         } else if scenario == "save-slots" {

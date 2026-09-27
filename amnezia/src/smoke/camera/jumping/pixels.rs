@@ -7,7 +7,7 @@ pub(crate) struct Snapshot {
 
 pub(in crate::smoke) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let scroll = match label {
-        "camera-jump-before" => 8.25,
+        "camera-jump-before" => 8.25_f32,
         "camera-jump-landed" => 9.25,
         "camera-jump-pan-finished" => 16.0,
         _ => return None,
@@ -27,8 +27,8 @@ pub(in crate::smoke) fn snapshot(world: &mut World, label: &str) -> Option<Snaps
                     .to_srgba()
                     .to_u8_array();
                 pixels.push((
-                    (center_x - 10.0 + col as f32 * 8.0).round() as u32,
-                    50 + row * 8,
+                    (center_x.trunc() - 6.0 + col as f32 * 8.0) as u32,
+                    54 + row * 8,
                     [rgb[0], rgb[1], rgb[2]],
                 ));
             }

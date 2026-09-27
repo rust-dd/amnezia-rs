@@ -28,8 +28,12 @@ pub(super) fn locate(frame: &mut Frame, command: &EventCommand, x: &mut Exec) ->
             .as_ref()
             .is_some_and(|data| data.map_id != map)
         {
-            x.pending.0 = Some((map, tx, ty));
-            return Flow::Yield;
+            if frame.parallel && frame.base_event_id() != 0 {
+                bevy::log::warn!("Quick vehicle transfer is not valid in a parallel map event");
+                return Flow::Stop;
+            }
+            x.pending.quick(map, tx, ty);
+            return Flow::Advance;
         }
         vehicles.relocate_pending = Some((tx, ty));
     }

@@ -84,3 +84,60 @@ fn same_map_relocation_keeps_map_fixed_pictures_at_their_screen_coordinates() {
     app.update();
     assert_eq!(relative_positions(app.world_mut()), before);
 }
+
+#[test]
+fn quick_transfer_preserves_fixed_and_screen_pictures_and_flushes_old_map_anchors() {
+    let (mut app, _) = fixture();
+    app.add_plugins(crate::teleport::TeleportPlugin)
+        .add_message::<crate::world::MapChanged>();
+    show(&mut app);
+    let before = relative_positions(app.world_mut());
+    let states = app
+        .world_mut()
+        .run_system_once(|capture: saved::Capture| capture.snapshot())
+        .unwrap();
+    app.world_mut().write_message(PictureCommand::Show {
+        id: 3,
+        name: "Cross".into(),
+        x: 192.0,
+        y: 136.0,
+        fixed_to_map: true,
+        use_transparent_color: true,
+        transparency: 0.0,
+        zoom: 100.0,
+        tone: Tone::NEUTRAL,
+        effect: Effect::default(),
+    });
+    app.world_mut()
+        .resource_mut::<crate::teleport::PendingTeleport>()
+        .quick(4, 7, 6);
+    crate::teleport::flush_quick(app.world_mut());
+    app.world_mut()
+        .run_system_once(clear_on_map_change)
+        .unwrap();
+    app.world_mut()
+        .run_system_once(render::place_pictures)
+        .unwrap();
+    assert_eq!(
+        relative_positions(app.world_mut()),
+        [before[0], before[1], Vec2::new(32.0, -16.0)]
+    );
+    let after = app
+        .world_mut()
+        .run_system_once(|capture: saved::Capture| capture.snapshot())
+        .unwrap();
+    for state in states {
+        assert_eq!(
+            after.iter().find(|picture| picture.id == state.id),
+            Some(&state)
+        );
+    }
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::ZERO,
+    ));
+    app.update();
+    assert_eq!(
+        relative_positions(app.world_mut()),
+        [before[0], before[1], Vec2::new(32.0, -16.0)]
+    );
+}

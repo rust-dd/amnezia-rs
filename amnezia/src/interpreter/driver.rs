@@ -77,6 +77,7 @@ fn step(world: &mut World, source: Option<ParallelSource>, operation: Operation)
 fn flush(world: &mut World) {
     super::scenes::cancel_replaced(world);
     crate::vehicles::flush(world);
+    crate::teleport::flush_quick(world);
     crate::world::update::flush(world);
     super::foreground::refresh(world);
     crate::appearance::flush(world);

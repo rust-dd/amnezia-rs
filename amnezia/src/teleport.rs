@@ -1,23 +1,33 @@
-//! Map transfers share the event transition state, preserving explicit erasure.
+//! Map transfers share event transitions; occupied vehicle relocation skips them.
 
-use crate::player::{CameraPan, Player};
-use crate::state::{Inventory, Party, Switches, Variables};
-use crate::tiles::CHAR_Y_OFFSET;
 use crate::transitions::{Kind, TransitionIo};
-use crate::world::{
-    Character, MapChanged, MapData, MapEvents, MapRebuilt, MapScene, MoveQueue, RouteStepper,
-    load_map,
-};
+use crate::world::{MapEffectsReset, MapRebuilt};
 use bevy::prelude::*;
 
+mod scene;
+pub(crate) mod smoke;
+#[cfg(test)]
+use crate::{
+    player::{CameraPan, Player},
+    state::{Inventory, Party, Switches, Variables},
+    tiles::CHAR_Y_OFFSET,
+    world::{Character, MapChanged, MapData, MapEvents, MapScene, MoveQueue, RouteStepper},
+};
+#[cfg(test)]
+use scene::reposition_hero;
+
 #[derive(Resource, Default)]
-pub struct PendingTeleport(pub Option<(u32, u32, u32)>, bool);
+pub struct PendingTeleport(pub Option<(u32, u32, u32)>, bool, Option<(u32, u32, u32)>);
 
 impl PendingTeleport {
     /// Rebuild the destination even when a save or new game uses the current map.
     pub fn reload(&mut self, map_id: u32, x: u32, y: u32) {
         self.0 = Some((map_id, x, y));
         self.1 = true;
+    }
+
+    pub(crate) fn quick(&mut self, map_id: u32, x: u32, y: u32) {
+        self.2 = Some((map_id, x, y));
     }
 }
 
@@ -54,6 +64,7 @@ impl Plugin for TeleportPlugin {
         app.init_resource::<PendingTeleport>()
             .init_resource::<Fade>()
             .add_message::<MapRebuilt>()
+            .add_message::<MapEffectsReset>()
             .add_systems(
                 Update,
                 drive_fade
@@ -63,29 +74,27 @@ impl Plugin for TeleportPlugin {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+pub(crate) fn flush_quick(world: &mut World) {
+    let target = world
+        .get_resource_mut::<PendingTeleport>()
+        .and_then(|mut pending| pending.2.take());
+    let Some(target) = target else {
+        return;
+    };
+    crate::picture::apply_pending(world);
+    world.run_system_cached_with(scene::quick, target).unwrap();
+    if let Some(mut pool) = world.get_resource_mut::<crate::interpreter::ParallelPool>() {
+        pool.enter_map(Some(target.0));
+    }
+    crate::player::relocate_camera(world);
+    crate::map_bgm::flush(world);
+}
+
 fn drive_fade(
     mut transition: TransitionIo,
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-    switches: Res<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
     mut pending: ResMut<PendingTeleport>,
     mut fade: ResMut<Fade>,
-    mut map_data: ResMut<MapData>,
-    mut map_events: ResMut<MapEvents>,
-    mut pan: ResMut<CameraPan>,
-    mut map_changed: MessageWriter<MapChanged>,
-    mut map_rebuilt: MessageWriter<MapRebuilt>,
-    scene: Query<Entity, With<MapScene>>,
-    mut players: Query<(
-        &mut Player,
-        &mut Transform,
-        &mut MoveQueue,
-        &mut RouteStepper,
-    )>,
+    mut scene: scene::Scene,
 ) {
     if transition.state.busy() {
         return;
@@ -110,39 +119,8 @@ fn drive_fade(
             fade.phase = Phase::Out;
         }
         Phase::Out => {
-            if let Some((map_id, x, y)) = fade.target.take() {
-                let rebuilt = swap_map(
-                    &mut commands,
-                    &asset_server,
-                    &switches,
-                    &variables,
-                    &party,
-                    &inventory,
-                    &mut map_data,
-                    &mut map_events,
-                    &mut pan,
-                    &scene,
-                    &mut players,
-                    map_id,
-                    x,
-                    y,
-                    fade.reload,
-                );
-                commands.queue(move |world: &mut World| {
-                    if let Some(mut vehicles) =
-                        world.get_resource_mut::<crate::vehicles::Vehicles>()
-                        && let Some(index) = vehicles.save.riding
-                    {
-                        vehicles.set_location(index, map_id, x, y);
-                    }
-                    if let Some(mut calling) = world.get_resource_mut::<crate::menu::Calling>() {
-                        calling.cancel();
-                    }
-                });
-                if rebuilt {
-                    map_rebuilt.write(MapRebuilt);
-                }
-                map_changed.write(MapChanged);
+            if let Some(target) = fade.target.take() {
+                scene.perform(target, fade.reload, false);
             }
             fade.phase = Phase::Prepare;
         }
@@ -158,84 +136,6 @@ fn drive_fade(
             fade.phase = Phase::In;
         }
         Phase::In => fade.phase = Phase::Idle,
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn swap_map(
-    commands: &mut Commands,
-    asset_server: &AssetServer,
-    switches: &Switches,
-    variables: &Variables,
-    party: &Party,
-    inventory: &Inventory,
-    map_data: &mut MapData,
-    map_events: &mut MapEvents,
-    pan: &mut CameraPan,
-    scene: &Query<Entity, With<MapScene>>,
-    players: &mut Query<(
-        &mut Player,
-        &mut Transform,
-        &mut MoveQueue,
-        &mut RouteStepper,
-    )>,
-    map_id: u32,
-    x: u32,
-    y: u32,
-    reload: bool,
-) -> bool {
-    let (tile_x, tile_y) = (x as i32, y as i32);
-    if map_id == map_data.map_id && !reload {
-        reposition_hero(players, map_data, tile_x, tile_y);
-        pan.recenter(false);
-        return false;
-    }
-    for entity in scene {
-        commands.entity(entity).despawn();
-    }
-    let (data, events) = load_map(
-        commands,
-        asset_server,
-        switches,
-        variables,
-        party,
-        inventory,
-        map_id,
-    );
-    reposition_hero(players, &data, tile_x, tile_y);
-    if map_id != map_data.map_id
-        && let Ok((mut player, _, _, mut route)) = players.single_mut()
-    {
-        route.animation.reset(&mut *player);
-    }
-    *map_data = data;
-    *map_events = events;
-    pan.recenter(true);
-    true
-}
-
-/// Move the persistent hero to tile `(tile_x, tile_y)` on `data`: update its
-/// logical tile and snap its transform to the tile center. Facing is retained —
-/// the teleport target carries no direction, matching RM2000's "retain heading".
-fn reposition_hero(
-    players: &mut Query<(
-        &mut Player,
-        &mut Transform,
-        &mut MoveQueue,
-        &mut RouteStepper,
-    )>,
-    data: &MapData,
-    tile_x: i32,
-    tile_y: i32,
-) {
-    if let Ok((mut player, mut transform, mut queue, _)) = players.single_mut() {
-        queue.relocate(player.tile());
-        player.tile_x = tile_x;
-        player.tile_y = tile_y;
-        let (world_x, world_y) = data.tile_center(tile_x, tile_y);
-        transform.translation.x = world_x;
-        transform.translation.y = world_y + CHAR_Y_OFFSET;
-        transform.translation.z = crate::tiles::character_z(tile_y);
     }
 }
 

@@ -7,6 +7,8 @@ mod request;
 pub(super) fn capture(world: &mut World, label: &str) {
     super::native::describe(world, label);
     let world_snapshot = super::world_image::snapshot(world, label);
+    let quick_snapshot = crate::teleport::smoke::snapshot(world, label);
+    let rotation_snapshot = crate::picture::smoke::rotation::snapshot(world, label);
     let target = world.get_resource::<offscreen::Target>();
     let prefix = if target.is_some() {
         "amnezia-smoke-offscreen"
@@ -70,6 +72,12 @@ pub(super) fn capture(world: &mut World, label: &str) {
             move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
                 if let Some(snapshot) = &world_snapshot {
                     snapshot.verify(&capture.image, &label);
+                }
+                if let Some(snapshot) = &quick_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &rotation_snapshot {
+                    snapshot.verify(&capture.image);
                 }
                 verify_content(&capture.image, &label);
                 if let Some(snapshot) = &inn_snapshot {

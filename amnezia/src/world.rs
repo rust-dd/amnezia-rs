@@ -214,6 +214,10 @@ pub struct MapChanged;
 #[derive(Message)]
 pub(crate) struct MapRebuilt;
 
+/// Ordinary map transfers clear transient effects; quick vehicle transfers do not.
+#[derive(Message)]
+pub(crate) struct MapEffectsReset;
+
 pub struct WorldPlugin;
 
 impl Plugin for WorldPlugin {

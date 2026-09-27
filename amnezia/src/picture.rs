@@ -8,10 +8,10 @@
 //! RM2000 fixed-to-map flag: a screen-pinned picture re-centres on the unshaken
 //! camera every frame, a map-fixed one accumulates actual map scrolling but not
 //! jump-landing corrections. Pictures inherit shake but not screen tint.
-//! Rebuilding the map clears its pictures; same-map repositioning preserves them.
+//! Ordinary cross-map transfers clear pictures; quick vehicle transfers preserve them.
 
 use crate::screenfx::ScreenShakeSet;
-use crate::world::MapRebuilt;
+use crate::world::{MapEffectsReset, MapRebuilt};
 use bevy::prelude::*;
 use bevy::sprite_render::Material2dPlugin;
 use bevy::transform::TransformSystems;
@@ -289,7 +289,7 @@ impl Plugin for PicturePlugin {
 struct ParallelPictures;
 
 fn register_timeline(app: &mut App) {
-    app.add_systems(
+    app.add_message::<MapEffectsReset>().add_systems(
         Update,
         (
             (clear_on_map_change, saved::restore)
@@ -330,7 +330,7 @@ fn drive_tweens(
 /// Clear the previous scene before destination picture commands can run.
 fn clear_on_map_change(
     mut commands: Commands,
-    mut changed: MessageReader<MapRebuilt>,
+    mut changed: MessageReader<MapEffectsReset>,
     pictures: Query<Entity, With<Picture>>,
 ) {
     if changed.read().last().is_none() {

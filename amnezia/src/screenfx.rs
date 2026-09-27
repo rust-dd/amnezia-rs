@@ -162,6 +162,7 @@ impl Plugin for ScreenFxPlugin {
     fn build(&self, app: &mut App) {
         app.add_message::<ScreenEffect>()
             .add_message::<crate::world::MapRebuilt>()
+            .add_message::<crate::world::MapEffectsReset>()
             .init_resource::<Fx>()
             .init_resource::<flash::channel::Inbox>()
             .add_plugins(tone::ScreenTonePlugin)
@@ -221,7 +222,7 @@ impl Plugin for ScreenFxPlugin {
     }
 }
 
-fn clear_map_flash(mut rebuilt: MessageReader<crate::world::MapRebuilt>, mut fx: ResMut<Fx>) {
+fn clear_map_flash(mut rebuilt: MessageReader<crate::world::MapEffectsReset>, mut fx: ResMut<Fx>) {
     if rebuilt.read().count() != 0 {
         fx.flash = None;
     }

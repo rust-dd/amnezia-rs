@@ -84,6 +84,12 @@ impl CameraPan {
         }
     }
 
+    pub(crate) fn recenter_quick(&mut self) {
+        let tracking = self.tracking.take();
+        self.recenter(true);
+        self.tracking = tracking;
+    }
+
     fn update(&mut self, data: &MapData, player: Vec2, half_view: Vec2, dt: f32) -> Vec2 {
         let player = data.world_near(player, self.previous_player.unwrap_or(player));
         let focus = player + Vec2::X * 8.0 + self.offset;
@@ -190,6 +196,34 @@ fn raster_position(data: &MapData, point: Vec2, half_view: Vec2) -> Vec2 {
         (point.x - corner.x - half_view.x).trunc() + corner.x + half_view.x,
         corner.y - half_view.y - (corner.y - point.y - half_view.y).trunc(),
     )
+}
+
+pub(crate) fn relocate_camera(world: &mut World) {
+    world.run_system_cached(place_relocated_camera).unwrap();
+}
+
+#[allow(clippy::type_complexity)]
+fn place_relocated_camera(
+    data: Res<MapData>,
+    mut pan: ResMut<CameraPan>,
+    shake: crate::screenfx::ScreenShake,
+    heroes: Query<(&Player, &MoveQueue)>,
+    mut cameras: Query<(&mut Transform, Option<&Projection>), (With<MainCamera>, Without<Player>)>,
+) {
+    let Ok((hero, queue)) = heroes.single() else {
+        return;
+    };
+    let Ok((mut camera, projection)) = cameras.single_mut() else {
+        return;
+    };
+    let half_view = match projection {
+        Some(Projection::Orthographic(view)) => view.area.size() / 2.0,
+        _ => Vec2::new(160.0, 120.0),
+    };
+    let point = pan.update(&data, queue.subpixel_position(hero, &data), half_view, 0.0);
+    let point = raster_position(&data, point, half_view) + shake.offset();
+    camera.translation.x = point.x;
+    camera.translation.y = point.y;
 }
 
 #[cfg(test)]

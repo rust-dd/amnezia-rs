@@ -73,6 +73,16 @@ pub struct ParallelPool {
 }
 
 impl ParallelPool {
+    pub(crate) fn enter_map(&mut self, map_id: Option<u32>) {
+        if self.last_map == map_id {
+            return;
+        }
+        self.frames
+            .retain(|entry| !matches!(entry.source, ParallelSource::MapPage(..)));
+        self.pages.clear();
+        self.last_map = map_id;
+    }
+
     pub(super) fn settle_scene(&mut self, ticket: u64, cancelled: bool) {
         for entry in &mut self.frames {
             entry.frame.settle_scene(ticket, cancelled);

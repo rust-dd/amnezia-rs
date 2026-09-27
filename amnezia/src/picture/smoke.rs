@@ -1,9 +1,13 @@
 use super::{Effect, Picture, PictureCommand, effects::EffectState, render::PictureMaterial};
 use bevy::prelude::*;
 
+pub(crate) mod rotation;
 mod transfers;
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if frame >= 1030 {
+        return rotation::drive(world, frame);
+    }
     if frame >= 600 {
         return transfers::drive(world, frame);
     }
@@ -207,8 +211,8 @@ pub(crate) fn verify_image(image: &Image, label: &str, expected: &[PixelCheck]) 
     if !matches!(label, "pictures-color-key" | "pictures-transfer-same") {
         return;
     }
-    let opaque = at(220, 50);
-    let keyed = at(270, 50);
+    let opaque = at(224, 54);
+    let keyed = at(274, 54);
     for (actual, expected) in opaque[..3].iter().zip([32, 156, 0]) {
         assert!(
             actual.abs_diff(expected) <= 1,
@@ -228,4 +232,5 @@ pub(crate) fn verify_image(image: &Image, label: &str, expected: &[PixelCheck]) 
 
 pub(crate) fn verify_finished(world: &World) {
     transfers::verify_finished(world);
+    rotation::verify_finished(world);
 }
