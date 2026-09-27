@@ -74,6 +74,8 @@ fn run_script(world: &mut World) {
         crate::screenfx::weather_smoke::input(frame)
     } else if scenario == "dialogue-timing" {
         crate::dialogue::timing_smoke::input(frame)
+    } else if scenario == "screen-events" {
+        crate::screenfx::flash_smoke::input(frame)
     } else {
         None
     };

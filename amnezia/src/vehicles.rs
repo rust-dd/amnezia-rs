@@ -166,6 +166,7 @@ fn keyboard(
     mut vehicles: ResMut<Vehicles>,
     mut audio: MessageWriter<AudioRequest>,
     mut players: Query<(&Player, &MoveQueue, Option<&mut RouteStepper>)>,
+    steps: Option<ResMut<crate::conditions::FieldSteps>>,
 ) {
     vehicles.consumed_action = false;
     if guards.paused() {
@@ -187,6 +188,9 @@ fn keyboard(
         return;
     }
     if move_rider(&keys, &data, &mut vehicles) {
+        if let Some(mut steps) = steps {
+            steps.record();
+        }
         return;
     }
     if keys.just_pressed(KeyCode::Enter) || keys.just_pressed(KeyCode::Space) {

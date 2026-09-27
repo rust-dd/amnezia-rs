@@ -82,6 +82,7 @@ fn resolve(
     mut triggers: EventTriggers,
     mut running: ResMut<RunningEvent>,
     mut players: Query<(&mut Player, &mut MoveQueue, &RouteStepper), Without<EventSprite>>,
+    steps: Option<ResMut<crate::conditions::FieldSteps>>,
 ) {
     let Ok((mut player, mut queue, stepper)) = players.single_mut() else {
         return;
@@ -110,5 +111,10 @@ fn resolve(
             .data
             .normalize_tile(player.tile_x + delta.0, player.tile_y + delta.1);
         triggers.queue_at(&mut running, front, true, &[1, 2], player.tile(), false);
+    }
+    if queue.busy()
+        && let Some(mut steps) = steps
+    {
+        steps.record();
     }
 }

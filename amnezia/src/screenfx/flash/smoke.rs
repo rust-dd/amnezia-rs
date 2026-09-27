@@ -8,13 +8,18 @@ use std::sync::{
 const BASES: [[u8; 3]; 3] = [[0, 0, 0], [64, 128, 192], [255; 3]];
 const UI: [u8; 3] = [40, 80, 120];
 
+mod steps;
 mod transfers;
+pub(crate) use steps::input;
 
 #[derive(Resource, Default)]
 struct Checks(Arc<AtomicU32>);
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if let Some(label) = transfers::drive(world, frame) {
+        return Some(label);
+    }
+    if let Some(label) = steps::drive(world, frame) {
         return Some(label);
     }
     if frame == 600 {
@@ -94,13 +99,17 @@ pub(crate) fn snapshot(world: &World, label: &str) -> Option<Snapshot> {
         ([0; 3], 0)
     } else {
         let flash = world.resource::<Fx>().flash.as_ref().unwrap();
-        assert!((1..60).contains(&flash.frames_left));
-        let (rgb, mut level) = if label.contains("strong") {
-            ([248, 80, 40], 31.0_f64)
+        let (rgb, mut level, duration) = if label.contains("poison") {
+            let remaining = if label.ends_with("first") { 5 } else { 3 };
+            assert_eq!(flash.frames_left, remaining);
+            ([248, 80, 80], 20.0_f64, 6)
+        } else if label.contains("strong") {
+            ([248, 80, 40], 31.0_f64, 60)
         } else {
-            ([56, 136, 248], 13.0_f64)
+            ([56, 136, 248], 13.0_f64, 60)
         };
-        for remaining in (flash.frames_left + 1..=60).rev() {
+        assert!((1..duration).contains(&flash.frames_left));
+        for remaining in (flash.frames_left + 1..=duration).rev() {
             level -= level / f64::from(remaining);
         }
         (rgb, (level * 8.0) as u8)
@@ -147,5 +156,6 @@ impl Snapshot {
 
 pub(crate) fn verify_finished(world: &World) {
     transfers::verify_finished(world);
-    assert_eq!(world.resource::<Checks>().0.load(Ordering::SeqCst), 7);
+    steps::verify_finished(world);
+    assert_eq!(world.resource::<Checks>().0.load(Ordering::SeqCst), 10);
 }

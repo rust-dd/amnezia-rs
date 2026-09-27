@@ -1,14 +1,14 @@
 use crate::assets::{asset_root, load_ron};
 use crate::gamedata::GameData;
-use crate::player::Player;
 use crate::progression::Progression;
 use crate::state::Party;
-use crate::vehicles::Vehicles;
 use crate::vitals::Vitals;
-use crate::world::MapData;
 use amnezia_data::StateDef;
 use bevy::prelude::*;
 use std::sync::OnceLock;
+
+#[cfg(test)]
+mod movement_tests;
 
 pub fn definitions() -> &'static [StateDef] {
     static STATES: OnceLock<Vec<StateDef>> = OnceLock::new();
@@ -36,41 +36,43 @@ pub fn names(vitals: &Vitals, actor_id: u32) -> String {
 #[derive(Resource, Default)]
 pub struct FieldSteps {
     pub count: u64,
-    last: Option<(u32, i32, i32)>,
+    pending: bool,
+}
+
+impl FieldSteps {
+    pub(crate) fn record(&mut self) {
+        self.pending = true;
+    }
 }
 
 pub struct ConditionsPlugin;
 
 impl Plugin for ConditionsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<FieldSteps>();
+        app.init_resource::<FieldSteps>()
+            .add_message::<crate::screenfx::ScreenEffect>();
         crate::player::update::character(app, || {
-            step.after(crate::player::PlayerStep)
-                .after(crate::vehicles::VehicleSync)
+            step.after(crate::player::PlayerInput)
+                .after(crate::vehicles::VehicleInput)
+                .before(crate::player::PlayerStep)
                 .before(crate::dialogue::MessageUpdate)
         });
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn step(
-    data: Res<MapData>,
     actors: Res<GameData>,
     progression: Res<Progression>,
     party: Res<Party>,
-    vehicles: Res<Vehicles>,
-    players: Query<&Player>,
     mut steps: ResMut<FieldSteps>,
     mut vitals: ResMut<Vitals>,
+    mut effects: MessageWriter<crate::screenfx::ScreenEffect>,
 ) {
-    let Ok(hero) = players.single() else { return };
-    let now = (data.map_id, hero.tile_x, hero.tile_y);
-    let previous = steps.last.replace(now);
-    let Some((map, x, y)) = previous else { return };
-    if vehicles.riding() || map != now.0 || (x - now.1).abs() + (y - now.2).abs() != 1 {
+    if !std::mem::take(&mut steps.pending) {
         return;
     }
     steps.count = steps.count.wrapping_add(1);
+    let mut damaged = false;
     for id in party.snapshot() {
         let Some(actor) = actors.actor(id) else {
             continue;
@@ -80,31 +82,54 @@ fn step(
             actor.curves.max_hp.get(level).copied().unwrap_or(actor.hp) as i32,
             actor.curves.max_sp.get(level).copied().unwrap_or(actor.sp) as i32,
         );
-        apply_step(&mut vitals, id, steps.count, full);
+        damaged |= apply_step(&mut vitals, id, steps.count, full);
+    }
+    if damaged {
+        effects.write(crate::screenfx::ScreenEffect::Flash {
+            r: 31,
+            g: 10,
+            b: 10,
+            intensity: 20,
+            secs: 0.1,
+        });
     }
 }
 
-fn apply_step(vitals: &mut Vitals, actor: u32, step: u64, full: (i32, i32)) {
+fn apply_step(vitals: &mut Vitals, actor: u32, step: u64, full: (i32, i32)) -> bool {
     let (mut hp, sp) = vitals.get_stored(actor).unwrap_or(full);
     if hp <= 0 {
-        return;
+        return false;
     }
+    let mut changed = false;
+    let mut damaged = false;
     for state_id in vitals.states(actor) {
         let Some(state) = definitions().iter().find(|s| s.id == state_id) else {
             continue;
         };
-        if state.hp_change_map_steps == 0 || !step.is_multiple_of(state.hp_change_map_steps as u64)
+        if state.hp_change_map_steps == 0
+            || state.hp_change_map_val == 0
+            || !step.is_multiple_of(state.hp_change_map_steps as u64)
         {
             continue;
         }
         let amount = state.hp_change_map_val as i32;
         match state.hp_change_type {
-            0 => hp = (hp - amount).max(1),
-            1 => hp = (hp + amount).min(full.0),
+            0 => {
+                hp = hp.saturating_sub(amount).clamp(1, full.0.max(1));
+                changed = true;
+                damaged = true;
+            }
+            1 => {
+                hp = hp.saturating_add(amount).clamp(1, full.0.max(1));
+                changed = true;
+            }
             _ => {}
         }
     }
-    vitals.set(actor, hp, sp);
+    if changed {
+        vitals.set(actor, hp, sp);
+    }
+    damaged
 }
 
 #[cfg(test)]

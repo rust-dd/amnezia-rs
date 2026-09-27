@@ -26,7 +26,7 @@ mod screen;
 pub(crate) mod stop_clock;
 mod terrain;
 #[cfg(test)]
-mod test_support;
+pub(crate) mod test_support;
 mod topology;
 mod touch;
 mod triggers;
