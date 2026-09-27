@@ -16,9 +16,9 @@ mod camera;
 mod input;
 use input::move_player;
 pub(crate) mod update;
-pub(crate) use camera::CameraFollow;
 pub use camera::CameraPan;
 pub(crate) use camera::saved as saved_camera;
+pub(crate) use camera::{BackgroundScroll, CameraFollow};
 
 const PLAYER_CHARSET: &str = "Chara1";
 const PLAYER_INDEX: u32 = 0;

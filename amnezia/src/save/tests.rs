@@ -9,6 +9,7 @@ mod identities;
 pub(crate) use fixture::save_resources;
 mod message;
 mod music;
+mod panorama;
 mod slots;
 mod timestamps;
 

@@ -39,7 +39,7 @@ use bevy::prelude::*;
 use ron::ser::PrettyConfig;
 use std::path::PathBuf;
 
-pub(crate) const SAVE_FORMAT_VERSION: u32 = 25;
+pub(crate) const SAVE_FORMAT_VERSION: u32 = 26;
 
 /// A request to load the save slot, honoured by [`save_or_load`] on the next
 /// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
@@ -492,6 +492,10 @@ fn valid_destination(game: &SaveGame, animation: &crate::animation::saved::Captu
             .is_none_or(|state| game.dir < 4 && state.valid())
         && game.screen.as_ref().is_none_or(|screen| screen.valid())
         && crate::picture::saved::valid(&game.pictures)
+        && game
+            .panorama
+            .as_ref()
+            .is_none_or(crate::panorama::Panorama::valid)
         && game
             .camera
             .as_ref()

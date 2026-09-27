@@ -39,6 +39,13 @@ impl Tracking {
 }
 
 impl CameraPan {
+    pub(super) fn canonical_display(&self) -> Option<Vec2> {
+        self.tracking
+            .as_ref()
+            .filter(|state| Some(Vec2::from_array(state.world)) == self.position)
+            .map(|state| Vec2::from_array(state.display))
+    }
+
     pub(crate) fn effects_position(&self) -> Option<Vec2> {
         self.position.map(|position| {
             self.tracking
@@ -74,6 +81,11 @@ impl CameraPan {
             .map(|state| Vec2::from_array(state.effects));
         self.tracking = Some(Tracking::new(data, position, half_view, effects));
         self.position = Some(position);
+        self.background_scroll.push(BackgroundScroll {
+            map_id: data.map_id,
+            display: self.tracking.as_ref().unwrap().display,
+            delta: None,
+        });
     }
 
     pub(super) fn scroll_to(&mut self, data: &MapData, position: Vec2, half_view: Vec2) {
@@ -84,6 +96,11 @@ impl CameraPan {
             .is_none_or(|state| state.world != before.to_array())
         {
             self.tracking = Some(Tracking::new(data, before, half_view, None));
+            self.background_scroll.push(BackgroundScroll {
+                map_id: data.map_id,
+                display: self.tracking.as_ref().unwrap().display,
+                delta: None,
+            });
         }
         let state = self.tracking.as_mut().unwrap();
         let moved = position - before;
@@ -102,6 +119,13 @@ impl CameraPan {
         }
         state.world = position.to_array();
         self.position = Some(position);
+        if moved != Vec2::ZERO {
+            self.background_scroll.push(BackgroundScroll {
+                map_id: data.map_id,
+                display: state.display,
+                delta: Some(map_delta.to_array()),
+            });
+        }
     }
 
     pub(super) fn round_jump(&mut self, data: &MapData, half_view: Vec2) {

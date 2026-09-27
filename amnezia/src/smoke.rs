@@ -186,6 +186,11 @@ fn drive(world: &mut World) {
     if scenario == "camera" {
         camera::drive(world, frame);
     }
+    if scenario == "panorama"
+        && let Some(label) = crate::panorama::smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
     if scenario == "map-animations"
         && let Some(label) = crate::animation::map_smoke::drive(world, frame)
     {

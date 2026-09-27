@@ -4,20 +4,82 @@ use amnezia_data::PanoramaDef;
 use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 
+mod motion;
+mod render;
 pub(crate) mod smoke;
 
-#[derive(Resource, Default, Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Resource, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Panorama {
     map_id: Option<u32>,
     definition: Option<PanoramaDef>,
     scroll: (f32, f32),
+    #[serde(default)]
+    motion: Option<motion::Motion>,
+    #[serde(default)]
+    clock: crate::timing::GameFrames,
+}
+
+impl Default for Panorama {
+    fn default() -> Self {
+        Self {
+            map_id: None,
+            definition: None,
+            scroll: (0.0, 0.0),
+            motion: Some(default()),
+            clock: default(),
+        }
+    }
 }
 
 impl Panorama {
-    pub fn change(&mut self, map_id: u32, definition: PanoramaDef) {
-        self.map_id = Some(map_id);
-        self.definition = (!definition.name.is_empty()).then_some(definition);
-        self.scroll = (0.0, 0.0);
+    pub(crate) fn change(
+        &mut self,
+        map: &MapData,
+        camera: &mut crate::player::CameraPan,
+        definition: PanoramaDef,
+    ) {
+        self.sync_camera(map, Some(&mut *camera));
+        self.definition = if definition.name.is_empty() {
+            map.panorama.clone()
+        } else {
+            Some(definition)
+        }
+        .filter(|definition| !definition.name.is_empty());
+        if self.definition.is_none() {
+            self.motion.get_or_insert_default().initialize(
+                "",
+                UVec2::ZERO,
+                None,
+                map,
+                camera.background_position(map).unwrap_or_default(),
+            );
+        }
+    }
+
+    fn sync_camera(&mut self, map: &MapData, camera: Option<&mut crate::player::CameraPan>) {
+        if self.map_id != Some(map.map_id) {
+            *self = Self {
+                map_id: Some(map.map_id),
+                definition: map
+                    .panorama
+                    .clone()
+                    .filter(|definition| !definition.name.is_empty()),
+                ..default()
+            };
+        }
+        if let Some(camera) = camera {
+            for event in camera.take_background_scroll() {
+                if let Some(motion) = &mut self.motion {
+                    motion.scroll(&event, self.definition.as_ref(), map);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn valid(&self) -> bool {
+        self.scroll.0.is_finite()
+            && self.scroll.1.is_finite()
+            && self.motion.as_ref().is_none_or(motion::Motion::valid)
     }
 }
 
@@ -47,20 +109,13 @@ impl Plugin for PanoramaPlugin {
             .init_resource::<BackgroundImage>()
             .add_systems(
                 PostUpdate,
-                draw.in_set(PanoramaDraw)
+                render::draw
+                    .in_set(PanoramaDraw)
                     .after(advance)
                     .after(crate::screenfx::ScreenShakeSet)
                     .before(bevy::transform::TransformSystems::Propagate),
             );
         crate::timing::logical::post(app, || advance);
-    }
-}
-
-fn speed(value: i32) -> f32 {
-    if value == 0 {
-        0.0
-    } else {
-        value.signum() as f32 * 2f32.powi(value.saturating_abs().min(12)) * 60.0 / 32.0
     }
 }
 
@@ -82,6 +137,7 @@ fn camera_scroll(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn advance(
     time: Res<Time>,
     data: Res<MapData>,
@@ -90,122 +146,66 @@ fn advance(
     scene: ScenePause,
     mut panorama: ResMut<Panorama>,
     mut texture: ResMut<BackgroundImage>,
+    mut camera: Option<ResMut<crate::player::CameraPan>>,
+    transforms: Query<&Transform, With<MainCamera>>,
 ) {
-    if panorama.map_id != Some(data.map_id) {
-        panorama.map_id = Some(data.map_id);
-        panorama.definition = data
-            .panorama
-            .clone()
-            .filter(|definition| !definition.name.is_empty());
-        panorama.scroll = (0.0, 0.0);
-    }
+    panorama.sync_camera(&data, camera.as_deref_mut());
+    let display = camera
+        .as_ref()
+        .and_then(|camera| camera.background_position(&data))
+        .unwrap_or_else(|| {
+            let point = transforms
+                .single()
+                .map_or(Vec2::ZERO, |transform| transform.translation.truncate());
+            Vec2::new(
+                point.x + (data.width as f32 * 16.0 - 320.0) / 2.0,
+                (data.height as f32 * 16.0 - 240.0) / 2.0 - point.y,
+            )
+        });
     let Some(definition) = panorama.definition.clone() else {
         texture.0 = None;
+        panorama
+            .motion
+            .get_or_insert_default()
+            .initialize("", UVec2::ZERO, None, &data, display);
         return;
     };
-    if !scene.paused() {
-        if definition.loop_x && definition.auto_x {
-            panorama.scroll.0 += speed(definition.speed_x) * time.delta_secs();
-        }
-        if definition.loop_y && definition.auto_y {
-            panorama.scroll.1 += speed(definition.speed_y) * time.delta_secs();
-        }
-    }
     let image = texture.load(&server, &definition.name);
-    if let Some(image) = images.get(image) {
-        let size = image.size();
-        if size.x != 0 && size.y != 0 {
-            panorama.scroll.0 = panorama.scroll.0.rem_euclid(size.x as f32);
-            panorama.scroll.1 = panorama.scroll.1.rem_euclid(size.y as f32);
-        }
-    }
-}
-
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
-fn draw(
-    mut commands: Commands,
-    data: Res<MapData>,
-    texture: Res<BackgroundImage>,
-    images: Res<Assets<Image>>,
-    panorama: Res<Panorama>,
-    pan: Option<Res<crate::player::CameraPan>>,
-    mut previous: Local<Option<(String, UVec2)>>,
-    camera: Query<&Transform, (With<MainCamera>, Without<PanoramaTile>)>,
-    mut tiles: Query<(Entity, &PanoramaTile, &mut Transform), Without<MainCamera>>,
-) {
-    let Some(definition) = panorama.definition.clone() else {
-        if previous.take().is_some() {
-            for (entity, _, _) in &tiles {
-                commands.entity(entity).despawn();
-            }
-        }
+    let Some(image) = images.get(image) else {
         return;
     };
-    let Some((name, image)) = &texture.0 else {
-        return;
-    };
-    let Some(loaded) = images.get(image) else {
-        return;
-    };
-    let size = loaded.size();
-    if size.x == 0 || size.y == 0 {
+    let size = image.size();
+    if size.min_element() == 0 {
         return;
     }
-    let Ok(camera) = camera.single() else { return };
-    let tracked = pan
-        .as_ref()
-        .and_then(|pan| pan.panorama_position(&data, [definition.loop_x, definition.loop_y]));
-    let point = tracked.map_or(camera.translation.truncate(), |display| {
-        Vec2::new(
-            display.x - (data.width as f32 * 16.0 - 320.0) / 2.0,
-            (data.height as f32 * 16.0 - 240.0) / 2.0 - display.y,
-        )
-    });
-    let x_scroll = camera_scroll(
-        point.x,
-        data.width as f32 * 16.0,
-        320.0,
-        size.x as f32,
-        definition.loop_x || data.loops_x(),
+    if panorama.motion.is_none() {
+        let tracked = camera
+            .as_ref()
+            .and_then(|camera| {
+                camera.panorama_position(&data, [definition.loop_x, definition.loop_y])
+            })
+            .unwrap_or(display);
+        panorama.motion = Some(motion::Motion::migrate(
+            &definition,
+            &data,
+            size,
+            tracked,
+            panorama.scroll,
+        ));
+        panorama.scroll = (0.0, 0.0);
+    }
+    panorama.motion.as_mut().unwrap().initialize(
+        &definition.name,
+        size,
+        Some(&definition),
+        &data,
+        display,
     );
-    let y_scroll = camera_scroll(
-        -point.y,
-        data.height as f32 * 16.0,
-        240.0,
-        size.y as f32,
-        definition.loop_y || data.loops_y(),
-    );
-    let x_offset = (x_scroll + panorama.scroll.0).rem_euclid(size.x as f32);
-    let y_offset = (y_scroll + panorama.scroll.1).rem_euclid(size.y as f32);
-    let translation = |x, y| {
-        Vec3::new(
-            camera.translation.x - 160.0 + (x as f32 + 0.5) * size.x as f32 + x_offset,
-            camera.translation.y + 120.0 - (y as f32 + 0.5) * size.y as f32 - y_offset,
-            -10.0,
-        )
-    };
-    if previous.as_ref() != Some(&(name.clone(), size)) {
-        for (entity, _, _) in &tiles {
-            commands.entity(entity).despawn();
-        }
-        for y in -1..=(240 / size.y + 1) as i32 {
-            for x in -1..=(320 / size.x + 1) as i32 {
-                commands.spawn((
-                    PanoramaTile(x, y),
-                    Sprite {
-                        image: image.clone(),
-                        custom_size: Some(size.as_vec2()),
-                        ..default()
-                    },
-                    Transform::from_translation(translation(x, y)),
-                ));
-            }
-        }
-        *previous = Some((name.clone(), size));
-        return;
-    }
-    for (_, tile, mut transform) in &mut tiles {
-        transform.translation = translation(tile.0, tile.1);
+    if !scene.paused() {
+        let before = panorama.clock.frame;
+        panorama.clock.advance(time.delta_secs_f64());
+        let frames = panorama.clock.frame.wrapping_sub(before);
+        panorama.motion.as_mut().unwrap().step(&definition, frames);
     }
 }
 
@@ -214,20 +214,27 @@ mod tests {
     use super::*;
 
     mod loading;
+    mod logical;
+    mod motion;
+    mod ordering;
+    mod phase;
 
     #[test]
     fn parallax_speed_and_camera_tracking_match_original_subpixels() {
-        assert_eq!(speed(0), 0.0);
-        assert_eq!(speed(3), 15.0);
-        assert_eq!(speed(-3), -15.0);
+        assert_eq!(super::motion::amount(0), 0);
+        assert_eq!(super::motion::amount(3), -8);
+        assert_eq!(super::motion::amount(-3), 8);
         assert_eq!(camera_scroll(0.0, 640.0, 320.0, 320.0, true), -80.0);
     }
 
     #[test]
     fn command_configuration_and_scroll_survive_save() {
         let mut panorama = Panorama::default();
+        let mut map = MapData::for_test(20, 26);
+        map.map_id = 126;
         panorama.change(
-            126,
+            &map,
+            &mut crate::player::CameraPan::default(),
             PanoramaDef::from_command("Sky".into(), &[1, 1, 1, -3, 1, 2]),
         );
         panorama.scroll = (12.0, 8.0);

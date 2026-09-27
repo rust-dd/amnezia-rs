@@ -4,6 +4,9 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
 };
 
+mod phase;
+pub(crate) use phase::drive;
+
 #[derive(Resource, Default)]
 struct Checked(Arc<AtomicU32>);
 
@@ -13,7 +16,7 @@ pub(crate) struct Snapshot {
 }
 
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
-    if label != "panorama" {
+    if label != "panorama" && !label.starts_with("panorama-phase-") {
         return None;
     }
     world.init_resource::<Checked>();
@@ -23,26 +26,32 @@ pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         .resource::<crate::player::CameraPan>()
         .position
         .unwrap();
-    let corner = Vec2::from(map.tile_center(0, 0)) + Vec2::new(-8.0, 8.0);
-    let display = (camera - corner) * Vec2::new(1.0, -1.0) - Vec2::new(160.0, 120.0);
     let rendered = world
         .query_filtered::<&Transform, With<MainCamera>>()
         .single(world)
         .unwrap()
         .translation
         .truncate();
-    assert_eq!(rendered, camera);
+    let shake = rendered - camera;
+    assert_eq!(shake.y, 0.0);
+    assert_eq!(shake.x, shake.x.trunc());
+    if label == "panorama-phase-shake" {
+        assert!(shake.x.abs() >= 1.0);
+    } else {
+        assert_eq!(shake, Vec2::ZERO);
+    }
     let panorama = world.resource::<Panorama>();
     assert_eq!(panorama.definition.as_ref().unwrap().name, "Sky");
-    let phase = display * 16.0 - Vec2::from(panorama.scroll) * 32.0;
+    let phase = world.resource::<phase::Reference>().phase;
+    assert_eq!(panorama.motion.as_ref().unwrap().phase, phase);
     let images = world.resource::<Assets<Image>>();
     let source = images
         .get(&world.resource::<BackgroundImage>().0.as_ref().unwrap().1)
         .unwrap();
     assert_eq!(source.size(), UVec2::new(640, 480));
     let start = [
-        ((phase.x as i32).rem_euclid(640 * 32) / 16) / 2,
-        ((phase.y as i32).rem_euclid(480 * 32) / 16) / 2,
+        (-((-phase[0] / 16) / 2) + shake.x as i64).rem_euclid(640),
+        (-((-phase[1] / 16) / 2)).rem_euclid(480),
     ];
     let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(
         "{}/maps/map_0094.ron",
@@ -100,5 +109,6 @@ impl Snapshot {
 }
 
 pub(crate) fn verify_finished(world: &World) {
-    assert_eq!(world.resource::<Checked>().0.load(Ordering::SeqCst), 1);
+    assert_eq!(world.resource::<Checked>().0.load(Ordering::SeqCst), 5);
+    phase::verify_finished(world);
 }

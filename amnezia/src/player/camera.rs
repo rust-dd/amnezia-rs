@@ -3,9 +3,11 @@ use crate::tiles::{CHAR_Y_OFFSET, TILE};
 use crate::world::{MainCamera, MapData, MoveQueue};
 use bevy::prelude::*;
 
+mod background;
 pub(crate) mod saved;
 mod scroll;
 mod tracking;
+pub(crate) use background::BackgroundScroll;
 pub(super) use scroll::{MotionScroll, apply_scroll, prepare_scroll};
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -20,6 +22,7 @@ pub struct CameraPan {
     pub(crate) position: Option<Vec2>,
     previous_player: Option<Vec2>,
     tracking: Option<tracking::Tracking>,
+    background_scroll: Vec<BackgroundScroll>,
 }
 
 impl Default for CameraPan {
@@ -32,6 +35,7 @@ impl Default for CameraPan {
             position: None,
             previous_player: None,
             tracking: None,
+            background_scroll: Vec::new(),
         }
     }
 }
@@ -73,6 +77,7 @@ impl CameraPan {
         self.previous_player = None;
         if map_changed {
             self.tracking = None;
+            self.background_scroll.clear();
             self.offset = Vec2::ZERO;
             self.target = Vec2::ZERO;
             self.speed = 60.0;

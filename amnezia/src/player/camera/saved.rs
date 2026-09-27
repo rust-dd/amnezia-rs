@@ -16,6 +16,8 @@ pub(crate) struct CameraState {
     pub previous_player: Option<[f32; 2]>,
     #[serde(default)]
     pub(super) tracking: Option<super::tracking::Tracking>,
+    #[serde(default)]
+    pub(super) background_scroll: Vec<super::BackgroundScroll>,
 }
 
 impl CameraPan {
@@ -28,6 +30,7 @@ impl CameraPan {
             position: self.position.map(|value| value.to_array()),
             previous_player: self.previous_player.map(|value| value.to_array()),
             tracking: self.tracking.clone(),
+            background_scroll: self.background_scroll.clone(),
         }
     }
 }
@@ -35,6 +38,10 @@ impl CameraPan {
 impl CameraState {
     pub(crate) fn valid(&self) -> bool {
         self.speed.is_finite()
+            && self
+                .background_scroll
+                .iter()
+                .all(super::BackgroundScroll::valid)
             && self
                 .tracking
                 .as_ref()
@@ -58,6 +65,7 @@ impl CameraState {
             position: self.position.map(Vec2::from_array),
             previous_player: self.previous_player.map(Vec2::from_array),
             tracking: self.tracking,
+            background_scroll: self.background_scroll,
         }
     }
 }

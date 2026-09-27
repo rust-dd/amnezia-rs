@@ -14,6 +14,7 @@ fn app() -> App {
         PanoramaPlugin,
     ))
     .register_asset_loader(ImageLoader::new(CompressedImageFormats::NONE))
+    .init_resource::<crate::player::CameraPan>()
     .insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
         Duration::from_secs_f64(1.0 / 60.0),
     ));
@@ -45,7 +46,7 @@ fn wait_for(app: &mut App, ready: impl Fn(&mut World) -> bool) {
     }
 }
 
-fn loaded_without_tiles() -> App {
+pub(super) fn loaded_without_tiles() -> App {
     let mut app = app();
     app.world_mut().resource_mut::<MapData>().panorama = None;
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
@@ -58,10 +59,9 @@ fn loaded_without_tiles() -> App {
     wait_for(&mut app, |world| {
         world.resource::<Assets<Image>>().contains(&handle)
     });
-    app.world_mut().resource_mut::<Panorama>().change(
-        94,
-        PanoramaDef::from_command("Sky".into(), &[1, 1, 0, 0, 0, 0]),
-    );
+    app.insert_resource(Panorama::default());
+    app.world_mut().resource_mut::<MapData>().panorama =
+        Some(PanoramaDef::from_command("Sky".into(), &[1, 1, 0, 0, 0, 0]));
     app.world_mut()
         .query_filtered::<&mut Transform, With<MainCamera>>()
         .single_mut(app.world_mut())
@@ -70,6 +70,19 @@ fn loaded_without_tiles() -> App {
         .y = -8.0;
     app.update();
     app
+}
+
+pub(super) fn change(app: &mut App, name: &str, params: &[i32]) {
+    app.world_mut()
+        .resource_scope(|world, mut panorama: Mut<Panorama>| {
+            world.resource_scope(|world, mut camera: Mut<crate::player::CameraPan>| {
+                panorama.change(
+                    world.resource::<MapData>(),
+                    &mut camera,
+                    PanoramaDef::from_command(name.into(), params),
+                );
+            });
+        });
 }
 
 #[test]
@@ -126,10 +139,7 @@ fn changing_scroll_parameters_keeps_the_existing_background_entities() {
         .iter(app.world())
         .collect::<std::collections::HashSet<_>>();
     assert_eq!(before.len(), 9);
-    app.world_mut().resource_mut::<Panorama>().change(
-        94,
-        PanoramaDef::from_command("Sky".into(), &[1, 1, 1, 6, 1, -6]),
-    );
+    change(&mut app, "Sky", &[1, 1, 1, 6, 1, -6]);
     app.update();
     let after = app
         .world_mut()
@@ -142,10 +152,7 @@ fn changing_scroll_parameters_keeps_the_existing_background_entities() {
 #[test]
 fn replacing_and_clearing_a_background_preserves_then_releases_its_visible_tiles() {
     let mut app = loaded_without_tiles();
-    app.world_mut().resource_mut::<Panorama>().change(
-        94,
-        PanoramaDef::from_command("Ground".into(), &[1, 1, 0, 0, 0, 0]),
-    );
+    change(&mut app, "Ground", &[1, 1, 0, 0, 0, 0]);
     app.update();
     assert_eq!(
         app.world_mut()
@@ -157,9 +164,8 @@ fn replacing_and_clearing_a_background_preserves_then_releases_its_visible_tiles
     wait_for(&mut app, |world| {
         world.query::<&PanoramaTile>().iter(world).count() == 414
     });
-    app.world_mut()
-        .resource_mut::<Panorama>()
-        .change(94, PanoramaDef::from_command(String::new(), &[0; 6]));
+    app.world_mut().resource_mut::<MapData>().panorama = None;
+    change(&mut app, "", &[0; 6]);
     app.update();
     assert_eq!(
         app.world_mut()

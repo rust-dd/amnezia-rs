@@ -342,7 +342,8 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         CHANGE_PBG => {
             if let Some(data) = x.subsystems.flow.map_data.as_ref() {
                 x.subsystems.mapfx.panorama.change(
-                    data.map_id,
+                    data,
+                    &mut x.subsystems.mapfx.camera_pan,
                     amnezia_data::PanoramaDef::from_command(
                         command.string.clone(),
                         &command.params,
