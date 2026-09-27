@@ -1,12 +1,13 @@
 use super::*;
+use crate::interpreter::continuation::{self, Continuation, Owner};
 use crate::interpreter::params::Blockers;
 use crate::teleport::Fade;
 
 enum Phase {
     Begin,
     After,
-    Common(u32),
-    Map(u32),
+    Common(u32, bool),
+    Map(u32, Option<ParallelSource>),
 }
 
 #[derive(PartialEq)]
@@ -18,11 +19,19 @@ enum Progress {
 }
 
 pub(super) fn run(world: &mut World) {
+    continuation::begin(world);
     crate::interpreter::foreground::refresh(world);
+    let continuation = world.resource::<Continuation>();
+    let resume = continuation.resume_owner();
+    if continuation.waiting() || resume == Some(Owner::Foreground) {
+        return;
+    }
     if world.run_system_cached_with(step, Phase::Begin).unwrap() == Progress::Paused {
         return;
     }
-    crate::world::update::begin(world);
+    if resume.is_none() {
+        crate::world::update::begin(world);
+    }
     let mut ids = world
         .resource::<CommonEvents>()
         .0
@@ -31,7 +40,13 @@ pub(super) fn run(world: &mut World) {
         .collect::<Vec<_>>();
     ids.sort_unstable();
     for id in ids {
-        if phase(world, Phase::Common(id)) == Progress::Paused {
+        if matches!(resume, Some(Owner::Parallel(ParallelSource::MapPage(..))))
+            || matches!(resume, Some(Owner::Parallel(ParallelSource::Common(owner))) if id < owner)
+        {
+            continue;
+        }
+        let resumed = resume == Some(Owner::Parallel(ParallelSource::Common(id)));
+        if phase(world, Phase::Common(id, resumed), true) == Progress::Paused {
             return;
         }
     }
@@ -43,16 +58,35 @@ pub(super) fn run(world: &mut World) {
         .collect::<Vec<_>>();
     ids.sort_unstable();
     for id in ids {
-        if !map_event(world, id) {
+        let owner = match resume {
+            Some(Owner::Parallel(source @ ParallelSource::MapPage(owner, _))) => {
+                if id < owner {
+                    continue;
+                }
+                (id == owner).then_some(source)
+            }
+            _ => None,
+        };
+        if !visit_map_event(world, id, owner, true) {
             return;
         }
     }
     crate::world::update::refresh(world);
+    continuation::complete_parallel(world);
 }
 
 pub(crate) fn map_event(world: &mut World, id: u32) -> bool {
+    visit_map_event(world, id, None, false)
+}
+
+fn visit_map_event(
+    world: &mut World,
+    id: u32,
+    owner: Option<ParallelSource>,
+    owns_async: bool,
+) -> bool {
     crate::world::update::refresh(world);
-    match phase(world, Phase::Map(id)) {
+    match phase(world, Phase::Map(id, owner), owns_async) {
         Progress::Paused => false,
         Progress::NoPage => true,
         Progress::Continue => {
@@ -63,10 +97,13 @@ pub(crate) fn map_event(world: &mut World, id: u32) -> bool {
     }
 }
 
-fn phase(world: &mut World, phase: Phase) -> Progress {
+fn phase(world: &mut World, phase: Phase, owns_async: bool) -> Progress {
     let progress = world.run_system_cached_with(step, phase).unwrap();
     if let Progress::Run(source) = progress {
-        crate::interpreter::driver::parallel(world, source);
+        if crate::interpreter::driver::parallel(world, source, owns_async) == RunOutcome::Suspended
+        {
+            return Progress::Paused;
+        }
         world.run_system_cached_with(step, Phase::After).unwrap()
     } else {
         progress
@@ -103,13 +140,18 @@ fn step(
     }
     let source = match phase {
         Phase::Begin | Phase::After => None,
-        Phase::Common(id) => common_events
+        Phase::Common(id, resumed) => common_events
             .0
             .iter()
             .find(|event| event.id == id)
-            .filter(|event| event.trigger == 4 && common_gate_on(event, &exec.switches))
+            .filter(|event| {
+                event.trigger == 4 && (resumed || common_gate_on(event, &exec.switches))
+            })
             .map(|_| ParallelSource::Common(id)),
-        Phase::Map(id) => {
+        Phase::Map(id, resumed) => {
+            if let Some(source) = resumed {
+                return Progress::Run(source);
+            }
             let Some(events) = exec.subsystems.flow.map_events.as_ref() else {
                 return Progress::NoPage;
             };

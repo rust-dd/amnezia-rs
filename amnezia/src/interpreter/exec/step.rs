@@ -13,6 +13,8 @@ pub(in crate::interpreter) enum Operation {
 pub(in crate::interpreter) enum RunOutcome {
     Advance,
     Yielded,
+    Async(crate::interpreter::continuation::AsyncOp),
+    Suspended,
     Finished,
 }
 
@@ -142,6 +144,7 @@ fn command(frame: &mut Frame, x: &mut Exec) -> RunOutcome {
     match dispatch(frame, command, x) {
         Flow::Advance => RunOutcome::Advance,
         Flow::Yield => RunOutcome::Yielded,
+        Flow::Async(op) => RunOutcome::Async(op),
         Flow::Stop => {
             frame.stop();
             RunOutcome::Finished

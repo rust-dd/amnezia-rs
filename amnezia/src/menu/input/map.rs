@@ -73,7 +73,7 @@ fn capture(
         && gates.menu_access.0
         && gates.scene.as_ref().is_none_or(|flow| !flow.active())
         && gates.switch.as_ref().is_none_or(|switch| !switch.active())
-        && blockers.frame.as_ref().is_none_or(|frame| !frame.0)
+        && !blockers.frame_paused()
         && !blockers.any()
         && keys.just_pressed(KeyCode::Escape)
     {

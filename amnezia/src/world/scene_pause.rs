@@ -5,6 +5,7 @@ use bevy::prelude::*;
 pub(crate) struct ScenePause<'w> {
     transition: Option<Res<'w, crate::transitions::Transition>>,
     frame: Option<Res<'w, crate::timing::SceneWait>>,
+    continuation: Option<Res<'w, crate::interpreter::continuation::Continuation>>,
     menu_flow: Option<Res<'w, crate::menu::SceneFlow>>,
     shop_flow: Option<Res<'w, crate::shop::SceneFlow>>,
     fade: Option<Res<'w, crate::teleport::Fade>>,
@@ -24,8 +25,26 @@ impl ScenePause<'_> {
     }
 
     pub(crate) fn screen_effects_paused(&self) -> bool {
+        let waiting = self.frame.as_ref().is_some_and(|v| v.0);
+        self.blocked()
+            || self
+                .continuation
+                .as_ref()
+                .map_or(waiting, |state| state.characters_paused(waiting))
+    }
+
+    pub(crate) fn tail_paused(&self) -> bool {
+        let waiting = self.frame.as_ref().is_some_and(|v| v.0);
+        self.blocked()
+            || self.battle.as_ref().is_some_and(|v| v.0)
+            || self
+                .continuation
+                .as_ref()
+                .map_or(waiting, |state| state.tail_paused(waiting))
+    }
+
+    fn blocked(&self) -> bool {
         self.fade.as_ref().is_some_and(|v| v.busy())
-            || self.frame.as_ref().is_some_and(|v| v.0)
             || self.menu_flow.as_ref().is_some_and(|v| v.blocks_map())
             || self.shop_flow.as_ref().is_some_and(|v| v.active())
             || self.transition.as_ref().is_some_and(|v| v.busy())

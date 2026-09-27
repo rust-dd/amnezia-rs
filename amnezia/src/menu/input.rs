@@ -40,6 +40,7 @@ use sounds::MenuSfx;
 #[derive(SystemParam)]
 pub(super) struct OpenBlockers<'w> {
     frame: Option<Res<'w, crate::timing::SceneWait>>,
+    continuation: Option<Res<'w, crate::interpreter::continuation::Continuation>>,
     prompt_frame: Option<Res<'w, crate::dialogue::PromptFrame>>,
     transition: Option<Res<'w, crate::transitions::Transition>>,
     dialogue: Res<'w, Dialogue>,
@@ -51,6 +52,13 @@ pub(super) struct OpenBlockers<'w> {
 }
 
 impl OpenBlockers<'_> {
+    fn frame_paused(&self) -> bool {
+        let waiting = self.frame.as_ref().is_some_and(|frame| frame.0);
+        self.continuation
+            .as_ref()
+            .map_or(waiting, |state| state.characters_paused(waiting))
+    }
+
     /// Whether any transient flow is live, so the menu must refuse to open.
     fn any(&self) -> bool {
         self.prompt_frame

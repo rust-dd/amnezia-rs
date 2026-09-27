@@ -46,7 +46,7 @@ fn default_command_uses_changed_setting_and_none_show_keeps_black() {
     assert!(!switch_on(&app, 70));
     tick(&mut app, 30);
     assert!(switch_on(&app, 70));
-    assert!(!switch_on(&app, 71));
+    assert!(switch_on(&app, 71));
     assert!(app.world().resource::<Transition>().erased());
     assert!(!app.world().resource::<Transition>().event_erased);
     tick(&mut app, 31);
@@ -65,12 +65,10 @@ fn repeated_erase_does_not_add_another_full_transition() {
     ]);
     tick(&mut app, 0);
     tick(&mut app, 35);
-    assert!(app.world().resource::<Transition>().erased());
-    assert!(!app.world().resource::<Transition>().busy());
-    tick(&mut app, 36);
+    assert!(app.world().resource::<Transition>().busy());
     assert!(switch_on(&app, 70));
     assert!(!switch_on(&app, 71));
-    tick(&mut app, 37);
+    tick(&mut app, 36);
     assert!(switch_on(&app, 71));
     assert!(!app.world().resource::<Transition>().erased());
 }
@@ -87,5 +85,7 @@ fn transition_blocks_other_parallel_interpreters_until_it_finishes() {
     assert!(switch_on(&app, 71));
     tick(&mut app, 41);
     assert!(switch_on(&app, 70));
+    assert!(switch_on(&app, 71));
+    tick(&mut app, 42);
     assert!(!switch_on(&app, 71));
 }

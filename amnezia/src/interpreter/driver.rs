@@ -1,3 +1,4 @@
+use super::continuation::{self, Continuation, Owner};
 use super::exec::{Exec, Operation, RunOutcome, run_operation};
 use super::frame::MAX_STEPS_PER_FRAME;
 use super::parallel::{CommonEvents, ParallelPool, ParallelSource};
@@ -5,9 +6,12 @@ use super::{Blockers, Fade, RunningEvent};
 use bevy::prelude::*;
 
 pub(super) fn foreground(world: &mut World) {
-    let mut remaining = MAX_STEPS_PER_FRAME;
+    if world.resource::<Continuation>().waiting() {
+        return;
+    }
+    let mut remaining = continuation::budget(world, Owner::Foreground);
     loop {
-        if run(world, None, &mut remaining) != RunOutcome::Finished
+        if run(world, None, &mut remaining, true) != RunOutcome::Finished
             || remaining == 0
             || scene_limit(world, remaining)
         {
@@ -22,13 +26,25 @@ pub(super) fn foreground(world: &mut World) {
     }
 }
 
-pub(super) fn parallel(world: &mut World, source: ParallelSource) {
-    let mut remaining = MAX_STEPS_PER_FRAME;
-    run(world, Some(source), &mut remaining);
+pub(super) fn parallel(world: &mut World, source: ParallelSource, owns_async: bool) -> RunOutcome {
+    let mut remaining = if owns_async {
+        continuation::budget(world, Owner::Parallel(source))
+    } else {
+        MAX_STEPS_PER_FRAME
+    };
+    run(world, Some(source), &mut remaining, owns_async)
 }
 
-fn run(world: &mut World, source: Option<ParallelSource>, remaining: &mut usize) -> RunOutcome {
+fn run(
+    world: &mut World,
+    source: Option<ParallelSource>,
+    remaining: &mut usize,
+    owns_async: bool,
+) -> RunOutcome {
     flush(world);
+    if *remaining == 0 {
+        return RunOutcome::Yielded;
+    }
     let outcome = step(world, source, Operation::Resume);
     if outcome != RunOutcome::Advance {
         return outcome;
@@ -42,6 +58,14 @@ fn run(world: &mut World, source: Option<ParallelSource>, remaining: &mut usize)
             return outcome;
         }
         *remaining -= 1;
+        if let RunOutcome::Async(op) = outcome {
+            if !owns_async
+                || continuation::suspend(world, Owner::interpreter(source), *remaining, op)
+            {
+                return RunOutcome::Suspended;
+            }
+            continue;
+        }
         if outcome != RunOutcome::Advance {
             return outcome;
         }

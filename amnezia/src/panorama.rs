@@ -201,7 +201,7 @@ fn advance(
         &data,
         display,
     );
-    if !scene.paused() {
+    if !scene.tail_paused() {
         let before = panorama.clock.frame;
         panorama.clock.advance(time.delta_secs_f64());
         let frames = panorama.clock.frame.wrapping_sub(before);

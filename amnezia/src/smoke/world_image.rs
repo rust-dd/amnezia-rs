@@ -16,7 +16,11 @@ pub(super) struct Snapshot {
 
 pub(super) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let map_id = match label {
-        "intro" | "map-animation-transferred" => 3,
+        "intro"
+        | "map-animation-transferred"
+        | "async-transition-foreground"
+        | "async-transition-common"
+        | "async-transition-map" => 3,
         "escape" => 86,
         _ => return None,
     };
@@ -156,7 +160,10 @@ fn save_failure(image: &Image, label: &str) {
 }
 
 pub(super) fn verify_finished(world: &World, scenario: &str) {
-    if matches!(scenario, "intro" | "escape" | "map-animations") {
+    if matches!(
+        scenario,
+        "intro" | "escape" | "map-animations" | "async-transitions"
+    ) {
         assert!(world.resource::<Checked>().0.load(Ordering::Relaxed));
     }
 }

@@ -68,6 +68,9 @@ pub(crate) fn early(world: &mut World) {
 }
 
 fn advance(world: &mut World) {
+    if asynchronous_pause(world) {
+        return;
+    }
     let Some(entity) = world
         .query_filtered::<Entity, With<Player>>()
         .single(world)
@@ -81,7 +84,16 @@ fn advance(world: &mut World) {
 }
 
 fn finish(world: &mut World) {
+    if asynchronous_pause(world) {
+        return;
+    }
     crate::picture::apply_pending(world);
     // Pan and Cancel capture also run on repeated MakeWay visits.
     world.run_schedule(PlayerPostUpdate);
+}
+
+fn asynchronous_pause(world: &World) -> bool {
+    world
+        .get_resource::<crate::interpreter::continuation::Continuation>()
+        .is_some_and(|state| state.characters_paused(false))
 }

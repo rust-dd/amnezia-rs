@@ -15,6 +15,7 @@ use bevy::prelude::*;
 mod actor_query;
 mod branch;
 mod commands;
+pub(crate) mod continuation;
 mod control_vars;
 mod driver;
 mod event_rng;
@@ -109,6 +110,7 @@ impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
         scenes::register(app);
         app.init_resource::<RunningEvent>()
+            .init_resource::<continuation::Continuation>()
             .init_resource::<foreground::Inbox>()
             .add_message::<foreground::UnpauseEvent>()
             .init_resource::<crate::dialogue::MessageOptions>()

@@ -37,6 +37,7 @@ pub(super) struct Blockers<'w> {
     shop: Res<'w, ShopOpen>,
     battle: Res<'w, BattleActive>,
     frame: Option<Res<'w, crate::timing::SceneWait>>,
+    continuation: Option<Res<'w, super::continuation::Continuation>>,
     menu_flow: Option<Res<'w, crate::menu::SceneFlow>>,
     shop_flow: Option<Res<'w, crate::shop::SceneFlow>>,
 }
@@ -47,10 +48,14 @@ impl Blockers<'_> {
     }
 
     pub(super) fn any(&self) -> bool {
+        let waiting = self.frame.as_ref().is_some_and(|v| v.0);
         self.menu.0
             || self.shop.0
             || self.battle.0
-            || self.frame.as_ref().is_some_and(|v| v.0)
+            || self
+                .continuation
+                .as_ref()
+                .map_or(waiting, |state| state.tail_paused(waiting))
             || self.menu_flow.as_ref().is_some_and(|v| v.blocks_map())
             || self.shop_flow.as_ref().is_some_and(|v| v.active())
     }

@@ -39,6 +39,13 @@ pub(super) fn start(world: &mut World, scenario: &str) {
             | "save-screen"
     ) {
         message_options::entry()
+    } else if scenario == "async-transitions" {
+        vec![EventCommand {
+            code: 10810,
+            indent: 0,
+            string: String::new(),
+            params: vec![3, 15, 6],
+        }]
     } else if scenario == "inn" {
         crate::shop::inn::smoke::entry()
     } else if scenario == "screen-events" {
@@ -264,6 +271,8 @@ pub(super) fn selected() -> &'static str {
         "quick-transfers"
     } else if std::env::args().any(|arg| arg == "--smoke-normal-transfers") {
         "normal-transfers"
+    } else if std::env::args().any(|arg| arg == "--smoke-async-transitions") {
+        "async-transitions"
     } else if std::env::args().any(|arg| arg == "--smoke-airship") {
         "airship"
     } else if std::env::args().any(|arg| arg == "--smoke-battle") {

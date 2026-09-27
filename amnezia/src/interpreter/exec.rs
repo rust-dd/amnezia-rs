@@ -115,6 +115,7 @@ pub(super) enum Flow {
     Advance,
     /// Suspend command execution until the next interpreter update.
     Yield,
+    Async(super::continuation::AsyncOp),
     /// End the current interpreter run.
     Stop,
 }

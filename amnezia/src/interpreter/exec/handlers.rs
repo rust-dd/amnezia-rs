@@ -268,11 +268,12 @@ pub(super) fn present(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -
                     );
                     IVec2::new(x, y - 8)
                 });
-            if !x.subsystems.mapfx.transitions.event(kind, erase, center) {
-                return Flow::Yield;
-            }
             frame.ip += 1;
-            Flow::Yield
+            Flow::Async(crate::interpreter::continuation::AsyncOp::Transition {
+                kind,
+                erase,
+                center,
+            })
         }
         Some(Present::Screen(effect, wait)) => {
             x.subsystems.screen_writer.write(effect);

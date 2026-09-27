@@ -5,6 +5,8 @@ use bevy::prelude::*;
 #[derive(SystemParam)]
 pub(crate) struct Scenes<'w> {
     fade: Option<Res<'w, crate::teleport::Fade>>,
+    frame: Option<Res<'w, crate::timing::SceneWait>>,
+    continuation: Option<Res<'w, crate::interpreter::continuation::Continuation>>,
     menu: Option<Res<'w, crate::menu::MenuOpen>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
     title: Option<Res<'w, crate::title::TitleActive>>,
@@ -15,7 +17,13 @@ pub(crate) struct Scenes<'w> {
 
 impl Scenes<'_> {
     pub(super) fn frozen(&self) -> bool {
-        self.paused() || self.fade.as_ref().is_some_and(|fade| fade.busy())
+        let waiting = self.frame.as_ref().is_some_and(|frame| frame.0);
+        self.paused()
+            || self.fade.as_ref().is_some_and(|fade| fade.busy())
+            || self
+                .continuation
+                .as_ref()
+                .map_or(waiting, |state| state.characters_paused(waiting))
     }
 
     pub(crate) fn paused(&self) -> bool {

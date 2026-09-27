@@ -27,6 +27,7 @@ use bevy::prelude::*;
 pub(crate) struct MoveGuards<'w> {
     transition: Option<Res<'w, crate::transitions::Transition>>,
     frame: Option<Res<'w, crate::timing::SceneWait>>,
+    continuation: Option<Res<'w, crate::interpreter::continuation::Continuation>>,
     menu_flow: Option<Res<'w, crate::menu::SceneFlow>>,
     shop_flow: Option<Res<'w, crate::shop::SceneFlow>>,
     prompts: crate::dialogue::InputPrompts<'w>,
@@ -75,8 +76,12 @@ impl MoveGuards<'_> {
     /// `IsMoveRouteOverwritten` short-circuits the interpreter/message stop gate), so
     /// cutscene movement (the intro walking the hero in) plays while the event runs.
     pub(crate) fn forced_route_paused(&self) -> bool {
+        let waiting = self.frame.as_ref().is_some_and(|wait| wait.0);
         self.fade.busy()
-            || self.frame.as_ref().is_some_and(|wait| wait.0)
+            || self
+                .continuation
+                .as_ref()
+                .map_or(waiting, |state| state.characters_paused(waiting))
             || self
                 .menu_flow
                 .as_ref()

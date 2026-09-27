@@ -30,6 +30,7 @@ use amnezia_data::{CommonEvent, Event, EventCommand, EventPage};
 use bevy::prelude::*;
 
 mod actor_commands;
+mod async_transitions;
 mod call_scope;
 mod camera;
 mod common_events;

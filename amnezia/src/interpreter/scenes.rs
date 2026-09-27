@@ -140,6 +140,9 @@ fn commit(world: &mut World) {
 }
 
 fn suspended(world: &World) -> bool {
+    let waiting = world
+        .get_resource::<crate::timing::SceneWait>()
+        .is_some_and(|wait| wait.0);
     world
         .get_resource::<crate::teleport::PendingTeleport>()
         .is_some_and(|pending| pending.0.is_some())
@@ -150,8 +153,8 @@ fn suspended(world: &World) -> bool {
             .get_resource::<crate::transitions::Transition>()
             .is_some_and(|transition| transition.busy())
         || world
-            .get_resource::<crate::timing::SceneWait>()
-            .is_some_and(|wait| wait.0)
+            .get_resource::<super::continuation::Continuation>()
+            .map_or(waiting, |state| state.tail_paused(waiting))
         || world
             .get_resource::<crate::shop::inn::State>()
             .is_some_and(|inn| inn.resting())
