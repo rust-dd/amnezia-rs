@@ -48,7 +48,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 1110 {
         assert!(world.resource::<Trace>().captured);
         assert_eq!(world.resource::<ActiveAnimations>().total, 1);
-        world.resource_mut::<crate::teleport::PendingTeleport>().0 = Some((3, 15, 12));
+        world.resource_mut::<crate::teleport::PendingTeleport>().0 = Some((3, 15, 6));
     }
     if frame == 1200 {
         assert_eq!(world.resource::<MapData>().map_id, 3);

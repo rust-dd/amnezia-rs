@@ -2,7 +2,10 @@ use super::{offscreen, ui_layers};
 use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 
+mod request;
+
 pub(super) fn capture(world: &mut World, label: &str) {
+    super::native::describe(world, label);
     let world_snapshot = super::world_image::snapshot(world, label);
     let target = world.get_resource::<offscreen::Target>();
     let prefix = if target.is_some() {
@@ -59,143 +62,147 @@ pub(super) fn capture(world: &mut World, label: &str) {
     let saved_hero_snapshot = crate::save::hero_smoke::pixels::snapshot(world, label);
     let saved_vehicle_snapshot = crate::save::vehicle_smoke::pixels::snapshot(world, label);
     let label = label.to_owned();
-    world.spawn(screenshot).observe(save_to_disk(path)).observe(
-        move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
-            if let Some(snapshot) = &world_snapshot {
-                snapshot.verify(&capture.image, &label);
-            }
-            verify_content(&capture.image, &label);
-            if let Some(snapshot) = &inn_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &shop_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &embedded_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &prompt_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &save_selector_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &saved_erasure_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &saved_vehicle_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &saved_hero_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &saved_npc_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &dialogue_arrow_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &dialogue_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            crate::battle::smoke::verify_skin(&capture.image, &label);
-            crate::picture::smoke::verify_image(&capture.image, &label, &picture_pixels);
-            crate::legacy_colors::smoke::verify(&capture.image, &label);
-            if let Some(snapshot) = &display_snapshot {
-                snapshot.submit(&capture.image, false);
-            }
-            if let Some(snapshot) = &animation_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &water_snapshot {
-                snapshot.verify(&capture.image, &label);
-            }
-            if let Some(snapshot) = &transition_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &gameover_snapshot {
-                crate::gameover::smoke::verify_image(snapshot, &capture.image);
-            }
-            if let Some(snapshot) = &font_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &arrow_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &cursor_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &movement_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &battler_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &actor_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &map_animation_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &world_tone_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &map_flash_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &ui_layer_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &menu_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &item_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &skill_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &equipment_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &target_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &menu_font_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &end_game_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &title_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &saved_message_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &saved_picture_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &jump_camera_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &panorama_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &screen_flash_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &saved_screen_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &weather_snapshot {
-                snapshot.verify(&capture.image);
-            }
-            if let Some(snapshot) = &saved_animation_snapshot {
-                snapshot.verify(&capture.image);
-            }
-        },
-    );
+    let request = request::entity(world, screenshot);
+    world
+        .entity_mut(request)
+        .observe(save_to_disk(path))
+        .observe(
+            move |capture: On<bevy::render::view::screenshot::ScreenshotCaptured>| {
+                if let Some(snapshot) = &world_snapshot {
+                    snapshot.verify(&capture.image, &label);
+                }
+                verify_content(&capture.image, &label);
+                if let Some(snapshot) = &inn_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &shop_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &embedded_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &prompt_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &save_selector_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &saved_erasure_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &saved_vehicle_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &saved_hero_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &saved_npc_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &dialogue_arrow_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &dialogue_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                crate::battle::smoke::verify_skin(&capture.image, &label);
+                crate::picture::smoke::verify_image(&capture.image, &label, &picture_pixels);
+                crate::legacy_colors::smoke::verify(&capture.image, &label);
+                if let Some(snapshot) = &display_snapshot {
+                    snapshot.submit(&capture.image, false);
+                }
+                if let Some(snapshot) = &animation_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &water_snapshot {
+                    snapshot.verify(&capture.image, &label);
+                }
+                if let Some(snapshot) = &transition_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &gameover_snapshot {
+                    crate::gameover::smoke::verify_image(snapshot, &capture.image);
+                }
+                if let Some(snapshot) = &font_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &arrow_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &cursor_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &movement_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &battler_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &actor_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &map_animation_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &world_tone_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &map_flash_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &ui_layer_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &menu_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &item_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &skill_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &equipment_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &target_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &menu_font_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &end_game_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &title_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &saved_message_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &saved_picture_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &jump_camera_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &panorama_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &screen_flash_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &saved_screen_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &weather_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &saved_animation_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+            },
+        );
 }
 
 pub(super) fn verify_content(image: &Image, label: &str) {

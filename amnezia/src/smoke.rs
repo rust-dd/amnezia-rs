@@ -8,6 +8,7 @@ pub(crate) mod completion;
 mod input;
 mod looping;
 mod message_options;
+mod native;
 pub(crate) mod offscreen;
 mod scenarios;
 mod ui_layers;
@@ -30,6 +31,7 @@ impl Plugin for SmokePlugin {
             return;
         }
         offscreen::configure(app);
+        native::configure(app);
         let scenario = scenarios::selected();
         if scenario == "save-slots" {
             crate::menu::save_files::smoke::configure(app);

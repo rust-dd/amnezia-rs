@@ -16,7 +16,7 @@ pub(super) struct Snapshot {
 
 pub(super) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let map_id = match label {
-        "intro" => 3,
+        "intro" | "map-animation-transferred" => 3,
         "escape" => 86,
         _ => return None,
     };
@@ -156,7 +156,7 @@ fn save_failure(image: &Image, label: &str) {
 }
 
 pub(super) fn verify_finished(world: &World, scenario: &str) {
-    if matches!(scenario, "intro" | "escape") {
+    if matches!(scenario, "intro" | "escape" | "map-animations") {
         assert!(world.resource::<Checked>().0.load(Ordering::Relaxed));
     }
 }
@@ -201,5 +201,23 @@ mod tests {
             checked: Arc::default(),
         }
         .verify(&image(), "intro");
+    }
+
+    #[test]
+    #[should_panic]
+    fn cleared_animation_state_cannot_replace_a_verified_destination_image() {
+        let mut world = World::new();
+        world.init_resource::<Checked>();
+        verify_finished(&world, "map-animations");
+    }
+
+    #[test]
+    fn every_story_scene_requires_its_completed_pixel_verification() {
+        let mut world = World::new();
+        world.init_resource::<Checked>();
+        world.resource::<Checked>().0.store(true, Ordering::Relaxed);
+        for scenario in ["intro", "escape", "map-animations"] {
+            verify_finished(&world, scenario);
+        }
     }
 }
