@@ -100,8 +100,10 @@ fn the_request_frame_finishes_map_updates_before_the_erase_begins() {
     let mut app = fixture();
     app.init_resource::<Observed>().add_systems(
         Update,
-        (|flow: Res<SceneFlow>, pause: crate::world::ScenePause, mut seen: ResMut<Observed>| {
-            seen.0.push((flow.requested(), pause.paused()));
+        (|requests: Res<crate::interpreter::scenes::Requests>,
+          pause: crate::world::ScenePause,
+          mut seen: ResMut<Observed>| {
+            seen.0.push((requests.pending(), pause.paused()));
         })
         .after(crate::dialogue::MessageUpdate)
         .before(crate::interpreter::InterpreterStep),
@@ -126,8 +128,10 @@ fn menu_capture_and_consumption_take_two_logical_updates_at_every_render_rate() 
             .init_resource::<RequestedAt>()
             .add_systems(
                 Update,
-                (|flow: Res<SceneFlow>, frames: Res<GameFrames>, mut at: ResMut<RequestedAt>| {
-                    if flow.requested() && at.0.is_none() {
+                (|requests: Res<crate::interpreter::scenes::Requests>,
+                  frames: Res<GameFrames>,
+                  mut at: ResMut<RequestedAt>| {
+                    if requests.pending() && at.0.is_none() {
                         at.0 = Some(frames.frame);
                     }
                 })

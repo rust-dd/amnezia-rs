@@ -132,7 +132,11 @@ pub(super) fn verify_vitals(world: &World, healed: bool) {
                 None
             } else {
                 Some((if id == 1 { 0 } else { 2 }, 0))
-            }
+            },
+            "inn case {}, age {}, steps {}, healed {healed}",
+            world.resource::<Probe>().case,
+            world.resource::<Probe>().age,
+            world.resource::<crate::conditions::FieldSteps>().count,
         );
         assert_eq!(vitals.states(id).is_empty(), healed);
     }

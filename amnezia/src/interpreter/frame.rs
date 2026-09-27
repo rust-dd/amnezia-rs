@@ -43,6 +43,9 @@ pub(super) struct CallFrame {
 /// suspension flag. Shared verbatim by the foreground and parallel interpreters.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub(super) struct Frame {
+    /// Runtime-only ownership for cancelling a replaced scene request.
+    #[serde(skip)]
+    pub(super) scene_request: Option<u64>,
     pub(super) commands: Vec<EventCommand>,
     pub(super) ip: usize,
     pub(super) active: bool,
@@ -169,6 +172,7 @@ impl Frame {
     }
 
     fn reset(&mut self) {
+        self.scene_request = None;
         self.active = false;
         self.parallel = false;
         self.commands.clear();

@@ -91,6 +91,7 @@ pub(crate) fn clear_transient(world: &mut World) {
     world.remove_resource::<crate::audio::saved::Pending>();
     reset::<RunningEvent>(world);
     reset::<ParallelPool>(world);
+    reset::<crate::interpreter::scenes::Requests>(world);
     reset::<Dialogue>(world);
     reset::<MessagePosition>(world);
     reset::<MessageTransparent>(world);

@@ -25,6 +25,7 @@ mod pixels;
 pub(crate) use pixels::snapshot;
 
 pub(crate) fn configure(app: &mut App) {
+    crate::timing::logical::pre(app, || observation::release_finished_input);
     app.add_systems(Update, observation::update.after(super::flow::advance));
 }
 
@@ -65,6 +66,29 @@ struct Probe {
     animation: u16,
     pixels: Arc<AtomicUsize>,
     clock: clock::Clock,
+}
+
+impl Probe {
+    fn new(black: Entity, audio: MessageCursor<AudioRequest>) -> Self {
+        Self {
+            step: Step::Gap,
+            case: 0,
+            age: 0,
+            black,
+            before: None,
+            memorized: None,
+            audio,
+            rest_scene: None,
+            handoffs: 0,
+            played: false,
+            ended: false,
+            asleep: false,
+            checked: 0,
+            animation: 0,
+            pixels: Arc::default(),
+            clock: default(),
+        }
+    }
 }
 
 pub(crate) fn input(world: &mut World, frame: u32) -> bool {
@@ -113,24 +137,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             .id();
         let mut audio = MessageCursor::default();
         audio.clear(world.resource::<Messages<AudioRequest>>());
-        world.insert_resource(Probe {
-            step: Step::Gap,
-            case: 0,
-            age: 0,
-            black,
-            before: None,
-            memorized: None,
-            audio,
-            rest_scene: None,
-            handoffs: 0,
-            played: false,
-            ended: false,
-            asleep: false,
-            checked: 0,
-            animation: 0,
-            pixels: Arc::default(),
-            clock: default(),
-        });
+        world.insert_resource(Probe::new(black, audio));
         world.write_message(AudioRequest::play_bgm("Elven", &[125, 70, 120, 50]));
         world.write_message(AudioRequest::MemorizeBgm);
         world.write_message(AudioRequest::play_bgm("House", &[250, 80, 100, 50]));

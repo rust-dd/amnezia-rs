@@ -76,7 +76,7 @@ fn foreground_saving_holds_its_tail_and_subsequent_parallel_updates() {
 }
 
 #[test]
-fn a_parallel_save_holds_its_tail_other_background_events_and_new_autoruns() {
+fn a_parallel_save_allows_one_command_per_later_interpreter_before_pausing() {
     let mut app = interp_app();
     let mut autorun = map_event(3, 3, vec![switch_cmd(906, 0, 0), switch_cmd(901, 1, 0)]);
     autorun.pages[0].condition.flags = 1;
@@ -99,9 +99,12 @@ fn a_parallel_save_holds_its_tail_other_background_events_and_new_autoruns() {
     for _ in 0..4 {
         app.update();
         assert!(app.world().resource::<EventSaveRequest>().0);
-        assert!(!app.world().resource::<RunningEvent>().active());
-        for id in [904, 905, 906] {
-            assert!(!app.world().resource::<Switches>().get(id), "switch {id}");
+        let running = app.world().resource::<RunningEvent>();
+        assert_eq!(running.debug_id(), Some(3));
+        assert_eq!(running.frame.ip, 1);
+        assert!(!switch_on(&app, 904));
+        for id in [901, 905, 906] {
+            assert!(switch_on(&app, id), "switch {id}");
         }
     }
     app.world_mut().resource_mut::<EventSaveRequest>().0 = false;
@@ -109,6 +112,8 @@ fn a_parallel_save_holds_its_tail_other_background_events_and_new_autoruns() {
     for id in [904, 905, 906] {
         assert!(app.world().resource::<Switches>().get(id), "switch {id}");
     }
+    assert!(!switch_on(&app, 901));
+    assert!(!app.world().resource::<RunningEvent>().active());
 }
 
 #[test]

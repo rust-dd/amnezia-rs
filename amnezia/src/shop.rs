@@ -144,6 +144,7 @@ impl Plugin for ShopPlugin {
                     .chain()
                     .in_set(ShopUpdate)
                     .after(crate::interpreter::InterpreterStep)
+                    .after(crate::interpreter::scenes::Commit)
                     .after(crate::menu::MenuInput),
             );
         fades::register(app);

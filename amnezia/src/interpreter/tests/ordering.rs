@@ -12,6 +12,7 @@ mod immediate;
 mod input;
 mod menu;
 mod npcs;
+mod scenes;
 mod triggers;
 mod unpause;
 

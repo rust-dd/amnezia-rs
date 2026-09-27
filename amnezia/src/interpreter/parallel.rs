@@ -72,6 +72,12 @@ pub struct ParallelPool {
 }
 
 impl ParallelPool {
+    pub(super) fn settle_scene(&mut self, ticket: u64, cancelled: bool) {
+        for entry in &mut self.frames {
+            entry.frame.settle_scene(ticket, cancelled);
+        }
+    }
+
     /// Retained background interpreters, including gated common events.
     pub fn count(&self) -> usize {
         self.frames.len()

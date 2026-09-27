@@ -27,6 +27,7 @@ mod parallel;
 mod params;
 mod present;
 pub(crate) mod saved;
+pub(crate) mod scenes;
 #[cfg(test)]
 mod tests;
 
@@ -90,6 +91,7 @@ pub(crate) struct ParallelStep;
 
 impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
+        scenes::register(app);
         app.init_resource::<RunningEvent>()
             .init_resource::<foreground::Inbox>()
             .add_message::<foreground::UnpauseEvent>()

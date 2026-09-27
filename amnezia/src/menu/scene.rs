@@ -73,7 +73,7 @@ impl Flow {
         self.active() && !self.requested()
     }
 
-    pub(in crate::menu) fn request_main_menu(&mut self) {
+    pub(crate) fn request_main_menu(&mut self) {
         self.stage = Stage::Requested(Snapshot {
             open: true,
             screen: MenuScreen::Command,
@@ -114,8 +114,7 @@ pub(super) fn register(app: &mut App) {
             Update,
             begin
                 .after(MenuView)
-                .after(input::map::request)
-                .after(crate::interpreter::InterpreterStep),
+                .after(crate::interpreter::scenes::Commit),
         );
 }
 

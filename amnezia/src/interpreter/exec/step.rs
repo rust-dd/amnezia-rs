@@ -39,6 +39,9 @@ pub(in crate::interpreter) fn run_operation(
 }
 
 fn resume(frame: &mut Frame, x: &mut Exec, scene_blocked: bool) -> RunOutcome {
+    if frame.scene_request.is_some() {
+        return RunOutcome::Yielded;
+    }
     if frame.battle_pending
         && let Some(outcome) = x.subsystems.battle_result.0.take()
     {

@@ -6,7 +6,7 @@
 use super::event_rng::EventRng;
 use crate::animation::{AnimationLibrary, ShowMapAnimation};
 use crate::appearance::SpriteChange;
-use crate::battle::{BattleActive, BattleRequest, BattleResult};
+use crate::battle::{BattleActive, BattleResult};
 use crate::dialogue::{MessagePosition, MessageTransparent};
 use crate::equipment::Equipment;
 use crate::gamedata::GameData;
@@ -141,15 +141,13 @@ pub(super) struct Merchant<'w> {
     pub(super) inn: Option<Res<'w, crate::shop::inn::State>>,
 }
 
-/// The interpreter's channel to the shop and battle subsystems: the writers that
-/// open each screen and the finished-battle result it consumes to pick a handler
-/// branch, plus the nested effect/access/actor/flow bundles. Bundled into one
-/// `SystemParam` so `run_interpreter` stays within Bevy's 16-parameter cap.
+/// Scene requests and results, actor edits and map presentation channels,
+/// bundled to keep interpreter systems within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 pub struct SubsystemIo<'w, 's> {
     pub(super) battle_result: ResMut<'w, BattleResult>,
     pub(super) merchant: Merchant<'w>,
-    pub(super) battle_writer: MessageWriter<'w, BattleRequest>,
+    pub(super) scenes: ResMut<'w, super::scenes::Requests>,
     pub(super) screen_writer: MessageWriter<'w, ScreenEffect>,
     pub(super) picture_writer: MessageWriter<'w, PictureCommand>,
     pub(super) gameover: ResMut<'w, GameOverActive>,
@@ -158,7 +156,7 @@ pub struct SubsystemIo<'w, 's> {
     pub(super) visuals: CharacterVisuals<'w>,
     pub(super) relocate_writer: MessageWriter<'w, RelocateEvent>,
     pub(super) mapfx: MapFx<'w>,
-    pub(super) event_save: ResMut<'w, EventSaveRequest>,
+    pub(super) event_save: Res<'w, EventSaveRequest>,
     pub(super) access: AccessFlags<'w>,
     pub(super) actor_edits: ActorEdits<'w>,
     pub(super) flow: FlowCtx<'w, 's>,

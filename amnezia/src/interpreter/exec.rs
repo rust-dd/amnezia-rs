@@ -6,6 +6,7 @@ mod handlers;
 mod key_input;
 mod message_gate;
 mod messages;
+mod scenes;
 mod step;
 pub(super) use step::{Operation, RunOutcome, run_operation};
 mod vehicles;
@@ -110,7 +111,7 @@ pub(super) enum Flow {
     Advance,
     /// Suspend command execution until the next interpreter update.
     Yield,
-    /// The run is over (Game Over / Return to Title); the caller stops the frame.
+    /// End the current interpreter run.
     Stop,
 }
 

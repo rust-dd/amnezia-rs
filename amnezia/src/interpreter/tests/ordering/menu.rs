@@ -4,6 +4,7 @@ use crate::timing::TimingPlugin;
 use crate::transitions::{Transition, TransitionPlugin};
 use crate::world::RouteAction;
 
+mod arbitration;
 mod lifecycle;
 
 fn fixture() -> App {

@@ -1,5 +1,17 @@
 use super::*;
 
+pub(super) fn release_finished_input(
+    probe: Option<Res<Probe>>,
+    mut keys: ResMut<ButtonInput<KeyCode>>,
+) {
+    if probe
+        .is_some_and(|probe| probe.step == Step::Rest && probe.handoffs & (1 << probe.case) != 0)
+    {
+        // A render may contain more logical updates after the terminal inn frame.
+        keys.reset_all();
+    }
+}
+
 pub(super) fn update(world: &mut World) {
     let Some(probe) = world.get_resource::<Probe>() else {
         return;
@@ -11,6 +23,7 @@ pub(super) fn update(world: &mut World) {
     if matches!(phase, Phase::Closing) {
         return;
     }
+    fixtures::verify_vitals(world, matches!(phase, Phase::FadeIn | Phase::Idle));
     let finished = matches!(phase, Phase::Idle);
     let scene = world.resource::<SceneFrames>().frame;
     let expected = *world
@@ -41,3 +54,6 @@ pub(super) fn update(world: &mut World) {
         assert!(!world.resource::<ShopOpen>().0);
     }
 }
+
+#[cfg(test)]
+mod tests;

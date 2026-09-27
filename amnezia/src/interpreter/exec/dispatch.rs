@@ -17,10 +17,9 @@ use super::handlers;
 use super::{Exec, Flow};
 use crate::appearance::SpriteChange;
 use crate::audio::AudioRequest;
-use crate::battle::{BattleOutcome, BattleRequest};
+use crate::battle::BattleOutcome;
 use crate::dialogue::MessagePosition;
 use crate::screenfx::Weather;
-use crate::shop::ShopRequest;
 use crate::world::{MoveQueue, RouteStepper};
 use amnezia_data::EventCommand;
 
@@ -197,25 +196,8 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             frame.ip += 1;
             Flow::Advance
         }
-        ENEMY_ENCOUNTER => {
-            let troop_id = super::super::commands::operate_value(
-                0,
-                command.params.first().copied().unwrap_or(0),
-                command.params.get(1).copied().unwrap_or(0),
-                &x.variables,
-            )
-            .max(0) as u32;
-            x.subsystems.battle_writer.write(BattleRequest {
-                troop_id,
-                background: command.string.clone(),
-                allow_escape: command.params.get(3).copied().unwrap_or(0) != 0,
-                first_strike: command.params.get(5).copied().unwrap_or(0) != 0,
-                defeat_ends_game: command.params.get(4).copied().unwrap_or(0) == 0,
-            });
-            frame.battle_outcome = None;
-            frame.battle_pending = true;
-            frame.ip += 1;
-            Flow::Yield
+        ENEMY_ENCOUNTER | OPEN_SHOP | SHOW_INN | OPEN_SAVE_MENU => {
+            super::scenes::execute(frame, &command, x)
         }
         VICTORY_HANDLER => {
             frame.select_battle_handler(command.indent, BattleOutcome::Victory);
@@ -233,41 +215,6 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             frame.battle_outcome = None;
             frame.ip += 1;
             Flow::Advance
-        }
-        OPEN_SHOP => {
-            // `params[0]` is the mode (0 buy+sell, 1 buy-only, 2 sell-only),
-            // `params[1]` the shop type, and `params[4..]` the offered item ids.
-            let (allow_buy, allow_sell) = match command.params.first().copied().unwrap_or(0) {
-                1 => (true, false),
-                2 => (false, true),
-                _ => (true, true),
-            };
-            let shop_type = command.params.get(1).copied().unwrap_or(0).max(0) as u32;
-            let items = command
-                .params
-                .iter()
-                .skip(4)
-                .filter(|&&p| p >= 0)
-                .map(|&p| p as u32)
-                .collect();
-            x.subsystems.merchant.writer.write(ShopRequest::OpenShop {
-                items,
-                allow_buy,
-                allow_sell,
-                shop_type,
-            });
-            frame.shop_pending = true;
-            Flow::Yield
-        }
-        SHOW_INN => {
-            let cost = command.params.get(1).copied().unwrap_or(0);
-            let inn_type = command.params.first().copied().unwrap_or(0).max(0) as u32;
-            x.subsystems
-                .merchant
-                .writer
-                .write(ShopRequest::ShowInn { cost, inn_type });
-            frame.shop_pending = true;
-            Flow::Yield
         }
         PLAY_SOUND => {
             x.audio
@@ -298,11 +245,6 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         }
         ERASE_SCREEN | SHOW_SCREEN | TINT_SCREEN | FLASH_SCREEN | SHAKE_SCREEN | SHOW_PICTURE
         | MOVE_PICTURE | ERASE_PICTURE | GAME_OVER => handlers::present(frame, &command, x),
-        OPEN_SAVE_MENU => {
-            x.subsystems.event_save.0 = true;
-            frame.ip += 1;
-            Flow::Yield
-        }
         CHANGE_LEVEL => {
             apply_change_level(
                 &mut x.subsystems.actor_edits.progression,

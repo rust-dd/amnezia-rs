@@ -145,6 +145,9 @@ pub struct MenuPlugin;
 pub(crate) struct MenuInput;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct MapMenuRequest;
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(super) struct MenuView;
 
 impl Plugin for MenuPlugin {

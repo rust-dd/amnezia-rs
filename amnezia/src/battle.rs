@@ -141,7 +141,9 @@ impl Plugin for BattlePlugin {
             .add_systems(
                 Update,
                 (
-                    systems::start_on_request.after(crate::audio::AudioRequests),
+                    systems::start_on_request
+                        .after(crate::interpreter::scenes::Commit)
+                        .after(crate::audio::AudioRequests),
                     systems::debug_trigger,
                     message::tick
                         .run_if(flow::playing)

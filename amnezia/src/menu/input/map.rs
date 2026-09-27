@@ -26,11 +26,12 @@ impl Calling {
 }
 
 pub(in crate::menu) fn register(app: &mut App) {
+    crate::interpreter::scenes::register(app);
     app.init_resource::<Calling>()
         .init_resource::<crate::menu::SceneFlow>()
         .add_systems(
             Update,
-            (capture, request)
+            (capture, request.in_set(crate::menu::MapMenuRequest))
                 .chain()
                 .after(crate::menu::MenuInput)
                 .after(crate::player::CameraFollow)
@@ -66,11 +67,11 @@ fn capture(
 
 pub(in crate::menu) fn request(
     mut calling: ResMut<Calling>,
-    mut flow: ResMut<crate::menu::SceneFlow>,
+    mut scenes: ResMut<crate::interpreter::scenes::Requests>,
     mut sounds: MenuSfx,
 ) {
     if std::mem::take(&mut calling.requested) {
         sounds.decision();
-        flow.request_main_menu();
+        scenes.menu();
     }
 }

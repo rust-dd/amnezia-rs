@@ -57,6 +57,7 @@ impl Plugin for GameOverPlugin {
                 (drive, view::update)
                     .chain()
                     .in_set(GameOverFlowSet)
+                    .after(crate::interpreter::scenes::Commit)
                     .after(crate::battle::flow::BattleFlowSet),
             );
     }

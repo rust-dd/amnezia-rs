@@ -245,7 +245,7 @@ pub(super) fn show_battle_animation(
 
 /// The presentation opcodes (screen effects, pictures, Game Over): emit the
 /// message the presentation plugins consume, waiting (as `Wait` does) when the
-/// effect must finish before the next command; Game Over ends the run.
+/// effect must finish before the next command; Game Over requests its scene.
 pub(super) fn present(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -> Flow {
     match parse_present(command, &x.variables) {
         Some(Present::Transition { kind, erase }) => {
@@ -280,10 +280,7 @@ pub(super) fn present(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -
             frame.ip += 1;
             wait_if_requested(frame, wait)
         }
-        Some(Present::GameOver) => {
-            x.subsystems.gameover.0 = true;
-            Flow::Stop
-        }
+        Some(Present::GameOver) => super::scenes::game_over(frame, x),
         None => {
             frame.ip += 1;
             Flow::Advance

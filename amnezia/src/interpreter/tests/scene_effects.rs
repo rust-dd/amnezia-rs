@@ -2,7 +2,7 @@ use super::*;
 use crate::screenfx::TintState;
 use crate::world::MainCamera;
 
-fn app() -> App {
+pub(super) fn app() -> App {
     let mut app = interp_app();
     app.add_plugins((
         AssetPlugin::default(),

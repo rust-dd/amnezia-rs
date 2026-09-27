@@ -5,16 +5,12 @@ use super::{Blockers, Fade, RunningEvent};
 use bevy::prelude::*;
 
 pub(super) fn foreground(world: &mut World) {
-    let mut remaining = if world
-        .get_resource::<crate::menu::SceneFlow>()
-        .is_some_and(|flow| flow.requested())
-    {
-        1
-    } else {
-        MAX_STEPS_PER_FRAME
-    };
+    let mut remaining = MAX_STEPS_PER_FRAME;
     loop {
-        if run(world, None, &mut remaining) != RunOutcome::Finished || remaining == 0 {
+        if run(world, None, &mut remaining) != RunOutcome::Finished
+            || remaining == 0
+            || scene_limit(world, remaining)
+        {
             return;
         }
         if !world
@@ -38,6 +34,9 @@ fn run(world: &mut World, source: Option<ParallelSource>, remaining: &mut usize)
         return outcome;
     }
     while *remaining > 0 {
+        if scene_limit(world, *remaining) {
+            return RunOutcome::Yielded;
+        }
         let outcome = step(world, source, Operation::Command);
         if outcome == RunOutcome::Finished {
             return outcome;
@@ -48,6 +47,10 @@ fn run(world: &mut World, source: Option<ParallelSource>, remaining: &mut usize)
         }
     }
     RunOutcome::Yielded
+}
+
+fn scene_limit(world: &World, remaining: usize) -> bool {
+    remaining < MAX_STEPS_PER_FRAME && world.resource::<super::scenes::Requests>().pending()
 }
 
 fn step(world: &mut World, source: Option<ParallelSource>, operation: Operation) -> RunOutcome {
@@ -72,6 +75,7 @@ fn step(world: &mut World, source: Option<ParallelSource>, operation: Operation)
 }
 
 fn flush(world: &mut World) {
+    super::scenes::cancel_replaced(world);
     crate::world::update::flush(world);
     super::foreground::refresh(world);
     crate::appearance::flush(world);
