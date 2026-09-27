@@ -43,12 +43,12 @@ pub struct ConditionsPlugin;
 
 impl Plugin for ConditionsPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<FieldSteps>().add_systems(
-            Update,
+        app.init_resource::<FieldSteps>();
+        crate::player::update::character(app, || {
             step.after(crate::player::PlayerStep)
                 .after(crate::vehicles::VehicleSync)
-                .before(crate::dialogue::MessageUpdate),
-        );
+                .before(crate::dialogue::MessageUpdate)
+        });
     }
 }
 

@@ -3,6 +3,7 @@ use crate::world::{Character, EventSprite, MapData, MoveQueue, RouteStepper};
 use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
+mod hero;
 mod inactive;
 mod ordering;
 mod routes;

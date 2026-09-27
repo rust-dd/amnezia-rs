@@ -17,7 +17,19 @@ pub(crate) fn begin(world: &mut World) {
     }
 }
 
+pub(crate) fn claim(world: &mut World, entity: Entity) -> bool {
+    world
+        .get_resource_mut::<CharacterUpdates>()
+        .is_none_or(|mut updates| updates.processed.insert(entity))
+}
+
 pub(crate) fn register(app: &mut App) {
+    crate::player::update::character(app, || {
+        route::route_hero
+            .in_set(HeroRouteStep)
+            .after(crate::appearance::PlayerGraphics)
+            .before(crate::player::PlayerStep)
+    });
     app.init_resource::<TouchEvents>()
         .init_resource::<CharacterUpdates>()
         .init_resource::<relocation::Inbox>()
@@ -29,10 +41,6 @@ pub(crate) fn register(app: &mut App) {
                 pages::refresh_pages
                     .after(saved::RestoreCharacters)
                     .before(crate::interpreter::ParallelStep),
-                route::route_hero
-                    .in_set(HeroRouteStep)
-                    .after(crate::appearance::PlayerGraphics)
-                    .before(crate::player::PlayerStep),
                 (apply_relocate, update_event_sprites)
                     .chain()
                     .after(EventStep)
@@ -56,11 +64,7 @@ pub(crate) fn event(world: &mut World, id: u32) {
         crate::interpreter::foreground::queue_autorun(world, id);
         return;
     };
-    if !world
-        .resource_mut::<CharacterUpdates>()
-        .processed
-        .insert(entity)
-    {
+    if !claim(world, entity) {
         return;
     }
     let stopped = world

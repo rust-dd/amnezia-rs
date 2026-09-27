@@ -46,6 +46,14 @@ pub struct VehiclePlugin;
 impl Plugin for VehiclePlugin {
     fn build(&self, app: &mut App) {
         let system = load_ron::<SystemDef>(&format!("{}/system.ron", asset_root()));
+        crate::player::update::character(app, || {
+            keyboard
+                .in_set(VehicleInput)
+                .after(crate::interpreter::ParallelStep)
+                .after(crate::world::update::HeroRouteStep)
+                .after(crate::player::PlayerInput)
+                .before(crate::player::PlayerStep)
+        });
         app.init_resource::<Vehicles>()
             .insert_resource(VehicleMusic([
                 system.boat_music,
@@ -55,12 +63,6 @@ impl Plugin for VehiclePlugin {
             .add_systems(
                 Update,
                 (
-                    keyboard
-                        .in_set(VehicleInput)
-                        .after(crate::interpreter::ParallelStep)
-                        .after(crate::world::update::HeroRouteStep)
-                        .after(crate::player::PlayerInput)
-                        .before(crate::player::PlayerStep),
                     advance
                         .in_set(VehicleStep)
                         .after(saved::RestoreVehicles)

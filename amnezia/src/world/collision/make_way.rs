@@ -4,7 +4,7 @@ use crate::world::{Character, TouchEvents};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-pub(in crate::world) fn event(
+pub(crate) fn character(
     world: &mut World,
     id: u32,
     from: (i32, i32),
@@ -59,6 +59,17 @@ fn leg(world: &mut World, id: u32, from: (i32, i32), to: (i32, i32), jumping: bo
             return false;
         }
     }
+    if id != 0
+        && !world
+            .get_resource::<crate::vehicles::Vehicles>()
+            .is_some_and(|vehicles| vehicles.riding())
+        && world
+            .query::<&Player>()
+            .single(world)
+            .is_ok_and(|hero| hero.tile() == passage.destination)
+    {
+        crate::player::update::early(world);
+    }
     world.run_system_cached_with(finish, (id, passage)).unwrap()
 }
 
@@ -81,10 +92,15 @@ impl Context<'_, '_> {
         id: u32,
         f: impl FnOnce(&MapCollision, Mover, Option<(i32, i32)>) -> T,
     ) -> Option<T> {
-        let (character, route) = self.characters.iter().find(|(event, _)| event.id == id)?;
-        let mover = Mover::event(character, route.is_some_and(RouteStepper::through));
-        let mut bodies = CollisionBodies::from_events(self.characters.iter());
         let hero = self.players.single().ok();
+        let mover = if id == 0 {
+            let (_, route) = hero?;
+            Mover::hero(route.is_some_and(RouteStepper::through))
+        } else {
+            let (character, route) = self.characters.iter().find(|(event, _)| event.id == id)?;
+            Mover::event(character, route.is_some_and(RouteStepper::through))
+        };
+        let mut bodies = CollisionBodies::from_events(self.characters.iter());
         bodies.hero_through = hero
             .and_then(|(_, route)| route)
             .is_some_and(RouteStepper::through);

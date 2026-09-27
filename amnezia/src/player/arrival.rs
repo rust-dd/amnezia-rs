@@ -4,14 +4,14 @@ use super::*;
 struct InFlight(bool);
 
 pub(super) fn register(app: &mut App) {
-    app.init_resource::<InFlight>().add_systems(
-        Update,
+    app.init_resource::<InFlight>();
+    update::character(app, || {
         (remember, walk::<Player>, trigger)
             .chain()
             .in_set(PlayerStep)
             .after(crate::vehicles::VehicleInput)
-            .before(crate::dialogue::MessageUpdate),
-    );
+            .before(crate::dialogue::MessageUpdate)
+    });
 }
 
 fn remember(

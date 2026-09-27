@@ -1,4 +1,3 @@
-use super::collision::{CollisionBodies, MapCollision};
 use super::{EventSprite, MapData, MapEvents, MoveQueue, RouteStepper};
 use crate::interpreter::RunningEvent;
 use crate::player::Player;
@@ -108,28 +107,6 @@ impl EventTriggers<'_, '_> {
         {
             route.set_stop_count(0);
         }
-    }
-
-    pub(crate) fn bodies(&self) -> CollisionBodies {
-        CollisionBodies::from_events(
-            self.sprites
-                .iter()
-                .map(|(sprite, route, _)| (sprite, route)),
-        )
-    }
-
-    pub(crate) fn collision<'a>(&'a self, bodies: &'a CollisionBodies) -> MapCollision<'a> {
-        MapCollision::new(
-            &self.data,
-            &self.events,
-            (
-                &self.switches,
-                &self.variables,
-                &self.party,
-                &self.inventory,
-            ),
-            bodies,
-        )
     }
 }
 

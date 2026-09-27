@@ -1,16 +1,21 @@
 //! Move-route execution and shared side effects for map characters.
 
 mod events;
+mod hero;
 mod stepper;
 pub(super) use events::route_event;
+pub(super) use hero::route as route_hero;
 
 pub use stepper::RouteStepper;
 
+#[cfg(test)]
 use super::collision::{CollisionBodies, MapCollision, Mover};
 use super::{Character, EventSprite, MapData, MapEvents, MoveQueue};
 use crate::audio::AudioRequest;
 use crate::player::Player;
-use crate::state::{Inventory, Party, Switches, Variables};
+use crate::state::Switches;
+#[cfg(test)]
+use crate::state::{Inventory, Party, Variables};
 use bevy::prelude::*;
 pub(crate) use stepper::StepEffect;
 pub(crate) use stepper::Turn;
@@ -154,67 +159,6 @@ fn tile_open(
 #[cfg(test)]
 pub(super) fn route_events(world: &mut World) {
     events::route_event(world, None, None);
-}
-
-/// Step the hero's forced route (a `MoveEvent` targeting the hero). Same guards
-/// as event routes; the hero is `self_id` 0 (no event) for the collision test.
-pub(super) fn route_hero(world: &mut World) {
-    let mut turn = None;
-    loop {
-        turn = world.run_system_cached_with(hero_part, turn).unwrap();
-        if turn.is_none() {
-            break;
-        }
-        crate::world::update::refresh_route_switch(world);
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-fn hero_part(
-    In(turn): In<Option<Turn>>,
-    data: Res<MapData>,
-    map_events: Res<MapEvents>,
-    mut switches: ResMut<Switches>,
-    variables: Res<Variables>,
-    party: Res<Party>,
-    inventory: Res<Inventory>,
-    guards: super::autonomy::MoveGuards,
-    mut audio: MessageWriter<AudioRequest>,
-    mut hero: Query<
-        (&mut Player, &mut MoveQueue, &mut RouteStepper, &mut Sprite),
-        Without<EventSprite>,
-    >,
-    events: Query<(&EventSprite, Option<&RouteStepper>), Without<Player>>,
-    vehicles: Option<Res<crate::vehicles::Vehicles>>,
-) -> Option<Turn> {
-    // Forced routes keep advancing during the foreground cutscene that assigned them.
-    if turn.is_none()
-        && (guards.forced_route_paused()
-            || vehicles.as_ref().is_some_and(|v| v.airship_transitioning()))
-    {
-        return None;
-    }
-    let Ok((mut player, mut queue, mut stepper, mut sprite)) = hero.single_mut() else {
-        return None;
-    };
-    let (ex, ey) = (player.tile_x, player.tile_y);
-    let pos = (ex, ey);
-    let mut bodies = CollisionBodies::from_events(events.iter());
-    bodies.include_vehicles(vehicles.as_deref(), data.map_id);
-    let (driven, turn) = {
-        let collision = MapCollision::new(
-            &data,
-            &map_events,
-            (&switches, &variables, &party, &inventory),
-            &bodies,
-        );
-        let can_step = |_: &Player, dx: i32, dy: i32, jumping: bool, through: bool| {
-            collision.can_move(pos, (ex + dx, ey + dy), Mover::hero(through), None, jumping)
-        };
-        drive_part(&mut *player, &mut queue, &mut stepper, pos, can_step, turn)
-    };
-    apply_effects(driven.effects, &mut switches, &mut audio, &mut sprite);
-    turn
 }
 
 #[cfg(test)]

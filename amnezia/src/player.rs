@@ -6,7 +6,6 @@ use crate::dialogue::Dialogue;
 use crate::interpreter::RunningEvent;
 use crate::tiles::{self, CHAR_Y_OFFSET, DIR_DOWN, DIR_LEFT, DIR_RIGHT, DIR_UP};
 use crate::world::EventSprite;
-use crate::world::collision::Mover;
 use crate::world::{
     Character, EventTriggers, MapData, MoveQueue, RouteAction, RouteStepper, ScenePause, walk,
 };
@@ -14,6 +13,9 @@ use bevy::prelude::*;
 
 mod arrival;
 mod camera;
+mod input;
+use input::move_player;
+pub(crate) mod update;
 pub(crate) use camera::CameraFollow;
 pub use camera::CameraPan;
 pub(crate) use camera::saved as saved_camera;
@@ -98,30 +100,30 @@ impl Plugin for PlayerPlugin {
                 update_hero_hidden
                     .before(bevy::camera::visibility::VisibilitySystems::VisibilityPropagate),
             );
-        app.add_systems(
-            Update,
+        update::post(app, || {
             camera::camera_follow
                 .in_set(CameraFollow)
                 .after(PlayerStep)
                 .after(crate::vehicles::VehicleSync)
                 .before(crate::screenfx::ScreenShakeSet)
-                .before(crate::dialogue::MessageUpdate),
-        );
+                .before(crate::dialogue::MessageUpdate)
+        });
         register_movement(app);
     }
 }
 
 fn register_movement(app: &mut App) {
-    app.init_resource::<InputPhase>().add_systems(
-        Update,
+    update::register(app);
+    app.init_resource::<InputPhase>();
+    update::character(app, || {
         move_player
             .in_set(PlayerInput)
             .after(crate::interpreter::ParallelStep)
             .after(crate::world::update::HeroRouteStep)
             .after(crate::menu::MenuInput)
             .after(crate::world::saved::RestoreCharacters)
-            .before(PlayerStep),
-    );
+            .before(PlayerStep)
+    });
     arrival::register(app);
 }
 
@@ -158,108 +160,6 @@ pub fn spawn_player(
             tiles::character_z(start.1),
         ),
     ));
-}
-
-#[allow(clippy::too_many_arguments)]
-fn move_player(
-    keys: Res<ButtonInput<KeyCode>>,
-    prompts: crate::dialogue::InputPrompts,
-    mut triggers: EventTriggers,
-    dialogue: Res<Dialogue>,
-    scene: ScenePause,
-    mut running: ResMut<RunningEvent>,
-    mut phase: ResMut<InputPhase>,
-    mut players: Query<(&mut Player, &mut MoveQueue, &mut RouteStepper), Without<EventSprite>>,
-    vehicles: Option<Res<crate::vehicles::Vehicles>>,
-    mut calling: Option<ResMut<crate::menu::Calling>>,
-) {
-    phase.blocked = true;
-    let Ok((mut player, mut queue, mut stepper)) = players.single_mut() else {
-        return;
-    };
-    if scene.paused() {
-        return;
-    }
-    if queue.busy()
-        || vehicles
-            .as_ref()
-            .is_some_and(|vehicles| vehicles.rider_moving() || vehicles.airship_transitioning())
-    {
-        return;
-    }
-    if running.active() {
-        if let Some(calling) = &mut calling {
-            calling.cancel();
-        }
-        return;
-    }
-    if dialogue.active || prompts.active() || stepper.active() {
-        return;
-    }
-    if calling.as_mut().is_some_and(|calling| calling.consume()) {
-        stepper.animation.reset(&mut *player);
-        return;
-    }
-    if !scene.airship() {
-        let hero = (player.tile_x, player.tile_y);
-        triggers.queue_at(&mut running, hero, false, &[2], hero, false);
-    }
-    if running.waiting() {
-        return;
-    }
-    phase.blocked = false;
-    if scene.riding() {
-        return;
-    }
-    let data = &triggers.data;
-    let step = if keys.pressed(KeyCode::ArrowUp) {
-        Some((0, -1, DIR_UP))
-    } else if keys.pressed(KeyCode::ArrowDown) {
-        Some((0, 1, DIR_DOWN))
-    } else if keys.pressed(KeyCode::ArrowLeft) {
-        Some((-1, 0, DIR_LEFT))
-    } else if keys.pressed(KeyCode::ArrowRight) {
-        Some((1, 0, DIR_RIGHT))
-    } else {
-        None
-    };
-    let Some((dx, dy, dir)) = step else {
-        return;
-    };
-    stepper.set_direction(&mut *player, dir);
-    let (nx, ny) = (player.tile_x + dx, player.tile_y + dy);
-    if !data.contains_tile(nx, ny) {
-        return;
-    }
-    let (tx, ty) = data.normalize_tile(nx, ny);
-    let mut bodies = triggers.bodies();
-    bodies.include_vehicles(vehicles.as_deref(), data.map_id);
-    let collision = triggers.collision(&bodies);
-    let blocked = !collision.can_move(
-        (player.tile_x, player.tile_y),
-        (nx, ny),
-        Mover::hero(stepper.through()),
-        None,
-        false,
-    );
-    if !blocked {
-        queue.set_step_secs(crate::world::step_secs_for_speed(stepper.speed()));
-        queue.push_step(RouteAction::Step {
-            dx,
-            dy,
-            face: player.dir,
-        });
-    }
-    if blocked {
-        triggers.queue_at(
-            &mut running,
-            (tx, ty),
-            true,
-            &[1, 2],
-            (player.tile_x, player.tile_y),
-            false,
-        );
-    }
 }
 
 pub(crate) fn update_player_sprite(

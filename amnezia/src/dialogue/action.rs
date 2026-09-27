@@ -6,16 +6,15 @@ use bevy::prelude::*;
 
 pub(super) fn register(app: &mut App) {
     // RPG_RT checks player actions before resuming the foreground interpreter.
-    app.add_systems(
-        Update,
+    crate::player::update::character(app, || {
         update
             .after(crate::menu::MenuInput)
             .after(crate::player::PlayerInput)
             .after(crate::vehicles::VehicleInput)
             .before(crate::player::PlayerStep)
             .before(InterpreterStep)
-            .before(super::MessageUpdate),
-    );
+            .before(super::MessageUpdate)
+    });
 }
 
 /// Facing action pages share the hero's layer and can be reached across three

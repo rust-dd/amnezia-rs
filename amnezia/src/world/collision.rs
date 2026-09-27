@@ -5,7 +5,8 @@ use amnezia_data::{Event, EventPage};
 use std::collections::HashMap;
 
 mod make_way;
-pub(in crate::world) use make_way::{event as make_way, failed_walk};
+pub(crate) use make_way::character as make_way;
+pub(in crate::world) use make_way::failed_walk;
 
 pub(super) enum Entry {
     Blocked,

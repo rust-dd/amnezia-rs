@@ -29,14 +29,30 @@ pub(in crate::menu) fn register(app: &mut App) {
     crate::interpreter::scenes::register(app);
     app.init_resource::<Calling>()
         .init_resource::<crate::menu::SceneFlow>()
+        .init_schedule(crate::player::update::CharacterUpdate)
+        .add_systems(
+            crate::player::update::CharacterUpdate,
+            request
+                .in_set(crate::menu::MapMenuRequest)
+                .after(crate::player::PlayerInput)
+                .before(crate::vehicles::VehicleInput),
+        )
         .add_systems(
             Update,
-            (capture, request.in_set(crate::menu::MapMenuRequest))
-                .chain()
+            request
+                .in_set(crate::menu::MapMenuRequest)
                 .after(crate::menu::MenuInput)
                 .after(crate::player::CameraFollow)
-                .before(crate::dialogue::MessageUpdate),
+                .before(crate::dialogue::MessageUpdate)
+                .run_if(crate::player::update::standalone),
         );
+    crate::player::update::post(app, || {
+        capture
+            .after(crate::menu::MenuInput)
+            .after(crate::player::CameraFollow)
+            .before(crate::menu::MapMenuRequest)
+            .before(crate::dialogue::MessageUpdate)
+    });
 }
 
 #[allow(clippy::too_many_arguments)]
