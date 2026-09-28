@@ -82,6 +82,7 @@ pub(super) fn start_animations(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn step_animations(
     frames: Res<GameFrames>,
+    step: Option<Res<crate::timing::logical::Step>>,
     pause: crate::transitions::TransitionPause,
     scene: super::scene::Scenes,
     mut commands: Commands,
@@ -105,7 +106,11 @@ pub(super) fn step_animations(
     order.sort_unstable();
     for (_, entity) in order {
         let (_, mut anim) = animations.get_mut(entity).unwrap();
-        let delta = frames.frame.wrapping_sub(anim.last);
+        let delta = if step.as_ref().is_some_and(|step| step.callback) {
+            1
+        } else {
+            frames.frame.wrapping_sub(anim.last)
+        };
         anim.last = frames.frame;
         if pause.paused() || scene.frozen() || delta == 0 {
             continue;

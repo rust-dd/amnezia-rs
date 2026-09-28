@@ -54,15 +54,23 @@ fn free_inn_continuations_keep_identical_traces_at_every_render_rate() {
             for _ in 0..fps * 2 {
                 app.update();
             }
-            let expected = (1..=120)
-                .map(|raw| {
+            let expected = (1..=119)
+                .flat_map(|raw| {
                     let visits = if raw <= 71 { 1 } else { raw - 70 };
-                    let later = if owner == 1 && raw < 71 { 0 } else { visits };
-                    (
+                    let later = if owner == 1 && raw <= 71 { 0 } else { visits };
+                    let mut entries = Vec::new();
+                    if raw == 37 {
+                        entries.push((36, 1, [1, 0, i32::from(owner != 1)]));
+                    }
+                    if raw == 72 {
+                        entries.push((71, 1, [1, 1, 1]));
+                    }
+                    entries.push((
                         raw,
                         visits,
-                        [visits as i32, i32::from(raw >= 71), later as i32],
-                    )
+                        [visits as i32, i32::from(raw >= 72), later as i32],
+                    ));
+                    entries
                 })
                 .collect::<Vec<_>>();
             assert_eq!(

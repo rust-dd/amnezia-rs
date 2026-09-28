@@ -2,6 +2,7 @@ use super::*;
 use crate::timing::GameFrames;
 use crate::transitions::{Transition, TransitionPlugin};
 
+mod callbacks;
 mod clocks;
 
 fn app() -> App {

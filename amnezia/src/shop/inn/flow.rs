@@ -92,6 +92,7 @@ pub(super) fn advance(
     dialogue: Res<Dialogue>,
     frames: Res<GameFrames>,
     time: Res<Time<Real>>,
+    step: Option<Res<crate::timing::logical::Step>>,
     mut transition: ResMut<Transition>,
     mut playback: Playback,
 ) {
@@ -110,7 +111,7 @@ pub(super) fn advance(
                 continue;
             }
             Phase::FadeOut { started } => {
-                if transition.busy() {
+                if transition.busy() || step.as_ref().is_some_and(|step| !step.callback) {
                     return;
                 }
                 let request = AudioRequest::music_once(crate::system_bgm::resolve(
@@ -130,7 +131,7 @@ pub(super) fn advance(
                 time.elapsed().saturating_sub(started),
             ),
             Phase::FadeIn => {
-                if !transition.busy() {
+                if !transition.busy() && step.as_ref().is_none_or(|step| step.callback) {
                     state.phase = Phase::Idle;
                     open.0 = false;
                 }

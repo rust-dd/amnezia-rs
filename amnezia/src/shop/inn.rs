@@ -62,6 +62,10 @@ impl State {
     pub(crate) fn closing(&self) -> bool {
         matches!(self.phase, Phase::Closing)
     }
+
+    pub(crate) fn callback_ready(&self) -> bool {
+        matches!(self.phase, Phase::FadeOut { .. } | Phase::FadeIn)
+    }
 }
 
 pub(crate) fn open_pending(world: &mut World) {

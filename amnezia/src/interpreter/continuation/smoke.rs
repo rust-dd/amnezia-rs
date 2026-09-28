@@ -11,6 +11,35 @@ struct Probe {
     checks: u32,
     started: bool,
     inn: bool,
+    owner: u32,
+    callbacks: u8,
+}
+
+pub(crate) fn configure(app: &mut App) {
+    crate::timing::logical::post(app, || observe.after(crate::teleport::TransferCommit));
+}
+
+fn observe(world: &mut World) {
+    if !world.resource::<crate::timing::logical::Step>().callback {
+        return;
+    }
+    let Some(probe) = world.get_resource::<Probe>() else {
+        return;
+    };
+    let owner = probe.owner;
+    if probe.callbacks & (1 << owner) != 0 || world.resource::<Variables>().get(4807) == 0 {
+        return;
+    }
+    let values = std::array::from_fn::<_, 8, _>(|index| {
+        world.resource::<Variables>().get(4800 + index as u32)
+    });
+    assert_eq!(
+        values, [1; 8],
+        "the callback must complete exactly the interrupted map visit"
+    );
+    assert!(!world.resource::<Transition>().busy());
+    world.resource_mut::<Probe>().callbacks |= 1 << owner;
+    world.resource_mut::<Switches>().set(4800, false);
 }
 
 fn command(code: u32, params: Vec<i32>) -> EventCommand {
@@ -73,6 +102,7 @@ fn prepare(world: &mut World, case: u32) {
     assert!(!world.resource::<RunningEvent>().active());
     assert!(!world.resource::<Transition>().busy());
     world.resource_mut::<Probe>().started = false;
+    world.resource_mut::<Probe>().owner = case;
     for id in 4800..4808 {
         world.resource_mut::<Variables>().set(id, 0);
     }
@@ -161,7 +191,15 @@ pub(crate) fn drive(world: &mut World, frame: u32, inn: bool) -> Option<&'static
     assert_eq!(&counts[..4], &expected, "owner={case}, age={age}");
     assert_eq!(&counts[4..7], &[i32::from(!first_half); 3]);
     assert_eq!(counts[7], i32::from(finished));
-    assert_eq!(world.resource::<Transition>().busy(), !finished);
+    if finished {
+        assert!(!world.resource::<Transition>().busy());
+        assert_ne!(world.resource::<Probe>().callbacks & (1 << case), 0);
+    } else {
+        assert!(
+            world.resource::<Transition>().busy()
+                || crate::timing::logical::callback_pending(world)
+        );
+    }
     if !finished {
         world.resource_mut::<Probe>().started = true;
     }
@@ -196,6 +234,7 @@ pub(crate) fn drive(world: &mut World, frame: u32, inn: bool) -> Option<&'static
 pub(crate) fn verify_finished(world: &World) {
     let probe = world.resource::<Probe>();
     assert_eq!(probe.completed, 7);
+    assert_eq!(probe.callbacks, 7);
     assert!(probe.checks >= 210);
     if probe.inn {
         info!(

@@ -1,5 +1,33 @@
 use super::*;
 
+#[test]
+fn an_owed_animation_tick_runs_in_the_callback_before_the_next_raw_tick() {
+    use bevy::ecs::system::RunSystemOnce;
+    let (mut app, _, _) = map_flashes::fixture(60);
+    map_flashes::play(&mut app, AnimTarget::Hero);
+    let raw = app.world().resource::<GameFrames>().frame;
+    let elapsed = saved::snapshot(app.world_mut()).cast.unwrap().elapsed;
+    app.init_resource::<crate::timing::logical::Step>();
+    app.world_mut()
+        .resource_mut::<crate::timing::logical::Step>()
+        .callback = true;
+    app.world_mut().run_system_once(step_animations).unwrap();
+    assert_eq!(app.world().resource::<GameFrames>().frame, raw);
+    assert_eq!(
+        saved::snapshot(app.world_mut()).cast.unwrap().elapsed,
+        elapsed + 1
+    );
+    app.world_mut()
+        .resource_mut::<crate::timing::logical::Step>()
+        .callback = false;
+    app.world_mut().resource_mut::<GameFrames>().frame += 1;
+    app.world_mut().run_system_once(step_animations).unwrap();
+    assert_eq!(
+        saved::snapshot(app.world_mut()).cast.unwrap().elapsed,
+        elapsed + 2
+    );
+}
+
 fn cells(app: &mut App) -> Vec<(Entity, Visibility)> {
     app.world_mut()
         .query_filtered::<(Entity, &Visibility), With<MeshMaterial2d<cells::CellMaterial>>>()

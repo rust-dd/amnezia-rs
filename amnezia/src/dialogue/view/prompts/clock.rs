@@ -6,6 +6,7 @@ use bevy::prelude::*;
 #[derive(Resource, Default)]
 pub(crate) struct Clock {
     last: Option<u32>,
+    callback: bool,
     battle: bool,
     message: [u32; 2],
     number: [u32; 2],
@@ -21,11 +22,15 @@ impl Clock {
         if phase <= 10 { 64.0 } else { 96.0 }
     }
 
-    fn advance(&mut self, now: u32, battle: bool, number: bool, paused: bool) {
-        let delta = self
-            .last
-            .replace(now)
-            .map_or(0, |last| now.wrapping_sub(last));
+    fn advance(&mut self, now: u32, callback: bool, battle: bool, number: bool, paused: bool) {
+        let resumed = callback && (!self.callback || self.last != Some(now));
+        let delta = if callback {
+            u32::from(resumed)
+        } else {
+            self.last.map_or(0, |last| now.wrapping_sub(last))
+        };
+        self.last = Some(now);
+        self.callback = callback;
         if battle && !self.battle {
             self.message[1] = 0;
             self.number[1] = 0;
@@ -53,6 +58,7 @@ pub(in crate::dialogue) fn register(app: &mut App) {
 
 fn update(
     frames: Res<SceneFrames>,
+    step: Option<Res<crate::timing::logical::Step>>,
     prompts: Presentation,
     scene: crate::world::ScenePause,
     battle: Option<Res<crate::battle::BattleActive>>,
@@ -60,6 +66,7 @@ fn update(
 ) {
     clock.advance(
         frames.frame,
+        step.is_some_and(|step| step.callback),
         battle.is_some_and(|battle| battle.0),
         prompts.number.is_some_and(|number| number.active()),
         scene.message_paused(),

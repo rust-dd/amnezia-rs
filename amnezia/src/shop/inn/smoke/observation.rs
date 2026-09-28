@@ -24,14 +24,27 @@ pub(super) fn update(world: &mut World) {
     fixtures::verify_vitals(world, matches!(phase, Phase::FadeIn | Phase::Idle));
     let finished = matches!(phase, Phase::Idle);
     let scene = world.resource::<SceneFrames>().frame;
-    let expected = *world
-        .resource_mut::<Probe>()
-        .rest_scene
-        .get_or_insert(scene);
-    assert_eq!(
-        scene, expected,
-        "inn must not advance scene time during rest"
-    );
+    let raw = world.resource::<crate::timing::GameFrames>().frame;
+    let callback = world.resource::<crate::timing::logical::Step>().callback;
+    let paused = world.resource::<crate::timing::SceneWait>().0;
+    let mut probe = world.resource_mut::<Probe>();
+    if let Some((before_raw, before_scene)) = probe.rest_scene.replace((raw, scene)) {
+        let delta = if callback || paused {
+            0
+        } else {
+            raw.wrapping_sub(before_raw)
+        };
+        assert_eq!(
+            scene,
+            before_scene.wrapping_add(delta),
+            "only inn transitions freeze scene time"
+        );
+        if callback {
+            assert_eq!(raw, before_raw);
+        }
+        probe.rest_ticks += delta;
+    }
+    probe.callbacks += u32::from(callback);
     assert!(!world.resource::<crate::menu::MenuOpen>().0);
     let mut playing = false;
     let ended = world.resource::<State>().completed == Some(Completion::PlaybackStopped);
@@ -48,7 +61,7 @@ pub(super) fn update(world: &mut World) {
         let case = probe.case;
         assert!(
             !world.resource::<RunningEvent>().active(),
-            "event must finish in the terminal fade frame"
+            "event must finish in the callback before the fresh player update"
         );
         assert!(world.resource::<crate::state::Switches>().get(9031));
         assert_eq!(

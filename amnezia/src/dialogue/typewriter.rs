@@ -162,12 +162,14 @@ impl Typewriter {
 pub(in crate::dialogue) fn prepare_windows(
     mut dialogue: ResMut<super::Dialogue>,
     frames: Res<crate::timing::GameFrames>,
+    step: Option<Res<crate::timing::logical::Step>>,
     pause: super::MessagePause,
     battle: Option<Res<crate::battle::BattleActive>>,
 ) {
     let active = dialogue.active;
     dialogue.lifecycle.prepare(
         frames.frame,
+        step.is_some_and(|step| step.callback),
         active,
         battle.is_some_and(|battle| battle.0),
         pause.paused(),
@@ -180,12 +182,14 @@ pub(in crate::dialogue) fn drive_reveal(
     hero: Res<crate::text::HeroName>,
     variables: Res<Variables>,
     frames: Res<crate::timing::GameFrames>,
+    step: Option<Res<crate::timing::logical::Step>>,
     pause: super::MessagePause,
     battle: Option<Res<crate::battle::BattleActive>>,
 ) {
     let active = dialogue.active;
     dialogue.lifecycle.prepare(
         frames.frame,
+        step.is_some_and(|step| step.callback),
         active,
         battle.is_some_and(|battle| battle.0),
         pause.paused(),

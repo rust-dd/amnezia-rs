@@ -37,7 +37,8 @@ impl ScenePause<'_> {
     }
 
     pub(crate) fn message_paused(&self) -> bool {
-        self.blocked()
+        self.blocked_except_transfer()
+            || (self.transfer_blocked() && !self.inn.as_ref().is_some_and(|inn| inn.closing()))
             || (!self.inn.as_ref().is_some_and(|inn| inn.closing())
                 && (self.inn.as_ref().is_some_and(|inn| inn.resting()) || self.characters_paused()))
     }
@@ -68,8 +69,15 @@ impl ScenePause<'_> {
     }
 
     fn blocked(&self) -> bool {
-        (self.destination.is_none() && self.fade.as_ref().is_some_and(|v| v.busy()))
-            || self.menu_flow.as_ref().is_some_and(|v| v.blocks_map())
+        self.transfer_blocked() || self.blocked_except_transfer()
+    }
+
+    fn transfer_blocked(&self) -> bool {
+        self.destination.is_none() && self.fade.as_ref().is_some_and(|v| v.busy())
+    }
+
+    fn blocked_except_transfer(&self) -> bool {
+        self.menu_flow.as_ref().is_some_and(|v| v.blocks_map())
             || self.shop_flow.as_ref().is_some_and(|v| v.active())
             || self.transition.as_ref().is_some_and(|v| v.busy())
             || self.menu.as_ref().is_some_and(|v| v.0)

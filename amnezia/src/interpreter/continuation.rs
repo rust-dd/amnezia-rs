@@ -55,6 +55,15 @@ pub(crate) struct Continuation {
 }
 
 impl Continuation {
+    pub(crate) fn ready(&self, inn: bool) -> bool {
+        self.pending
+            .as_ref()
+            .is_some_and(|pending| match pending.wait {
+                WaitFor::Transition => true,
+                WaitFor::Inn => !inn,
+            })
+    }
+
     pub(super) fn resume_owner(&self) -> Option<Owner> {
         match self.pass {
             Pass::Resume(owner) => Some(owner),
@@ -92,16 +101,29 @@ impl Continuation {
 }
 
 pub(super) fn begin(world: &mut World) {
+    let callback = world
+        .get_resource::<crate::timing::logical::Step>()
+        .is_some_and(|step| step.callback);
+    let can_resume = callback
+        || !world.contains_resource::<crate::timing::logical::Step>()
+        || world.contains_resource::<super::destination::Visit>();
     let transition = world.resource::<crate::transitions::Transition>().busy();
     let inn = world
         .get_resource::<crate::shop::inn::State>()
         .is_some_and(|inn| inn.resting());
+    let empty = if callback && !world.contains_resource::<super::destination::Visit>() {
+        Pass::Waiting
+    } else {
+        Pass::Fresh
+    };
     let mut state = world.resource_mut::<Continuation>();
-    state.pass = state.pending.as_ref().map_or(Pass::Fresh, |pending| {
-        if match pending.wait {
-            WaitFor::Transition => transition,
-            WaitFor::Inn => inn,
-        } {
+    state.pass = state.pending.as_ref().map_or(empty, |pending| {
+        if !can_resume
+            || match pending.wait {
+                WaitFor::Transition => transition,
+                WaitFor::Inn => inn,
+            }
+        {
             Pass::Waiting
         } else {
             Pass::Resume(pending.owner)

@@ -1,5 +1,38 @@
 use super::*;
 
+#[test]
+fn a_callback_reuses_the_previous_repeat_sample_without_clearing_or_advancing_it() {
+    use bevy::ecs::system::RunSystemOnce;
+    let mut input = Input::default();
+    let mut keys = ButtonInput::default();
+    input.advance(0, &keys);
+    keys.press(KeyCode::ArrowDown);
+    for frame in 1..=24 {
+        input.advance(frame, &keys);
+        keys.clear();
+    }
+    assert_eq!(down_steps(&input), [1]);
+    let mut world = World::new();
+    world.insert_resource(input);
+    world.insert_resource(keys);
+    world.init_resource::<GameFrames>();
+    world.resource_mut::<GameFrames>().frame = 24;
+    world.init_resource::<crate::timing::logical::Step>();
+    world
+        .resource_mut::<crate::timing::logical::Step>()
+        .callback = true;
+    world.run_system_once(update).unwrap();
+    assert_eq!(down_steps(world.resource::<Input>()), [1]);
+    assert_eq!(world.resource::<Input>().held[0], 24);
+    world.resource_mut::<GameFrames>().frame = 25;
+    world
+        .resource_mut::<crate::timing::logical::Step>()
+        .callback = false;
+    world.run_system_once(update).unwrap();
+    assert!(down_steps(world.resource::<Input>()).is_empty());
+    assert_eq!(world.resource::<Input>().held[0], 25);
+}
+
 fn down_steps(input: &Input) -> Vec<u32> {
     input
         .steps()

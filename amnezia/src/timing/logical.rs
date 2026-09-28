@@ -5,6 +5,7 @@ use bevy::ecs::system::ScheduleSystem;
 use bevy::prelude::*;
 use std::time::Duration;
 
+mod callback;
 mod engine;
 mod input;
 pub(crate) use engine::EnginePlugin;
@@ -21,8 +22,9 @@ struct GamePostUpdate;
 struct LogicalUpdate;
 
 #[derive(Resource, Default)]
-pub(super) struct Step {
+pub(crate) struct Step {
     pub(super) advancing: bool,
+    pub(crate) callback: bool,
 }
 
 #[derive(Resource, Default)]
@@ -30,6 +32,7 @@ struct Clock {
     initialized: bool,
     time: Time,
     input: input::Buffered,
+    last_input: ButtonInput<KeyCode>,
 }
 
 pub(crate) struct LogicalPlugin;
@@ -56,6 +59,10 @@ impl Plugin for LogicalPlugin {
 
 fn standalone(step: Option<Res<Step>>) -> bool {
     step.is_none()
+}
+
+pub(crate) fn callback_pending(world: &World) -> bool {
+    callback::ready(world)
 }
 
 pub(crate) fn pre<M, S>(app: &mut App, systems: impl Fn() -> S) -> &mut App
@@ -88,6 +95,23 @@ fn update(world: &mut World) {
         let bootstrap = !clock.initialized && ticks == 0;
         clock.initialized = true;
         for _ in 0..ticks.max(u32::from(bootstrap)) {
+            if callback_pending(world) {
+                *world.resource_mut::<Step>() = Step {
+                    advancing: false,
+                    callback: true,
+                };
+                world.insert_resource(clock.time);
+                world.insert_resource(clock.last_input.clone());
+                let scene = callback::scene(world);
+                world.run_schedule(Update);
+                world.run_schedule(GamePostUpdate);
+                clock.last_input = world.resource::<ButtonInput<KeyCode>>().clone();
+                world.resource_mut::<Step>().callback = false;
+                if callback::suspended(world) || callback::scene(world) != scene {
+                    world.insert_resource(clock.input.current());
+                    continue;
+                }
+            }
             world.resource_mut::<Step>().advancing = !bootstrap;
             clock.time.advance_by(if bootstrap {
                 Duration::ZERO
@@ -99,6 +123,7 @@ fn update(world: &mut World) {
             world.run_schedule(GamePreUpdate);
             world.run_schedule(Update);
             world.run_schedule(GamePostUpdate);
+            clock.last_input = world.resource::<ButtonInput<KeyCode>>().clone();
         }
     });
     world.insert_resource(render_time);

@@ -19,11 +19,16 @@ struct Call {
 #[derive(Resource, Default)]
 pub(crate) struct Requests {
     next_ticket: u64,
+    committed: u64,
     pending: Option<Call>,
     cancelled: Vec<u64>,
 }
 
 impl Requests {
+    pub(crate) fn committed(&self) -> u64 {
+        self.committed
+    }
+
     pub(crate) fn pending(&self) -> bool {
         self.pending.is_some()
     }
@@ -133,6 +138,8 @@ fn commit_pending(world: &mut World, after_transfer: bool) {
     let Some(call) = world.resource_mut::<Requests>().pending.take() else {
         return;
     };
+    let mut requests = world.resource_mut::<Requests>();
+    requests.committed = requests.committed.wrapping_add(1);
     settle(world, call.ticket, false);
     match call.scene {
         Scene::Menu => world

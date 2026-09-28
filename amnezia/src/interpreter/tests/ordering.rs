@@ -7,6 +7,7 @@ use std::time::Duration;
 mod arrival;
 mod async_resumption;
 mod autoruns;
+mod callbacks;
 mod decision;
 mod destination;
 mod facing;

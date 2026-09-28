@@ -148,8 +148,13 @@ fn tick_clock(time: Res<Time>, scene: ClockScene, mut clock: ResMut<GameClock>) 
 
 /// Accumulate real playtime, carrying the sub-second remainder so the whole-second
 /// count stays accurate over a long session.
-fn tick_playtime(time: Res<Time>, scene: ClockScene, mut play: ResMut<PlayTime>) {
-    if scene.outside_game() {
+fn tick_playtime(
+    time: Res<Time>,
+    scene: ClockScene,
+    step: Option<Res<crate::timing::logical::Step>>,
+    mut play: ResMut<PlayTime>,
+) {
+    if scene.outside_game() || step.is_some_and(|step| step.callback) {
         return;
     }
     play.frac += time.delta_secs();
@@ -162,6 +167,28 @@ fn tick_playtime(time: Res<Time>, scene: ClockScene, mut play: ResMut<PlayTime>)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn callbacks_do_not_charge_supplementary_playtime() {
+        use bevy::ecs::system::RunSystemOnce;
+        let mut world = World::new();
+        let mut time = Time::<()>::default();
+        time.advance_by(std::time::Duration::from_secs(1));
+        world.insert_resource(time);
+        world.init_resource::<PlayTime>();
+        world.init_resource::<crate::timing::logical::Step>();
+        world
+            .resource_mut::<crate::timing::logical::Step>()
+            .callback = true;
+        world.run_system_once(tick_playtime).unwrap();
+        assert_eq!(world.resource::<PlayTime>().seconds, 0);
+        assert_eq!(world.resource::<PlayTime>().frac, 0.0);
+        world
+            .resource_mut::<crate::timing::logical::Step>()
+            .callback = false;
+        world.run_system_once(tick_playtime).unwrap();
+        assert_eq!(world.resource::<PlayTime>().seconds, 1);
+    }
 
     #[test]
     fn transitions_pause_countdowns_but_not_total_playtime() {

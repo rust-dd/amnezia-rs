@@ -48,8 +48,11 @@ impl BattleFlow {
     }
 }
 
-pub(super) fn playing(flow: Option<Res<BattleFlow>>) -> bool {
-    !flow.is_some_and(|flow| flow.busy())
+pub(super) fn playing(
+    flow: Option<Res<BattleFlow>>,
+    step: Option<Res<crate::timing::logical::Step>>,
+) -> bool {
+    !flow.is_some_and(|flow| flow.busy()) && !step.is_some_and(|step| step.callback)
 }
 
 #[allow(clippy::too_many_arguments)]

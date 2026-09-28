@@ -75,9 +75,13 @@ impl Input {
 
 pub(crate) fn update(
     frames: Res<GameFrames>,
+    step: Option<Res<crate::timing::logical::Step>>,
     keys: Res<ButtonInput<KeyCode>>,
     mut input: ResMut<Input>,
 ) {
+    if step.is_some_and(|step| step.callback) {
+        return;
+    }
     input.advance(frames.frame, &keys);
 }
 

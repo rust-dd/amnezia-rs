@@ -100,7 +100,10 @@ fn observe(world: &mut World) {
         "Morning1.png"
     );
     if world.resource::<crate::teleport::Fade>().busy() {
-        assert!(world.resource::<Transition>().busy());
+        assert!(
+            world.resource::<Transition>().busy()
+                || crate::timing::logical::callback_pending(world)
+        );
         assert_eq!(animation::snapshot(world).cast.unwrap().elapsed, 0);
         let current = screen::snapshot(world);
         let mut probe = world.resource_mut::<Probe>();

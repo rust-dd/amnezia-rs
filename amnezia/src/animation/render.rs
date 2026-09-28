@@ -176,11 +176,16 @@ pub(super) fn fade_flashes(
     transition: crate::transitions::TransitionPause,
     scene: super::scene::Scenes,
     frames: Res<crate::timing::GameFrames>,
+    step: Option<Res<crate::timing::logical::Step>>,
     mut commands: Commands,
     mut flashes: Query<(Entity, &mut FlashQuad, &mut Sprite)>,
 ) {
     for (entity, mut flash, mut sprite) in &mut flashes {
-        let delta = frames.frame.wrapping_sub(flash.last);
+        let delta = if step.as_ref().is_some_and(|step| step.callback) {
+            1
+        } else {
+            frames.frame.wrapping_sub(flash.last)
+        };
         flash.last = frames.frame;
         if transition.paused() || scene.frozen() {
             continue;

@@ -4,6 +4,7 @@ use crate::state::Variables;
 use amnezia_data::{CommonEvent, EventCommand};
 
 mod clocks;
+mod destination;
 mod messages;
 mod music;
 

@@ -3,6 +3,23 @@ use crate::transitions::{Kind, Transition, TransitionIo};
 use bevy::prelude::*;
 
 pub(super) fn drive(world: &mut World) {
+    if world.resource::<Fade>().busy()
+        && world
+            .get_resource::<crate::timing::logical::Step>()
+            .is_some_and(|step| !step.callback)
+    {
+        return;
+    }
+    progress(world);
+}
+
+fn progress(world: &mut World) {
+    if world
+        .get_resource::<crate::shop::inn::State>()
+        .is_some_and(|inn| inn.resting())
+    {
+        return;
+    }
     if world.resource::<Transition>().busy() {
         return;
     }
@@ -100,7 +117,7 @@ pub(super) fn begin_pending(world: &mut World) {
         return;
     }
     world.run_system_cached(begin).unwrap();
-    drive(world);
+    progress(world);
 }
 
 fn begin(

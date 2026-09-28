@@ -2,6 +2,45 @@ use super::*;
 use bevy::ecs::system::RunSystemOnce;
 
 #[test]
+fn callback_audio_delivery_does_not_advance_the_player_fade_clock() {
+    let mut world = World::new();
+    let mut time = Time::<()>::default();
+    time.advance_by(std::time::Duration::from_millis(250));
+    world.insert_resource(time);
+    world.insert_resource(CurrentBgm {
+        fade: Some(BgmFade::fade_out(1.0, 1.0)),
+        ..default()
+    });
+    world.init_resource::<crate::timing::logical::Step>();
+    world
+        .resource_mut::<crate::timing::logical::Step>()
+        .callback = true;
+    world.run_system_once(drive_bgm_fade).unwrap();
+    assert_eq!(
+        world
+            .resource::<CurrentBgm>()
+            .fade
+            .as_ref()
+            .unwrap()
+            .volume(),
+        1.0
+    );
+    world
+        .resource_mut::<crate::timing::logical::Step>()
+        .callback = false;
+    world.run_system_once(drive_bgm_fade).unwrap();
+    assert_eq!(
+        world
+            .resource::<CurrentBgm>()
+            .fade
+            .as_ref()
+            .unwrap()
+            .volume(),
+        0.75
+    );
+}
+
+#[test]
 fn one_pass_music_preserves_the_system_parameters_and_silence_sentinels() {
     let music = MusicDef {
         name: "Inn".into(),

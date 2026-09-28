@@ -61,7 +61,9 @@ struct Probe {
     before: Option<BgmTrack>,
     memorized: Option<BgmTrack>,
     audio: MessageCursor<AudioRequest>,
-    rest_scene: Option<u32>,
+    rest_scene: Option<(u32, u32)>,
+    rest_ticks: u32,
+    callbacks: u32,
     handoffs: u8,
     played: bool,
     ended: bool,
@@ -83,6 +85,8 @@ impl Probe {
             memorized: None,
             audio,
             rest_scene: None,
+            rest_ticks: 0,
+            callbacks: 0,
             handoffs: 0,
             played: false,
             ended: false,
@@ -333,11 +337,13 @@ pub(crate) fn verify_finished(world: &World) {
         "Inn must decode, play and reach its natural end, not the timeout"
     );
     assert_eq!(probe.handoffs, (1 << 2) | (1 << 3) | (1 << 4));
+    assert_eq!(probe.callbacks, 6);
+    assert!(probe.rest_ticks > 0);
     assert_eq!(probe.animation, (1 << 14) - 1);
     assert_eq!(probe.pixels.load(Ordering::Relaxed), 25);
     assert_eq!(world.resource::<crate::state::Variables>().get(9032), 6);
     info!(
-        "inn: six original/compatibility cases, {} state checks, 1920000 reference pixels including fourteen animated frames, one decoded jingle and six exact branch handoffs",
-        probe.checked
+        "inn: six original/compatibility cases, {} state checks, 1920000 reference pixels including fourteen animated frames, one decoded jingle, six exact branch handoffs, {} callback visits and {} resting scene ticks",
+        probe.checked, probe.callbacks, probe.rest_ticks
     );
 }

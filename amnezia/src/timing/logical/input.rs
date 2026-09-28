@@ -16,6 +16,13 @@ impl Buffered {
     }
 
     pub(super) fn take(&mut self) -> ButtonInput<KeyCode> {
+        let keys = self.current();
+        self.pressed.clear();
+        self.released.clear();
+        keys
+    }
+
+    pub(super) fn current(&self) -> ButtonInput<KeyCode> {
         let mut keys = ButtonInput::default();
         for key in self.pressed.iter().chain(&self.released) {
             keys.press(*key);
@@ -41,8 +48,6 @@ impl Buffered {
                 keys.clear_just_released(key);
             }
         }
-        self.pressed.clear();
-        self.released.clear();
         keys
     }
 }

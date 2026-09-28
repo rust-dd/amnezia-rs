@@ -62,6 +62,8 @@ impl Plugin for SmokePlugin {
             crate::teleport::reservation_smoke::configure(app);
         } else if scenario == "normal-transfers" {
             crate::teleport::normal_smoke::configure(app);
+        } else if matches!(scenario, "async-transitions" | "async-inns") {
+            crate::interpreter::continuation::smoke::configure(app);
         }
         app.insert_resource(completion::Completion::new(scenario));
         app.insert_resource(SmokeRun {

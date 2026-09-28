@@ -168,10 +168,14 @@ fn start_bgm(
 /// its target and clears.
 pub(super) fn drive_bgm_fade(
     time: Res<Time>,
+    step: Option<Res<crate::timing::logical::Step>>,
     mut commands: Commands,
     mut current: ResMut<CurrentBgm>,
     mut sinks: Query<&mut AudioSink>,
 ) {
+    if step.is_some_and(|step| step.callback) {
+        return;
+    }
     let Some((volume, finished, stop)) = current.fade.as_mut().map(|fade| {
         let volume = fade.advance(time.delta_secs());
         (volume, fade.finished(), fade.stop_at_end)

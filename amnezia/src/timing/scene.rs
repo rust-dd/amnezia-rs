@@ -33,8 +33,8 @@ impl Waiting<'_> {
         self.transition.paused()
             || self.menu.as_ref().is_some_and(|menu| menu.active())
             || self.shop.as_ref().is_some_and(|shop| shop.active())
-            || self.inn.as_ref().is_some_and(|inn| inn.resting())
-            || self.fade.as_ref().is_some_and(|fade| fade.busy())
+            || (self.fade.as_ref().is_some_and(|fade| fade.busy())
+                && !self.inn.as_ref().is_some_and(|inn| inn.resting()))
             || self
                 .teleport
                 .as_ref()

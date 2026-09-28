@@ -49,6 +49,47 @@ fn a_map_message_reveals_nothing_until_the_seventh_opening_tick() {
 }
 
 #[test]
+fn a_callback_spends_one_owed_window_tick_without_replaying_paused_time() {
+    let mut lifecycle = lifecycle::Lifecycle::default();
+    lifecycle.open();
+    lifecycle.prepare(0, false, true, false, false);
+    for frame in 1..=3 {
+        lifecycle.prepare(frame, false, true, false, false);
+    }
+    let before = lifecycle.message.half_height(80);
+    for frame in 4..=100 {
+        lifecycle.prepare(frame, false, true, false, true);
+        assert_eq!(lifecycle.message.half_height(80), before);
+    }
+    let mut expected = crate::windowskin::motion::Motion::default();
+    expected.open(true);
+    for _ in 0..4 {
+        expected.step();
+    }
+    lifecycle.prepare(100, true, true, false, false);
+    assert_eq!(lifecycle.message.half_height(80), expected.half_height(80));
+    lifecycle.reveal_ticks = None;
+    lifecycle.prepare(100, true, true, false, false);
+    assert_eq!(lifecycle.message.half_height(80), expected.half_height(80));
+    expected.step();
+    lifecycle.prepare(101, false, true, false, false);
+    assert_eq!(lifecycle.message.half_height(80), expected.half_height(80));
+}
+
+#[test]
+fn closing_during_a_callback_does_not_spend_another_tick_in_the_same_visit() {
+    let mut lifecycle = lifecycle::Lifecycle::default();
+    lifecycle.prepare(100, true, true, false, false);
+    lifecycle.message.open(false);
+    lifecycle.close(100);
+    let before = lifecycle.message.half_height(80);
+    lifecycle.prepare(100, true, false, false, false);
+    assert_eq!(lifecycle.message.half_height(80), before);
+    lifecycle.prepare(101, false, false, false, false);
+    assert!(lifecycle.message.half_height(80) < before);
+}
+
+#[test]
 fn closing_owns_all_seven_frames_and_hides_contents_before_releasing_the_map() {
     let mut app = app();
     app.update();

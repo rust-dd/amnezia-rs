@@ -68,6 +68,7 @@ pub(super) fn entered(
 #[allow(clippy::too_many_arguments)]
 pub(super) fn input(
     keys: Res<ButtonInput<KeyCode>>,
+    step: Option<Res<crate::timing::logical::Step>>,
     directions: Res<crate::menu::DirectionInput>,
     location: Res<SaveLocation>,
     title: Res<TitleActive>,
@@ -79,7 +80,11 @@ pub(super) fn input(
     mut audio: MessageWriter<AudioRequest>,
     sounds: Option<Res<SystemSounds>>,
 ) {
-    if !title.0 || state.stage != Stage::Ready || transition.busy() {
+    if !title.0
+        || state.stage != Stage::Ready
+        || transition.busy()
+        || step.is_some_and(|step| step.callback)
+    {
         return;
     }
     let sounds = sounds.as_deref();
