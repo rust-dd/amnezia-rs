@@ -1,9 +1,9 @@
 //! Map transfers share event transitions; occupied vehicle relocation skips them.
 
-use crate::transitions::{Kind, TransitionIo};
 use crate::world::{MapEffectsReset, MapRebuilt};
 use bevy::prelude::*;
 
+mod flow;
 pub(crate) mod normal_smoke;
 pub(crate) mod rebuild;
 pub(crate) mod reservation_smoke;
@@ -20,13 +20,25 @@ use crate::{
 use scene::reposition_hero;
 
 #[derive(Resource, Default)]
-pub struct PendingTeleport(pub Option<(u32, u32, u32)>, bool, Option<(u32, u32, u32)>);
+pub struct PendingTeleport(
+    pub Option<(u32, u32, u32)>,
+    bool,
+    Option<(u32, u32, u32)>,
+    bool,
+);
 
 impl PendingTeleport {
     /// Rebuild the destination even when a save or new game uses the current map.
     pub fn reload(&mut self, map_id: u32, x: u32, y: u32) {
         self.0 = Some((map_id, x, y));
         self.1 = true;
+        self.3 = false;
+    }
+
+    pub(crate) fn reserve(&mut self, target: (u32, u32, u32), foreground: bool) {
+        self.0 = Some(target);
+        self.1 = false;
+        self.3 = foreground;
     }
 
     pub(crate) fn quick(&mut self, map_id: u32, x: u32, y: u32) {
@@ -43,8 +55,9 @@ enum Phase {
     #[default]
     Idle,
     Out,
-    Prepare,
+    Parallel,
     In,
+    Foreground,
 }
 
 /// Map-transfer progress, including rebuilding the scene between transitions.
@@ -53,6 +66,8 @@ pub struct Fade {
     phase: Phase,
     target: Option<(u32, u32, u32)>,
     reload: bool,
+    default_show: bool,
+    foreground: bool,
 }
 
 impl Fade {
@@ -77,12 +92,12 @@ impl Plugin for TeleportPlugin {
             .add_message::<MapEffectsReset>()
             .add_systems(
                 Update,
-                drive_fade
+                flow::drive
                     .in_set(MapTransfer)
                     .before(crate::interpreter::InterpreterStep),
             );
         crate::timing::logical::post(app, || {
-            begin_pending
+            flow::begin_pending
                 .in_set(TransferCommit)
                 .after(crate::panorama::PanoramaAdvance)
         });
@@ -103,82 +118,6 @@ pub(crate) fn flush_quick(world: &mut World) {
     }
     crate::player::relocate_camera(world);
     crate::map_bgm::flush(world);
-}
-
-fn drive_fade(
-    mut transition: TransitionIo,
-    mut pending: ResMut<PendingTeleport>,
-    mut fade: ResMut<Fade>,
-    mut scene: scene::Scene,
-) {
-    if transition.state.busy() {
-        return;
-    }
-    let now = transition.frames.frame;
-    let center = IVec2::new(160, 120);
-    match fade.phase {
-        Phase::Idle => {
-            if pending.reloading() {
-                begin(&mut transition, &mut pending, &mut fade);
-            }
-        }
-        Phase::Out => {
-            if let Some(target) = fade.target.take() {
-                scene.perform(target, fade.reload, false);
-            }
-            fade.phase = Phase::Prepare;
-        }
-        Phase::Prepare => {
-            if !transition.state.event_erased {
-                let kind = if fade.reload {
-                    Kind::Fade
-                } else {
-                    transition.kind(1)
-                };
-                transition.state.start(kind, false, now, center);
-            }
-            fade.phase = Phase::In;
-        }
-        Phase::In => fade.phase = Phase::Idle,
-    }
-}
-
-fn begin_pending(world: &mut World) {
-    if world.resource::<PendingTeleport>().0.is_none()
-        || world
-            .run_system_cached(|scene: crate::world::ScenePause| scene.tail_paused())
-            .unwrap()
-    {
-        return;
-    }
-    world.run_system_cached(start_pending).unwrap();
-}
-
-fn start_pending(
-    mut transition: TransitionIo,
-    mut pending: ResMut<PendingTeleport>,
-    mut fade: ResMut<Fade>,
-) {
-    begin(&mut transition, &mut pending, &mut fade);
-}
-
-fn begin(transition: &mut TransitionIo, pending: &mut PendingTeleport, fade: &mut Fade) {
-    let Some(target) = pending.0.take() else {
-        return;
-    };
-    fade.target = Some(target);
-    fade.reload = std::mem::take(&mut pending.1);
-    let kind = if fade.reload {
-        Kind::Fade
-    } else {
-        transition.kind(0)
-    };
-    if !transition.state.erased() {
-        transition
-            .state
-            .start(kind, true, transition.frames.frame, IVec2::new(160, 120));
-    }
-    fade.phase = Phase::Out;
 }
 
 #[cfg(test)]

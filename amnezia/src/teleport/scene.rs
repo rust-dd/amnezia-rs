@@ -89,6 +89,10 @@ pub(super) fn quick(In(target): In<(u32, u32, u32)>, mut scene: Scene) {
     scene.perform(target, false, true);
 }
 
+pub(super) fn normal(In((target, reload)): In<((u32, u32, u32), bool)>, mut scene: Scene) {
+    scene.perform(target, reload, false);
+}
+
 /// Move the persistent hero to tile `(tile_x, tile_y)` on `data`: update its
 /// logical tile and snap its transform to the tile center. Facing is retained —
 /// the teleport target carries no direction, matching RM2000's "retain heading".

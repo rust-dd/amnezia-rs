@@ -50,12 +50,21 @@ fn prepare(world: &mut World) {
     assert_eq!(world.resource::<MapData>().map_id, 3);
     world.insert_resource(Probe::default());
     let mut variables = world.resource_mut::<Variables>();
-    for id in 4900..4905 {
+    for id in 4900..4909 {
         variables.set(id, 0);
     }
     for (id, value) in [(4910, 3), (4911, 12), (4912, 6)] {
         variables.set(id, value);
     }
+    let mut recursive = vec![
+        command(10220, vec![0, 4913, 4913, 0, 6, 10001, 1]),
+        command(12010, vec![1, 4913, 0, 13, 0]),
+    ];
+    for mut command in [increment(5), command(10810, vec![3, 15, 6]), increment(6)] {
+        command.indent = 1;
+        recursive.push(command);
+    }
+    recursive.extend([command(22011, vec![]), increment(7)]);
     world.resource_mut::<CommonEvents>().0.extend([
         common(
             900,
@@ -68,6 +77,7 @@ fn prepare(world: &mut World) {
             ],
         ),
         common(901, vec![increment(2), command(11410, vec![1000])]),
+        common(902, recursive),
     ]);
     let mut event = world.resource::<MapEvents>().events[0].clone();
     event.id = 900;
@@ -80,10 +90,16 @@ fn prepare(world: &mut World) {
         increment(3),
         command(11410, vec![1000]),
     ];
-    world.resource_mut::<MapEvents>().events.push(event);
+    let mut observer = event.clone();
+    observer.id = 901;
+    observer.pages[0].commands = vec![increment(8)];
+    world
+        .resource_mut::<MapEvents>()
+        .events
+        .extend([event, observer]);
     world
         .resource_mut::<RunningEvent>()
-        .start(7, vec![command(10810, vec![3, 15, 6]), increment(4)]);
+        .start(7, vec![command(10810, vec![3, 13, 6]), increment(4)]);
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -108,7 +124,7 @@ fn observe(
     assert_eq!(&counts[..4], &[1; 4]);
     assert!(pending.0.is_none());
     if let Some(before) = probe.scene {
-        assert_eq!(scene.frame, before + u32::from(counts[4] == 1));
+        assert_eq!(scene.frame, before);
     } else {
         assert!(fade.busy());
         assert!(transition.busy());
@@ -117,13 +133,23 @@ fn observe(
         probe.scene = Some(scene.frame);
         probe.started = raw.frame;
     }
+    let hero = hero.single().unwrap();
+    let arrived = variables.get(4905) == 1;
+    let destination = std::array::from_fn::<_, 4, _>(|index| variables.get(4905 + index as u32));
+    assert_eq!(
+        destination,
+        if arrived { [1, 1, 3, 3] } else { [0, 0, 1, 1] }
+    );
+    assert_ne!(
+        hero.tile_x, 13,
+        "the intermediate destination must never be drawn"
+    );
     probe.checks += 1;
     if counts[4] == 1 {
         assert!(!fade.busy());
         assert!(!transition.busy());
         assert!(raw.frame.wrapping_sub(probe.started) >= 70);
         assert_eq!(map.map_id, 3);
-        let hero = hero.single().unwrap();
         assert_eq!((hero.tile_x, hero.tile_y), (15, 6));
         probe.finished = true;
     } else {
@@ -148,7 +174,7 @@ pub(crate) fn verify_finished(world: &World) {
     assert!(probe.finished && probe.captured);
     assert!(probe.checks >= 70);
     info!(
-        "reserved transfers: {} ordered states, all old-map owners, recall tail, final target and scene clock verified",
+        "reserved transfers: {} ordered states, old-map owners, recall tail, recursive destination visits and foreground continuation verified",
         probe.checks
     );
 }

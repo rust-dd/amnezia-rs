@@ -18,6 +18,18 @@ pub(crate) fn begin(world: &mut World) {
     }
 }
 
+pub(crate) fn begin_destination(world: &mut World) {
+    let events = world
+        .query_filtered::<Entity, With<EventSprite>>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    if let Some(mut updates) = world.get_resource_mut::<CharacterUpdates>() {
+        for event in events {
+            updates.processed.remove(&event);
+        }
+    }
+}
+
 pub(crate) fn claim(world: &mut World, entity: Entity) -> bool {
     world
         .get_resource_mut::<CharacterUpdates>()

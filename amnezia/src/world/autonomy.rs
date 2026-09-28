@@ -25,6 +25,7 @@ use bevy::prelude::*;
 /// Shared movement gates for scenes, foreground events and input prompts.
 #[derive(SystemParam)]
 pub(crate) struct MoveGuards<'w> {
+    destination: Option<Res<'w, crate::interpreter::destination::Visit>>,
     transition: Option<Res<'w, crate::transitions::Transition>>,
     frame: Option<Res<'w, crate::timing::SceneWait>>,
     continuation: Option<Res<'w, crate::interpreter::continuation::Continuation>>,
@@ -76,8 +77,8 @@ impl MoveGuards<'_> {
     /// `IsMoveRouteOverwritten` short-circuits the interpreter/message stop gate), so
     /// cutscene movement (the intro walking the hero in) plays while the event runs.
     pub(crate) fn forced_route_paused(&self) -> bool {
-        let waiting = self.frame.as_ref().is_some_and(|wait| wait.0);
-        self.fade.busy()
+        let waiting = self.destination.is_none() && self.frame.as_ref().is_some_and(|wait| wait.0);
+        (self.destination.is_none() && self.fade.busy())
             || self
                 .continuation
                 .as_ref()

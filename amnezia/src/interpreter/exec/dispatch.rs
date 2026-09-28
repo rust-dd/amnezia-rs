@@ -136,7 +136,8 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
         }
         TELEPORT => {
             if let [map, tx, ty, ..] = command.params.as_slice() {
-                x.pending.0 = Some((*map as u32, *tx as u32, *ty as u32));
+                x.pending
+                    .reserve((*map as u32, *tx as u32, *ty as u32), !frame.parallel);
             }
             frame.ip += 1;
             // RM2000 parallel pages execute their trailing commands before the map unloads.
@@ -286,7 +287,8 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                     x.variables.get(*vy as u32),
                 );
                 if map > 0 && mx >= 0 && my >= 0 {
-                    x.pending.0 = Some((map as u32, mx as u32, my as u32));
+                    x.pending
+                        .reserve((map as u32, mx as u32, my as u32), !frame.parallel);
                 }
             }
             frame.ip += 1;

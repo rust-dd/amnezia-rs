@@ -5,6 +5,10 @@ use crate::world::{EventSprite, MapEvents, MapScene, saved};
 struct Fixture {
     slot: super::smoke_slot::Slot,
     saved: Vec<saved::EventState>,
+    after_preupdate: Option<Vec<saved::EventState>>,
+    awaiting_restore: bool,
+    expected_position: Vec2,
+    expected_stop: u32,
     legacy: String,
     held: u32,
     checks: u8,
@@ -15,10 +19,79 @@ pub(crate) fn configure(app: &mut App) {
     app.insert_resource(Fixture {
         slot,
         saved: Vec::new(),
+        after_preupdate: None,
+        awaiting_restore: false,
+        expected_position: Vec2::ZERO,
+        expected_stop: 0,
         legacy: String::new(),
         held: 0,
         checks: 0,
     });
+    crate::teleport::rebuild::register(
+        app,
+        crate::teleport::rebuild::Stage::State,
+        observe_restore,
+    );
+}
+
+fn observe_restore(
+    mut rebuilt: MessageReader<crate::world::MapRebuilt>,
+    capture: saved::Capture,
+    data: Res<crate::world::MapData>,
+    pending: Option<Res<saved::Pending>>,
+    outcome: Res<LoadOutcome>,
+    mut fixture: ResMut<Fixture>,
+    events: Query<(
+        &EventSprite,
+        &crate::world::MoveQueue,
+        &crate::world::RouteStepper,
+    )>,
+) {
+    if rebuilt.read().count() == 0 || !fixture.awaiting_restore {
+        return;
+    }
+    assert!(pending.is_none());
+    assert_eq!(outcome.0, Some(true));
+    assert_eq!(capture.snapshot(), fixture.saved);
+    let (event, queue, route) = events.iter().find(|(event, ..)| event.id == 1).unwrap();
+    assert_eq!(route.speed(), 1);
+    assert_eq!(route.direction(event), crate::tiles::DIR_RIGHT);
+    assert!(queue.busy() && !queue.jumping());
+    fixture.expected_position = queue.subpixel_position(event, &data) + Vec2::new(0.25, 0.0);
+    let (_, queue, route) = events.iter().find(|(event, ..)| event.id == 2).unwrap();
+    assert!(!queue.busy() && !route.forced());
+    fixture.expected_stop = route.stop_count() + 1;
+    fixture.awaiting_restore = false;
+    fixture.checks |= 16;
+}
+
+fn verify_preupdate(world: &mut World) {
+    assert_eq!(world.resource::<Fixture>().checks & 16, 16);
+    let current = saved::snapshot(world);
+    if let Some(expected) = &world.resource::<Fixture>().after_preupdate {
+        assert_eq!(&current, expected);
+        return;
+    }
+    let mut events = world.query::<(
+        &EventSprite,
+        &crate::world::MoveQueue,
+        &crate::world::RouteStepper,
+    )>();
+    let (event, queue, _) = events
+        .iter(world)
+        .find(|(event, ..)| event.id == 1)
+        .unwrap();
+    let position = queue.subpixel_position(event, world.resource::<crate::world::MapData>());
+    assert_eq!(position, world.resource::<Fixture>().expected_position);
+    let (_, _, route) = events
+        .iter(world)
+        .find(|(event, ..)| event.id == 2)
+        .unwrap();
+    assert_eq!(
+        route.stop_count(),
+        world.resource::<Fixture>().expected_stop
+    );
+    world.resource_mut::<Fixture>().after_preupdate = Some(current);
 }
 
 fn start(world: &mut World, code: u32, params: Vec<i32>) {
@@ -61,7 +134,7 @@ fn restored(world: &mut World, frame: u32) -> Option<&'static str> {
     }
     assert_eq!(world.resource::<LoadOutcome>().0, Some(true));
     if world.resource::<Fade>().busy() {
-        assert_eq!(saved::snapshot(world), world.resource::<Fixture>().saved);
+        verify_preupdate(world);
         black_stage(world);
         let mut fixture = world.resource_mut::<Fixture>();
         fixture.held += 1;
@@ -114,7 +187,11 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             assert_eq!(game.map_events, world.resource::<Fixture>().saved);
         }
         305 => start(world, 10860, vec![1, 0, 8, 9]),
-        330 | 640 => world.resource_mut::<LoadRequest>().0 = true,
+        330 => {
+            world.resource_mut::<Fixture>().awaiting_restore = true;
+            world.resource_mut::<LoadRequest>().0 = true;
+        }
+        640 => world.resource_mut::<LoadRequest>().0 = true,
         570 => {
             let (event, queue, route) = world
                 .query::<(
@@ -174,9 +251,9 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 pub(crate) fn verify_finished(world: &mut World) {
     saved::smoke::verify_finished(world);
     let fixture = world.remove_resource::<Fixture>().unwrap();
-    assert_eq!(fixture.checks, 15);
+    assert_eq!(fixture.checks, 31);
     fixture.slot.finish(world);
     info!(
-        "saved NPCs: exact rebuilt state, paused and resumed motion, route completion and legacy defaults verified"
+        "saved NPCs: exact restored state, one destination update, frozen fade, resumed routes and legacy defaults verified"
     );
 }

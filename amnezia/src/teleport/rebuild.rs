@@ -7,6 +7,7 @@ struct MapRestoration;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) enum Stage {
+    Arrival,
     Reset,
     Characters,
     State,
@@ -30,6 +31,7 @@ impl Plugin for RebuildPlugin {
             .configure_sets(
                 MapRestoration,
                 (
+                    Stage::Arrival,
                     Stage::Reset,
                     Stage::Characters,
                     Stage::State,

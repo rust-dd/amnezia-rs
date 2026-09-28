@@ -33,6 +33,7 @@ use bevy::prelude::*;
 /// mutably for the `ReturnToTitle` opcode.
 #[derive(SystemParam)]
 pub(super) struct Blockers<'w> {
+    destination: Option<Res<'w, super::destination::Visit>>,
     menu: Res<'w, MenuOpen>,
     shop: Res<'w, ShopOpen>,
     battle: Res<'w, BattleActive>,
@@ -43,12 +44,16 @@ pub(super) struct Blockers<'w> {
 }
 
 impl Blockers<'_> {
+    pub(super) fn fade_busy(&self, fade: &crate::teleport::Fade) -> bool {
+        self.destination.is_none() && fade.busy()
+    }
+
     pub(super) fn battle_active(&self) -> bool {
         self.battle.0
     }
 
     pub(super) fn any(&self) -> bool {
-        let waiting = self.frame.as_ref().is_some_and(|v| v.0);
+        let waiting = self.destination.is_none() && self.frame.as_ref().is_some_and(|v| v.0);
         self.menu.0
             || self.shop.0
             || self.battle.0

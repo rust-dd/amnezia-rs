@@ -1,5 +1,6 @@
 use super::*;
 
+mod destination;
 mod reservations;
 
 #[test]

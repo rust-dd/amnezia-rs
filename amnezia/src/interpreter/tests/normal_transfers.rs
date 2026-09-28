@@ -41,8 +41,10 @@ fn arrive(app: &mut App, map: u32, reload: bool) {
         app.world_mut().resource_mut::<PendingTeleport>().0 = Some((map, 7, 6));
     }
     app.update();
-    app.world_mut().resource_mut::<GameFrames>().frame += 35;
-    app.update();
+    if reload {
+        app.world_mut().resource_mut::<GameFrames>().frame += 35;
+        app.update();
+    }
     assert_eq!(app.world().resource::<MapData>().map_id, map);
     assert!(app.world().resource::<Fade>().busy());
 }

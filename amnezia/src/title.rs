@@ -67,6 +67,11 @@ pub(crate) struct TitleFlow;
 impl Plugin for TitlePlugin {
     fn build(&self, app: &mut App) {
         view::register(app);
+        crate::teleport::rebuild::register(
+            app,
+            crate::teleport::rebuild::Stage::Arrival,
+            flow::loaded,
+        );
         app.init_resource::<TitleActive>()
             .init_resource::<TitleState>()
             .init_resource::<crate::menu::DirectionInput>()
@@ -77,7 +82,6 @@ impl Plugin for TitlePlugin {
                 Update,
                 (
                     flow::entered,
-                    flow::loaded,
                     view::clock::tick,
                     flow::input,
                     flow::drive,

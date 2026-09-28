@@ -17,6 +17,7 @@ mod branch;
 mod commands;
 pub(crate) mod continuation;
 mod control_vars;
+pub(crate) mod destination;
 mod driver;
 mod event_rng;
 mod exec;
@@ -109,7 +110,8 @@ pub(crate) struct ParallelStep;
 impl Plugin for InterpreterPlugin {
     fn build(&self, app: &mut App) {
         scenes::register(app);
-        app.init_resource::<RunningEvent>()
+        app.insert_resource(destination::Enabled)
+            .init_resource::<RunningEvent>()
             .init_resource::<continuation::Continuation>()
             .init_resource::<foreground::Inbox>()
             .add_message::<foreground::UnpauseEvent>()

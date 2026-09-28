@@ -79,8 +79,12 @@ pub(crate) fn start_free(world: &mut World) {
 
 pub(super) fn register(app: &mut App) {
     register_flow(app);
-    app.add_systems(Startup, view::spawn)
-        .add_systems(Update, view::update.after(crate::dialogue::DialogueView));
+    app.add_systems(Startup, view::spawn);
+    crate::dialogue::presentation::register(
+        app,
+        crate::dialogue::presentation::Stage::Inn,
+        view::update,
+    );
 }
 
 fn register_flow(app: &mut App) {
@@ -93,7 +97,9 @@ fn register_flow(app: &mut App) {
         )
         .add_systems(
             Update,
-            flow::advance.before(crate::interpreter::ParallelStep),
+            flow::advance
+                .before(crate::teleport::MapTransfer)
+                .before(crate::interpreter::ParallelStep),
         )
         .add_systems(
             Update,

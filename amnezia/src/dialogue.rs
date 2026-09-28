@@ -17,6 +17,7 @@ mod lifecycle;
 mod lifecycle_tests;
 mod options;
 mod pause;
+pub(crate) mod presentation;
 pub(crate) mod saved;
 #[cfg(test)]
 pub(crate) mod testing;
@@ -250,6 +251,7 @@ impl Plugin for DialoguePlugin {
         InputPrompts::register(app);
         action::register(app);
         view::prompts::register(app);
+        presentation::register_windows(app);
         app.init_resource::<Dialogue>()
             .init_resource::<crate::timing::GameFrames>()
             .init_resource::<MessageOptions>()
@@ -274,20 +276,6 @@ impl Plugin for DialoguePlugin {
                 )
                     .chain()
                     .in_set(MessageUpdate),
-            )
-            .add_systems(
-                Update,
-                (
-                    view::render_box,
-                    view::target_camera,
-                    view::render_reveal,
-                    view::prompts::render_cursor,
-                    view::update_position,
-                    view::motion::render,
-                )
-                    .chain()
-                    .in_set(DialogueView)
-                    .after(crate::interpreter::InterpreterStep),
             );
     }
 }

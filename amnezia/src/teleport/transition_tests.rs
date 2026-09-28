@@ -1,6 +1,6 @@
 use super::*;
 use crate::timing::GameFrames;
-use crate::transitions::{Defaults, Settings, Transition, TransitionPlugin};
+use crate::transitions::{Defaults, Kind, Settings, Transition, TransitionPlugin};
 
 fn app() -> (App, Entity) {
     let mut app = App::new();
@@ -54,12 +54,9 @@ fn none_out_and_cut_in_reposition_without_a_black_fade() {
     settings.change(&[1, 19], &defaults);
     app.world_mut().resource_mut::<PendingTeleport>().0 = Some((3, 4, 6));
     tick(&mut app, 0);
-    assert!(!app.world().resource::<Transition>().busy());
-    assert!(!app.world().resource::<Transition>().erased());
-    tick(&mut app, 0);
     let player = app.world().get::<Player>(hero).unwrap();
     assert_eq!((player.tile_x, player.tile_y), (4, 6));
-    tick(&mut app, 0);
+    assert!(!app.world().resource::<Transition>().erased());
     assert!(app.world().resource::<Transition>().busy());
     tick(&mut app, 1);
     assert!(!app.world().resource::<Fade>().busy());
@@ -94,11 +91,11 @@ fn default_transfer_swaps_only_after_erase_then_waits_for_show() {
     assert_eq!(app.world().get::<Player>(hero).unwrap().tile_x, 1);
     tick(&mut app, 35);
     assert_eq!(app.world().get::<Player>(hero).unwrap().tile_x, 8);
-    assert!(app.world().resource::<Transition>().erased());
-    tick(&mut app, 36);
-    tick(&mut app, 70);
+    assert!(app.world().resource::<Transition>().busy());
+    assert_eq!(app.world().resource::<Transition>().age(), 0);
+    tick(&mut app, 69);
     assert!(app.world().resource::<Fade>().busy());
-    tick(&mut app, 71);
+    tick(&mut app, 70);
     assert!(!app.world().resource::<Fade>().busy());
     assert!(!app.world().resource::<Transition>().erased());
 }

@@ -107,6 +107,16 @@ impl Frame {
 }
 
 fn commit(world: &mut World) {
+    commit_pending(world, false);
+}
+
+pub(crate) fn after_transfer(world: &mut World) {
+    if world.contains_resource::<Requests>() {
+        commit_pending(world, true);
+    }
+}
+
+fn commit_pending(world: &mut World, after_transfer: bool) {
     cancel_replaced(world);
     if world
         .get_resource::<crate::title::TitleActive>()
@@ -117,7 +127,7 @@ fn commit(world: &mut World) {
         }
         return;
     }
-    if suspended(world) {
+    if suspended(world, after_transfer) {
         return;
     }
     let Some(call) = world.resource_mut::<Requests>().pending.take() else {
@@ -139,10 +149,11 @@ fn commit(world: &mut World) {
     }
 }
 
-fn suspended(world: &World) -> bool {
-    let waiting = world
-        .get_resource::<crate::timing::SceneWait>()
-        .is_some_and(|wait| wait.0);
+fn suspended(world: &World, after_transfer: bool) -> bool {
+    let waiting = !after_transfer
+        && world
+            .get_resource::<crate::timing::SceneWait>()
+            .is_some_and(|wait| wait.0);
     world
         .get_resource::<crate::teleport::PendingTeleport>()
         .is_some_and(|pending| pending.0.is_some())

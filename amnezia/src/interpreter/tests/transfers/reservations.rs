@@ -94,13 +94,21 @@ fn the_last_transfer_reserved_by_the_old_map_wins() {
         1,
         4,
         0,
-        vec![cmd(10810, 0, vec![3, 1, 2]), increment(1)],
+        vec![
+            cmd(10810, 0, vec![3, 1, 2]),
+            increment(1),
+            cmd(11410, 0, vec![100]),
+        ],
     )]));
     app.insert_resource(MapEvents {
         events: vec![map_event(
             1,
             4,
-            vec![cmd(10810, 0, vec![3, 4, 5]), increment(2)],
+            vec![
+                cmd(10810, 0, vec![3, 4, 5]),
+                increment(2),
+                cmd(11410, 0, vec![100]),
+            ],
         )],
     });
     app.world_mut()
@@ -127,6 +135,7 @@ fn a_reserved_transfer_waits_for_the_whole_asynchronous_map_visit_to_resume() {
                 cmd(10810, 0, vec![3, 7, 8]),
                 cmd(11010, 0, vec![0]),
                 increment(1),
+                cmd(11410, 0, vec![100]),
             ],
         ),
         common(2, 4, 0, vec![increment(2)]),
@@ -138,8 +147,13 @@ fn a_reserved_transfer_waits_for_the_whole_asynchronous_map_visit_to_resume() {
     assert!(!app.world().resource::<Fade>().busy());
     assert_eq!(counts(&app), [0; 4]);
     tick(&mut app, 35);
-    assert_eq!(counts(&app), [1, 1, 1, 0]);
-    assert!(app.world().resource::<Fade>().busy());
+    assert_eq!(counts(&app), [1, 2, 1, 0]);
+    assert!(!app.world().resource::<Fade>().busy());
+    assert!(app.world().resource::<Transition>().erased());
+    assert!(app.world().resource::<Transition>().event_erased);
+    let world = app.world_mut();
+    let hero = world.query::<&Player>().single(world).unwrap();
+    assert_eq!((hero.tile_x, hero.tile_y), (7, 8));
     assert!(app.world().resource::<PendingTeleport>().0.is_none());
 }
 
@@ -155,7 +169,7 @@ fn a_later_scene_request_waits_for_the_reserved_transfer() {
     app.world_mut()
         .resource_mut::<RunningEvent>()
         .start(7, vec![cmd(11910, 0, vec![])]);
-    for frame in [0, 35, 36, 70] {
+    for frame in [0, 35, 36, 69] {
         tick(&mut app, frame);
         assert!(!app.world().resource::<EventSaveRequest>().0);
         assert!(
@@ -164,7 +178,7 @@ fn a_later_scene_request_waits_for_the_reserved_transfer() {
                 .pending()
         );
     }
-    tick(&mut app, 71);
+    tick(&mut app, 70);
     assert!(app.world().resource::<EventSaveRequest>().0);
 }
 

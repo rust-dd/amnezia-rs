@@ -122,7 +122,7 @@ fn step_foreground(
     if std::mem::take(&mut running.fresh) && !blockers.battle_active() {
         exec.begin_map_event();
     }
-    let scene_blocked = exec.scene_owns_flow(fade.busy(), blockers.any());
+    let scene_blocked = exec.scene_owns_flow(blockers.fade_busy(&fade), blockers.any());
     let base_id = running.frame.base_event_id();
     let outcome = run_operation(
         operation,

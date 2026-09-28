@@ -117,7 +117,7 @@ pub(super) fn select_next(
     mut running: ResMut<RunningEvent>,
     mut exec: Exec,
 ) -> bool {
-    if exec.scene_paused(fade.busy(), blockers.any()) {
+    if exec.scene_paused(blockers.fade_busy(&fade), blockers.any()) {
         return false;
     }
     let common = common

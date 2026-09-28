@@ -30,7 +30,11 @@ pub(super) fn run(world: &mut World) {
         return;
     }
     if resume.is_none() {
-        crate::world::update::begin(world);
+        if world.contains_resource::<crate::interpreter::destination::Visit>() {
+            crate::world::update::begin_destination(world);
+        } else {
+            crate::world::update::begin(world);
+        }
     }
     let mut ids = world
         .resource::<CommonEvents>()
@@ -135,7 +139,7 @@ fn step(
         pool.discard_changed_pages(&exec);
     }
     discard_orphaned_results(&pool, &foreground.frame, &mut exec);
-    if exec.scene_paused(fade.busy(), blockers.any()) {
+    if exec.scene_paused(blockers.fade_busy(&fade), blockers.any()) {
         return Progress::Paused;
     }
     let source = match phase {

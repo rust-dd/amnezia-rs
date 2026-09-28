@@ -3,6 +3,7 @@ use bevy::prelude::*;
 
 #[derive(SystemParam)]
 pub(crate) struct ScenePause<'w> {
+    destination: Option<Res<'w, crate::interpreter::destination::Visit>>,
     transition: Option<Res<'w, crate::transitions::Transition>>,
     frame: Option<Res<'w, crate::timing::SceneWait>>,
     continuation: Option<Res<'w, crate::interpreter::continuation::Continuation>>,
@@ -29,7 +30,7 @@ impl ScenePause<'_> {
     }
 
     fn characters_paused(&self) -> bool {
-        let waiting = self.frame.as_ref().is_some_and(|v| v.0);
+        let waiting = self.destination.is_none() && self.frame.as_ref().is_some_and(|v| v.0);
         self.continuation
             .as_ref()
             .map_or(waiting, |state| state.characters_paused(waiting))
@@ -67,7 +68,7 @@ impl ScenePause<'_> {
     }
 
     fn blocked(&self) -> bool {
-        self.fade.as_ref().is_some_and(|v| v.busy())
+        (self.destination.is_none() && self.fade.as_ref().is_some_and(|v| v.busy()))
             || self.menu_flow.as_ref().is_some_and(|v| v.blocks_map())
             || self.shop_flow.as_ref().is_some_and(|v| v.active())
             || self.transition.as_ref().is_some_and(|v| v.busy())

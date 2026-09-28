@@ -133,6 +133,10 @@ pub(super) fn complete_parallel(world: &mut World) {
     }
 }
 
+pub(super) fn finish_destination(world: &mut World) {
+    world.resource_mut::<Continuation>().pass = Pass::Fresh;
+}
+
 pub(super) fn suspend(world: &mut World, owner: Owner, remaining: usize, op: AsyncOp) -> bool {
     let (wait, busy) = match op {
         AsyncOp::Transition { .. } => {
@@ -173,7 +177,11 @@ pub(crate) fn suspend_message(world: &mut World) {
     state.pass = Pass::Waiting;
 }
 
-fn apply(In(op): In<AsyncOp>, mut transitions: crate::transitions::TransitionIo) {
+fn apply(
+    In(op): In<AsyncOp>,
+    mut transitions: crate::transitions::TransitionIo,
+    destination: Option<Res<super::destination::Visit>>,
+) {
     match op {
         AsyncOp::Inn => unreachable!(),
         AsyncOp::Transition {
@@ -181,7 +189,10 @@ fn apply(In(op): In<AsyncOp>, mut transitions: crate::transitions::TransitionIo)
             erase,
             center,
         } => {
-            transitions.event(kind, erase, center);
+            let was_erased = transitions.state.event_erased;
+            if transitions.event(kind, erase, center) && erase && destination.is_some() {
+                transitions.state.event_erased = was_erased;
+            }
         }
     }
 }
