@@ -5,6 +5,9 @@ use bevy::prelude::*;
 
 mod flow;
 pub(crate) mod normal_smoke;
+mod presentation;
+#[cfg(test)]
+mod presentation_tests;
 pub(crate) mod rebuild;
 pub(crate) mod reservation_smoke;
 mod scene;

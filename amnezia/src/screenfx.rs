@@ -204,7 +204,7 @@ impl Plugin for ScreenFxPlugin {
                     .before(ScreenEffectsSet)
                     .before(crate::animation::AnimationSet::Start),
             )
-            .add_systems(Update, flash::channel::receive.in_set(ScreenEffectsSet))
+            .add_systems(Update, apply_pending.in_set(ScreenEffectsSet))
             .add_systems(
                 PostUpdate,
                 flash::channel::paint
@@ -219,6 +219,16 @@ impl Plugin for ScreenFxPlugin {
                 .before(crate::animation::AnimationSet::Advance)
                 .before(crate::interpreter::InterpreterStep),
         );
+    }
+}
+
+pub(crate) fn apply_pending(world: &mut World) {
+    if world.contains_resource::<flash::channel::Inbox>() && world.contains_resource::<Fx>() {
+        world.run_system_cached(flash::channel::receive).unwrap();
+        world.run_system_cached(apply_camera_shake).unwrap();
+    }
+    if world.contains_resource::<tone::Inbox>() && world.contains_resource::<TintState>() {
+        world.run_system_cached(tone::receive_tone).unwrap();
     }
 }
 
@@ -262,6 +272,7 @@ fn apply_effect(fx: &mut Fx, effect: &ScreenEffect) {
         }
         ScreenEffect::Shake { power, speed, secs } => {
             fx.shake.start(power, speed, secs);
+            fx.shake_offset = Vec2::new(fx.shake.position(), 0.0);
         }
     }
 }

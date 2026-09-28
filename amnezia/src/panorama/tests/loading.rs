@@ -127,6 +127,61 @@ fn an_uncached_original_background_stays_alive_until_it_can_spawn_visible_tiles(
 }
 
 #[test]
+fn destination_preparation_owns_the_image_before_tiles_exist_and_replaces_stale_requests() {
+    let mut app = app();
+    assert!(app.world().resource::<BackgroundImage>().image().is_none());
+    prepare(app.world_mut());
+    let first = app
+        .world()
+        .resource::<BackgroundImage>()
+        .image()
+        .unwrap()
+        .clone();
+    assert_eq!(first.path().unwrap().path().file_name().unwrap(), "Sky.png");
+    assert_eq!(
+        app.world_mut()
+            .query::<&PanoramaTile>()
+            .iter(app.world())
+            .count(),
+        0
+    );
+    prepare(app.world_mut());
+    assert_eq!(
+        app.world().resource::<BackgroundImage>().image(),
+        Some(&first)
+    );
+    change(&mut app, "Morning1", &[1, 1, 0, 0, 0, 0]);
+    prepare(app.world_mut());
+    let next = app.world().resource::<BackgroundImage>().image().unwrap();
+    assert_ne!(next, &first);
+    assert_eq!(
+        next.path().unwrap().path().file_name().unwrap(),
+        "Morning1.png"
+    );
+    app.world_mut().resource_mut::<MapData>().panorama = None;
+    change(&mut app, "", &[0; 6]);
+    prepare(app.world_mut());
+    assert!(app.world().resource::<BackgroundImage>().image().is_none());
+}
+
+#[test]
+fn destination_preparation_initializes_backgrounds_without_spending_the_map_tick() {
+    let mut app = loaded_without_tiles();
+    change(&mut app, "Sky", &[1, 1, 1, -1, 1, 1]);
+    let before = app.world().resource::<Panorama>().clone();
+    app.world_mut()
+        .resource_mut::<Time>()
+        .advance_by(Duration::from_secs(1));
+    for _ in 0..3 {
+        prepare(app.world_mut());
+        assert_eq!(*app.world().resource::<Panorama>(), before);
+    }
+    advance(app.world_mut());
+    assert_eq!(app.world().resource::<Panorama>().clock.frame, 60);
+    assert_ne!(*app.world().resource::<Panorama>(), before);
+}
+
+#[test]
 fn a_loaded_background_is_tiled_at_the_right_position_on_its_first_visible_frame() {
     let mut app = loaded_without_tiles();
     let world = app.world_mut();

@@ -60,6 +60,8 @@ impl Plugin for SmokePlugin {
             crate::save::animation_smoke::configure(app);
         } else if scenario == "reserved-transfers" {
             crate::teleport::reservation_smoke::configure(app);
+        } else if scenario == "normal-transfers" {
+            crate::teleport::normal_smoke::configure(app);
         }
         app.insert_resource(completion::Completion::new(scenario));
         app.insert_resource(SmokeRun {

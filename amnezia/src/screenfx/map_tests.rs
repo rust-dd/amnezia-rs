@@ -104,6 +104,32 @@ fn relocation_and_the_scheduled_projection_apply_camera_shake_only_once() {
 }
 
 #[test]
+fn a_stop_command_removes_the_current_shake_before_a_snapshot_without_aging_the_flash() {
+    let mut app = app();
+    let camera = app
+        .world_mut()
+        .spawn((MainCamera, Transform::default()))
+        .id();
+    crate::player::relocate_camera(app.world_mut());
+    assert_ne!(
+        app.world().get::<Transform>(camera).unwrap().translation.x,
+        0.0
+    );
+    let flash = app.world().resource::<Fx>().flash.clone();
+    app.world_mut()
+        .write_message(ScreenEffect::shake(&[0, 0, 0, 0]));
+    for _ in 0..3 {
+        apply_pending(app.world_mut());
+        assert_eq!(app.world().resource::<Fx>().shake_offset, Vec2::ZERO);
+        assert_eq!(
+            app.world().get::<Transform>(camera).unwrap().translation.x,
+            0.0
+        );
+        assert_eq!(app.world().resource::<Fx>().flash, flash);
+    }
+}
+
+#[test]
 fn rebuilt_maps_clear_the_old_flash_but_keep_tone_and_shake() {
     for (map_id, reload) in [(2, false), (3, true)] {
         let mut app = app();

@@ -13,7 +13,28 @@ use std::sync::{
 use std::time::Duration;
 
 mod pixels;
-pub(crate) use pixels::snapshot;
+mod pregraphics;
+pub(crate) use pregraphics::configure;
+
+pub(crate) enum Snapshot {
+    Closing(pixels::Snapshot),
+    Destination(pregraphics::Snapshot),
+}
+
+pub(crate) fn snapshot(world: &World, label: &str) -> Option<Snapshot> {
+    pixels::snapshot(world, label)
+        .map(Snapshot::Closing)
+        .or_else(|| pregraphics::snapshot(world, label).map(Snapshot::Destination))
+}
+
+impl Snapshot {
+    pub(crate) fn verify(&self, image: &Image) {
+        match self {
+            Self::Closing(snapshot) => snapshot.verify(image),
+            Self::Destination(snapshot) => snapshot.verify(image),
+        }
+    }
+}
 
 #[derive(Resource)]
 struct Probe {
@@ -120,6 +141,9 @@ fn start(world: &mut World, case: u32) {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    if let Some(label) = pregraphics::drive(world, frame) {
+        return Some(label);
+    }
     if frame == 300 {
         let black = world
             .spawn((
@@ -233,6 +257,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 }
 
 pub(crate) fn verify_finished(world: &World) {
+    pregraphics::verify_finished(world);
     let probe = world.resource::<Probe>();
     assert_eq!(probe.completed, 15);
     assert_eq!(probe.checks, 116);

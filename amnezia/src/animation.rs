@@ -31,6 +31,7 @@ use render::{FlashStamp, fade_flashes, spawn_screen_flash};
 pub(crate) use map::flash_smoke as map_flash_smoke;
 pub(crate) use map::smoke as map_smoke;
 pub(crate) use playback::AnimationSet;
+pub(crate) mod start;
 pub(crate) use playback::reset_transient;
 pub(crate) use playback::saved;
 pub(crate) use render::flash_power_level;
@@ -164,6 +165,7 @@ impl Plugin for AnimationPlugin {
         map::flash::register(app);
         scene::register(app);
         saved::register(app);
+        start::register(app);
         crate::teleport::rebuild::register(
             app,
             crate::teleport::rebuild::Stage::Reset,
@@ -187,14 +189,8 @@ impl Plugin for AnimationPlugin {
                         .in_set(AnimationSet::Advance)
                         .before(crate::interpreter::InterpreterStep)
                         .after(crate::teleport::MapTransfer),
-                    (
-                        resolve_map_animation,
-                        debug_preview,
-                        start_animations,
-                        track_active_animations,
-                    )
-                        .chain()
-                        .in_set(AnimationSet::Start)
+                    debug_preview
+                        .before(AnimationSet::Start)
                         .after(crate::interpreter::InterpreterStep)
                         .after(AnimationSet::Advance),
                 ),

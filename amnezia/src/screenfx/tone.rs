@@ -117,7 +117,7 @@ pub(super) fn update_tone(
     }
 }
 
-fn receive_tone(
+pub(super) fn receive_tone(
     effects: Res<Messages<ScreenEffect>>,
     mut inbox: ResMut<Inbox>,
     mut state: ResMut<TintState>,

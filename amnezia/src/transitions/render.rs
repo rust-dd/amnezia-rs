@@ -117,6 +117,7 @@ struct PendingGraphics<'w, 's> {
     custom: Query<'w, 's, &'static super::SnapshotImage>,
     ui: Query<'w, 's, &'static ImageNode>,
     fonts: Query<'w, 's, &'static TextFont>,
+    panorama: Option<Res<'w, crate::panorama::BackgroundImage>>,
 }
 
 impl PendingGraphics<'_, '_> {
@@ -129,7 +130,11 @@ impl PendingGraphics<'_, '_> {
                 )
             })
         };
-        self.sprites
+        self.panorama
+            .as_ref()
+            .and_then(|panorama| panorama.image())
+            .is_some_and(|image| waiting(image.id().untyped()))
+            || self.sprites
             .iter()
             .any(|sprite| waiting(sprite.image.id().untyped()))
             || self

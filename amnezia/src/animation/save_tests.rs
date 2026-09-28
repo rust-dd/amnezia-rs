@@ -36,27 +36,17 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
         .add_systems(Startup, cells::setup_mesh)
         .add_systems(
             Update,
-            (
-                (fade_flashes, step_animations, track_active_animations)
-                    .chain()
-                    .in_set(AnimationSet::Advance)
-                    .after(crate::teleport::MapTransfer),
-                (
-                    resolve_map_animation,
-                    start_animations,
-                    track_active_animations,
-                )
-                    .chain()
-                    .in_set(AnimationSet::Start)
-                    .after(crate::interpreter::InterpreterStep)
-                    .after(AnimationSet::Advance),
-            ),
+            ((fade_flashes, step_animations, track_active_animations)
+                .chain()
+                .in_set(AnimationSet::Advance)
+                .after(crate::teleport::MapTransfer),),
         )
         .add_systems(
             PostUpdate,
             (playback::follow_map_animations, cells::sync_flash),
         );
     map::flash::register(&mut app);
+    start::register(&mut app);
     scene::register(&mut app);
     saved::register(&mut app);
     crate::teleport::rebuild::register(

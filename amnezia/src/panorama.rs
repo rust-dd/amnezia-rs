@@ -87,9 +87,13 @@ impl Panorama {
 struct PanoramaTile(i32, i32);
 
 #[derive(Resource, Default)]
-struct BackgroundImage(Option<(String, Handle<Image>)>);
+pub(crate) struct BackgroundImage(Option<(String, Handle<Image>)>);
 
 impl BackgroundImage {
+    pub(crate) fn image(&self) -> Option<&Handle<Image>> {
+        self.0.as_ref().map(|(_, image)| image)
+    }
+
     fn load(&mut self, server: &AssetServer, name: &str) -> &Handle<Image> {
         if self.0.as_ref().is_none_or(|(previous, _)| previous != name) {
             self.0 = Some((name.to_owned(), server.load(resolve_png("Panorama", name))));
@@ -141,7 +145,8 @@ fn camera_scroll(
 }
 
 #[allow(clippy::too_many_arguments)]
-fn advance(
+fn update(
+    In(advancing): In<bool>,
     time: Res<Time>,
     data: Res<MapData>,
     server: Res<AssetServer>,
@@ -204,11 +209,21 @@ fn advance(
         &data,
         display,
     );
-    if !scene.tail_paused() {
+    if advancing && !scene.tail_paused() {
         let before = panorama.clock.frame;
         panorama.clock.advance(time.delta_secs_f64());
         let frames = panorama.clock.frame.wrapping_sub(before);
         panorama.motion.as_mut().unwrap().step(&definition, frames);
+    }
+}
+
+fn advance(world: &mut World) {
+    world.run_system_cached_with(update, true).unwrap();
+}
+
+pub(crate) fn prepare(world: &mut World) {
+    if world.contains_resource::<BackgroundImage>() {
+        world.run_system_cached_with(update, false).unwrap();
     }
 }
 

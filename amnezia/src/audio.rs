@@ -188,7 +188,11 @@ impl Plugin for AudioPlugin {
 }
 
 pub(crate) fn flush(world: &mut World) {
-    if world.contains_resource::<AssetServer>() && world.contains_resource::<MemorizedBgm>() {
+    if world.contains_resource::<AssetServer>()
+        && world.contains_resource::<MemorizedBgm>()
+        && world.contains_resource::<CurrentBgm>()
+        && world.contains_resource::<Messages<AudioRequest>>()
+    {
         world.run_system_cached(play_requests).unwrap();
     }
 }

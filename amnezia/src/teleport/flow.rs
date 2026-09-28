@@ -46,7 +46,7 @@ pub(super) fn drive(world: &mut World) {
 
 fn preupdate(world: &mut World, foreground: bool) -> bool {
     let finished = crate::interpreter::destination::run(world, foreground);
-    crate::dialogue::presentation::flush(world);
+    super::presentation::flush(world);
     if world
         .get_resource::<crate::title::TitleActive>()
         .is_some_and(|title| title.0)
