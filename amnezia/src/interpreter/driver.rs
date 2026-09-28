@@ -106,6 +106,7 @@ fn flush(world: &mut World) {
     super::foreground::refresh(world);
     crate::appearance::flush(world);
     crate::shop::inn::open_pending(world);
+    crate::dialogue::position::latch(world);
 }
 
 fn step_foreground(

@@ -1,5 +1,6 @@
 use super::*;
 use crate::choice::Choice;
+use crate::dialogue::MessagePosition;
 use crate::dialogue::view::prompts as presentation;
 use crate::inputnumber::InputNumber;
 
@@ -14,7 +15,11 @@ fn prompt_app() -> App {
         .init_resource::<crate::dialogue::MessageOptions>()
         .add_systems(
             Update,
-            (presentation::render_cursor, update_position).after(render_reveal),
+            (
+                presentation::render_cursor,
+                crate::dialogue::position::latch,
+            )
+                .after(render_reveal),
         );
     app
 }

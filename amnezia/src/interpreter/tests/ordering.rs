@@ -13,6 +13,7 @@ mod facing;
 mod immediate;
 mod input;
 mod menu;
+mod message_position;
 mod npcs;
 mod scenes;
 mod stops;

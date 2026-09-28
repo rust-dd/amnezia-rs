@@ -37,6 +37,8 @@ pub(super) fn finished(world: &mut World, scenario: &str) {
         crate::dialogue::font_smoke::verify_finished(world);
     } else if scenario == "dialogue-timing" {
         crate::dialogue::timing_smoke::verify_finished(world);
+    } else if scenario == "message-options" {
+        super::message_options::verify_finished(world);
     } else if scenario == "map-animations" {
         crate::animation::map_smoke::verify_finished(world);
     } else if scenario == "world-tones" {

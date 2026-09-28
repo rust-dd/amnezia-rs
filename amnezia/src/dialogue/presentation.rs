@@ -51,7 +51,7 @@ pub(super) fn register_windows(app: &mut App) {
             view::target_camera,
             view::render_reveal,
             view::prompts::render_cursor,
-            view::update_position,
+            super::position::latch,
             view::motion::render,
         )
             .chain(),

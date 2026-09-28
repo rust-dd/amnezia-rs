@@ -11,7 +11,7 @@ fn automatic_dialogue_position_is_chosen_once_per_box_and_battle_stays_at_the_bo
         .init_resource::<MessagePosition>()
         .init_resource::<MessageOptions>()
         .init_resource::<Dialogue>()
-        .add_systems(Update, view::update_position);
+        .add_systems(Update, position::latch);
     app.world_mut()
         .spawn((crate::world::MainCamera, Transform::default()));
     let hero = app
@@ -58,6 +58,15 @@ fn automatic_dialogue_position_is_chosen_once_per_box_and_battle_stays_at_the_bo
     assert_eq!(app.world().get::<Node>(panel).unwrap().bottom, Val::Px(0.0));
     app.world_mut().resource_mut::<MessageOptions>().fixed = true;
     *app.world_mut().resource_mut::<MessagePosition>() = MessagePosition::Top;
+    app.update();
+    assert_eq!(app.world().get::<Node>(panel).unwrap().bottom, Val::Px(0.0));
+    app.world_mut()
+        .resource_mut::<Dialogue>()
+        .open(vec![MessageBox {
+            face: None,
+            face_index: 0,
+            lines: vec!["Next message".into()],
+        }]);
     app.update();
     assert_eq!(app.world().get::<Node>(panel).unwrap().top, Val::Px(0.0));
     app.insert_resource(crate::battle::BattleActive(true));

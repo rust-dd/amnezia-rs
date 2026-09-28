@@ -1,7 +1,7 @@
 //! Original bitmap message contents, portrait and windowskin layers in native
 //! coordinates scaled threefold for Bevy UI.
 
-use super::{Dialogue, MessagePosition, MessageTransparent};
+use super::{Dialogue, MessageTransparent};
 use crate::assets::resolve_png;
 use crate::font::bitmap::{DEFAULT, PixelText, Run};
 use bevy::prelude::*;
@@ -280,75 +280,6 @@ pub(super) fn render_reveal(
     if let Ok(mut visibility) = arrows.single_mut() {
         *visibility =
             visible_if(!prompts.active() && reveal.is_some_and(|reveal| reveal.arrow_visible()));
-    }
-}
-
-#[allow(clippy::too_many_arguments, clippy::type_complexity)]
-pub(super) fn update_position(
-    position: Res<MessagePosition>,
-    options: Res<super::MessageOptions>,
-    dialogue: Res<Dialogue>,
-    prompts: prompts::Presentation,
-    map: Option<Res<crate::world::MapData>>,
-    screen: crate::world::MapScreen,
-    battle: Option<Res<crate::battle::BattleActive>>,
-    mut previous: Local<
-        Option<(
-            u64,
-            usize,
-            MessagePosition,
-            super::MessageOptions,
-            bool,
-            (u8, u64),
-        )>,
-    >,
-    mut panels: Query<&mut Node, With<DialoguePanel>>,
-) {
-    if !dialogue.active && !prompts.active() {
-        if dialogue.lifecycle.message.visible() {
-            return;
-        }
-        *previous = None;
-        return;
-    }
-    let battle = battle.is_some_and(|b| b.0);
-    let snapshot = (
-        dialogue.generation,
-        dialogue.index,
-        *position,
-        *options,
-        battle,
-        if dialogue.active {
-            (0, 0)
-        } else {
-            prompts.key()
-        },
-    );
-    if *previous == Some(snapshot) {
-        return;
-    }
-    *previous = Some(snapshot);
-    let hero_y = map
-        .as_deref()
-        .and_then(|map| screen.hero_y(map))
-        .unwrap_or(128);
-    let position = options.position(*position, hero_y, battle);
-    let Ok(mut node) = panels.single_mut() else {
-        return;
-    };
-    match position {
-        MessagePosition::Top => {
-            node.top = Val::Px(0.0);
-            node.bottom = Val::Auto;
-        }
-        MessagePosition::Middle => {
-            node.top = Val::Px(240.0);
-            node.bottom = Val::Auto;
-        }
-        MessagePosition::Bottom => {
-            node.top = Val::Auto;
-            node.bottom = Val::Px(0.0);
-        }
     }
 }
 

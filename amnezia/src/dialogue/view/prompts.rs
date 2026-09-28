@@ -17,7 +17,7 @@ pub(in crate::dialogue) struct Presentation<'w> {
 }
 
 impl Presentation<'_> {
-    pub(super) fn key(&self) -> (u8, u64) {
+    pub(in crate::dialogue) fn key(&self) -> (u8, u64) {
         if let Some(choice) = self.choice.as_deref().filter(|choice| choice.active()) {
             (1, choice.generation)
         } else if let Some(number) = self.number.as_deref().filter(|number| number.active()) {
@@ -27,7 +27,7 @@ impl Presentation<'_> {
         }
     }
 
-    pub(super) fn active(&self) -> bool {
+    pub(in crate::dialogue) fn active(&self) -> bool {
         self.key().0 != 0
     }
 

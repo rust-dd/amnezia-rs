@@ -6,6 +6,10 @@ pub(crate) fn register_actions(app: &mut App) {
     super::action::register(app);
 }
 
+pub(crate) fn register_position(app: &mut App) {
+    super::position::register(app);
+}
+
 pub(crate) fn register_playback(app: &mut App) {
     app.init_resource::<Dialogue>()
         .init_resource::<crate::timing::GameFrames>()

@@ -17,6 +17,7 @@ mod lifecycle;
 mod lifecycle_tests;
 mod options;
 mod pause;
+pub(crate) mod position;
 pub(crate) mod presentation;
 pub(crate) mod saved;
 #[cfg(test)]
@@ -155,10 +156,8 @@ impl Dialogue {
     }
 }
 
-/// Where the message box sits vertically (`MessageOptions` 10120). The default
-/// [`MessagePosition::Bottom`] is RM2000's usual placement; [`view`] moves the
-/// box when the interpreter changes this. `Top`/`Middle` are only produced by
-/// the interpreter's MessageOptions arm, which lands separately.
+/// Requested placement (`MessageOptions` 10120), sampled when a page opens.
+/// Automatic positioning avoids the hero; battle messages stay at the bottom.
 #[derive(
     Resource, Default, Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize,
 )]
@@ -251,6 +250,7 @@ impl Plugin for DialoguePlugin {
         InputPrompts::register(app);
         action::register(app);
         view::prompts::register(app);
+        position::register(app);
         presentation::register_windows(app);
         app.init_resource::<Dialogue>()
             .init_resource::<crate::timing::GameFrames>()
