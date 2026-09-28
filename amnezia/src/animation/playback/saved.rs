@@ -109,18 +109,11 @@ pub(super) fn reset(world: &mut World) {
 }
 
 pub(crate) fn register(app: &mut App) {
-    app.add_systems(
-        Update,
-        (restore, track_active_animations)
-            .chain()
-            .after(AnimationSet::Advance)
-            .before(AnimationSet::Start),
+    crate::teleport::rebuild::register(
+        app,
+        crate::teleport::rebuild::Stage::Animation,
+        (restore, restore_target_flash, track_active_animations).chain(),
     );
-    crate::timing::logical::post(app, || {
-        restore_target_flash
-            .after(map::flash::Expire)
-            .before(crate::legacy_colors::world::WorldColors)
-    });
 }
 
 #[allow(clippy::too_many_arguments)]

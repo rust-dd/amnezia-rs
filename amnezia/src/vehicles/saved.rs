@@ -90,13 +90,7 @@ pub(crate) fn prepare(world: &mut World, map_id: u32, state: Option<State>) {
 pub(crate) struct RestoreVehicles;
 
 pub(crate) fn register(app: &mut App) {
-    app.add_systems(
-        Update,
-        restore
-            .in_set(RestoreVehicles)
-            .after(crate::teleport::MapTransfer)
-            .before(crate::interpreter::InterpreterStep),
-    );
+    crate::teleport::rebuild::register(app, crate::teleport::rebuild::Stage::Characters, restore);
 }
 
 fn restore(

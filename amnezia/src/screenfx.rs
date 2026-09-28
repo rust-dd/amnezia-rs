@@ -160,6 +160,11 @@ pub struct ScreenFxPlugin;
 
 impl Plugin for ScreenFxPlugin {
     fn build(&self, app: &mut App) {
+        crate::teleport::rebuild::register(
+            app,
+            crate::teleport::rebuild::Stage::Reset,
+            clear_map_flash,
+        );
         app.add_message::<ScreenEffect>()
             .add_message::<crate::world::MapRebuilt>()
             .add_message::<crate::world::MapEffectsReset>()
@@ -181,14 +186,6 @@ impl Plugin for ScreenFxPlugin {
                 ),
             )
             .add_systems(Startup, flash::channel::spawn_overlay)
-            .add_systems(
-                Update,
-                clear_map_flash
-                    .in_set(MapScreenReset)
-                    .after(crate::teleport::MapTransfer)
-                    .before(flash::channel::Advance)
-                    .before(ScreenEffectsSet),
-            )
             .add_systems(
                 Update,
                 step_effects

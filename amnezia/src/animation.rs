@@ -164,6 +164,11 @@ impl Plugin for AnimationPlugin {
         map::flash::register(app);
         scene::register(app);
         saved::register(app);
+        crate::teleport::rebuild::register(
+            app,
+            crate::teleport::rebuild::Stage::Reset,
+            playback::clear_map_animations,
+        );
         app.add_message::<PlayAnimation>()
             .add_message::<ShowMapAnimation>()
             .add_message::<crate::world::MapRebuilt>()
@@ -177,12 +182,7 @@ impl Plugin for AnimationPlugin {
             .add_systems(
                 Update,
                 (
-                    (
-                        playback::clear_map_animations,
-                        fade_flashes,
-                        step_animations,
-                        track_active_animations,
-                    )
+                    (fade_flashes, step_animations, track_active_animations)
                         .chain()
                         .in_set(AnimationSet::Advance)
                         .before(crate::interpreter::InterpreterStep)

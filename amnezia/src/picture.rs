@@ -289,14 +289,15 @@ impl Plugin for PicturePlugin {
 struct ParallelPictures;
 
 fn register_timeline(app: &mut App) {
+    crate::teleport::rebuild::register(
+        app,
+        crate::teleport::rebuild::Stage::Reset,
+        clear_on_map_change,
+    );
+    crate::teleport::rebuild::register(app, crate::teleport::rebuild::Stage::State, saved::restore);
     app.add_message::<MapEffectsReset>().add_systems(
         Update,
         (
-            (clear_on_map_change, saved::restore)
-                .chain()
-                .after(crate::teleport::MapTransfer)
-                .before(crate::interpreter::ParallelStep)
-                .before(ParallelPictures),
             render::apply_commands
                 .in_set(ParallelPictures)
                 .after(crate::interpreter::ParallelStep)

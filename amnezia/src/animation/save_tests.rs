@@ -37,12 +37,7 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
         .add_systems(
             Update,
             (
-                (
-                    playback::clear_map_animations,
-                    fade_flashes,
-                    step_animations,
-                    track_active_animations,
-                )
+                (fade_flashes, step_animations, track_active_animations)
                     .chain()
                     .in_set(AnimationSet::Advance)
                     .after(crate::teleport::MapTransfer),
@@ -64,6 +59,11 @@ fn app(tag: &str) -> (App, std::path::PathBuf) {
     map::flash::register(&mut app);
     scene::register(&mut app);
     saved::register(&mut app);
+    crate::teleport::rebuild::register(
+        &mut app,
+        crate::teleport::rebuild::Stage::Reset,
+        playback::clear_map_animations,
+    );
     let mut map = MapData::for_test(20, 15);
     map.map_id = 3;
     app.insert_resource(map);

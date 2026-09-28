@@ -35,15 +35,8 @@ impl Plugin for MapBgmPlugin {
         app.insert_resource(MapInfoData(load_ron(&format!(
             "{}/map_info.ron",
             asset_root()
-        ))))
-        .add_systems(
-            Update,
-            flush
-                .in_set(MapMusic)
-                .after(crate::teleport::MapTransfer)
-                .before(crate::interpreter::ParallelStep)
-                .before(crate::interpreter::InterpreterStep),
-        );
+        ))));
+        crate::teleport::rebuild::register(app, crate::teleport::rebuild::Stage::Music, flush);
     }
 }
 

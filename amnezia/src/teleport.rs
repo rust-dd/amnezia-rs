@@ -5,6 +5,7 @@ use crate::world::{MapEffectsReset, MapRebuilt};
 use bevy::prelude::*;
 
 pub(crate) mod normal_smoke;
+pub(crate) mod rebuild;
 pub(crate) mod reservation_smoke;
 mod scene;
 pub(crate) mod smoke;

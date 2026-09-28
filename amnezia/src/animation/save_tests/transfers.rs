@@ -1,6 +1,61 @@
 use super::*;
 
 #[test]
+fn inline_map_restoration_keeps_new_cells_and_target_flash_through_the_scheduled_visit() {
+    let (mut app, _) = app("inline-rebuild");
+    play(&mut app);
+    let expected = saved::snapshot(app.world_mut());
+    let old = app
+        .world_mut()
+        .query::<&playback::LiveAnimation>()
+        .single(app.world())
+        .unwrap()
+        .cells
+        .clone();
+    saved::prepare(app.world_mut(), 3, expected.clone());
+    app.world_mut().write_message(MapRebuilt);
+    app.world_mut().write_message(crate::world::MapEffectsReset);
+    crate::teleport::rebuild::flush(app.world_mut());
+    assert_eq!(saved::snapshot(app.world_mut()), expected);
+    assert!(
+        old.iter()
+            .all(|cell| app.world().get_entity(*cell).is_err())
+    );
+    let cells = app
+        .world_mut()
+        .query::<&playback::LiveAnimation>()
+        .single(app.world())
+        .unwrap()
+        .cells
+        .clone();
+    let flash = app
+        .world_mut()
+        .query_filtered::<&crate::legacy_colors::flash::SpriteFlash, With<Player>>()
+        .single(app.world())
+        .unwrap()
+        .0;
+    for _ in 0..2 {
+        crate::teleport::rebuild::flush(app.world_mut());
+        app.update();
+        assert_eq!(saved::snapshot(app.world_mut()), expected);
+        assert_eq!(app.world().resource::<ActiveAnimations>().total, 1);
+        assert!(
+            cells
+                .iter()
+                .all(|cell| app.world().get_entity(*cell).is_ok())
+        );
+        assert_eq!(
+            app.world_mut()
+                .query_filtered::<&crate::legacy_colors::flash::SpriteFlash, With<Player>>()
+                .single(app.world())
+                .unwrap()
+                .0,
+            flash
+        );
+    }
+}
+
+#[test]
 fn a_real_reload_keeps_restored_cells_and_flashes_frozen_until_the_fade_finishes() {
     let (mut app, path) = app("real_reload");
     app.add_plugins((

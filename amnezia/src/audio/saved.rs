@@ -64,13 +64,8 @@ pub(crate) fn prepare(world: &mut World, map_id: u32, music: Option<MusicState>)
 
 pub(crate) fn register(app: &mut App) {
     app.add_message::<AudioRequest>()
-        .add_message::<crate::world::MapChanged>()
-        .add_systems(
-            Update,
-            restore
-                .after(crate::map_bgm::MapMusic)
-                .before(crate::interpreter::InterpreterStep),
-        );
+        .add_message::<crate::world::MapChanged>();
+    crate::teleport::rebuild::register(app, crate::teleport::rebuild::Stage::SavedMusic, restore);
 }
 
 fn restore(

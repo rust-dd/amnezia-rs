@@ -127,13 +127,8 @@ pub(crate) fn prepare(world: &mut World, map_id: u32, events: Vec<EventState>) {
 
 pub(crate) fn register(app: &mut App) {
     hero::register(app);
-    app.add_message::<MapRebuilt>().add_systems(
-        Update,
-        restore
-            .in_set(RestoreCharacters)
-            .after(crate::teleport::MapTransfer)
-            .before(crate::interpreter::InterpreterStep),
-    );
+    app.add_message::<MapRebuilt>();
+    crate::teleport::rebuild::register(app, crate::teleport::rebuild::Stage::Characters, restore);
 }
 
 #[allow(clippy::too_many_arguments)]

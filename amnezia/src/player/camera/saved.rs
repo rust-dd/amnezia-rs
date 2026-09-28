@@ -84,13 +84,8 @@ pub(crate) fn prepare(world: &mut World, map_id: u32, camera: Option<CameraState
 }
 
 pub(crate) fn register(app: &mut App) {
-    app.add_message::<crate::world::MapChanged>().add_systems(
-        Update,
-        restore
-            .after(crate::teleport::MapTransfer)
-            .before(super::CameraFollow)
-            .before(crate::interpreter::InterpreterStep),
-    );
+    app.add_message::<crate::world::MapChanged>();
+    crate::teleport::rebuild::register(app, crate::teleport::rebuild::Stage::Characters, restore);
 }
 
 fn restore(

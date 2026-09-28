@@ -13,6 +13,11 @@ pub(in crate::animation) struct Expire;
 pub(in crate::animation) fn register(app: &mut App) {
     app.add_message::<crate::world::MapRebuilt>()
         .add_message::<crate::world::MapEffectsReset>();
+    crate::teleport::rebuild::register(
+        app,
+        crate::teleport::rebuild::Stage::Reset,
+        clear_on_map_change,
+    );
     crate::timing::logical::post(app, || {
         expire
             .in_set(Expire)
@@ -79,18 +84,29 @@ fn expire(
     frames: Res<GameFrames>,
     pause: crate::transitions::TransitionPause,
     scene: crate::animation::scene::Scenes,
-    mut changes: MessageReader<crate::world::MapEffectsReset>,
     mut flashes: Query<(Entity, &mut CharacterFlash, &mut SpriteFlash)>,
 ) {
-    let changed = changes.read().count() != 0;
     for (entity, mut state, mut flash) in &mut flashes {
-        if changed || (!pause.paused() && !scene.frozen() && state.frame != frames.frame) {
+        if !pause.paused() && !scene.frozen() && state.frame != frames.frame {
             // Character flashes last one game tick; a live animation refreshes them.
             flash.0 = [0; 4];
             commands.entity(entity).remove::<CharacterFlash>();
         } else {
             state.frame = frames.frame;
         }
+    }
+}
+
+fn clear_on_map_change(
+    world: &mut World,
+    mut cursor: Local<bevy::ecs::message::MessageCursor<crate::world::MapEffectsReset>>,
+) {
+    if cursor
+        .read(world.resource::<Messages<crate::world::MapEffectsReset>>())
+        .count()
+        != 0
+    {
+        reset(world);
     }
 }
 
