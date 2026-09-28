@@ -83,6 +83,27 @@ fn same_map_teleports_preserve_flash_tone_and_shake() {
 }
 
 #[test]
+fn relocation_and_the_scheduled_projection_apply_camera_shake_only_once() {
+    let mut app = app();
+    let camera = app
+        .world_mut()
+        .spawn((MainCamera, Transform::default()))
+        .id();
+    assert_ne!(app.world().resource::<Fx>().shake_offset, Vec2::ZERO);
+    crate::player::relocate_camera(app.world_mut());
+    let before = app.world().get::<Transform>(camera).unwrap().translation;
+    for _ in 0..3 {
+        app.world_mut()
+            .run_system_cached(apply_camera_shake)
+            .unwrap();
+        assert_eq!(
+            app.world().get::<Transform>(camera).unwrap().translation,
+            before
+        );
+    }
+}
+
+#[test]
 fn rebuilt_maps_clear_the_old_flash_but_keep_tone_and_shake() {
     for (map_id, reload) in [(2, false), (3, true)] {
         let mut app = app();

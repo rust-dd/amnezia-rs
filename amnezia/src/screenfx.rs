@@ -2,8 +2,8 @@
 //! scene-transition controller. Tint is applied to world bitmaps; flash uses
 //! a fullscreen overlay below message/menu windows.
 //!
-//! Camera follow and shake run together once per logical tick, so extra render
-//! frames cannot accumulate the shake offset.
+//! Camera projection replaces its previous shake offset, including while the
+//! character update is suspended by an asynchronous operation.
 
 use crate::world::MainCamera;
 use bevy::prelude::*;
@@ -13,6 +13,7 @@ use shake::ShakeState;
 pub(crate) mod battle_smoke;
 #[cfg(test)]
 mod battle_tests;
+mod camera;
 pub(crate) mod flash;
 #[cfg(test)]
 mod logical_tests;
@@ -27,6 +28,7 @@ mod shake;
 mod tone;
 mod weather;
 
+pub(crate) use camera::CameraShake;
 pub(crate) use flash::smoke as flash_smoke;
 pub use tone::{FrontCamera, PICTURE_LAYER, TintState};
 pub(crate) use weather::rain::Canvas as WeatherCanvas;
@@ -169,6 +171,7 @@ impl Plugin for ScreenFxPlugin {
             .add_message::<crate::world::MapRebuilt>()
             .add_message::<crate::world::MapEffectsReset>()
             .init_resource::<Fx>()
+            .init_resource::<camera::Applied>()
             .init_resource::<flash::channel::Inbox>()
             .add_plugins(tone::ScreenTonePlugin)
             .add_plugins(weather::WeatherPlugin)
@@ -273,12 +276,16 @@ fn step_shake(fx: &mut Fx, dt: f32) {
     fx.shake_offset = Vec2::new(fx.shake.step(dt), 0.0);
 }
 
-fn apply_camera_shake(fx: Res<Fx>, mut cameras: Query<&mut Transform, With<MainCamera>>) {
+fn apply_camera_shake(
+    mut shake: CameraShake,
+    mut cameras: Query<&mut Transform, With<MainCamera>>,
+) {
     let Ok(mut camera) = cameras.single_mut() else {
         return;
     };
-    camera.translation.x += fx.shake_offset.x;
-    camera.translation.y += fx.shake_offset.y;
+    let point = shake.reproject(camera.translation.truncate());
+    camera.translation.x = point.x;
+    camera.translation.y = point.y;
 }
 
 #[cfg(test)]

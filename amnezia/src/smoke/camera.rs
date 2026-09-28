@@ -2,6 +2,7 @@ use amnezia_data::EventCommand;
 use bevy::prelude::*;
 
 mod jumping;
+mod shaking;
 mod walking;
 pub(super) use jumping::snapshot;
 
@@ -24,6 +25,7 @@ pub(super) fn entry() -> Vec<EventCommand> {
 pub(super) fn drive(world: &mut World, frame: u32) {
     walking::drive(world, frame);
     jumping::drive(world, frame);
+    shaking::drive(world, frame);
     if frame == 260 {
         assert!(
             !world
@@ -77,4 +79,5 @@ pub(super) fn drive(world: &mut World, frame: u32) {
 pub(super) fn verify_finished(world: &World) {
     walking::verify_finished(world);
     jumping::verify_finished(world);
+    shaking::verify_finished(world);
 }

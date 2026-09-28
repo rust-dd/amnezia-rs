@@ -21,6 +21,12 @@ mod triggers;
 mod unpause;
 
 fn app() -> App {
+    let mut app = unstarted_app();
+    app.update();
+    app
+}
+
+fn unstarted_app() -> App {
     let mut app = interp_app();
     app.add_plugins((
         AssetPlugin::default(),
@@ -41,7 +47,6 @@ fn app() -> App {
     world
         .entity_mut(hero)
         .insert((Sprite::default(), Transform::default()));
-    app.update();
     app
 }
 

@@ -66,3 +66,49 @@ fn a_foreground_resume_does_not_advance_completed_character_movement_again() {
     assert_ne!(*app.world().get::<Transform>(first).unwrap(), before[0]);
     assert_ne!(*app.world().get::<Transform>(hero).unwrap(), before[1]);
 }
+
+#[test]
+fn a_suspended_hero_update_does_not_accumulate_the_frozen_camera_shake() {
+    let mut app = unstarted_app();
+    app.add_plugins((TransitionPlugin, crate::screenfx::ScreenFxPlugin));
+    app.update();
+    let camera = app
+        .world_mut()
+        .spawn((
+            crate::world::MainCamera,
+            Transform::default(),
+            Projection::Orthographic(OrthographicProjection::default_2d()),
+        ))
+        .id();
+    app.world_mut()
+        .write_message(crate::screenfx::ScreenEffect::shake(&[3, 5, 10, 0]));
+    app.world_mut()
+        .resource_mut::<RunningEvent>()
+        .start(7, vec![cmd(11010, 0, vec![0]), switch_cmd(70, 0, 0)]);
+    tick(&mut app, 0);
+    let offset = app
+        .world_mut()
+        .run_system_cached(|shake: crate::screenfx::ScreenShake| shake.offset())
+        .unwrap();
+    assert_ne!(offset, Vec2::ZERO);
+    let before = app.world().get::<Transform>(camera).unwrap().translation;
+    let effects = crate::screenfx::saved::snapshot(app.world());
+    for frame in 1..=35 {
+        tick(&mut app, frame);
+        assert_eq!(crate::screenfx::saved::snapshot(app.world()), effects);
+        assert_eq!(
+            app.world().get::<Transform>(camera).unwrap().translation,
+            before,
+            "asynchronous frame {frame}"
+        );
+    }
+    tick(&mut app, 36);
+    let offset_after = app
+        .world_mut()
+        .run_system_cached(|shake: crate::screenfx::ScreenShake| shake.offset())
+        .unwrap();
+    assert_eq!(
+        app.world().get::<Transform>(camera).unwrap().translation,
+        before + (offset_after - offset).extend(0.0)
+    );
+}

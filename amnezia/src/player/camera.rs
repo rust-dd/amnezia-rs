@@ -152,6 +152,7 @@ pub(super) fn camera_follow(
     data: Res<MapData>,
     scene: ScenePause,
     mut pan: ResMut<CameraPan>,
+    mut shake: crate::screenfx::CameraShake,
     players: Query<(&Player, &Transform, Option<&MoveQueue>)>,
     mut cameras: Query<(&mut Transform, &Projection), (With<MainCamera>, Without<Player>)>,
 ) {
@@ -185,7 +186,7 @@ pub(super) fn camera_follow(
             },
         )
     };
-    let rendered = raster_position(&data, point, half_view);
+    let rendered = shake.project(raster_position(&data, point, half_view));
     camera.translation.x = rendered.x;
     camera.translation.y = rendered.y;
 }
@@ -206,7 +207,7 @@ pub(crate) fn relocate_camera(world: &mut World) {
 fn place_relocated_camera(
     data: Res<MapData>,
     mut pan: ResMut<CameraPan>,
-    shake: crate::screenfx::ScreenShake,
+    mut shake: crate::screenfx::CameraShake,
     heroes: Query<(&Player, &MoveQueue)>,
     mut cameras: Query<(&mut Transform, Option<&Projection>), (With<MainCamera>, Without<Player>)>,
 ) {
@@ -221,7 +222,7 @@ fn place_relocated_camera(
         _ => Vec2::new(160.0, 120.0),
     };
     let point = pan.update(&data, queue.subpixel_position(hero, &data), half_view, 0.0);
-    let point = raster_position(&data, point, half_view) + shake.offset();
+    let point = shake.project(raster_position(&data, point, half_view));
     camera.translation.x = point.x;
     camera.translation.y = point.y;
 }
