@@ -20,9 +20,6 @@ pub(super) fn update(world: &mut World) {
         return;
     }
     let phase = &world.resource::<State>().phase;
-    if matches!(phase, Phase::Closing) {
-        return;
-    }
     fixtures::verify_vitals(world, matches!(phase, Phase::FadeIn | Phase::Idle));
     let finished = matches!(phase, Phase::Idle);
     let scene = world.resource::<SceneFrames>().frame;
@@ -47,9 +44,15 @@ pub(super) fn update(world: &mut World) {
     probe.ended |= ended;
     if finished {
         probe.handoffs |= 1 << probe.case;
+        let case = probe.case;
         assert!(
-            world.resource::<RunningEvent>().active(),
-            "event must wait through the terminal fade frame"
+            !world.resource::<RunningEvent>().active(),
+            "event must finish in the terminal fade frame"
+        );
+        assert!(world.resource::<crate::state::Switches>().get(9031));
+        assert_eq!(
+            world.resource::<crate::state::Variables>().get(9032),
+            case as i32 + 1
         );
         assert!(!world.resource::<ShopOpen>().0);
     }

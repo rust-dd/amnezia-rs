@@ -6,6 +6,7 @@ pub(crate) mod smoke;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum AsyncOp {
+    Inn,
     Transition {
         kind: i32,
         erase: bool,
@@ -17,6 +18,7 @@ pub(super) enum AsyncOp {
 pub(super) enum Owner {
     Parallel(ParallelSource),
     Foreground,
+    Message,
 }
 
 impl Owner {
@@ -28,6 +30,13 @@ impl Owner {
 struct Pending {
     owner: Owner,
     remaining: usize,
+    wait: WaitFor,
+}
+
+#[derive(Clone, Copy)]
+enum WaitFor {
+    Transition,
+    Inn,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -60,8 +69,16 @@ impl Continuation {
     pub(crate) fn characters_paused(&self, frame_waiting: bool) -> bool {
         match self.pass {
             Pass::Fresh => frame_waiting,
-            Pass::Waiting | Pass::Resume(Owner::Foreground) => true,
+            Pass::Waiting | Pass::Resume(Owner::Foreground | Owner::Message) => true,
             Pass::Resume(Owner::Parallel(_)) => false,
+        }
+    }
+
+    pub(crate) fn effects_paused(&self, frame_waiting: bool) -> bool {
+        match self.pass {
+            Pass::Fresh => frame_waiting,
+            Pass::Waiting | Pass::Resume(Owner::Foreground) => true,
+            Pass::Resume(Owner::Parallel(_) | Owner::Message) => false,
         }
     }
 
@@ -75,15 +92,24 @@ impl Continuation {
 }
 
 pub(super) fn begin(world: &mut World) {
-    let busy = world.resource::<crate::transitions::Transition>().busy();
+    let transition = world.resource::<crate::transitions::Transition>().busy();
+    let inn = world
+        .get_resource::<crate::shop::inn::State>()
+        .is_some_and(|inn| inn.resting());
     let mut state = world.resource_mut::<Continuation>();
     state.pass = state.pending.as_ref().map_or(Pass::Fresh, |pending| {
-        if busy {
+        if match pending.wait {
+            WaitFor::Transition => transition,
+            WaitFor::Inn => inn,
+        } {
             Pass::Waiting
         } else {
             Pass::Resume(pending.owner)
         }
     });
+    if matches!(state.pass, Pass::Resume(Owner::Message)) {
+        state.pending = None;
+    }
 }
 
 pub(super) fn budget(world: &mut World, owner: Owner) -> usize {
@@ -108,18 +134,48 @@ pub(super) fn complete_parallel(world: &mut World) {
 }
 
 pub(super) fn suspend(world: &mut World, owner: Owner, remaining: usize, op: AsyncOp) -> bool {
-    world.run_system_cached_with(apply, op).unwrap();
-    if !world.resource::<crate::transitions::Transition>().busy() {
+    let (wait, busy) = match op {
+        AsyncOp::Transition { .. } => {
+            world.run_system_cached_with(apply, op).unwrap();
+            (
+                WaitFor::Transition,
+                world.resource::<crate::transitions::Transition>().busy(),
+            )
+        }
+        AsyncOp::Inn => {
+            crate::shop::inn::start_free(world);
+            (
+                WaitFor::Inn,
+                world.resource::<crate::shop::inn::State>().resting(),
+            )
+        }
+    };
+    if !busy {
         return false;
     }
     let mut state = world.resource_mut::<Continuation>();
-    state.pending = Some(Pending { owner, remaining });
+    state.pending = Some(Pending {
+        owner,
+        remaining,
+        wait,
+    });
     state.pass = Pass::Waiting;
     true
 }
 
+pub(crate) fn suspend_message(world: &mut World) {
+    let mut state = world.resource_mut::<Continuation>();
+    state.pending = Some(Pending {
+        owner: Owner::Message,
+        remaining: 0,
+        wait: WaitFor::Inn,
+    });
+    state.pass = Pass::Waiting;
+}
+
 fn apply(In(op): In<AsyncOp>, mut transitions: crate::transitions::TransitionIo) {
     match op {
+        AsyncOp::Inn => unreachable!(),
         AsyncOp::Transition {
             kind,
             erase,

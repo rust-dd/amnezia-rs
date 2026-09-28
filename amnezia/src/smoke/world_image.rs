@@ -20,7 +20,10 @@ pub(super) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
         | "map-animation-transferred"
         | "async-transition-foreground"
         | "async-transition-common"
-        | "async-transition-map" => 3,
+        | "async-transition-map"
+        | "async-inn-foreground"
+        | "async-inn-common"
+        | "async-inn-map" => 3,
         "escape" => 86,
         _ => return None,
     };
@@ -162,7 +165,7 @@ fn save_failure(image: &Image, label: &str) {
 pub(super) fn verify_finished(world: &World, scenario: &str) {
     if matches!(
         scenario,
-        "intro" | "escape" | "map-animations" | "async-transitions"
+        "intro" | "escape" | "map-animations" | "async-transitions" | "async-inns"
     ) {
         assert!(world.resource::<Checked>().0.load(Ordering::Relaxed));
     }

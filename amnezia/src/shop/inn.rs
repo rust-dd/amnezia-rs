@@ -48,34 +48,60 @@ impl State {
     }
 
     pub(crate) fn resting(&self) -> bool {
-        !matches!(
-            self.phase,
-            Phase::Idle | Phase::Prompt { .. } | Phase::Closing
-        )
+        !matches!(self.phase, Phase::Idle | Phase::Prompt { .. })
+    }
+
+    pub(crate) fn closing(&self) -> bool {
+        matches!(self.phase, Phase::Closing)
     }
 }
 
-#[cfg(test)]
 pub(crate) fn open_pending(world: &mut World) {
-    world.run_system_cached(flow::open).unwrap();
+    if world.contains_resource::<State>()
+        && world.contains_resource::<crate::terms::Terms>()
+        && world.run_system_cached(flow::open).unwrap()
+    {
+        flow::begin_stay(world);
+    }
+}
+
+pub(crate) fn start_free(world: &mut World) {
+    let gold = world.resource::<crate::state::Inventory>().gold();
+    *world.resource_mut::<State>() = State {
+        phase: Phase::Closing,
+        gold,
+        ..default()
+    };
+    world.resource_mut::<crate::shop::ShopOpen>().0 = true;
+    world.resource_mut::<crate::shop::ShopOutcome>().transacted = false;
+    flow::begin_stay(world);
 }
 
 pub(super) fn register(app: &mut App) {
+    register_flow(app);
+    app.add_systems(Startup, view::spawn)
+        .add_systems(Update, view::update.after(crate::dialogue::DialogueView));
+}
+
+fn register_flow(app: &mut App) {
     app.init_resource::<State>()
-        .add_systems(Startup, view::spawn)
         .add_systems(
             Update,
-            (flow::open, flow::advance)
-                .chain()
+            open_pending
                 .after(crate::interpreter::InterpreterStep)
-                .after(crate::audio::AudioRequests)
                 .before(crate::dialogue::DialogueView),
+        )
+        .add_systems(
+            Update,
+            flow::advance.before(crate::interpreter::ParallelStep),
         )
         .add_systems(
             Update,
             flow::accept
                 .after(crate::dialogue::MessageUpdate)
+                .before(crate::timer::ClockTick)
+                .before(crate::screenfx::ScreenAdvance)
+                .before(crate::animation::AnimationSet::Advance)
                 .before(crate::interpreter::InterpreterStep),
-        )
-        .add_systems(Update, view::update.after(crate::dialogue::DialogueView));
+        );
 }

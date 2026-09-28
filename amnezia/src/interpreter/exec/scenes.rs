@@ -52,6 +52,11 @@ pub(super) fn execute(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -
         }
         SHOW_INN => {
             let cost = command.params.get(1).copied().unwrap_or(0);
+            if cost <= 0 {
+                frame.shop_transacted = Some(true);
+                frame.ip += 1;
+                return Flow::Async(super::super::continuation::AsyncOp::Inn);
+            }
             let inn_type = command.params.first().copied().unwrap_or(0).max(0) as u32;
             x.subsystems.merchant.writer.write(ShopRequest::ShowInn {
                 cost,
@@ -60,6 +65,7 @@ pub(super) fn execute(frame: &mut Frame, command: &EventCommand, x: &mut Exec) -
             });
             frame.shop_transacted = None;
             frame.shop_pending = true;
+            frame.message_pending = true;
         }
         OPEN_SAVE_MENU => {
             x.subsystems.scenes.replace(Scene::Save);

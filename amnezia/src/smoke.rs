@@ -122,8 +122,9 @@ fn drive(world: &mut World) {
             .requested = true;
     }
     let scenario = world.resource::<SmokeRun>().scenario;
-    if scenario == "async-transitions"
-        && let Some(label) = crate::interpreter::continuation::smoke::drive(world, frame)
+    if matches!(scenario, "async-transitions" | "async-inns")
+        && let Some(label) =
+            crate::interpreter::continuation::smoke::drive(world, frame, scenario == "async-inns")
     {
         capture(world, label);
     }

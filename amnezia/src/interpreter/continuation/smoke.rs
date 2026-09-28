@@ -10,6 +10,7 @@ struct Probe {
     completed: u8,
     checks: u32,
     started: bool,
+    inn: bool,
 }
 
 fn command(code: u32, params: Vec<i32>) -> EventCommand {
@@ -25,7 +26,17 @@ fn increment(index: i32) -> EventCommand {
     command(10220, vec![0, 4800 + index, 4800 + index, 1, 0, 1])
 }
 
-fn commands() -> Vec<EventCommand> {
+fn commands(inn: bool) -> Vec<EventCommand> {
+    if inn {
+        return vec![
+            command(10210, vec![0, 4801, 4801, 1]),
+            command(10730, vec![0, 0, 1]),
+            increment(4),
+            increment(5),
+            increment(6),
+            increment(7),
+        ];
+    }
     vec![
         command(10210, vec![0, 4801, 4801, 1]),
         command(11010, vec![0]),
@@ -51,6 +62,13 @@ fn common(id: u32, gate: u32, commands: Vec<EventCommand>) -> CommonEvent {
 }
 
 fn prepare(world: &mut World, case: u32) {
+    let inn = world.resource::<Probe>().inn;
+    if inn {
+        world
+            .resource_mut::<crate::system_bgm::SystemBgm>()
+            .change("(OFF)", &[2, 0, 100, 100, 50]);
+        world.resource_mut::<crate::vitals::Vitals>().set(1, 2, 0);
+    }
     assert!(!world.resource::<crate::dialogue::Dialogue>().busy());
     assert!(!world.resource::<RunningEvent>().active());
     assert!(!world.resource::<Transition>().busy());
@@ -70,7 +88,7 @@ fn prepare(world: &mut World, case: u32) {
         common(902, 4800, vec![increment(1)]),
     ]);
     if case == 1 {
-        common_events.0.push(common(901, 4801, commands()));
+        common_events.0.push(common(901, 4801, commands(inn)));
     }
     let template = crate::assets::load_ron::<amnezia_data::Map>(&format!(
         "{}/maps/map_0003.ron",
@@ -103,17 +121,18 @@ fn prepare(world: &mut World, case: u32) {
         page.condition.flags = 1;
         page.condition.switch_a = 4801;
         page.trigger = 4;
-        page.commands = commands();
+        page.commands = commands(inn);
         map_events.events.push(event);
     }
     if case == 0 {
-        world.resource_mut::<RunningEvent>().start(7, commands());
+        world.resource_mut::<RunningEvent>().start(7, commands(inn));
     }
 }
 
-pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+pub(crate) fn drive(world: &mut World, frame: u32, inn: bool) -> Option<&'static str> {
     if frame == 300 {
         world.init_resource::<Probe>();
+        world.resource_mut::<Probe>().inn = inn;
     }
     if !(300..900).contains(&frame) {
         return None;
@@ -153,6 +172,18 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         assert!(!world.resource::<Transition>().event_erased);
         world.resource_mut::<Switches>().set(4800, false);
         world.resource_mut::<Probe>().completed |= 1 << case;
+        if inn {
+            assert_eq!(
+                world.resource::<crate::vitals::Vitals>().get_stored(1),
+                None
+            );
+            assert!(!world.resource::<crate::shop::inn::State>().active());
+            return Some(match case {
+                0 => "async-inn-foreground",
+                1 => "async-inn-common",
+                _ => "async-inn-map",
+            });
+        }
         return Some(match case {
             0 => "async-transition-foreground",
             1 => "async-transition-common",
@@ -166,6 +197,13 @@ pub(crate) fn verify_finished(world: &World) {
     let probe = world.resource::<Probe>();
     assert_eq!(probe.completed, 7);
     assert!(probe.checks >= 210);
+    if probe.inn {
+        info!(
+            "async inns: {} ordered states across foreground, common and map owners; healing and disabled gates verified",
+            probe.checks
+        );
+        return;
+    }
     info!(
         "async transitions: {} ordered states across foreground, common and map owners; redundant erase, instantaneous show and disabled gates verified",
         probe.checks

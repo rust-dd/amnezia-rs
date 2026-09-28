@@ -318,7 +318,7 @@ fn drive_tweens(
     scenes: crate::world::ScenePause,
     mut pictures: Query<&mut Picture>,
 ) {
-    if scenes.paused() {
+    if scenes.map_effects_paused() {
         return;
     }
     let dt = time.delta_secs();

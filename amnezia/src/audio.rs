@@ -179,11 +179,17 @@ impl Plugin for AudioPlugin {
             })
             .add_systems(
                 Update,
-                (play_requests, drive_bgm_fade)
+                (flush, drive_bgm_fade)
                     .chain()
                     .in_set(AudioRequests)
                     .after(crate::interpreter::InterpreterStep),
             );
+    }
+}
+
+pub(crate) fn flush(world: &mut World) {
+    if world.contains_resource::<AssetServer>() && world.contains_resource::<MemorizedBgm>() {
+        world.run_system_cached(play_requests).unwrap();
     }
 }
 

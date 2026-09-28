@@ -11,6 +11,7 @@ pub(crate) struct ScenePause<'w> {
     fade: Option<Res<'w, crate::teleport::Fade>>,
     menu: Option<Res<'w, crate::menu::MenuOpen>>,
     shop: Option<Res<'w, crate::shop::ShopOpen>>,
+    inn: Option<Res<'w, crate::shop::inn::State>>,
     battle: Option<Res<'w, crate::battle::BattleActive>>,
     title: Option<Res<'w, crate::title::TitleActive>>,
     gameover: Option<Res<'w, crate::gameover::GameOverActive>>,
@@ -21,21 +22,43 @@ pub(crate) struct ScenePause<'w> {
 
 impl ScenePause<'_> {
     pub(crate) fn paused(&self) -> bool {
+        self.blocked()
+            || self.inn.as_ref().is_some_and(|inn| inn.resting())
+            || self.battle.as_ref().is_some_and(|v| v.0)
+            || self.characters_paused()
+    }
+
+    fn characters_paused(&self) -> bool {
+        let waiting = self.frame.as_ref().is_some_and(|v| v.0);
+        self.continuation
+            .as_ref()
+            .map_or(waiting, |state| state.characters_paused(waiting))
+    }
+
+    pub(crate) fn message_paused(&self) -> bool {
+        self.blocked()
+            || (!self.inn.as_ref().is_some_and(|inn| inn.closing())
+                && (self.inn.as_ref().is_some_and(|inn| inn.resting()) || self.characters_paused()))
+    }
+
+    pub(crate) fn map_effects_paused(&self) -> bool {
         self.screen_effects_paused() || self.battle.as_ref().is_some_and(|v| v.0)
     }
 
     pub(crate) fn screen_effects_paused(&self) -> bool {
         let waiting = self.frame.as_ref().is_some_and(|v| v.0);
         self.blocked()
+            || self.inn.as_ref().is_some_and(|inn| inn.resting())
             || self
                 .continuation
                 .as_ref()
-                .map_or(waiting, |state| state.characters_paused(waiting))
+                .map_or(waiting, |state| state.effects_paused(waiting))
     }
 
     pub(crate) fn tail_paused(&self) -> bool {
         let waiting = self.frame.as_ref().is_some_and(|v| v.0);
         self.blocked()
+            || self.inn.as_ref().is_some_and(|inn| inn.resting())
             || self.battle.as_ref().is_some_and(|v| v.0)
             || self
                 .continuation

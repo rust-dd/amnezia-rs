@@ -11,6 +11,7 @@ use crate::transitions::Transition;
 use crate::vitals::Vitals;
 use bevy::ecs::system::RunSystemOnce;
 
+mod continuation;
 mod music;
 mod timing;
 
@@ -18,6 +19,7 @@ fn app() -> App {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
         .init_resource::<State>()
+        .init_resource::<crate::interpreter::continuation::Continuation>()
         .init_resource::<ShopOpen>()
         .init_resource::<ShopOutcome>()
         .init_resource::<Dialogue>()
@@ -38,7 +40,7 @@ fn app() -> App {
         ))))
         .add_message::<ShopRequest>()
         .add_message::<AudioRequest>()
-        .add_systems(Update, (flow::open, flow::accept, flow::advance).chain());
+        .add_systems(Update, (open_pending, flow::accept, flow::advance).chain());
     app.update();
     app.world_mut().resource_mut::<Inventory>().add_gold(100);
     app.world_mut().resource_mut::<Vitals>().set(1, 2, 0);
@@ -131,6 +133,7 @@ fn affordability_is_captured_when_the_original_inn_question_opens() {
     assert_eq!(app.world().resource::<State>().gold, 100);
     app.world_mut().resource_mut::<Choice>().result = Some(0);
     app.world_mut().resource_mut::<Dialogue>().close();
+    flow::accept(app.world_mut());
     app.world_mut().run_system_once(flow::advance).unwrap();
     assert!(app.world().resource::<State>().resting());
     assert_eq!(app.world().resource::<Inventory>().gold(), 0);
@@ -143,6 +146,7 @@ fn no_and_escape_leave_without_payment_heal_or_audio_changes() {
         open(&mut app, 30);
         app.world_mut().resource_mut::<Choice>().result = Some(result);
         app.world_mut().resource_mut::<Dialogue>().close();
+        flow::accept(app.world_mut());
         app.world_mut().run_system_once(flow::advance).unwrap();
         assert!(!app.world().resource::<ShopOpen>().0);
         assert!(!app.world().resource::<ShopOutcome>().transacted);
@@ -158,6 +162,7 @@ fn accepted_stay_charges_before_rest_but_heals_only_party_at_the_show_transition
     open(&mut app, 30);
     app.world_mut().resource_mut::<Choice>().result = Some(0);
     app.world_mut().resource_mut::<Dialogue>().close();
+    flow::accept(app.world_mut());
     app.world_mut().run_system_once(flow::advance).unwrap();
     assert_eq!(app.world().resource::<Inventory>().gold(), 70);
     assert_eq!(app.world().resource::<Vitals>().get_stored(1), Some((2, 0)));

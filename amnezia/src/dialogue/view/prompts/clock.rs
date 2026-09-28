@@ -62,7 +62,7 @@ fn update(
         frames.frame,
         battle.is_some_and(|battle| battle.0),
         prompts.number.is_some_and(|number| number.active()),
-        scene.screen_effects_paused(),
+        scene.message_paused(),
     );
 }
 

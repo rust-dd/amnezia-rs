@@ -25,7 +25,8 @@ pub(super) fn open(
     mut number: ResMut<InputNumber>,
     inventory: Res<Inventory>,
     terms: Res<Terms>,
-) {
+) -> bool {
+    let mut free = false;
     for request in requests.read() {
         let ShopRequest::ShowInn {
             cost,
@@ -36,6 +37,7 @@ pub(super) fn open(
             continue;
         };
         let cost = (*cost).max(0);
+        free = cost == 0;
         *state = State {
             gold: inventory.gold(),
             ..default()
@@ -68,6 +70,7 @@ pub(super) fn open(
         }
         state.phase = Phase::Prompt { cost };
     }
+    free
 }
 
 #[derive(SystemParam)]
@@ -84,61 +87,56 @@ pub(super) fn advance(
     mut state: ResMut<State>,
     mut open: ResMut<ShopOpen>,
     mut outcome: ResMut<ShopOutcome>,
-    mut inventory: ResMut<Inventory>,
     mut vitals: ResMut<Vitals>,
     party: Res<Party>,
     dialogue: Res<Dialogue>,
-    mut choice: ResMut<Choice>,
     frames: Res<GameFrames>,
     time: Res<Time<Real>>,
     mut transition: ResMut<Transition>,
     mut playback: Playback,
 ) {
-    accept_result(&mut state, &mut open, &mut inventory, &mut choice);
-    let finished = match state.phase {
-        Phase::Idle | Phase::Prompt { .. } => return,
-        Phase::Closing => {
-            if dialogue.busy() || transition.busy() {
-                return;
+    let finished = loop {
+        break match state.phase {
+            Phase::Idle | Phase::Prompt { .. } => return,
+            Phase::Closing => {
+                if dialogue.busy() || transition.busy() {
+                    return;
+                }
+                open.0 = true;
+                transition.start(Kind::Fade, true, frames.frame, IVec2::new(160, 120));
+                state.phase = Phase::FadeOut {
+                    started: time.elapsed(),
+                };
+                continue;
             }
-            open.0 = true;
-            state.before = playback.current.track();
-            playback
-                .audio
-                .write(AudioRequest::FadeOutBgm { duration: 0.8 });
-            transition.start(Kind::Fade, true, frames.frame, IVec2::new(160, 120));
-            state.phase = Phase::FadeOut {
-                started: time.elapsed(),
-            };
-            false
-        }
-        Phase::FadeOut { started } => {
-            if transition.busy() {
-                return;
+            Phase::FadeOut { started } => {
+                if transition.busy() {
+                    return;
+                }
+                let request = AudioRequest::music_once(crate::system_bgm::resolve(
+                    playback.overrides.as_deref(),
+                    2,
+                    &playback.music.inn,
+                ));
+                let silent = request == AudioRequest::StopBgm;
+                if !silent {
+                    playback.audio.write(request);
+                    state.phase = Phase::Resting { started };
+                }
+                silent
             }
-            let request = AudioRequest::music_once(crate::system_bgm::resolve(
-                playback.overrides.as_deref(),
-                2,
-                &playback.music.inn,
-            ));
-            let silent = request == AudioRequest::StopBgm;
-            if !silent {
-                playback.audio.write(request);
-                state.phase = Phase::Resting { started };
+            Phase::Resting { started } => rest_finished(
+                playback.current.playing_or_pending(&playback.sinks),
+                time.elapsed().saturating_sub(started),
+            ),
+            Phase::FadeIn => {
+                if !transition.busy() {
+                    state.phase = Phase::Idle;
+                    open.0 = false;
+                }
+                false
             }
-            silent
-        }
-        Phase::Resting { started } => rest_finished(
-            playback.current.playing_or_pending(&playback.sinks),
-            time.elapsed().saturating_sub(started),
-        ),
-        Phase::FadeIn => {
-            if !transition.busy() {
-                state.phase = Phase::Idle;
-                open.0 = false;
-            }
-            false
-        }
+        };
     };
     if finished {
         playback.audio.write(AudioRequest::StopBgm);
@@ -158,26 +156,34 @@ pub(super) fn advance(
     }
 }
 
-pub(super) fn accept(
+pub(super) fn begin_stay(world: &mut World) {
+    crate::audio::flush(world);
+    let before = world.resource::<CurrentBgm>().track();
+    world.resource_mut::<State>().before = before;
+    world.write_message(AudioRequest::FadeOutBgm { duration: 0.8 });
+    // UpdateInn immediately revisits the already-closing message on acceptance.
+    world.resource_mut::<Dialogue>().advance_inn_close();
+    world.run_system_cached(advance).unwrap();
+}
+
+pub(super) fn accept(world: &mut World) {
+    if world.run_system_cached(accept_result).unwrap() {
+        begin_stay(world);
+        crate::interpreter::continuation::suspend_message(world);
+    }
+}
+
+fn accept_result(
     mut state: ResMut<State>,
     mut open: ResMut<ShopOpen>,
     mut inventory: ResMut<Inventory>,
     mut choice: ResMut<Choice>,
-) {
-    accept_result(&mut state, &mut open, &mut inventory, &mut choice);
-}
-
-fn accept_result(
-    state: &mut State,
-    open: &mut ShopOpen,
-    inventory: &mut Inventory,
-    choice: &mut Choice,
-) {
+) -> bool {
     let Phase::Prompt { cost } = state.phase else {
-        return;
+        return false;
     };
     let Some(result) = choice.result.take() else {
-        return;
+        return false;
     };
     if result != 0 {
         state.phase = Phase::Idle;
@@ -186,6 +192,7 @@ fn accept_result(
         inventory.remove_gold(cost);
         state.phase = Phase::Closing;
     }
+    result == 0
 }
 
 pub(super) fn rest_finished(playing: bool, elapsed: Duration) -> bool {

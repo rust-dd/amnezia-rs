@@ -9,7 +9,7 @@ pub(super) fn finished(world: &mut World, scenario: &str) {
             "airship escape never reached the next dream scene"
         );
     }
-    if scenario == "async-transitions" {
+    if matches!(scenario, "async-transitions" | "async-inns") {
         crate::interpreter::continuation::smoke::verify_finished(world);
     } else if scenario == "inn" {
         crate::shop::inn::smoke::verify_finished(world);

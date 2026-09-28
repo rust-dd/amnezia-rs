@@ -23,7 +23,7 @@ impl Scenes<'_> {
             || self
                 .continuation
                 .as_ref()
-                .map_or(waiting, |state| state.characters_paused(waiting))
+                .map_or(waiting, |state| state.effects_paused(waiting))
     }
 
     pub(crate) fn paused(&self) -> bool {

@@ -8,6 +8,6 @@ pub(crate) struct MessagePause<'w> {
 
 impl MessagePause<'_> {
     pub(crate) fn paused(&self) -> bool {
-        self.scene.screen_effects_paused() || self.transition.paused()
+        self.scene.message_paused() || self.transition.paused()
     }
 }

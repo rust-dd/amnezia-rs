@@ -23,7 +23,7 @@ pub(super) fn run(world: &mut World) {
     crate::interpreter::foreground::refresh(world);
     let continuation = world.resource::<Continuation>();
     let resume = continuation.resume_owner();
-    if continuation.waiting() || resume == Some(Owner::Foreground) {
+    if continuation.waiting() || matches!(resume, Some(Owner::Foreground | Owner::Message)) {
         return;
     }
     if world.run_system_cached_with(step, Phase::Begin).unwrap() == Progress::Paused {

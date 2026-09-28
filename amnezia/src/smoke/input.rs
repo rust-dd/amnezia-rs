@@ -114,6 +114,7 @@ fn run_script(world: &mut World) {
                 | "ui-layers"
                 | "normal-transfers"
                 | "async-transitions"
+                | "async-inns"
         )
         && frame.is_multiple_of(15)
         && (world.resource::<crate::dialogue::Dialogue>().active

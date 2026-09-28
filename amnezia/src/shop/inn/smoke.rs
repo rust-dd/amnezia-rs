@@ -27,7 +27,10 @@ pub(crate) use pixels::snapshot;
 
 pub(crate) fn configure(app: &mut App) {
     crate::timing::logical::pre(app, || observation::release_finished_input);
-    app.add_systems(Update, observation::update.after(super::flow::advance));
+    app.add_systems(
+        Update,
+        observation::update.after(crate::interpreter::InterpreterStep),
+    );
 }
 
 pub(crate) fn entry() -> Vec<amnezia_data::EventCommand> {
@@ -219,7 +222,7 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         }
         Step::Rest => {
             if matches!(world.resource::<State>().phase, Phase::Closing) {
-                assert!(world.resource::<Dialogue>().busy());
+                assert!(!world.resource::<Transition>().busy());
                 assert!(!world.resource::<ShopOpen>().0);
                 assert!(world.resource::<RunningEvent>().active());
                 fixtures::verify_vitals(world, false);

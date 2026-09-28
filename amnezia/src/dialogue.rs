@@ -122,6 +122,12 @@ impl Dialogue {
         self.active || self.lifecycle.busy()
     }
 
+    pub(crate) fn advance_inn_close(&mut self) {
+        if !self.active && self.busy() {
+            self.lifecycle.step();
+        }
+    }
+
     pub(crate) fn allows_next(&self, foreground: bool) -> bool {
         !self.active && self.lifecycle.allows_next(foreground)
     }
