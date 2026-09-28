@@ -5,6 +5,7 @@ struct Trace {
     entity: Entity,
     cells: Vec<Entity>,
     frame: usize,
+    elapsed: u32,
     held: u32,
     captured: bool,
     cleared: bool,
@@ -12,6 +13,7 @@ struct Trace {
 
 pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 1010 {
+        let elapsed = playback::saved::snapshot(world).cast.unwrap().elapsed;
         let (entity, animation) = world
             .query::<(Entity, &playback::LiveAnimation)>()
             .single(world)
@@ -20,12 +22,30 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             entity,
             cells: animation.cells.clone(),
             frame: animation.frame,
+            elapsed,
             held: 0,
             captured: false,
             cleared: false,
         };
         world.insert_resource(trace);
         world.resource_mut::<crate::teleport::PendingTeleport>().0 = Some((13, 61, 60));
+    }
+    if frame == 1011 {
+        let elapsed = playback::saved::snapshot(world).cast.unwrap().elapsed;
+        let trace = world.resource::<Trace>();
+        assert_eq!(elapsed, trace.elapsed + 1);
+        let animation = world.get::<playback::LiveAnimation>(trace.entity).unwrap();
+        assert_eq!(animation.frame, elapsed as usize / 2);
+        assert_eq!(animation.cells.len(), trace.cells.len());
+        assert_eq!(
+            animation.cells == trace.cells,
+            animation.frame == trace.frame
+        );
+        let cells = animation.cells.clone();
+        let next = animation.frame;
+        let mut trace = world.resource_mut::<Trace>();
+        trace.frame = next;
+        trace.cells = cells;
     }
     if (1011..1110).contains(&frame) {
         let trace = world.resource::<Trace>();

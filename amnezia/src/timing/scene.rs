@@ -38,7 +38,7 @@ impl Waiting<'_> {
             || self
                 .teleport
                 .as_ref()
-                .is_some_and(|pending| pending.0.is_some())
+                .is_some_and(|pending| pending.reloading())
             || self
                 .new_game
                 .as_ref()

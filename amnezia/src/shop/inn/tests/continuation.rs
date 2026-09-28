@@ -262,3 +262,46 @@ fn nested_make_way_discards_free_rest_but_retains_the_stay_branch_and_command_cu
     assert!(!app.world().resource::<Transition>().busy());
     assert!(heard(&mut app).is_empty());
 }
+
+#[test]
+fn an_ordinary_transfer_waits_for_inn_continuation_and_the_remaining_map_visit() {
+    let mut app = interpreter_app();
+    app.add_plugins((AssetPlugin::default(), crate::teleport::TeleportPlugin))
+        .init_asset::<Image>()
+        .add_message::<crate::world::MapChanged>();
+    let hero = app
+        .world_mut()
+        .query_filtered::<Entity, With<crate::player::Player>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut()
+        .entity_mut(hero)
+        .insert(Transform::default());
+    app.insert_resource(CommonEvents(vec![
+        common(
+            1,
+            vec![
+                command(10810, vec![3, 7, 8]),
+                command(10730, vec![0, 0, 1]),
+                increment(1),
+            ],
+        ),
+        common(2, vec![increment(2)]),
+    ]));
+    app.world_mut()
+        .resource_mut::<RunningEvent>()
+        .start(7, vec![increment(3)]);
+    for frame in [0, 35, 69] {
+        tick(&mut app, frame);
+        assert_eq!(counts(&app), [0; 3]);
+        assert!(!app.world().resource::<crate::teleport::Fade>().busy());
+        assert_eq!(
+            app.world().resource::<crate::teleport::PendingTeleport>().0,
+            Some((3, 7, 8))
+        );
+    }
+    tick(&mut app, 70);
+    assert_eq!(counts(&app), [1; 3]);
+    assert!(app.world().resource::<crate::teleport::Fade>().busy());
+    assert!(!app.world().resource::<State>().active());
+}

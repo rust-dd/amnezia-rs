@@ -17,6 +17,8 @@ pub(super) fn finished(world: &mut World, scenario: &str) {
         crate::teleport::smoke::verify_finished(world);
     } else if scenario == "normal-transfers" {
         crate::teleport::normal_smoke::verify_finished(world);
+    } else if scenario == "reserved-transfers" {
+        crate::teleport::reservation_smoke::verify_finished(world);
     } else if scenario == "shop" {
         crate::shop::smoke::verify_finished(world);
     } else if scenario == "save-slots" {

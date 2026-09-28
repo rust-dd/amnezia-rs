@@ -5,6 +5,7 @@ use crate::world::{MapEffectsReset, MapRebuilt};
 use bevy::prelude::*;
 
 pub(crate) mod normal_smoke;
+pub(crate) mod reservation_smoke;
 mod scene;
 pub(crate) mod smoke;
 #[cfg(test)]
@@ -29,6 +30,10 @@ impl PendingTeleport {
 
     pub(crate) fn quick(&mut self, map_id: u32, x: u32, y: u32) {
         self.2 = Some((map_id, x, y));
+    }
+
+    pub(crate) fn reloading(&self) -> bool {
+        self.0.is_some() && self.1
     }
 }
 
@@ -60,6 +65,9 @@ pub struct TeleportPlugin;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct MapTransfer;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct TransferCommit;
+
 impl Plugin for TeleportPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<PendingTeleport>()
@@ -72,6 +80,11 @@ impl Plugin for TeleportPlugin {
                     .in_set(MapTransfer)
                     .before(crate::interpreter::InterpreterStep),
             );
+        crate::timing::logical::post(app, || {
+            begin_pending
+                .in_set(TransferCommit)
+                .after(crate::panorama::PanoramaAdvance)
+        });
     }
 }
 
@@ -104,20 +117,9 @@ fn drive_fade(
     let center = IVec2::new(160, 120);
     match fade.phase {
         Phase::Idle => {
-            let Some(target) = pending.0.take() else {
-                return;
-            };
-            fade.target = Some(target);
-            fade.reload = std::mem::take(&mut pending.1);
-            let kind = if fade.reload {
-                Kind::Fade
-            } else {
-                transition.kind(0)
-            };
-            if !transition.state.erased() {
-                transition.state.start(kind, true, now, center);
+            if pending.reloading() {
+                begin(&mut transition, &mut pending, &mut fade);
             }
-            fade.phase = Phase::Out;
         }
         Phase::Out => {
             if let Some(target) = fade.target.take() {
@@ -138,6 +140,44 @@ fn drive_fade(
         }
         Phase::In => fade.phase = Phase::Idle,
     }
+}
+
+fn begin_pending(world: &mut World) {
+    if world.resource::<PendingTeleport>().0.is_none()
+        || world
+            .run_system_cached(|scene: crate::world::ScenePause| scene.tail_paused())
+            .unwrap()
+    {
+        return;
+    }
+    world.run_system_cached(start_pending).unwrap();
+}
+
+fn start_pending(
+    mut transition: TransitionIo,
+    mut pending: ResMut<PendingTeleport>,
+    mut fade: ResMut<Fade>,
+) {
+    begin(&mut transition, &mut pending, &mut fade);
+}
+
+fn begin(transition: &mut TransitionIo, pending: &mut PendingTeleport, fade: &mut Fade) {
+    let Some(target) = pending.0.take() else {
+        return;
+    };
+    fade.target = Some(target);
+    fade.reload = std::mem::take(&mut pending.1);
+    let kind = if fade.reload {
+        Kind::Fade
+    } else {
+        transition.kind(0)
+    };
+    if !transition.state.erased() {
+        transition
+            .state
+            .start(kind, true, transition.frames.frame, IVec2::new(160, 120));
+    }
+    fade.phase = Phase::Out;
 }
 
 #[cfg(test)]

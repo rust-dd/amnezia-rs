@@ -91,6 +91,18 @@ fn map_rebuild_requests_hold_the_counter_without_losing_the_raw_fraction() {
 }
 
 #[test]
+fn an_ordinary_transfer_reservation_does_not_pause_the_map_visit() {
+    let mut app = app(60);
+    app.insert_resource(crate::teleport::PendingTeleport::default());
+    app.world_mut()
+        .resource_mut::<crate::teleport::PendingTeleport>()
+        .0 = Some((5, 0, 0));
+    app.update();
+    assert!(!app.world().resource::<SceneWait>().0);
+    assert_eq!(app.world().resource::<SceneFrames>().frame, 1);
+}
+
+#[test]
 fn a_requested_new_game_cannot_age_the_scene_before_rebuilding() {
     let mut app = app(60);
     app.init_resource::<crate::session::NewGameRequest>();

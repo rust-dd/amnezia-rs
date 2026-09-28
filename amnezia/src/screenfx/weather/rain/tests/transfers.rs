@@ -39,7 +39,11 @@ fn real_local_cross_map_and_reload_transfers_preserve_and_freeze_rain() {
             app.world_mut().resource_mut::<PendingTeleport>().0 = Some((destination, 8, 7));
         }
         let initial = app.world().resource::<Rain>().drops.clone();
-        let fraction = app.world().resource::<Rain>().fraction;
+        let mut expected = Rain::new(crate::interpreter::EventRng::seeded(31415));
+        assert_eq!(expected.drops, initial);
+        if !reload {
+            expected.advance(std::time::Duration::from_secs_f64(1.0 / 60.0).as_secs_f64());
+        }
         let canvas = app
             .world_mut()
             .query_filtered::<Entity, With<Canvas>>()
@@ -55,8 +59,8 @@ fn real_local_cross_map_and_reload_transfers_preserve_and_freeze_rain() {
                 break;
             }
             held += 1;
-            assert_eq!(app.world().resource::<Rain>().drops, initial);
-            assert_eq!(app.world().resource::<Rain>().fraction, fraction);
+            assert_eq!(app.world().resource::<Rain>().drops, expected.drops);
+            assert_eq!(app.world().resource::<Rain>().fraction, expected.fraction);
             assert_eq!(
                 *app.world().get::<Visibility>(canvas).unwrap(),
                 Visibility::Inherited

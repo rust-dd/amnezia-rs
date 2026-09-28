@@ -86,3 +86,33 @@ fn a_saved_camera_scroll_pending_at_the_command_boundary_applies_exactly_once() 
         assert_eq!(phase(&app), [before[0] + 4, before[1]]);
     }
 }
+
+#[test]
+fn the_last_background_tick_precedes_committing_an_ordinary_transfer() {
+    let mut app = loading::loaded_without_tiles_with(|app| {
+        app.add_plugins((
+            crate::transitions::TransitionPlugin,
+            crate::teleport::TeleportPlugin,
+        ))
+        .init_resource::<crate::state::Switches>()
+        .init_resource::<crate::state::Variables>()
+        .init_resource::<crate::state::Inventory>()
+        .init_resource::<crate::state::Party>()
+        .init_resource::<crate::world::MapEvents>()
+        .add_message::<crate::world::MapChanged>();
+    });
+    loading::change(&mut app, "Sky", &[1, 1, 1, -1, 1, 1]);
+    let before = phase(&app);
+    app.world_mut()
+        .resource_mut::<crate::teleport::PendingTeleport>()
+        .0 = Some((94, 1, 2));
+    app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
+        std::time::Duration::from_secs_f64(1.0 / 60.0),
+    ));
+    app.update();
+    assert_eq!(phase(&app), [before[0] + 2, before[1] - 2]);
+    assert!(app.world().resource::<crate::teleport::Fade>().busy());
+    let after = phase(&app);
+    app.update();
+    assert_eq!(phase(&app), after);
+}

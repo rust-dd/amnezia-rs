@@ -58,17 +58,28 @@ fn restored(world: &mut World, frame: u32) -> Option<&'static str> {
     None
 }
 
+fn before_capture_ready(frame: u32, checks: u8, state: &saved::MapState) -> bool {
+    (321..324).contains(&frame)
+        && checks & 32 == 0
+        && state.cast.as_ref().is_some_and(|cast| cast.elapsed == 20)
+}
+
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if let Some(label) = restored(world, frame) {
         return Some(label);
+    }
+    let state = saved::snapshot(world);
+    if before_capture_ready(frame, world.resource::<Fixture>().checks, &state) {
+        world.resource_mut::<Fixture>().checks |= 32;
+        return Some("saved-animation-before");
     }
     let path = world.resource::<Fixture>().slot.path(world);
     match frame {
         260 => world.resource_mut::<TintState>().set_tone([100.0; 4]),
         300 | 470 | 660 => start(world),
         320 | 650 => world.resource_mut::<EventSaveRequest>().0 = true,
-        321 => return Some("saved-animation-before"),
         324 => {
+            assert_ne!(world.resource::<Fixture>().checks & 32, 0);
             let game = read_save(&path).unwrap();
             assert_eq!(game.format_version, SAVE_FORMAT_VERSION);
             let cast = game.map_animation.cast.as_ref().unwrap();
@@ -129,10 +140,38 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
 
 pub(crate) fn verify_finished(world: &mut World) {
     let fixture = world.remove_resource::<Fixture>().unwrap();
-    assert_eq!(fixture.checks, 31);
+    assert_eq!(fixture.checks, 63);
     saved::smoke::verify_finished(world);
     fixture.slot.finish(world);
     info!(
         "saved map animation: exact restore, frozen reload, target flash, resumed bitmap, completion and legacy/empty slots verified"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_before_capture_waits_for_the_exact_live_tick_after_the_save_menu_closes() {
+        for elapsed in 19..=21 {
+            let state = saved::MapState {
+                cast: Some(saved::CastState {
+                    id: 62,
+                    target: crate::animation::AnimTarget::Hero,
+                    global: false,
+                    elapsed,
+                }),
+                ..default()
+            };
+            for frame in 320..=324 {
+                assert_eq!(
+                    before_capture_ready(frame, 0, &state),
+                    (321..324).contains(&frame) && elapsed == 20
+                );
+                assert!(!before_capture_ready(frame, 32, &state));
+            }
+        }
+        assert!(!before_capture_ready(322, 0, &default()));
+    }
 }

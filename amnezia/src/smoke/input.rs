@@ -113,6 +113,7 @@ fn run_script(world: &mut World) {
                 | "actor-names"
                 | "ui-layers"
                 | "normal-transfers"
+                | "reserved-transfers"
                 | "async-transitions"
                 | "async-inns"
         )

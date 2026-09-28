@@ -58,6 +58,8 @@ impl Plugin for SmokePlugin {
             crate::save::weather_smoke::configure(app);
         } else if scenario == "save-animations" {
             crate::save::animation_smoke::configure(app);
+        } else if scenario == "reserved-transfers" {
+            crate::teleport::reservation_smoke::configure(app);
         }
         app.insert_resource(completion::Completion::new(scenario));
         app.insert_resource(SmokeRun {
@@ -199,6 +201,11 @@ fn drive(world: &mut World) {
     }
     if scenario == "normal-transfers"
         && let Some(label) = crate::teleport::normal_smoke::drive(world, frame)
+    {
+        capture(world, label);
+    }
+    if scenario == "reserved-transfers"
+        && let Some(label) = crate::teleport::reservation_smoke::drive(world, frame)
     {
         capture(world, label);
     }

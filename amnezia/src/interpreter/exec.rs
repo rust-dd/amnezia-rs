@@ -74,7 +74,6 @@ impl Exec<'_, '_> {
             || self.subsystems.event_save.0
             || self.subsystems.mapfx.transitions.state.busy()
             || overlay_open
-            || self.pending.0.is_some()
             || self.subsystems.flow.title.0
             || self.subsystems.gameover.0
     }

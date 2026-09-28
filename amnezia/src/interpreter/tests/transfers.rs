@@ -1,5 +1,7 @@
 use super::*;
 
+mod reservations;
+
 #[test]
 fn airship_parallel_transfer_restores_music_and_tint_before_the_map_unloads() {
     let map = crate::assets::load_ron::<amnezia_data::Map>(&format!(

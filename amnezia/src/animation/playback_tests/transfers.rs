@@ -2,7 +2,7 @@ use super::*;
 use crate::world::{MapChanged, MapEffectsReset};
 
 #[test]
-fn a_real_same_map_teleport_keeps_the_animation_frozen_but_visible() {
+fn a_real_same_map_teleport_freezes_after_the_last_old_map_animation_tick() {
     let (mut app, hero, _) = super::map_targets::map_app(60);
     app.add_plugins((
         crate::transitions::TransitionPlugin,
@@ -35,7 +35,18 @@ fn a_real_same_map_teleport_keeps_the_animation_frozen_but_visible() {
     app.world_mut()
         .resource_mut::<crate::teleport::PendingTeleport>()
         .0 = Some((3, 8, 7));
-    let mut held = 0;
+    app.update();
+    assert!(app.world().resource::<crate::teleport::Fade>().busy());
+    let animation = app.world().get::<LiveAnimation>(entity).unwrap();
+    assert_eq!(animation.frame, frame + 1);
+    assert_eq!(animation.cells.len(), cells.len());
+    assert!(
+        cells
+            .iter()
+            .all(|cell| app.world().get_entity(*cell).is_err())
+    );
+    let cells = animation.cells.clone();
+    let mut held = 1;
     for _ in 0..80 {
         app.update();
         if !app.world().resource::<crate::teleport::Fade>().busy() {
@@ -43,7 +54,7 @@ fn a_real_same_map_teleport_keeps_the_animation_frozen_but_visible() {
         }
         held += 1;
         let animation = app.world().get::<LiveAnimation>(entity).unwrap();
-        assert_eq!(animation.frame, frame);
+        assert_eq!(animation.frame, frame + 1);
         assert_eq!(animation.cells, cells);
         for &cell in &cells {
             assert_ne!(

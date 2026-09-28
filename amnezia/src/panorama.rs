@@ -103,6 +103,9 @@ pub struct PanoramaPlugin;
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub(crate) struct PanoramaDraw;
 
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct PanoramaAdvance;
+
 impl Plugin for PanoramaPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Panorama>()
@@ -115,7 +118,7 @@ impl Plugin for PanoramaPlugin {
                     .after(crate::screenfx::ScreenShakeSet)
                     .before(bevy::transform::TransformSystems::Propagate),
             );
-        crate::timing::logical::post(app, || advance);
+        crate::timing::logical::post(app, || advance.in_set(PanoramaAdvance));
     }
 }
 

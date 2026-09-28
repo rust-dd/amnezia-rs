@@ -83,6 +83,7 @@ fn ordinary_cross_map_transfer_clears_only_the_foreground_stack_event_ids() {
     let mut expected = app.world().resource::<RunningEvent>().frame.clone();
     expected.event_id = 0;
     expected.call_stack[0].event_id = 0;
+    expected.wait -= 1.0 / 60.0;
     arrive(&mut app, 4, false);
     assert_eq!(app.world().resource::<RunningEvent>().frame, expected);
 }

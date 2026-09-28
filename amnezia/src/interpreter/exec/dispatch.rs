@@ -290,7 +290,11 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
                 }
             }
             frame.ip += 1;
-            Flow::Yield
+            if frame.parallel {
+                Flow::Advance
+            } else {
+                Flow::Yield
+            }
         }
         HALT_ALL_MOVEMENT => {
             x.subsystems.mapfx.vehicles.clear_motion();

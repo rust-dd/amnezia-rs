@@ -3,6 +3,10 @@ use bevy::image::{CompressedImageFormats, ImageLoader};
 use std::time::{Duration, Instant};
 
 fn app() -> App {
+    app_with(|_| {})
+}
+
+fn app_with(configure: impl FnOnce(&mut App)) -> App {
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,
@@ -26,6 +30,7 @@ fn app() -> App {
     ));
     app.insert_resource(map);
     app.world_mut().spawn((MainCamera, Transform::default()));
+    configure(&mut app);
     app.finish();
     app.cleanup();
     app
@@ -47,7 +52,11 @@ fn wait_for(app: &mut App, ready: impl Fn(&mut World) -> bool) {
 }
 
 pub(super) fn loaded_without_tiles() -> App {
-    let mut app = app();
+    loaded_without_tiles_with(|_| {})
+}
+
+pub(super) fn loaded_without_tiles_with(configure: impl FnOnce(&mut App)) -> App {
+    let mut app = app_with(configure);
     app.world_mut().resource_mut::<MapData>().panorama = None;
     app.insert_resource(bevy::time::TimeUpdateStrategy::ManualDuration(
         Duration::ZERO,

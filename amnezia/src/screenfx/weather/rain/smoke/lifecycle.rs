@@ -25,6 +25,19 @@ fn assert_held(world: &World) {
     assert_eq!(world.resource::<Rain>().fraction, trace.fraction);
 }
 
+fn hold_after_transfer_tick(world: &mut World) {
+    fixture(world);
+    hold(world);
+    let mut trace = world.resource_mut::<Trace>();
+    for drop in &mut trace.held {
+        assert!(drop.life > 0);
+        drop.life -= 1;
+        drop.x -= 1;
+        drop.y += 4;
+    }
+    trace.fraction = std::time::Duration::from_secs_f64(1.0 / 60.0).as_secs_f64() * 60.0 - 1.0;
+}
+
 pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     match frame {
         420 => {
@@ -71,7 +84,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             world.resource_mut::<Trace>().checks |= 2;
         }
         550 | 650 => {
-            hold(world);
+            hold_after_transfer_tick(world);
             world.resource_mut::<PendingTeleport>().0 = Some(if frame == 550 {
                 (13, 61, 60)
             } else {
@@ -154,4 +167,22 @@ pub(super) fn verify_finished(world: &World) {
     info!(
         "rain: original weather commands, real menu pause/resume, local/cross-map transfers and active battle rendering verified"
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_transfer_fixture_checks_one_exact_tick_for_every_rain_drop() {
+        let mut world = World::new();
+        world.init_resource::<Rain>();
+        world.init_resource::<Trace>();
+        hold_after_transfer_tick(&mut world);
+        assert_eq!(world.resource::<Trace>().held.len(), 100);
+        world
+            .resource_mut::<Rain>()
+            .advance(std::time::Duration::from_secs_f64(1.0 / 60.0).as_secs_f64());
+        assert_held(&world);
+    }
 }

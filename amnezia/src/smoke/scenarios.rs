@@ -39,7 +39,10 @@ pub(super) fn start(world: &mut World, scenario: &str) {
             | "save-screen"
     ) {
         message_options::entry()
-    } else if matches!(scenario, "async-transitions" | "async-inns") {
+    } else if matches!(
+        scenario,
+        "async-transitions" | "async-inns" | "reserved-transfers"
+    ) {
         vec![EventCommand {
             code: 10810,
             indent: 0,
@@ -271,6 +274,8 @@ pub(super) fn selected() -> &'static str {
         "quick-transfers"
     } else if std::env::args().any(|arg| arg == "--smoke-normal-transfers") {
         "normal-transfers"
+    } else if std::env::args().any(|arg| arg == "--smoke-reserved-transfers") {
+        "reserved-transfers"
     } else if std::env::args().any(|arg| arg == "--smoke-async-transitions") {
         "async-transitions"
     } else if std::env::args().any(|arg| arg == "--smoke-async-inns") {

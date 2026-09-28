@@ -15,6 +15,7 @@ mod menu;
 mod npcs;
 mod scenes;
 mod stops;
+mod transfers;
 mod triggers;
 mod unpause;
 
