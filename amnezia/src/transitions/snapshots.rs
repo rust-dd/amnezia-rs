@@ -23,6 +23,7 @@ pub(super) struct Capture {
     pub active: bool,
     pub erase: bool,
     pub previous_scene: bool,
+    pub hold_previous: bool,
     completed: Arc<AtomicU64>,
 }
 
@@ -36,6 +37,7 @@ impl Capture {
             active: false,
             erase: false,
             previous_scene: false,
+            hold_previous: false,
             completed: Arc::new(AtomicU64::new(0)),
         }
     }
@@ -59,16 +61,37 @@ fn copy_scene(
     mut context: RenderContext,
     mut before_serial: Local<u64>,
     mut after_serial: Local<u64>,
+    mut held: Local<Option<AssetId<Image>>>,
 ) {
-    let Some(capture) = capture.filter(|capture| capture.active) else {
+    let Some(capture) = capture else {
         return;
     };
     let camera = view.into_inner();
-    let early = camera.order == 0
-        && *before_serial != capture.serial
-        && (!capture.erase || capture.previous_scene);
+    if camera.order == 100 && !capture.active {
+        *held = None;
+    }
+    if !capture.active {
+        return;
+    }
+    let early = camera.order == 0 && *before_serial != capture.serial;
+    let source = if early {
+        held.unwrap_or(capture.live.id())
+    } else {
+        capture.live.id()
+    };
+    if camera.order == 100 {
+        *held = capture.hold_previous.then_some(if capture.erase {
+            capture.after.id()
+        } else {
+            capture.before.id()
+        });
+    }
     let destination = if early {
-        &capture.before
+        if capture.erase {
+            &capture.after
+        } else {
+            &capture.before
+        }
     } else if camera.order == 100 && *after_serial != capture.serial {
         if capture.erase {
             &capture.before
@@ -78,9 +101,39 @@ fn copy_scene(
     } else {
         return;
     };
-    let (Some(source), Some(destination)) = (images.get(&capture.live), images.get(destination))
-    else {
+    if early
+        && capture.previous_scene
+        && capture.erase
+        && !copy(&mut context, &images, source, capture.before.id())
+    {
         return;
+    }
+    if !copy(&mut context, &images, source, destination.id()) {
+        return;
+    }
+    if early {
+        *before_serial = capture.serial;
+        if capture.erase && capture.previous_scene {
+            *after_serial = capture.serial;
+            capture.completed.store(capture.serial, Ordering::SeqCst);
+        }
+    } else {
+        *after_serial = capture.serial;
+        capture.completed.store(capture.serial, Ordering::SeqCst);
+    }
+}
+
+fn copy(
+    context: &mut RenderContext,
+    images: &RenderAssets<GpuImage>,
+    source: AssetId<Image>,
+    destination: AssetId<Image>,
+) -> bool {
+    if source == destination {
+        return true;
+    }
+    let (Some(source), Some(destination)) = (images.get(source), images.get(destination)) else {
+        return false;
     };
     context.command_encoder().copy_texture_to_texture(
         TexelCopyTextureInfo {
@@ -101,14 +154,5 @@ fn copy_scene(
             depth_or_array_layers: 1,
         },
     );
-    if camera.order == 0 {
-        *before_serial = capture.serial;
-        if capture.erase {
-            *after_serial = capture.serial;
-            capture.completed.store(capture.serial, Ordering::SeqCst);
-        }
-    } else {
-        *after_serial = capture.serial;
-        capture.completed.store(capture.serial, Ordering::SeqCst);
-    }
+    true
 }

@@ -104,7 +104,7 @@ fn the_terminal_transition_frame_does_not_tick_a_message_cursor() {
         IVec2::new(160, 120),
         6,
     );
-    for _ in 0..6 {
+    for _ in 0..7 {
         app.update();
         assert_eq!(app.world().resource::<Clock>().source_x(0, false), 64.0);
     }

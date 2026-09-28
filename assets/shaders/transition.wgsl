@@ -16,6 +16,12 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     var rgb = vec3<f32>(0.0);
     if control.x == 20.0 {
         rgb = linear_to_srgb(textureLoad(live, vec2<i32>(pixel), 0).rgb);
+    } else if control.x == 23.0 {
+        if erase {
+            rgb = linear_to_srgb(textureLoad(after, vec2<i32>(pixel), 0).rgb);
+        } else {
+            rgb = linear_to_srgb(textureLoad(before, vec2<i32>(pixel), 0).rgb);
+        }
     } else if control.x == 22.0 {
         rgb = mix(linear_to_srgb(textureLoad(before, vec2<i32>(pixel), 0).rgb),
             vec3<f32>(248.0 / 255.0), control.w);

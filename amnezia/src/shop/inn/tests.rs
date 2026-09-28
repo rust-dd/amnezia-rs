@@ -208,6 +208,11 @@ fn free_stay_skips_prompt_and_prior_erasure_never_suppresses_the_return_fade() {
     assert!(!app.world().resource::<Dialogue>().active);
     assert!(!app.world().resource::<Choice>().active());
     assert_eq!(app.world().resource::<Inventory>().gold(), 100);
+    assert!(matches!(
+        app.world().resource::<State>().phase,
+        Phase::FadeOut { .. }
+    ));
+    app.world_mut().resource_mut::<Transition>().hold_black();
     app.world_mut().run_system_once(flow::advance).unwrap();
     assert!(matches!(
         app.world().resource::<State>().phase,

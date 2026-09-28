@@ -11,144 +11,16 @@ struct Case {
     kind: Kind,
     flashes: bool,
     previous: bool,
+    previous_none: bool,
+    changed: bool,
     erase: bool,
     from_erased: bool,
-    frame: u32,
+    frame: i32,
     center: IVec2,
 }
 
-const CASES: [Case; 13] = [
-    Case {
-        label: "transition-fade-out",
-        flashes: false,
-        previous: false,
-        kind: Kind::Fade,
-        erase: true,
-        from_erased: false,
-        frame: 16,
-        center: IVec2::ZERO,
-    },
-    Case {
-        label: "transition-fade-in",
-        flashes: false,
-        previous: false,
-        kind: Kind::Fade,
-        erase: false,
-        from_erased: true,
-        frame: 16,
-        center: IVec2::ZERO,
-    },
-    Case {
-        label: "transition-crossfade",
-        flashes: false,
-        previous: false,
-        kind: Kind::Fade,
-        erase: false,
-        from_erased: false,
-        frame: 16,
-        center: IVec2::ZERO,
-    },
-    Case {
-        label: "transition-mosaic-out",
-        flashes: false,
-        previous: false,
-        kind: Kind::Mosaic,
-        erase: true,
-        from_erased: false,
-        frame: 20,
-        center: IVec2::ZERO,
-    },
-    Case {
-        label: "transition-mosaic-in",
-        flashes: false,
-        previous: false,
-        kind: Kind::Mosaic,
-        erase: false,
-        from_erased: true,
-        frame: 12,
-        center: IVec2::ZERO,
-    },
-    Case {
-        label: "transition-zoom-out",
-        flashes: false,
-        previous: false,
-        kind: Kind::Zoom,
-        erase: true,
-        from_erased: false,
-        frame: 20,
-        center: IVec2::new(16, 200),
-    },
-    Case {
-        label: "transition-zoom-in",
-        flashes: false,
-        previous: false,
-        kind: Kind::Zoom,
-        erase: false,
-        from_erased: true,
-        frame: 0,
-        center: IVec2::new(300, 16),
-    },
-    Case {
-        label: "transition-cut-out",
-        flashes: false,
-        previous: false,
-        kind: Kind::Cut,
-        erase: true,
-        from_erased: false,
-        frame: 0,
-        center: IVec2::ZERO,
-    },
-    Case {
-        label: "transition-cut-in",
-        flashes: false,
-        previous: false,
-        kind: Kind::Cut,
-        erase: false,
-        from_erased: true,
-        frame: 0,
-        center: IVec2::ZERO,
-    },
-    Case {
-        label: "transition-battle-flash-peak",
-        kind: Kind::Zoom,
-        flashes: true,
-        previous: false,
-        erase: true,
-        from_erased: false,
-        frame: 0,
-        center: IVec2::ZERO,
-    },
-    Case {
-        label: "transition-battle-flash-decay",
-        kind: Kind::Zoom,
-        flashes: true,
-        previous: false,
-        erase: true,
-        from_erased: false,
-        frame: 15,
-        center: IVec2::ZERO,
-    },
-    Case {
-        label: "transition-battle-zoom",
-        kind: Kind::Zoom,
-        flashes: true,
-        previous: false,
-        erase: true,
-        from_erased: false,
-        frame: 40,
-        center: IVec2::new(16, 200),
-    },
-    Case {
-        label: "transition-previous-scene",
-        kind: Kind::Fade,
-        flashes: false,
-        previous: true,
-        erase: true,
-        from_erased: false,
-        frame: 16,
-        center: IVec2::ZERO,
-    },
-];
+mod cases;
+use cases::CASES;
 
 #[derive(Resource)]
 struct Fixture {
@@ -247,17 +119,35 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             let (sprite, image) = (fixture.sprite, fixture.images[0].clone());
             world.get_mut::<Sprite>(sprite).unwrap().image = image;
         }
+        if case.previous_none && frame == start - 5 {
+            let fixture = world.resource::<Fixture>();
+            let (sprite, image) = (fixture.sprite, fixture.images[1].clone());
+            world.get_mut::<Sprite>(sprite).unwrap().image = image;
+            assert!(world.resource_mut::<Transition>().start_for(
+                Kind::None,
+                true,
+                0,
+                IVec2::ZERO,
+                30
+            ));
+        }
         if frame == start {
             let fixture = world.resource::<Fixture>();
             let (sprite, image) = (
                 fixture.sprite,
-                fixture.images[usize::from(!case.erase || case.previous)].clone(),
+                fixture.images[usize::from(!case.erase || case.previous || case.changed)].clone(),
             );
             world.get_mut::<Sprite>(sprite).unwrap().image = image;
             let mut state = world.resource_mut::<Transition>();
+            if case.previous_none {
+                state.advance(31);
+                assert!(!state.busy());
+            }
             state.erased = case.from_erased;
             if case.previous {
                 assert!(state.erase_previous(0, 35));
+            } else if case.kind == Kind::None {
+                assert!(state.start_for(case.kind, case.erase, 0, case.center, 30));
             } else {
                 assert!(state.start(case.kind, case.erase, 0, case.center));
             }
@@ -271,11 +161,15 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         if frame == start + 10 {
             let state = world.resource::<Transition>();
             assert!(world.resource::<snapshots::Capture>().ready(state.serial));
-            world.resource_mut::<crate::timing::GameFrames>().frame = case.frame;
+            let raw = (case.frame + 1) as u32;
+            world.resource_mut::<crate::timing::GameFrames>().frame = raw;
+            world.resource_mut::<Transition>().advance(raw);
             let fixture = world.resource::<Fixture>();
             let (sprite, image) = (
                 fixture.sprite,
-                fixture.images[usize::from(case.erase)].clone(),
+                fixture.images
+                    [usize::from(case.erase || case.frame < 0 || case.kind == Kind::None)]
+                .clone(),
             );
             world.get_mut::<Sprite>(sprite).unwrap().image = image;
         }
@@ -310,8 +204,8 @@ impl Snapshot {
                     } else {
                         40 - case.frame
                     };
-                    let size = step as i32 + 1;
-                    let offset = (step * 7 % (step + 1)) as i32;
+                    let size = step + 1;
+                    let offset = step * 7 % (step + 1);
                     let sample = |pixel: i32| {
                         ((pixel + offset + size / 2) / size * size - size / 2).max(0) as u32
                     };
@@ -329,7 +223,13 @@ impl Snapshot {
                 } else {
                     (x, y)
                 };
-                let expected = if case.flashes && case.frame < 20 {
+                let expected = if case.frame < 0 || case.kind == Kind::None {
+                    if case.from_erased {
+                        [0; 3]
+                    } else {
+                        color(x, y, 0)
+                    }
+                } else if case.flashes && case.frame < 20 {
                     let alpha = if case.frame == 0 { 248 } else { 123 };
                     color(x, y, 0).map(|channel| {
                         ((channel as u32 * (255 - alpha) + 248 * alpha + 127) / 255) as u8
@@ -345,7 +245,7 @@ impl Snapshot {
                         ((first[i] as u32 * 124 + second[i] as u32 * 131 + 127) / 255) as u8
                     })
                 } else {
-                    color(sx, sy, usize::from(!case.erase))
+                    color(sx, sy, usize::from(!case.erase || case.changed))
                 };
                 let actual = crate::display::smoke::pixel_at(image, x, y);
                 assert!(
@@ -371,4 +271,8 @@ pub(crate) fn verify_finished(world: &World) {
         world.resource::<Fixture>().complete.load(Ordering::SeqCst),
         CASES.len()
     );
+}
+
+pub(crate) fn finish_frame() -> u32 {
+    260 + CASES.len() as u32 * 80
 }

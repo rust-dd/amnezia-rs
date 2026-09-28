@@ -116,7 +116,7 @@ fn the_last_transfer_reserved_by_the_old_map_wins() {
         .start(7, vec![cmd(10810, 0, vec![3, 7, 8]), increment(3)]);
     tick(&mut app, 0);
     assert_eq!(counts(&app), [1, 1, 0, 0]);
-    tick(&mut app, 35);
+    tick(&mut app, 36);
     let world = app.world_mut();
     let hero = world.query::<&Player>().single(world).unwrap();
     assert_eq!((hero.tile_x, hero.tile_y), (7, 8));
@@ -146,7 +146,7 @@ fn a_reserved_transfer_waits_for_the_whole_asynchronous_map_visit_to_resume() {
     tick(&mut app, 0);
     assert!(!app.world().resource::<Fade>().busy());
     assert_eq!(counts(&app), [0; 4]);
-    tick(&mut app, 35);
+    tick(&mut app, 36);
     assert_eq!(counts(&app), [1, 2, 1, 0]);
     assert!(!app.world().resource::<Fade>().busy());
     assert!(app.world().resource::<Transition>().erased());
@@ -169,7 +169,7 @@ fn a_later_scene_request_waits_for_the_reserved_transfer() {
     app.world_mut()
         .resource_mut::<RunningEvent>()
         .start(7, vec![cmd(11910, 0, vec![])]);
-    for frame in [0, 35, 36, 69] {
+    for frame in [0, 36, 37, 71] {
         tick(&mut app, frame);
         assert!(!app.world().resource::<EventSaveRequest>().0);
         assert!(
@@ -178,7 +178,7 @@ fn a_later_scene_request_waits_for_the_reserved_transfer() {
                 .pending()
         );
     }
-    tick(&mut app, 70);
+    tick(&mut app, 72);
     assert!(app.world().resource::<EventSaveRequest>().0);
 }
 

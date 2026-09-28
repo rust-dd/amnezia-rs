@@ -46,10 +46,10 @@ fn a_failed_selected_write_preserves_the_destination_and_closes_the_crystal_menu
     app.world_mut().resource_mut::<MenuOpen>().0 = false;
     app.world_mut().resource_mut::<EventSaveRequest>().0 = true;
     step(&mut app, None);
-    advance(&mut app, 12);
+    advance(&mut app, 14);
     step(&mut app, Some(KeyCode::Enter));
     step(&mut app, None);
-    advance(&mut app, 12);
+    advance(&mut app, 14);
     assert!(!app.world().resource::<SaveFiles>().active());
     assert!(!app.world().resource::<MenuOpen>().0);
     assert!(!app.world().resource::<EventSaveRequest>().0);
@@ -81,7 +81,7 @@ fn a_transition_defers_opening_and_the_confirmed_event_write() {
         .clear();
     step(&mut app, None);
     assert!(app.world().resource::<SaveFiles>().active());
-    advance(&mut app, 12);
+    advance(&mut app, 14);
     step(&mut app, Some(KeyCode::Enter));
     app.world_mut()
         .resource_mut::<crate::transitions::Transition>()
@@ -100,7 +100,7 @@ fn a_transition_defers_opening_and_the_confirmed_event_write() {
     step(&mut app, None);
     assert!(app.world().resource::<SaveFiles>().active());
     assert!(directory.join("slot1.ron").is_file());
-    advance(&mut app, 12);
+    advance(&mut app, 14);
     assert!(!app.world().resource::<SaveFiles>().active());
     std::fs::remove_file(directory.join("slot1.ron")).unwrap();
     std::fs::remove_dir(directory).unwrap();

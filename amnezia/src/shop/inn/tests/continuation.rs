@@ -129,12 +129,12 @@ fn free_inn_resumes_foreground_on_the_terminal_fade_frame_without_parallel_repla
         .start(7, vec![command(10730, vec![0, 0, 1]), increment(2)]);
     tick(&mut app, 0);
     assert_eq!(counts(&app), [1, 0, 0]);
-    tick(&mut app, 35);
+    tick(&mut app, 36);
     assert_eq!(counts(&app), [1, 0, 0]);
-    tick(&mut app, 70);
+    tick(&mut app, 72);
     assert_eq!(counts(&app), [1, 1, 0]);
     assert!(!app.world().resource::<RunningEvent>().active());
-    tick(&mut app, 71);
+    tick(&mut app, 73);
     assert_eq!(counts(&app), [2, 1, 0]);
 }
 
@@ -157,13 +157,13 @@ fn free_inn_suspends_and_resumes_the_common_interpreter_before_later_events() {
         .start(7, vec![increment(3)]);
     tick(&mut app, 0);
     assert_eq!(counts(&app), [0, 0, 0]);
-    tick(&mut app, 35);
-    tick(&mut app, 70);
+    tick(&mut app, 36);
+    tick(&mut app, 72);
     assert_eq!(counts(&app), [1, 1, 1]);
 }
 
 #[test]
-fn a_free_silent_inn_on_an_erased_screen_heals_and_starts_show_without_an_extra_tick() {
+fn a_free_silent_inn_on_an_erased_screen_keeps_the_redundant_erase_update_barrier() {
     let mut app = interpreter_app();
     app.world_mut().resource_mut::<Transition>().hold_black();
     app.world_mut().resource_mut::<Transition>().event_erased = true;
@@ -171,13 +171,19 @@ fn a_free_silent_inn_on_an_erased_screen_heals_and_starts_show_without_an_extra_
         .resource_mut::<RunningEvent>()
         .start(7, vec![command(10730, vec![0, 0, 1]), increment(1)]);
     tick(&mut app, 0);
+    assert_eq!(app.world().resource::<Vitals>().get_stored(1), Some((2, 0)));
+    assert!(matches!(
+        app.world().resource::<State>().phase,
+        Phase::FadeOut { .. }
+    ));
+    tick(&mut app, 1);
     assert_eq!(app.world().resource::<Vitals>().get_stored(1), None);
     assert!(matches!(
         app.world().resource::<State>().phase,
         Phase::FadeIn
     ));
     assert!(!app.world().resource::<Transition>().event_erased);
-    tick(&mut app, 35);
+    tick(&mut app, 37);
     assert_eq!(counts(&app), [1, 0, 0]);
 }
 
@@ -197,10 +203,10 @@ fn a_free_inn_keeps_the_interpreter_budget_even_when_it_is_the_last_command() {
             }
             tick(&mut app, 0);
             assert_eq!(counts(&app), [before as i32, 0, 0]);
-            tick(&mut app, 35);
-            tick(&mut app, 70);
+            tick(&mut app, 36);
+            tick(&mut app, 72);
             assert_eq!(counts(&app), [before as i32, i32::from(before == 9_998), 0]);
-            tick(&mut app, 71);
+            tick(&mut app, 73);
             assert_eq!(counts(&app), [before as i32, 1, 1]);
         }
     }
@@ -228,10 +234,10 @@ fn a_free_map_inn_resumes_its_disabled_page_without_repeating_common_events() {
         .start(7, vec![increment(3)]);
     tick(&mut app, 0);
     assert_eq!(counts(&app), [1, 0, 0]);
-    tick(&mut app, 35);
-    tick(&mut app, 70);
+    tick(&mut app, 36);
+    tick(&mut app, 72);
     assert_eq!(counts(&app), [1, 1, 1]);
-    tick(&mut app, 71);
+    tick(&mut app, 73);
     assert_eq!(counts(&app), [2, 1, 1]);
 }
 
@@ -292,7 +298,7 @@ fn an_ordinary_transfer_waits_for_inn_continuation_and_the_remaining_map_visit()
     app.world_mut()
         .resource_mut::<RunningEvent>()
         .start(7, vec![increment(3)]);
-    for frame in [0, 35, 69] {
+    for frame in [0, 36, 71] {
         tick(&mut app, frame);
         assert_eq!(counts(&app), [0; 3]);
         assert!(!app.world().resource::<crate::teleport::Fade>().busy());
@@ -301,7 +307,7 @@ fn an_ordinary_transfer_waits_for_inn_continuation_and_the_remaining_map_visit()
             Some((3, 7, 8))
         );
     }
-    tick(&mut app, 70);
+    tick(&mut app, 72);
     assert_eq!(counts(&app), [1; 3]);
     assert!(app.world().resource::<crate::teleport::Fade>().busy());
     assert!(!app.world().resource::<State>().active());

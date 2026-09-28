@@ -55,7 +55,7 @@ fn fresh_cancel_is_latched_until_the_next_stopped_player_update() {
     assert!(calling(&app));
     assert_eq!(app.world().resource::<Transition>().age(), 0);
     assert!(!app.world().resource::<MenuOpen>().0);
-    for _ in 0..6 {
+    for _ in 0..7 {
         tick(&mut app, &[]);
     }
     assert!(app.world().resource::<MenuOpen>().0);

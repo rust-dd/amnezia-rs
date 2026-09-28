@@ -70,14 +70,14 @@ fn slot(directory: &std::path::Path, number: u8, map: u32) -> (std::path::PathBu
 
 fn open(app: &mut App) {
     step(app, 0, None);
-    step(app, 35, None);
-    step(app, 43, None);
+    step(app, 36, None);
+    step(app, 44, None);
     assert_eq!(app.world().resource::<TitleState>().cursor, CONTINUE);
-    step(app, 44, Some(KeyCode::Enter));
-    step(app, 50, None);
+    step(app, 45, Some(KeyCode::Enter));
+    step(app, 52, None);
     assert_eq!(app.world().resource::<TitleState>().stage, Stage::Files);
-    step(app, 51, None);
-    step(app, 56, None);
+    step(app, 53, None);
+    step(app, 59, None);
     assert!(app.world().resource::<SaveFiles>().active());
     assert!(!app.world().resource::<LoadRequest>().0);
     assert!(!app.world().resource::<Transition>().busy());
@@ -111,15 +111,15 @@ fn cancelling_load_uses_six_frame_fades_without_restarting_music_or_changing_fil
     let (mut app, directory) = app("load_cancel");
     let (path, original) = slot(&directory, 15, 2);
     open(&mut app);
-    step(&mut app, 57, Some(KeyCode::Escape));
+    step(&mut app, 60, Some(KeyCode::Escape));
     assert_eq!(
         app.world().resource::<TitleState>().stage,
         Stage::FileLeaving(false)
     );
-    step(&mut app, 62, Some(KeyCode::Enter));
+    step(&mut app, 66, Some(KeyCode::Enter));
     assert!(app.world().resource::<SaveFiles>().active());
     assert!(!app.world().resource::<LoadRequest>().0);
-    step(&mut app, 63, None);
+    step(&mut app, 67, None);
     assert_eq!(
         app.world().resource::<TitleState>().stage,
         Stage::FileReturning
@@ -139,12 +139,12 @@ fn cancelling_load_uses_six_frame_fades_without_restarting_music_or_changing_fil
                 )
             })
     );
-    step(&mut app, 68, Some(KeyCode::Enter));
+    step(&mut app, 73, Some(KeyCode::Enter));
     assert_eq!(
         app.world().resource::<TitleState>().stage,
         Stage::FileReturning
     );
-    step(&mut app, 69, None);
+    step(&mut app, 74, None);
     assert_eq!(app.world().resource::<TitleState>().stage, Stage::Ready);
     assert_eq!(app.world().resource::<TitleState>().cursor, CONTINUE);
     assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
@@ -158,7 +158,7 @@ fn choosing_slot_fifteen_loads_it_only_after_the_exit_fade_without_writing() {
     let (first, original_first) = slot(&directory, 1, 3);
     let (selected, original_selected) = slot(&directory, 15, 2);
     open(&mut app);
-    step(&mut app, 57, Some(KeyCode::Enter));
+    step(&mut app, 60, Some(KeyCode::Enter));
     assert_eq!(
         app.world().resource::<TitleState>().stage,
         Stage::FileLeaving(true)
@@ -175,18 +175,18 @@ fn choosing_slot_fifteen_loads_it_only_after_the_exit_fade_without_writing() {
         *app.world().resource::<ActiveSlot>(),
         ActiveSlot::new(15).unwrap()
     );
-    step(&mut app, 62, None);
+    step(&mut app, 66, None);
     assert!(!app.world().resource::<LoadRequest>().0);
-    step(&mut app, 63, None);
+    step(&mut app, 67, None);
     assert!(app.world().resource::<LoadRequest>().0);
     assert!(!app.world().resource::<SaveFiles>().active());
-    step(&mut app, 64, None);
+    step(&mut app, 68, None);
     assert!(!app.world().resource::<LoadRequest>().0);
     assert!(app.world().resource::<PendingTeleport>().0.is_some());
     assert_eq!(app.world().resource::<crate::text::HeroName>().0, "Álmos");
     assert_eq!(app.world().resource::<crate::state::Inventory>().gold(), 17);
     app.world_mut().resource_mut::<PendingTeleport>().0 = None;
-    step(&mut app, 65, None);
+    step(&mut app, 69, None);
     assert!(!app.world().resource::<TitleActive>().0);
     assert!(!app.world().resource::<MenuOpen>().0);
     for (path, original) in [(first, original_first), (selected, original_selected)] {
@@ -209,9 +209,9 @@ fn a_failure_after_preview_returns_to_the_selector_without_mutating_the_session(
         if missing {
             std::fs::remove_file(&path).unwrap();
         }
-        step(&mut app, 57, Some(KeyCode::Enter));
-        step(&mut app, 63, None);
-        step(&mut app, 64, None);
+        step(&mut app, 60, Some(KeyCode::Enter));
+        step(&mut app, 67, None);
+        step(&mut app, 68, None);
         assert_eq!(app.world().resource::<TitleState>().stage, Stage::Files);
         assert!(app.world().resource::<TitleActive>().0);
         assert!(app.world().resource::<SaveFiles>().active());
@@ -227,10 +227,10 @@ fn a_failure_after_preview_returns_to_the_selector_without_mutating_the_session(
                     matches!(audio, AudioRequest::Sound { name, .. } if name == "BUZZER")
                 })
         );
-        step(&mut app, 70, None);
-        step(&mut app, 71, Some(KeyCode::Escape));
-        step(&mut app, 77, None);
+        step(&mut app, 75, None);
+        step(&mut app, 76, Some(KeyCode::Escape));
         step(&mut app, 83, None);
+        step(&mut app, 90, None);
         assert_eq!(app.world().resource::<TitleState>().stage, Stage::Ready);
         if !missing {
             assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
@@ -247,12 +247,12 @@ fn corrupt_and_empty_load_slots_buzz_without_selecting_or_requesting_a_load() {
     std::fs::write(&path, "broken save").unwrap();
     open(&mut app);
     for (at, key) in [
-        (57, KeyCode::Enter),
-        (58, KeyCode::ArrowUp),
-        (67, KeyCode::Enter),
+        (60, KeyCode::Enter),
+        (61, KeyCode::ArrowUp),
+        (70, KeyCode::Enter),
     ] {
-        if at == 67 {
-            step(&mut app, 66, None);
+        if at == 70 {
+            step(&mut app, 69, None);
         }
         step(&mut app, at, Some(key));
         assert_eq!(app.world().resource::<TitleState>().stage, Stage::Files);

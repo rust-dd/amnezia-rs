@@ -83,14 +83,14 @@ fn all_shop_modes_initialize_at_black_and_wait_six_frames_on_both_sides() {
     for (buy, sell, help) in [(true, true, 0), (true, false, 2), (false, true, 2)] {
         let mut app = fixture(buy, sell);
         let scene_frame = app.world().resource::<SceneFrames>().frame;
-        for age in 0..6 {
-            assert_age(&app, age);
+        for age in 0_u32..7 {
+            assert_age(&app, age.saturating_sub(1));
             assert!(!app.world().resource::<ShopOpen>().0);
             assert!(matches!(app.world().resource::<Screen>(), Screen::Closed));
             tick(&mut app, &[KeyCode::Enter, KeyCode::Escape]);
         }
-        for age in 0..6 {
-            assert_age(&app, age);
+        for age in 0_u32..7 {
+            assert_age(&app, age.saturating_sub(1));
             assert!(app.world().resource::<ShopOpen>().0);
             let scene = &state(&app).scene;
             assert_eq!(scene.help_id, 0);
@@ -119,19 +119,19 @@ fn all_shop_modes_initialize_at_black_and_wait_six_frames_on_both_sides() {
 #[test]
 fn leaving_keeps_the_shop_until_black_and_owns_the_entire_return_to_map() {
     let mut app = fixture(true, true);
-    for _ in 0..13 {
+    for _ in 0..15 {
         tick(&mut app, &[]);
     }
     tick(&mut app, &[KeyCode::Escape]);
     let frame = state(&app).scene.command_frame;
-    for age in 0..6 {
-        assert_age(&app, age);
+    for age in 0_u32..7 {
+        assert_age(&app, age.saturating_sub(1));
         assert!(app.world().resource::<ShopOpen>().0);
         assert_eq!(state(&app).scene.command_frame, frame);
         tick(&mut app, &[KeyCode::Enter]);
     }
-    for age in 0..6 {
-        assert_age(&app, age);
+    for age in 0_u32..7 {
+        assert_age(&app, age.saturating_sub(1));
         assert!(!app.world().resource::<ShopOpen>().0);
         assert!(matches!(app.world().resource::<Screen>(), Screen::Closed));
         tick(&mut app, &[KeyCode::Enter]);
@@ -147,7 +147,7 @@ fn leaving_keeps_the_shop_until_black_and_owns_the_entire_return_to_map() {
 #[test]
 fn shop_subwindows_share_the_scene_without_additional_fades() {
     let mut app = fixture(true, true);
-    for _ in 0..13 {
+    for _ in 0..15 {
         tick(&mut app, &[]);
     }
     tick(&mut app, &[KeyCode::Enter]);

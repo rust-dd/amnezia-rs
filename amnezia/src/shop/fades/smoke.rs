@@ -97,7 +97,7 @@ pub(in crate::shop) fn drive(world: &mut World, frame: u32) -> Option<&'static s
         );
         assert_eq!(scene_frame, pending.scene_frame);
         if pending.showing.is_none() && matches!(flow.0, Stage::Showing) {
-            assert!(now.wrapping_sub(pending.started) >= 6);
+            assert!(now.wrapping_sub(pending.started) >= 7);
             assert_eq!(transition.age(), 0);
             pending.showing = Some(now);
             pending.frozen = Frozen::of(world.resource::<Screen>());
@@ -109,7 +109,7 @@ pub(in crate::shop) fn drive(world: &mut World, frame: u32) -> Option<&'static s
         {
             assert!(!transition.busy());
             assert!(world.resource::<SceneWait>().0);
-            assert!(now.wrapping_sub(started) >= 6);
+            assert!(now.wrapping_sub(started) >= 7);
             checks.pending = None;
             checks.completed += 1;
             return None;

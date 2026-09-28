@@ -21,6 +21,7 @@ pub(crate) fn pictures(world: &World) -> Arc<AtomicUsize> {
 }
 
 pub(crate) fn input(frame: u32) -> Option<KeyCode> {
+    let frame = frame.saturating_sub(20);
     match frame {
         1220 | 1290 | 1320 | 1400 => Some(KeyCode::PageUp),
         1230 | 1440 => Some(KeyCode::ArrowUp),
@@ -33,6 +34,7 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
 }
 
 pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
+    let frame = frame.saturating_sub(20);
     let (start, key) = if (1180..1212).contains(&frame) {
         (1180, KeyCode::ArrowDown)
     } else if (1350..1382).contains(&frame) {
@@ -49,7 +51,9 @@ pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
+    let frame = frame.saturating_sub(20);
     if frame == 1170 {
+        assert!(!world.resource::<crate::menu::SceneFlow>().active());
         assert!(!world.resource::<MenuOpen>().0);
         world.insert_resource(Checks::default());
         world.insert_resource(crate::vitals::Vitals::default());

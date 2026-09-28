@@ -23,7 +23,7 @@ impl Fixture {
 
     fn open(&mut self, crystal: bool) {
         self.start(crystal);
-        for _ in 0..12 {
+        for _ in 0..14 {
             step(&mut self.app, None);
         }
         assert!(!self.app.world().resource::<Transition>().busy());
@@ -51,14 +51,14 @@ fn both_save_origins_erase_the_parent_then_show_the_populated_list_for_six_frame
         let app = &mut fixture.app;
         assert!(app.world().resource::<Transition>().busy());
         assert!(app.world().resource::<SaveFiles>().entries.is_none());
-        for _ in 0..5 {
+        for _ in 0..6 {
             step(app, Some(KeyCode::Enter));
             assert!(app.world().resource::<SaveFiles>().entries.is_none());
         }
         step(app, None);
         assert!(app.world().resource::<Transition>().busy());
         assert!(app.world().resource::<SaveFiles>().entries.is_some());
-        for _ in 0..5 {
+        for _ in 0..6 {
             step(app, Some(KeyCode::Enter));
             assert!(app.world().resource::<Transition>().busy());
             assert!(app.world().resource::<SaveFiles>().decision().is_none());
@@ -78,7 +78,7 @@ fn cancelling_keeps_the_list_until_erased_and_returns_to_the_correct_parent_afte
         step(app, Some(KeyCode::Escape));
         assert!(app.world().resource::<Transition>().busy());
         assert!(app.world().resource::<SaveFiles>().entries.is_some());
-        for _ in 0..5 {
+        for _ in 0..6 {
             step(app, Some(KeyCode::Enter));
             assert!(app.world().resource::<SaveFiles>().entries.is_some());
         }
@@ -86,7 +86,7 @@ fn cancelling_keeps_the_list_until_erased_and_returns_to_the_correct_parent_afte
         assert!(app.world().resource::<Transition>().busy());
         assert!(app.world().resource::<SaveFiles>().entries.is_none());
         assert_eq!(app.world().resource::<MenuOpen>().0, !crystal);
-        for _ in 0..5 {
+        for _ in 0..6 {
             step(app, Some(KeyCode::Escape));
             assert_eq!(app.world().resource::<MenuOpen>().0, !crystal);
         }
@@ -111,14 +111,14 @@ fn confirmation_writes_once_before_the_list_exit_fade_and_blocks_input_until_ret
         let saved = std::fs::read(&path).unwrap();
         assert!(app.world().resource::<Transition>().busy());
         assert!(app.world().resource::<SaveFiles>().entries.is_some());
-        for _ in 0..5 {
+        for _ in 0..6 {
             step(app, Some(KeyCode::Enter));
             assert_eq!(std::fs::read(&path).unwrap(), saved);
         }
         step(app, None);
         assert!(app.world().resource::<Transition>().busy());
         assert!(app.world().resource::<SaveFiles>().entries.is_none());
-        for _ in 0..6 {
+        for _ in 0..7 {
             step(app, None);
             assert_eq!(std::fs::read(&path).unwrap(), saved);
         }
@@ -140,7 +140,7 @@ fn render_updates_without_logical_ticks_do_not_advance_entry_or_file_clocks() {
         assert_eq!(app.world().resource::<Transition>().age(), 0);
         assert!(app.world().resource::<SaveFiles>().entries.is_none());
     }
-    advance(app, 6);
+    advance(app, 7);
     for _ in 0..40 {
         app.update();
         let files = app.world().resource::<SaveFiles>();
@@ -149,7 +149,7 @@ fn render_updates_without_logical_ticks_do_not_advance_entry_or_file_clocks() {
         assert_eq!(files.navigation.arrows, [false; 2]);
         assert_eq!(app.world().resource::<Transition>().age(), 0);
     }
-    advance(app, 6);
+    advance(app, 7);
     assert!(!app.world().resource::<Transition>().busy());
 }
 
@@ -170,12 +170,12 @@ fn real_frame_clock_keeps_the_save_before_the_exit_transition() {
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .reset_all();
-        for _ in 0..12 {
+        for _ in 0..14 {
             app.update();
         }
         assert_eq!(
             app.world().resource::<crate::timing::GameFrames>().frame,
-            12
+            14
         );
         assert!(!app.world().resource::<Transition>().busy());
         app.world_mut()
@@ -191,12 +191,12 @@ fn real_frame_clock_keeps_the_save_before_the_exit_transition() {
         assert!(fixture.directory.join("slot1.ron").is_file());
         assert_eq!(app.world().resource::<Transition>().age(), 0);
         assert!(app.world().resource::<Transition>().busy());
-        for _ in 0..12 {
+        for _ in 0..14 {
             app.update();
         }
         assert_eq!(
             app.world().resource::<crate::timing::GameFrames>().frame,
-            26
+            30
         );
         assert!(!app.world().resource::<SaveFiles>().active());
         assert_eq!(app.world().resource::<MenuOpen>().0, !crystal);
@@ -218,14 +218,14 @@ fn both_approved_save_origins_wait_for_an_intervening_transition() {
             IVec2::ZERO,
             6,
         );
-        for _ in 0..6 {
+        for _ in 0..7 {
             step(app, None);
             assert!(!fixture.directory.join("slot1.ron").exists());
         }
         step(app, None);
         assert!(fixture.directory.join("slot1.ron").is_file());
         assert!(app.world().resource::<Transition>().busy());
-        advance(app, 12);
+        advance(app, 14);
         assert!(!app.world().resource::<SaveFiles>().active());
     }
 }

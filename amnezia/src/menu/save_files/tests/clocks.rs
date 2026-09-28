@@ -104,7 +104,7 @@ fn crystal_confirmation_updates_the_last_visible_frame_before_any_file_write() {
         .resource_mut::<crate::save::EventSaveRequest>()
         .0 = true;
     step(&mut app, None);
-    advance(&mut app, 12);
+    advance(&mut app, 14);
     let before = app.world().resource::<SaveFiles>().navigation.cursors[0];
     step(&mut app, Some(KeyCode::Enter));
     let files = app.world().resource::<SaveFiles>();

@@ -78,7 +78,7 @@ fn advance(app: &mut App, frames: u32) {
 
 fn open_manual(app: &mut App) {
     step(app, Some(KeyCode::Enter));
-    advance(app, 12);
+    advance(app, 14);
 }
 
 #[test]
@@ -88,7 +88,7 @@ fn cancel_returns_to_the_same_command_without_writing_or_closing_the_menu() {
     assert!(app.world().resource::<SaveFiles>().active());
     assert!(!app.world().resource::<SaveRequest>().0);
     step(&mut app, Some(KeyCode::Escape));
-    advance(&mut app, 12);
+    advance(&mut app, 14);
     assert!(!app.world().resource::<SaveFiles>().active());
     assert!(app.world().resource::<MenuOpen>().0);
     assert_eq!(app.world().resource::<MenuState>().cursor, 3);
@@ -119,7 +119,7 @@ fn selecting_the_last_slot_saves_only_that_slot_after_confirmation() {
     );
     assert!(directory.join("slot15.ron").is_file());
     assert!(!directory.join("slot1.ron").exists());
-    advance(&mut app, 12);
+    advance(&mut app, 14);
     assert!(!app.world().resource::<SaveFiles>().active());
     assert!(app.world().resource::<MenuOpen>().0);
     std::fs::remove_file(directory.join("slot15.ron")).unwrap();

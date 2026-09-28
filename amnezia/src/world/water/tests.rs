@@ -28,7 +28,7 @@ fn water_phase_stays_frozen_until_the_frame_after_an_async_transition() {
         IVec2::new(160, 120),
         36,
     );
-    for frame in 1..=36 {
+    for frame in 1..=37 {
         app.update();
         assert_eq!(
             app.world().get::<Sprite>(entity).unwrap().rect,

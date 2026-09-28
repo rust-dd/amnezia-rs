@@ -202,10 +202,15 @@ pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     }
     if case == 2 && age > 90 && !world.resource::<Probe>().closing {
         let dialogue = world.resource::<Dialogue>();
-        if !dialogue.active && dialogue.lifecycle.message.closing() {
+        if !dialogue.active
+            && dialogue.lifecycle.message.closing()
+            && !world.resource::<crate::transitions::Transition>().busy()
+        {
             assert_eq!(dialogue.lifecycle.message.half_height(80), 34);
             assert_eq!(dialogue.lifecycle.gold.half_height(32), 13);
             assert!(!world.resource::<Choice>().active());
+            assert!(world.resource::<super::Fade>().busy());
+            assert!(crate::timing::logical::callback_pending(world));
             world.resource_mut::<Probe>().closing = true;
             world.resource_mut::<Probe>().resume = Some(frame + 5);
             time(world, false);

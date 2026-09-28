@@ -21,11 +21,11 @@ fn screen_commands_wait_for_the_actual_transition_without_a_second_timer() {
     for (kind, duration) in [(0, 35), (17, 41), (19, 1), (20, 30)] {
         let mut app = app(vec![cmd(11010, 0, vec![kind]), switch_cmd(70, 0, 0)]);
         tick(&mut app, 0);
-        for frame in 0..duration {
+        for frame in 0..=duration {
             tick(&mut app, frame);
             assert!(!switch_on(&app, 70), "kind {kind} at {frame}");
         }
-        tick(&mut app, duration);
+        tick(&mut app, duration + 1);
         assert!(switch_on(&app, 70), "kind {kind}");
         assert!(app.world().resource::<Transition>().erased());
     }
@@ -42,14 +42,14 @@ fn default_command_uses_changed_setting_and_none_show_keeps_black() {
         switch_cmd(71, 0, 0),
     ]);
     tick(&mut app, 0);
-    tick(&mut app, 29);
-    assert!(!switch_on(&app, 70));
     tick(&mut app, 30);
-    assert!(switch_on(&app, 70));
-    assert!(switch_on(&app, 71));
-    assert!(app.world().resource::<Transition>().erased());
-    assert!(!app.world().resource::<Transition>().event_erased);
+    assert!(!switch_on(&app, 70));
     tick(&mut app, 31);
+    assert!(switch_on(&app, 70));
+    assert!(!switch_on(&app, 71));
+    assert!(app.world().resource::<Transition>().busy());
+    assert!(!app.world().resource::<Transition>().event_erased);
+    tick(&mut app, 32);
     assert!(switch_on(&app, 71));
     assert!(app.world().resource::<Transition>().erased());
 }
@@ -64,11 +64,16 @@ fn repeated_erase_does_not_add_another_full_transition() {
         switch_cmd(71, 0, 0),
     ]);
     tick(&mut app, 0);
-    tick(&mut app, 35);
+    tick(&mut app, 36);
+    assert!(!switch_on(&app, 70));
+    assert!(app.world().resource::<Transition>().busy());
+    tick(&mut app, 37);
     assert!(app.world().resource::<Transition>().busy());
     assert!(switch_on(&app, 70));
     assert!(!switch_on(&app, 71));
-    tick(&mut app, 36);
+    tick(&mut app, 38);
+    assert!(!switch_on(&app, 71));
+    tick(&mut app, 39);
     assert!(switch_on(&app, 71));
     assert!(!app.world().resource::<Transition>().erased());
 }
@@ -81,11 +86,11 @@ fn transition_blocks_other_parallel_interpreters_until_it_finishes() {
     });
     tick(&mut app, 0);
     assert!(switch_on(&app, 71));
-    tick(&mut app, 40);
-    assert!(switch_on(&app, 71));
     tick(&mut app, 41);
-    assert!(switch_on(&app, 70));
     assert!(switch_on(&app, 71));
     tick(&mut app, 42);
+    assert!(switch_on(&app, 70));
+    assert!(switch_on(&app, 71));
+    tick(&mut app, 43);
     assert!(!switch_on(&app, 71));
 }

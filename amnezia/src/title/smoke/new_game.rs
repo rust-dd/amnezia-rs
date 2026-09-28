@@ -5,9 +5,20 @@ use crate::transitions::Transition;
 #[derive(Resource, Default)]
 struct Checks {
     selected_at: Option<u32>,
+    player_updates: u32,
     fade_ages: u8,
     captured: bool,
     rebuilt: bool,
+}
+
+pub(super) fn configure(app: &mut App) {
+    crate::timing::logical::pre(app, || count_player_updates);
+}
+
+fn count_player_updates(checks: Option<ResMut<Checks>>) {
+    if let Some(mut checks) = checks {
+        checks.player_updates += 1;
+    }
 }
 
 pub(super) fn begin(world: &mut World) {
@@ -17,7 +28,11 @@ pub(super) fn begin(world: &mut World) {
 pub(crate) fn observe(world: &mut World, frame: u32) -> Option<&'static str> {
     let checks = world.get_resource::<Checks>()?;
     let first = checks.selected_at.unwrap_or(frame);
-    assert_eq!(world.resource::<GameFrames>().frame, frame - first);
+    assert!(checks.player_updates > 0);
+    assert_eq!(
+        world.resource::<GameFrames>().frame,
+        checks.player_updates - 1
+    );
     let stage = world.resource::<TitleState>().stage;
     if matches!(
         stage,

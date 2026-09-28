@@ -13,6 +13,7 @@ struct Probe {
     inn: bool,
     owner: u32,
     callbacks: u8,
+    barriers: [u8; 3],
 }
 
 pub(crate) fn configure(app: &mut App) {
@@ -27,12 +28,29 @@ fn observe(world: &mut World) {
         return;
     };
     let owner = probe.owner;
-    if probe.callbacks & (1 << owner) != 0 || world.resource::<Variables>().get(4807) == 0 {
+    if probe.callbacks & (1 << owner) != 0 {
         return;
     }
+    let inn = probe.inn;
     let values = std::array::from_fn::<_, 8, _>(|index| {
         world.resource::<Variables>().get(4800 + index as u32)
     });
+    if values[7] == 0 {
+        if inn {
+            return;
+        }
+        let phase = match &values[4..] {
+            [1, 0, 0, 0] => 1,
+            [1, 1, 0, 0] => 2,
+            [1, 1, 1, 0] => 4,
+            other => panic!("unexpected transition callback: {other:?}"),
+        };
+        assert!(world.resource::<Transition>().busy());
+        let mut probe = world.resource_mut::<Probe>();
+        assert_eq!(probe.barriers[owner as usize], phase - 1);
+        probe.barriers[owner as usize] |= phase;
+        return;
+    }
     assert_eq!(
         values, [1; 8],
         "the callback must complete exactly the interrupted map visit"
@@ -180,7 +198,6 @@ pub(crate) fn drive(world: &mut World, frame: u32, inn: bool) -> Option<&'static
     let vars = world.resource::<Variables>();
     let counts = std::array::from_fn::<_, 8, _>(|index| vars.get(4800 + index as u32));
     let finished = counts[7] != 0;
-    let first_half = counts[4] == 0;
     let expected = if finished || case == 0 {
         [1, 1, 1, 1]
     } else if case == 1 {
@@ -189,7 +206,14 @@ pub(crate) fn drive(world: &mut World, frame: u32, inn: bool) -> Option<&'static
         [1, 1, 1, 0]
     };
     assert_eq!(&counts[..4], &expected, "owner={case}, age={age}");
-    assert_eq!(&counts[4..7], &[i32::from(!first_half); 3]);
+    if inn {
+        assert_eq!(&counts[4..7], &[i32::from(finished); 3]);
+    } else {
+        assert!(matches!(
+            &counts[4..7],
+            [0, 0, 0] | [1, 0, 0] | [1, 1, 0] | [1, 1, 1]
+        ));
+    }
     assert_eq!(counts[7], i32::from(finished));
     if finished {
         assert!(!world.resource::<Transition>().busy());
@@ -243,8 +267,9 @@ pub(crate) fn verify_finished(world: &World) {
         );
         return;
     }
+    assert_eq!(probe.barriers, [7; 3]);
     info!(
-        "async transitions: {} ordered states across foreground, common and map owners; redundant erase, instantaneous show and disabled gates verified",
+        "async transitions: {} ordered states across foreground, common and map owners; redundant erase, no-effect update barriers and disabled gates verified",
         probe.checks
     );
 }

@@ -87,7 +87,7 @@ pub(super) fn verify_frame(world: &mut World, frame: u32) -> (bool, Option<&'sta
         );
         if pending.showing.is_none() && actual != pending.source {
             assert_eq!(actual, pending.target);
-            assert!(now.wrapping_sub(pending.started) >= 6);
+            assert!(now.wrapping_sub(pending.started) >= 7);
             assert_eq!(transition.age(), 0);
             assert_eq!(
                 (scene.slot_frame, scene.preview, scene.picking),
@@ -114,7 +114,7 @@ pub(super) fn verify_frame(world: &mut World, frame: u32) -> (bool, Option<&'sta
         if let Some(started) = pending.showing
             && !transition.busy()
         {
-            assert!(now.wrapping_sub(started) >= 6);
+            assert!(now.wrapping_sub(started) >= 7);
             assert!(!world.resource::<Switch>().active());
             assert_eq!(scene.slot_frame, 0);
             checks.pending = None;

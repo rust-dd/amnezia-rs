@@ -56,12 +56,12 @@ fn frame(app: &mut App, frame: u32) {
 fn continue_waits_for_a_slot_choice_without_stopping_the_title_music() {
     let mut app = flow_app();
     frame(&mut app, 0);
-    frame(&mut app, 35);
+    frame(&mut app, 36);
     app.world_mut().resource_mut::<TitleState>().stage = Stage::Leaving(TitleAction::Continue);
     app.world_mut()
         .resource_mut::<Messages<AudioRequest>>()
         .clear();
-    frame(&mut app, 36);
+    frame(&mut app, 37);
     assert!(
         !app.world().resource::<LoadRequest>().0,
         "Continue must open the file chooser before requesting a load"
@@ -84,11 +84,11 @@ fn title_waits_for_its_initial_fade_and_new_game_erases_for_six_frames() {
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::Enter);
-    frame(&mut app, 34);
-    assert!(!app.world().resource::<NewGameRequest>().requested);
     frame(&mut app, 35);
-    assert_eq!(app.world().resource::<TitleState>().stage, Stage::Ready);
+    assert!(!app.world().resource::<NewGameRequest>().requested);
     frame(&mut app, 36);
+    assert_eq!(app.world().resource::<TitleState>().stage, Stage::Ready);
+    frame(&mut app, 37);
     assert_eq!(
         app.world().resource::<TitleState>().stage,
         Stage::Leaving(TitleAction::NewGame)
@@ -103,9 +103,9 @@ fn title_waits_for_its_initial_fade_and_new_game_erases_for_six_frames() {
             |audio| matches!(audio, AudioRequest::FadeOutBgm { duration } if *duration == 0.8)
         )
     );
-    frame(&mut app, 5);
-    assert!(!app.world().resource::<NewGameRequest>().requested);
     frame(&mut app, 6);
+    assert!(!app.world().resource::<NewGameRequest>().requested);
+    frame(&mut app, 7);
     assert!(app.world().resource::<NewGameRequest>().requested);
     assert!(
         app.world()
@@ -119,29 +119,29 @@ fn title_waits_for_its_initial_fade_and_new_game_erases_for_six_frames() {
 fn return_to_title_keeps_its_twenty_frame_delay_between_erase_and_show() {
     let mut app = flow_app();
     frame(&mut app, 0);
-    frame(&mut app, 35);
-    app.world_mut().resource_mut::<TitleActive>().0 = false;
     frame(&mut app, 36);
-    app.world_mut().resource_mut::<TitleActive>().0 = true;
+    app.world_mut().resource_mut::<TitleActive>().0 = false;
     frame(&mut app, 37);
+    app.world_mut().resource_mut::<TitleActive>().0 = true;
+    frame(&mut app, 38);
     assert_eq!(app.world().resource::<TitleState>().stage, Stage::Enter);
-    frame(&mut app, 43);
-    frame(&mut app, 62);
+    frame(&mut app, 45);
+    frame(&mut app, 64);
     assert!(!app.world().resource::<TitleState>().stage.visible());
     assert!(
         app.world()
             .resource::<crate::transitions::Transition>()
             .erased()
     );
-    frame(&mut app, 63);
+    frame(&mut app, 65);
     assert_eq!(app.world().resource::<TitleState>().stage, Stage::Showing);
-    frame(&mut app, 97);
+    frame(&mut app, 100);
     assert!(
         app.world()
             .resource::<crate::transitions::Transition>()
             .busy()
     );
-    frame(&mut app, 98);
+    frame(&mut app, 101);
     assert_eq!(app.world().resource::<TitleState>().stage, Stage::Ready);
 }
 
@@ -205,7 +205,7 @@ fn cursor_wraps_around_all_three_rows() {
 }
 
 #[test]
-fn selecting_shutdown_requests_app_exit_after_thirty_five_frames() {
+fn shutdown_waits_for_initialization_and_all_thirty_five_effect_frames() {
     let mut app = App::new();
     app.add_plugins(MinimalPlugins)
         .add_message::<AudioRequest>()
@@ -229,7 +229,7 @@ fn selecting_shutdown_requests_app_exit_after_thirty_five_frames() {
     assert!(app.should_exit().is_none());
     app.world_mut()
         .resource_mut::<crate::timing::GameFrames>()
-        .frame = 35;
+        .frame = 36;
     app.update();
     assert!(
         app.should_exit().is_some(),

@@ -89,7 +89,7 @@ fn every_original_crystal_can_be_cancelled_or_saved_then_resumes_exactly_once() 
             assert!(app.world().resource::<SaveFiles>().active());
             assert!(!switch_on(&app, 9998));
             assert_eq!(path.exists(), save);
-            for _ in 0..12 {
+            for _ in 0..14 {
                 press(&mut app, None);
             }
             assert!(!app.world().resource::<SaveFiles>().active());

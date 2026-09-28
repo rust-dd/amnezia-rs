@@ -3,12 +3,21 @@ use super::*;
 
 mod new_game;
 pub(in crate::title) mod repetition;
+mod returning;
 pub(crate) use new_game::{observe as new_game_frame, verify_finished as verify_new_game_finished};
-pub(crate) use repetition::held_input;
+pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
+    returning::repetition_frame(world, frame)
+        .is_some_and(|frame| repetition::held_input(world, frame))
+}
+
+pub(crate) fn configure(app: &mut App) {
+    new_game::configure(app);
+}
 
 pub(crate) fn verify_finished(world: &World) {
     super::view::smoke::verify_finished(world);
     repetition::verify_finished(world);
+    returning::verify_finished(world);
 }
 
 pub(crate) fn ready(world: &World) -> bool {
@@ -25,41 +34,13 @@ pub(crate) fn select_new_game(world: &mut World) {
     new_game::begin(world);
 }
 
-pub(crate) fn return_input(frame: u32) -> Option<KeyCode> {
-    match frame {
-        305 | 414 => Some(KeyCode::Escape),
-        320 | 330 | 340 | 350 => Some(KeyCode::ArrowDown),
-        448 => Some(KeyCode::ArrowUp),
-        351 | 380 | 397 | 432 | 462 => Some(KeyCode::Enter),
-        _ => repetition::input(frame),
-    }
+pub(crate) fn return_input(world: &mut World, frame: u32) -> Option<KeyCode> {
+    returning::input(world, frame)
 }
 
 pub(crate) fn return_scene(world: &mut World, frame: u32) -> Option<&'static str> {
     if let Some(label) = super::view::smoke::opening_label(world, frame) {
         return Some(label);
     }
-    match frame {
-        368 => {
-            assert!(world.resource::<crate::menu::MenuOpen>().0);
-            Some("title-return-menu")
-        }
-        379 => Some("end-game-no-blink"),
-        396 | 430 => {
-            crate::menu::end_smoke::assert_cancelled(world);
-            None
-        }
-        460 => Some("end-game-yes"),
-        463 => {
-            assert!(world.resource::<TitleActive>().0);
-            assert!(!world.resource::<crate::menu::MenuOpen>().0);
-            assert!(world.resource::<crate::transitions::Transition>().busy());
-            Some("title-return-fade")
-        }
-        552 => {
-            assert!(ready(world));
-            Some("title-return-ready")
-        }
-        _ => repetition::drive(world, frame),
-    }
+    returning::drive(world, frame)
 }

@@ -133,6 +133,10 @@ fn an_erase_during_destination_preupdate_does_not_make_the_screen_stay_black() {
     )]));
     start_foreground_transfer(&mut app);
     reach_destination(&mut app);
+    assert_eq!(app.world().resource::<Variables>().get(1), 0);
+    assert!(app.world().resource::<Transition>().busy());
+    let now = app.world().resource::<GameFrames>().frame;
+    tick(&mut app, now + 1);
     assert_eq!(app.world().resource::<Variables>().get(1), 1);
     assert!(!app.world().resource::<Transition>().event_erased);
     assert!(app.world().resource::<Transition>().busy());
@@ -218,7 +222,7 @@ fn an_async_destination_visit_resumes_at_its_common_or_map_owner() {
                 .waiting()
         );
         let now = app.world().resource::<GameFrames>().frame;
-        tick(&mut app, now + 1);
+        tick(&mut app, now + 2);
         let vars = app.world().resource::<Variables>();
         assert_eq!(
             [vars.get(1), vars.get(2), vars.get(3), vars.get(4)],
@@ -239,7 +243,7 @@ fn a_suspended_destination_owner_retains_its_command_budget() {
     reach_destination(&mut app);
     assert_eq!(app.world().resource::<Variables>().get(1), 9_996);
     let now = app.world().resource::<GameFrames>().frame;
-    tick(&mut app, now + 1);
+    tick(&mut app, now + 2);
     let vars = app.world().resource::<Variables>();
     assert_eq!([vars.get(2), vars.get(4)], [1, 0]);
     assert!(app.world().resource::<Fade>().busy());
@@ -259,11 +263,11 @@ fn an_async_foreground_preupdate_resumes_before_the_transfer_is_released() {
     );
     reach_destination(&mut app);
     let now = app.world().resource::<GameFrames>().frame;
-    tick(&mut app, now + 35);
+    tick(&mut app, now + 36);
     let vars = app.world().resource::<Variables>();
     assert_eq!([vars.get(1), vars.get(2)], [1, 0]);
     assert!(app.world().resource::<Fade>().busy());
-    tick(&mut app, now + 36);
+    tick(&mut app, now + 38);
     let vars = app.world().resource::<Variables>();
     assert_eq!([vars.get(1), vars.get(2)], [1, 1]);
     assert!(!app.world().resource::<Fade>().busy());

@@ -142,7 +142,7 @@ fn completed_messages_ignore_decision_and_cancel_on_the_last_transition_frame() 
             step(&mut app, &[]);
         }
         start_transition(&mut app, 6);
-        for _ in 0..5 {
+        for _ in 0..6 {
             step(&mut app, &[]);
         }
         step(&mut app, &[key]);
@@ -169,7 +169,7 @@ fn an_explicit_key_wait_is_not_released_by_the_terminal_transition_key() {
             step(&mut app, &[]);
         }
         start_transition(&mut app, 6);
-        for _ in 0..5 {
+        for _ in 0..6 {
             step(&mut app, &[]);
         }
         step(&mut app, &[key]);
@@ -248,7 +248,7 @@ fn choice_and_number_input_discard_the_terminal_transition_keys() {
             step(&mut app, &[]);
         }
         start_transition(&mut app, 6);
-        for _ in 0..5 {
+        for _ in 0..6 {
             step(&mut app, &[]);
         }
         step(&mut app, &[KeyCode::ArrowDown, KeyCode::Enter]);

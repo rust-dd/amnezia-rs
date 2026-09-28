@@ -163,18 +163,24 @@ fn every_menu_scene_changes_only_between_two_six_frame_fades() {
             );
             tick(&mut app, &[]);
         }
-        for age in 0..6 {
+        for age in 0_u32..7 {
             assert!(app.world().resource::<MapPaused>().0);
             assert_eq!(screen(&app), (open, before));
-            assert_eq!(app.world().resource::<Transition>().age(), age);
+            assert_eq!(
+                app.world().resource::<Transition>().age(),
+                age.saturating_sub(1)
+            );
             assert!(app.world().resource::<Transition>().busy());
             assert!(app.world().resource::<SceneFlow>().active());
             tick(&mut app, &[]);
         }
-        for age in 0..6 {
+        for age in 0_u32..7 {
             assert!(app.world().resource::<MapPaused>().0);
             assert_eq!(screen(&app), (next_open, next));
-            assert_eq!(app.world().resource::<Transition>().age(), age);
+            assert_eq!(
+                app.world().resource::<Transition>().age(),
+                age.saturating_sub(1)
+            );
             assert!(app.world().resource::<Transition>().busy());
             tick(&mut app, &[]);
         }
@@ -228,7 +234,7 @@ fn member_selection_and_equipment_focus_changes_do_not_fade() {
 fn both_fades_and_the_final_frame_discard_decisions_without_replaying_them() {
     let mut app = fixture(true, 0, MenuScreen::Command);
     tick(&mut app, &[KeyCode::Enter]);
-    for age in 1..=12 {
+    for age in 1..=14 {
         tick(
             &mut app,
             &[
@@ -243,7 +249,7 @@ fn both_fades_and_the_final_frame_discard_decisions_without_replaying_them() {
         );
         assert_eq!(
             screen(&app).1,
-            if age < 6 {
+            if age < 7 {
                 MenuScreen::Command
             } else {
                 MenuScreen::ItemList { cursor: 0 }

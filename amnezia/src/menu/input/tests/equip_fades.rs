@@ -41,7 +41,7 @@ fn switching_erases_the_old_actor_before_showing_the_new_scene_for_six_frames_ea
         let mut app = fixture(slot);
         tick(&mut app, &[KeyCode::ArrowRight]);
         let old_phase = app.world().resource::<Scene>().slot_frame;
-        for age in 0..6 {
+        for age in 0_u32..7 {
             assert_eq!(
                 app.world().resource::<MenuState>().screen,
                 screen(0, slot, None)
@@ -50,10 +50,13 @@ fn switching_erases_the_old_actor_before_showing_the_new_scene_for_six_frames_ea
             assert_eq!(scene.member, Some(0));
             assert_eq!(scene.slot_frame, old_phase);
             assert!(app.world().resource::<Switch>().active());
-            assert_eq!(app.world().resource::<Transition>().age(), age);
+            assert_eq!(
+                app.world().resource::<Transition>().age(),
+                age.saturating_sub(1)
+            );
             tick(&mut app, &[]);
         }
-        for age in 0..6 {
+        for age in 0_u32..7 {
             assert_eq!(
                 app.world().resource::<MenuState>().screen,
                 screen(1, slot, None)
@@ -68,7 +71,10 @@ fn switching_erases_the_old_actor_before_showing_the_new_scene_for_six_frames_ea
                     .all(|list| list.arrow_frame == 0 && list.offset == 0)
             );
             assert_eq!(scene.help_id, if slot == 0 { 11 } else { 0 });
-            assert_eq!(app.world().resource::<Transition>().age(), age);
+            assert_eq!(
+                app.world().resource::<Transition>().age(),
+                age.saturating_sub(1)
+            );
             tick(&mut app, &[]);
         }
         assert!(!app.world().resource::<Switch>().active());
@@ -86,7 +92,7 @@ fn switching_erases_the_old_actor_before_showing_the_new_scene_for_six_frames_ea
 fn both_halves_block_equipping_cancelling_saving_and_navigation_without_replaying_keys() {
     let mut app = fixture(0);
     tick(&mut app, &[KeyCode::ArrowRight]);
-    for age in 1..12 {
+    for age in 1..14 {
         tick(
             &mut app,
             &[
@@ -102,7 +108,7 @@ fn both_halves_block_equipping_cancelling_saving_and_navigation_without_replayin
         );
         assert_eq!(
             app.world().resource::<MenuState>().screen,
-            screen(usize::from(age >= 6), 0, None)
+            screen(usize::from(age >= 7), 0, None)
         );
         assert!(app.world().resource::<MenuOpen>().0);
         assert!(!app.world().resource::<SaveFiles>().active());
@@ -144,7 +150,7 @@ fn zero_tick_render_updates_do_not_finish_fades_or_animate_either_scene() {
         assert_eq!(app.world().resource::<Transition>().age(), 0);
         assert_eq!(app.world().resource::<Scene>().slot_frame, 1);
     }
-    app.world_mut().resource_mut::<GameFrames>().frame += 6;
+    app.world_mut().resource_mut::<GameFrames>().frame += 7;
     app.update();
     for _ in 0..40 {
         app.update();
@@ -183,7 +189,7 @@ fn held_switch_key_is_consumed_once_across_both_transitions_at_all_render_rates(
         );
         tick(&mut app, &[KeyCode::ArrowRight]);
         assert!(app.world().resource::<Switch>().active());
-        for _ in 0..12 {
+        for _ in 0..14 {
             tick(&mut app, &[]);
         }
         assert_eq!(
@@ -201,7 +207,7 @@ fn slot_movement_is_visible_in_the_outgoing_snapshot_and_preserved_after_the_fad
         app.world().resource::<MenuState>().screen,
         screen(0, 3, None)
     );
-    for _ in 0..12 {
+    for _ in 0..14 {
         tick(&mut app, &[]);
     }
     assert_eq!(
@@ -236,7 +242,7 @@ fn picker_and_single_member_navigation_do_not_start_actor_transitions() {
 
 #[test]
 fn clearing_the_session_cancels_pending_actor_replacement_and_both_fade_halves() {
-    for ticks in [0, 6] {
+    for ticks in [0, 7] {
         let mut app = fixture(1);
         tick(&mut app, &[KeyCode::ArrowRight]);
         for _ in 0..ticks {

@@ -28,7 +28,7 @@ fn destination_preupdate_moves_npcs_but_does_not_repeat_the_hero_stage() {
     let before = app.world().get::<Transform>(npc).unwrap().translation.x;
     assert!(app.world().resource::<Transition>().busy());
     app.insert_resource(SceneWait(true));
-    app.world_mut().resource_mut::<GameFrames>().frame = 35;
+    app.world_mut().resource_mut::<GameFrames>().frame = 36;
     app.update();
     assert_eq!(hero_x(&mut app), 7);
     assert_eq!(

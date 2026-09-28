@@ -63,7 +63,7 @@ fn run_script(world: &mut World) {
     } else if matches!(scenario, "gameover" | "battle-defeat") {
         crate::gameover::smoke::input(world, frame, scenario == "battle-defeat")
     } else if scenario == "return-title" {
-        crate::title::smoke::return_input(frame)
+        crate::title::smoke::return_input(world, frame)
     } else if scenario == "battle-menus" {
         crate::battle::smoke::input(frame)
     } else if scenario == "menu" {

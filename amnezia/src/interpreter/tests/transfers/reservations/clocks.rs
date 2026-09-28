@@ -67,15 +67,15 @@ fn reserved_transfers_start_after_one_full_logical_visit_at_every_render_rate() 
         }
         let trace = &app.world().resource::<Trace>().0;
         assert_eq!(trace.len(), 60, "{fps} FPS");
-        let expected = (1..=35)
+        let expected = (1_u32..=36)
             .map(|raw| Sample {
                 raw,
                 scene: 1,
                 counts: [1; 4],
-                age: raw - 1,
+                age: raw.saturating_sub(2),
                 transferring: true,
             })
             .collect::<Vec<_>>();
-        assert_eq!(trace[..35], expected, "{fps} FPS");
+        assert_eq!(trace[..36], expected, "{fps} FPS");
     }
 }

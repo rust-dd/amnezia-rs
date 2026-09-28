@@ -56,19 +56,19 @@ fn free_inn_continuations_keep_identical_traces_at_every_render_rate() {
             }
             let expected = (1..=119)
                 .flat_map(|raw| {
-                    let visits = if raw <= 71 { 1 } else { raw - 70 };
-                    let later = if owner == 1 && raw <= 71 { 0 } else { visits };
+                    let visits = if raw <= 73 { 1 } else { raw - 72 };
+                    let later = if owner == 1 && raw <= 73 { 0 } else { visits };
                     let mut entries = Vec::new();
-                    if raw == 37 {
-                        entries.push((36, 1, [1, 0, i32::from(owner != 1)]));
+                    if raw == 38 {
+                        entries.push((37, 1, [1, 0, i32::from(owner != 1)]));
                     }
-                    if raw == 72 {
-                        entries.push((71, 1, [1, 1, 1]));
+                    if raw == 74 {
+                        entries.push((73, 1, [1, 1, 1]));
                     }
                     entries.push((
                         raw,
                         visits,
-                        [visits as i32, i32::from(raw >= 72), later as i32],
+                        [visits as i32, i32::from(raw >= 74), later as i32],
                     ));
                     entries
                 })

@@ -1,10 +1,13 @@
 use super::*;
 
+mod initialization;
+
 #[test]
 fn battle_flashes_keep_two_full_ten_frame_envelopes_before_the_zoom() {
     let mut state = Transition::default();
     state.start(Kind::Zoom, true, 0, IVec2::ZERO);
     state.prepend_battle_flashes();
+    assert!(!state.updated);
     for frame in 0..20 {
         let mut level = 31.0_f64;
         let mut remaining = 10;
@@ -12,15 +15,15 @@ fn battle_flashes_keep_two_full_ten_frame_envelopes_before_the_zoom() {
             level -= level / remaining as f64;
             remaining -= 1;
         }
-        state.advance(frame);
+        state.advance(frame + 1);
         let effect = state.effect.as_ref().unwrap();
         assert_eq!(effect.flash_alpha(state.frame), Some((level * 8.0) as u32));
     }
-    state.advance(20);
+    state.advance(21);
     assert_eq!(state.effect.as_ref().unwrap().flash_alpha(20), None);
-    state.advance(60);
-    assert!(state.busy());
     state.advance(61);
+    assert!(state.busy());
+    state.advance(62);
     assert!(!state.busy());
     assert!(state.erased());
 }
@@ -45,48 +48,63 @@ fn battle_none_and_already_erased_entry_keep_the_original_forty_frame_wait() {
         assert_eq!(effect.flash_frames, if erased { 0 } else { 20 });
         let total = if erased { 40 } else { 60 };
         let mut state = world.resource_mut::<Transition>();
-        state.advance(total - 1);
-        assert!(state.busy());
         state.advance(total);
+        assert!(state.busy());
+        state.advance(total + 1);
         assert!(!state.busy());
         assert!(state.erased());
     }
 }
 
 #[test]
-fn none_preserves_erasure_and_repeated_erase_is_skipped() {
+fn none_and_repeated_erase_keep_a_one_update_barrier_without_changing_erasure() {
     let mut state = Transition::default();
     assert!(state.start(Kind::None, true, 0, IVec2::ZERO));
     assert!(!state.erased);
-    assert!(!state.busy());
-    assert!(state.start(Kind::Cut, true, 0, IVec2::ZERO));
     assert!(state.busy());
     state.advance(1);
+    assert!(!state.busy());
+    assert!(state.start(Kind::Cut, true, 1, IVec2::ZERO));
+    state.advance(2);
+    assert!(state.busy());
+    state.advance(3);
     assert!(state.erased);
     let serial = state.serial;
-    assert!(state.start(Kind::Mosaic, true, 1, IVec2::ZERO));
+    assert!(state.start(Kind::Mosaic, true, 3, IVec2::ZERO));
+    assert!(state.busy());
+    let effect = state.effect.as_ref().unwrap();
+    assert_eq!((effect.kind, effect.duration), (Kind::None, 0));
+    assert!(effect.offsets.is_empty());
+    state.advance(4);
     assert!(!state.busy());
-    assert_eq!(state.serial, serial);
-    assert!(state.start(Kind::None, false, 1, IVec2::ZERO));
+    assert_eq!(state.serial, serial + 1);
+    assert!(state.start(Kind::None, false, 4, IVec2::ZERO));
     assert!(state.erased);
+    assert!(state.busy());
+    state.advance(5);
+    assert!(state.erased());
     state.clear();
     assert!(!state.erased);
-    assert_eq!(state.serial, serial);
+    assert_eq!(state.serial, serial + 2);
 }
 
 #[test]
-fn every_transition_keeps_frame_zero_and_finishes_at_original_duration() {
+fn every_transition_starts_invisibly_then_keeps_frame_zero_for_the_first_update() {
     for kind in [Kind::Fade, Kind::Zoom, Kind::Mosaic, Kind::Cut] {
         let mut state = Transition::default();
         assert!(state.start(kind, true, u32::MAX - 2, IVec2::new(160, 120)));
         assert_eq!(state.frame, 0);
+        assert!(!state.updated);
+        state.advance(u32::MAX - 2);
+        assert!(!state.updated);
         assert!(!state.start(Kind::Fade, false, 0, IVec2::ZERO));
         for frame in 0..kind.frames() {
-            state.advance((u32::MAX - 2).wrapping_add(frame));
+            state.advance((u32::MAX - 2).wrapping_add(frame + 1));
             assert!(state.busy(), "{kind:?} at {frame}");
+            assert!(state.updated);
             assert_eq!(state.frame, frame);
         }
-        state.advance((u32::MAX - 2).wrapping_add(kind.frames()));
+        state.advance((u32::MAX - 2).wrapping_add(kind.frames() + 1));
         assert!(!state.busy());
         assert!(state.erased);
     }
@@ -101,7 +119,7 @@ fn transition_duration_does_not_depend_on_render_rate() {
         for _ in 0..fps {
             frames.advance(1.0 / fps as f64);
             state.advance(frames.frame);
-            assert_eq!(state.busy(), frames.frame < 41, "{fps} FPS");
+            assert_eq!(state.busy(), frames.frame <= 41, "{fps} FPS");
         }
     }
 }

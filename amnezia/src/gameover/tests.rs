@@ -24,23 +24,23 @@ fn game_over_fades_in_and_out_for_eighty_frames_without_early_confirmation() {
     let mut app = app();
     app.world_mut().resource_mut::<GameOverActive>().0 = true;
     frame(&mut app, 0);
-    frame(&mut app, 34);
-    assert!(!app.world().resource::<GameOverFlow>().visible());
     frame(&mut app, 35);
+    assert!(!app.world().resource::<GameOverFlow>().visible());
+    frame(&mut app, 36);
     assert!(app.world().resource::<GameOverFlow>().visible());
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::Enter);
-    frame(&mut app, 114);
-    assert_eq!(app.world().resource::<GameOverFlow>().0, Stage::Revealing);
-    frame(&mut app, 115);
-    assert_eq!(app.world().resource::<GameOverFlow>().0, Stage::Showing);
     frame(&mut app, 116);
+    assert_eq!(app.world().resource::<GameOverFlow>().0, Stage::Revealing);
+    frame(&mut app, 117);
+    assert_eq!(app.world().resource::<GameOverFlow>().0, Stage::Showing);
+    frame(&mut app, 118);
     assert_eq!(app.world().resource::<GameOverFlow>().0, Stage::Leaving);
     assert!(!app.world().resource::<TitleActive>().0);
-    frame(&mut app, 195);
+    frame(&mut app, 198);
     assert!(!app.world().resource::<TitleActive>().0);
-    frame(&mut app, 196);
+    frame(&mut app, 199);
     assert!(app.world().resource::<TitleActive>().0);
     assert!(!app.world().resource::<GameOverActive>().0);
     assert!(app.world().resource::<Transition>().erased());
@@ -71,7 +71,7 @@ fn battle_handoff_does_not_add_a_map_erase_or_restore_its_music() {
         .prepare_from_battle();
     app.world_mut().resource_mut::<GameOverActive>().0 = true;
     frame(&mut app, 0);
-    frame(&mut app, 80);
+    frame(&mut app, 81);
     assert_eq!(app.world().resource::<GameOverFlow>().0, Stage::Showing);
     assert!(!app.world().resource::<Transition>().busy());
 }

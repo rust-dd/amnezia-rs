@@ -40,11 +40,11 @@ fn foreground_transition_resumes_after_the_parallel_stage() {
         .start(7, vec![cmd(11010, 0, vec![0]), increment(3)]);
     tick(&mut app, 0);
     assert_eq!(counts(&app), [1, 1, 0, 0]);
-    tick(&mut app, 34);
-    assert_eq!(counts(&app), [1, 1, 0, 0]);
     tick(&mut app, 35);
-    assert_eq!(counts(&app), [1, 1, 1, 0]);
+    assert_eq!(counts(&app), [1, 1, 0, 0]);
     tick(&mut app, 36);
+    assert_eq!(counts(&app), [1, 1, 1, 0]);
+    tick(&mut app, 37);
     assert_eq!(counts(&app), [2, 2, 1, 0]);
 }
 
@@ -67,9 +67,9 @@ fn common_transition_resumes_its_owner_even_after_disabling_its_gate() {
     set_switch(&mut app, 5, true);
     tick(&mut app, 0);
     assert_eq!(counts(&app), [1, 0, 0, 0]);
-    tick(&mut app, 35);
-    assert_eq!(counts(&app), [1, 1, 1, 1]);
     tick(&mut app, 36);
+    assert_eq!(counts(&app), [1, 1, 1, 1]);
+    tick(&mut app, 37);
     assert_eq!(counts(&app), [2, 1, 2, 2]);
 }
 
@@ -94,9 +94,9 @@ fn map_transition_resumes_at_its_event_without_repeating_common_or_earlier_map_e
     });
     tick(&mut app, 0);
     assert_eq!(counts(&app), [1, 1, 0, 0]);
-    tick(&mut app, 35);
-    assert_eq!(counts(&app), [1, 1, 1, 1]);
     tick(&mut app, 36);
+    assert_eq!(counts(&app), [1, 1, 1, 1]);
+    tick(&mut app, 37);
     assert_eq!(counts(&app), [2, 2, 1, 2]);
 }
 
@@ -115,15 +115,15 @@ fn resuming_a_transition_retains_the_same_ten_thousand_command_budget() {
         }
         tick(&mut app, 0);
         assert_eq!(counts(&app), [9_998, 0, 0, 0]);
-        tick(&mut app, 35);
-        assert_eq!(counts(&app), [9_998, 1, 0, 0], "parallel={parallel}");
         tick(&mut app, 36);
+        assert_eq!(counts(&app), [9_998, 1, 0, 0], "parallel={parallel}");
+        tick(&mut app, 37);
         assert_eq!(counts(&app), [9_998, 1, 1, 0]);
     }
 }
 
 #[test]
-fn instantaneous_show_and_redundant_erase_resume_in_the_same_visit() {
+fn none_show_and_redundant_erase_resume_after_their_one_update_barriers() {
     let mut app = app();
     app.world_mut().resource_mut::<RunningEvent>().start(
         7,
@@ -137,7 +137,13 @@ fn instantaneous_show_and_redundant_erase_resume_in_the_same_visit() {
         ],
     );
     tick(&mut app, 0);
-    tick(&mut app, 35);
+    tick(&mut app, 36);
+    assert_eq!(counts(&app), [1, 0, 0, 0]);
+    assert!(app.world().resource::<Transition>().busy());
+    tick(&mut app, 37);
+    assert_eq!(counts(&app), [1, 1, 0, 0]);
+    assert!(app.world().resource::<Transition>().busy());
+    tick(&mut app, 38);
     assert_eq!(counts(&app), [1, 1, 1, 0]);
     assert!(app.world().resource::<Transition>().erased());
     assert!(!app.world().resource::<Transition>().event_erased);
@@ -175,7 +181,7 @@ fn a_resumed_scene_request_commits_before_the_next_map_update() {
         .start(7, vec![cmd(11010, 0, vec![19]), cmd(11910, 0, vec![])]);
     tick(&mut app, 0);
     assert!(!app.world().resource::<EventSaveRequest>().0);
-    tick(&mut app, 1);
+    tick(&mut app, 2);
     assert_eq!(counts(&app), [1, 0, 0, 0]);
     assert!(app.world().resource::<EventSaveRequest>().0);
 }
@@ -189,9 +195,9 @@ fn a_transition_on_the_command_limit_does_not_replenish_the_resumed_visit() {
         .resource_mut::<RunningEvent>()
         .start(7, commands);
     tick(&mut app, 0);
-    tick(&mut app, 1);
-    assert_eq!(counts(&app), [9_999, 0, 0, 0]);
     tick(&mut app, 2);
+    assert_eq!(counts(&app), [9_999, 0, 0, 0]);
+    tick(&mut app, 3);
     assert_eq!(counts(&app), [9_999, 1, 0, 0]);
 }
 
@@ -211,8 +217,8 @@ fn an_async_map_owner_without_an_active_page_finishes_its_suspended_burst() {
     set_switch(&mut app, 5, true);
     tick(&mut app, 0);
     assert_eq!(counts(&app), [0; 4]);
-    tick(&mut app, 1);
-    assert_eq!(counts(&app), [1, 0, 0, 0]);
     tick(&mut app, 2);
+    assert_eq!(counts(&app), [1, 0, 0, 0]);
+    tick(&mut app, 3);
     assert_eq!(counts(&app), [1, 0, 0, 0]);
 }

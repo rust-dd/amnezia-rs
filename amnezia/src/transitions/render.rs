@@ -75,24 +75,34 @@ fn sync(
     capture.serial = transition.serial;
     capture.active = transition.busy();
     if let Some(effect) = &transition.effect {
-        if effect.from_erased && !capture.ready(transition.serial) && graphics.pending() {
+        if effect.kind != Kind::None
+            && effect.from_erased
+            && !capture.ready(transition.serial)
+            && graphics.pending()
+        {
             capture.active = false;
             material.control = Vec4::new(21.0, 0.0, 0.0, 0.0);
             return;
         }
         capture.erase = effect.erase;
         capture.previous_scene = effect.previous_scene;
+        capture.hold_previous = !transition.updated || effect.kind == Kind::None;
+        if capture.hold_previous {
+            material.control = Vec4::new(
+                if effect.from_erased { 21.0 } else { 23.0 },
+                u8::from(effect.erase) as f32,
+                0.0,
+                0.0,
+            );
+            return;
+        }
         if let Some(alpha) = effect.flash_alpha(transition.frame) {
             material.control = Vec4::new(22.0, 1.0, 0.0, alpha as f32 / 255.0);
             return;
         }
         let frame = transition.frame.saturating_sub(effect.flash_frames);
         material.control = Vec4::new(
-            if effect.kind == Kind::None && effect.from_erased {
-                21.0
-            } else {
-                effect.kind as u32 as f32
-            },
+            effect.kind as u32 as f32,
             u8::from(effect.erase) as f32,
             u8::from(effect.from_erased) as f32,
             effect.fade_alpha(frame) as f32 / 255.0,

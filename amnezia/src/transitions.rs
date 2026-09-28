@@ -35,6 +35,7 @@ pub(crate) struct Transition {
     serial: u64,
     started: u32,
     frame: u32,
+    updated: bool,
     pub(crate) event_erased: bool,
 }
 
@@ -66,12 +67,15 @@ impl Transition {
         if self.busy() {
             return false;
         }
-        if duration == 0 || (kind != Kind::None && erase && self.erased) {
-            return true;
-        }
+        let (kind, duration) = if kind != Kind::None && erase && self.erased {
+            (Kind::None, 0)
+        } else {
+            (kind, duration)
+        };
         self.serial = self.serial.wrapping_add(1);
         self.started = now;
         self.frame = 0;
+        self.updated = false;
         let mut effect = Effect::new(kind, erase, self.erased, center);
         effect.duration = duration;
         self.effect = Some(effect);
@@ -108,8 +112,10 @@ impl Transition {
         let Some(effect) = &self.effect else {
             return;
         };
-        self.frame = now.wrapping_sub(self.started);
-        if self.frame >= effect.flash_frames + effect.duration {
+        let elapsed = now.wrapping_sub(self.started);
+        self.updated = elapsed > 0;
+        self.frame = elapsed.saturating_sub(1);
+        if elapsed > effect.flash_frames + effect.duration {
             if effect.kind != Kind::None {
                 self.erased = effect.erase;
             }
@@ -135,7 +141,12 @@ fn tick(
     mut transition: ResMut<Transition>,
     capture: Option<Res<snapshots::Capture>>,
 ) {
-    if transition.busy() && capture.is_some_and(|capture| !capture.ready(transition.serial)) {
+    if transition
+        .effect
+        .as_ref()
+        .is_some_and(|effect| effect.kind != Kind::None)
+        && capture.is_some_and(|capture| !capture.ready(transition.serial))
+    {
         transition.started = frames.frame;
         return;
     }

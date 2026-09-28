@@ -17,6 +17,10 @@ pub(crate) struct Snapshot {
     verified: Arc<AtomicUsize>,
 }
 
+pub(in crate::title) fn fully_open(world: &World) -> bool {
+    world.resource::<clock::Clock>().opened == 8
+}
+
 pub(in crate::title) fn opening_label(world: &mut World, frame: u32) -> Option<&'static str> {
     if (60..=421).contains(&frame) || !world.resource::<TitleActive>().0 {
         return None;

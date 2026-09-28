@@ -25,15 +25,15 @@ fn an_interrupted_map_visit_keeps_processed_npcs_and_resumes_the_unprocessed_her
     tick(&mut app, 0);
     assert_eq!(hero_x(&mut app), 5);
     let before = *app.world().get::<Transform>(first).unwrap();
-    for frame in 1..35 {
+    for frame in 1..36 {
         tick(&mut app, frame);
         assert_eq!(hero_x(&mut app), 5);
         assert_eq!(*app.world().get::<Transform>(first).unwrap(), before);
     }
-    tick(&mut app, 35);
+    tick(&mut app, 36);
     assert_eq!(hero_x(&mut app), 6);
     assert_eq!(*app.world().get::<Transform>(first).unwrap(), before);
-    tick(&mut app, 36);
+    tick(&mut app, 37);
     assert_ne!(*app.world().get::<Transform>(first).unwrap(), before);
 }
 
@@ -56,13 +56,13 @@ fn a_foreground_resume_does_not_advance_completed_character_movement_again() {
         *world.get::<Transform>(first).unwrap(),
         *world.get::<Transform>(hero).unwrap(),
     ];
-    for frame in 1..=35 {
+    for frame in 1..=36 {
         tick(&mut app, frame);
         assert_eq!(*app.world().get::<Transform>(first).unwrap(), before[0]);
         assert_eq!(*app.world().get::<Transform>(hero).unwrap(), before[1]);
     }
     assert!(switch_on(&app, 70));
-    tick(&mut app, 36);
+    tick(&mut app, 37);
     assert_ne!(*app.world().get::<Transform>(first).unwrap(), before[0]);
     assert_ne!(*app.world().get::<Transform>(hero).unwrap(), before[1]);
 }
@@ -93,7 +93,7 @@ fn a_suspended_hero_update_does_not_accumulate_the_frozen_camera_shake() {
     assert_ne!(offset, Vec2::ZERO);
     let before = app.world().get::<Transform>(camera).unwrap().translation;
     let effects = crate::screenfx::saved::snapshot(app.world());
-    for frame in 1..=35 {
+    for frame in 1..=36 {
         tick(&mut app, frame);
         assert_eq!(crate::screenfx::saved::snapshot(app.world()), effects);
         assert_eq!(
@@ -102,7 +102,7 @@ fn a_suspended_hero_update_does_not_accumulate_the_frozen_camera_shake() {
             "asynchronous frame {frame}"
         );
     }
-    tick(&mut app, 36);
+    tick(&mut app, 37);
     let offset_after = app
         .world_mut()
         .run_system_cached(|shake: crate::screenfx::ScreenShake| shake.offset())

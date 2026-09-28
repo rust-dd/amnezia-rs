@@ -13,6 +13,19 @@ pub(crate) struct Snapshot {
     checks: Arc<AtomicUsize>,
 }
 
+pub(crate) fn cursor_source(world: &World) -> u32 {
+    world.resource::<Clock>().source_x() as u32
+}
+
+pub(crate) fn cursors(world: &World) -> (Option<usize>, Option<usize>) {
+    let state = world.resource::<MenuState>();
+    match state.screen {
+        MenuScreen::Command => (Some(state.cursor), None),
+        MenuScreen::EndGame { cursor } => (None, Some(cursor)),
+        _ => (None, None),
+    }
+}
+
 pub(crate) fn snapshot(world: &mut World, label: &str) -> Option<Snapshot> {
     let selected = match label {
         "title-return-menu" | "end-game-no-blink" => 1,

@@ -36,7 +36,7 @@ fn the_players_menu_request_replaces_an_earlier_parallel_scene() {
         assert!(shop_requests(&mut app).is_empty());
         assert!(!app.world().resource::<EventSaveRequest>().0);
         assert!(!app.world().resource::<GameOverActive>().0);
-        for _ in 0..6 {
+        for _ in 0..7 {
             tick(&mut app, &[]);
         }
         assert!(app.world().resource::<MenuOpen>().0);

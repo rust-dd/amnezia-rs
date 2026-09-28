@@ -53,7 +53,7 @@ pub(in crate::menu) fn drive(world: &mut World, frame: u32) -> Option<&'static s
         };
         assert!(now.wrapping_sub(pending.started) < 24, "menu fade stalled");
         if pending.showing.is_none() && matches!(flow.stage, Stage::Showing) {
-            assert!(now.wrapping_sub(pending.started) >= 6);
+            assert!(now.wrapping_sub(pending.started) >= 7);
             assert_eq!(transition.age(), 0);
             pending.showing = Some(now);
         }
@@ -71,7 +71,7 @@ pub(in crate::menu) fn drive(world: &mut World, frame: u32) -> Option<&'static s
         {
             assert!(!transition.busy());
             assert!(world.resource::<SceneWait>().0);
-            assert!(now.wrapping_sub(started) >= 6);
+            assert!(now.wrapping_sub(started) >= 7);
             checks.pending = None;
             checks.completed += 1;
             return None;

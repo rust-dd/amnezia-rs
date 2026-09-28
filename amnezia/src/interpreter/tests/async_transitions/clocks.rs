@@ -52,16 +52,16 @@ fn async_continuations_keep_identical_sixty_tick_traces_at_every_render_rate() {
             }
             let expected = (1..=60)
                 .flat_map(|raw| {
-                    let visits = if raw <= 36 { 1 } else { raw - 35 };
-                    let later = if parallel && raw <= 36 { 0 } else { visits };
+                    let visits = if raw <= 37 { 1 } else { raw - 36 };
+                    let later = if parallel && raw <= 37 { 0 } else { visits };
                     let mut entries = Vec::new();
-                    if raw == 37 {
-                        entries.push((36, 1, [1, 1, 1]));
+                    if raw == 38 {
+                        entries.push((37, 1, [1, 1, 1]));
                     }
                     entries.push((
                         raw,
                         visits,
-                        [visits as i32, i32::from(raw >= 37), later as i32],
+                        [visits as i32, i32::from(raw >= 38), later as i32],
                     ));
                     entries
                 })

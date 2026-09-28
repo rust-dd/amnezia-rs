@@ -13,22 +13,22 @@ fn unhandled_defeat_hands_directly_to_game_over_without_revealing_or_replaying_t
             ..default()
         });
         frame(&mut app, 0);
-        frame(&mut app, 21);
         frame(&mut app, 22);
+        frame(&mut app, 24);
         app.world_mut()
             .resource_mut::<Battle>()
             .finish(BattleOutcome::Defeat);
         app.world_mut()
             .resource_mut::<ButtonInput<KeyCode>>()
             .press(KeyCode::Enter);
-        frame(&mut app, 23);
+        frame(&mut app, 25);
         assert!(app.world().resource::<crate::dialogue::Dialogue>().active);
         app.world_mut()
             .resource_mut::<crate::dialogue::Dialogue>()
             .close();
-        frame(&mut app, 23);
-        frame(&mut app, 24);
         frame(&mut app, 25);
+        frame(&mut app, 26);
+        frame(&mut app, 28);
         assert_eq!(
             app.world().resource::<crate::gameover::GameOverActive>().0,
             unhandled
@@ -47,7 +47,7 @@ fn unhandled_defeat_hands_directly_to_game_over_without_revealing_or_replaying_t
             !unhandled
         );
         if !unhandled {
-            frame(&mut app, 66);
+            frame(&mut app, 70);
             assert_eq!(
                 app.world().resource::<BattleResult>().0,
                 Some(BattleOutcome::Defeat)
@@ -80,36 +80,36 @@ fn original_battle_entry_and_exit_hold_scene_input_and_result_until_each_transit
     frame(&mut app, 0);
     assert!(app.world().resource::<BattleActive>().0);
     assert_eq!(app.world().resource::<Battle>().phase, Phase::Inactive);
-    frame(&mut app, 60);
-    assert_eq!(app.world().resource::<Battle>().phase, Phase::Inactive);
     frame(&mut app, 61);
+    assert_eq!(app.world().resource::<Battle>().phase, Phase::Inactive);
+    frame(&mut app, 62);
     assert_eq!(app.world().resource::<Battle>().phase, Phase::Encounter);
     assert!(app.world().resource::<crate::battle::BattleFlow>().busy());
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .press(KeyCode::Enter);
-    frame(&mut app, 101);
+    frame(&mut app, 103);
     assert_eq!(app.world().resource::<Battle>().phase, Phase::Encounter);
     app.world_mut()
         .resource_mut::<ButtonInput<KeyCode>>()
         .clear();
     assert!(app.world().resource::<crate::battle::BattleFlow>().busy());
-    frame(&mut app, 102);
+    frame(&mut app, 104);
     assert!(!app.world().resource::<crate::battle::BattleFlow>().busy());
     app.world_mut()
         .resource_mut::<Battle>()
         .finish(BattleOutcome::Abort);
-    frame(&mut app, 103);
-    frame(&mut app, 104);
-    frame(&mut app, 144);
+    frame(&mut app, 105);
+    frame(&mut app, 106);
+    frame(&mut app, 147);
     assert_eq!(app.world().resource::<Battle>().phase, Phase::Outcome);
     assert_eq!(app.world().resource::<BattleResult>().0, None);
-    frame(&mut app, 145);
+    frame(&mut app, 148);
     assert_eq!(app.world().resource::<Battle>().phase, Phase::Inactive);
     assert!(app.world().resource::<BattleActive>().0);
-    frame(&mut app, 185);
+    frame(&mut app, 189);
     assert_eq!(app.world().resource::<BattleResult>().0, None);
-    frame(&mut app, 186);
+    frame(&mut app, 190);
     assert_eq!(
         app.world().resource::<BattleResult>().0,
         Some(BattleOutcome::Abort)
@@ -148,10 +148,10 @@ fn troop_pages_do_not_start_during_the_battle_show_transition() {
         ..default()
     });
     frame(&mut app, 0);
-    frame(&mut app, 61);
-    frame(&mut app, 101);
+    frame(&mut app, 62);
+    frame(&mut app, 103);
     assert!(!app.world().resource::<Switches>().get(9001));
-    frame(&mut app, 102);
+    frame(&mut app, 104);
     assert!(!app.world().resource::<Switches>().get(9001));
     for _ in 0..80 {
         let mut battle = app.world_mut().resource_mut::<Battle>();
@@ -159,7 +159,7 @@ fn troop_pages_do_not_start_during_the_battle_show_transition() {
             crate::battle::message::encounter::advance(&mut battle, default());
         }
     }
-    frame(&mut app, 103);
+    frame(&mut app, 105);
     assert!(app.world().resource::<Switches>().get(9001));
 }
 
@@ -170,25 +170,25 @@ fn already_erased_encounter_waits_forty_frames_and_returns_to_an_event_erased_ma
     app.world_mut()
         .resource_mut::<Transition>()
         .start(Kind::Cut, true, 0, IVec2::ZERO);
-    frame(&mut app, 1);
+    frame(&mut app, 2);
     app.world_mut().resource_mut::<Transition>().event_erased = true;
     app.world_mut().write_message(BattleRequest {
         troop_id: DEBUG_TROOP,
         ..default()
     });
-    frame(&mut app, 2);
-    frame(&mut app, 41);
-    assert_eq!(app.world().resource::<Battle>().phase, Phase::Inactive);
-    frame(&mut app, 42);
-    assert_eq!(app.world().resource::<Battle>().phase, Phase::Encounter);
+    frame(&mut app, 3);
     frame(&mut app, 43);
+    assert_eq!(app.world().resource::<Battle>().phase, Phase::Inactive);
+    frame(&mut app, 44);
+    assert_eq!(app.world().resource::<Battle>().phase, Phase::Encounter);
+    frame(&mut app, 46);
     app.world_mut()
         .resource_mut::<Battle>()
         .finish(BattleOutcome::Abort);
-    frame(&mut app, 44);
-    frame(&mut app, 45);
-    frame(&mut app, 46);
     frame(&mut app, 47);
+    frame(&mut app, 48);
+    frame(&mut app, 50);
+    frame(&mut app, 51);
     assert!(!app.world().resource::<BattleActive>().0);
     assert!(app.world().resource::<Transition>().erased());
     assert!(app.world().resource::<Transition>().event_erased);

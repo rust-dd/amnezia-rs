@@ -10,7 +10,7 @@ fn app() -> App {
         .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::ZERO))
         .init_resource::<crate::state::Inventory>();
     frame(&mut app, 0);
-    frame(&mut app, 35);
+    frame(&mut app, 36);
     app.world_mut().resource_mut::<TitleState>().cursor = NEW_GAME;
     app.world_mut()
         .resource_mut::<crate::state::Inventory>()
@@ -48,14 +48,14 @@ fn new_game_resets_the_clock_on_the_decision_frame_before_its_six_frame_exit() {
             app.world().resource::<crate::state::Inventory>().gold(),
             123
         );
-        frame(&mut app, 5);
+        frame(&mut app, 6);
         assert!(app.world().resource::<Transition>().busy());
         assert!(!app.world().resource::<NewGameRequest>().requested);
-        frame(&mut app, 6);
+        frame(&mut app, 7);
         assert!(!app.world().resource::<Transition>().busy());
         assert!(app.world().resource::<NewGameRequest>().requested);
         app.update();
-        assert_eq!(app.world().resource::<GameFrames>().frame, 6);
+        assert_eq!(app.world().resource::<GameFrames>().frame, 7);
         assert_eq!(app.world().resource::<SceneFrames>().frame, 0);
         assert_eq!(app.world().resource::<crate::state::Inventory>().gold(), 0);
         assert_eq!(app.world().resource::<PendingTeleport>().0, Some((5, 0, 0)));
@@ -142,7 +142,7 @@ fn title_delay_and_initial_fade_do_not_count_as_scene_frames() {
     app.insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
         1.0 / 60.0,
     )));
-    for _ in 0..55 {
+    for _ in 0..56 {
         app.update();
         assert_eq!(app.world().resource::<SceneFrames>().frame, 0);
     }

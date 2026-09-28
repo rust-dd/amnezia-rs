@@ -84,14 +84,14 @@ fn paid_inn_keeps_only_message_motion_alive_until_the_seventh_raw_tick() {
         app.world_mut().run_system_once(gates).unwrap(),
         (true, true, true)
     );
-    tick(&mut app, frame + 42);
-    tick(&mut app, frame + 77);
+    tick(&mut app, frame + 43);
+    tick(&mut app, frame + 79);
     assert_eq!(counts(&app), [1, 0, 0]);
     assert_eq!(
         app.world_mut().run_system_once(gates).unwrap(),
         (true, false, true)
     );
-    tick(&mut app, frame + 78);
+    tick(&mut app, frame + 80);
     assert_eq!(
         app.world_mut().run_system_once(gates).unwrap(),
         (false, false, false)
@@ -108,15 +108,15 @@ fn paid_parallel_inn_returns_to_message_tail_before_resuming_its_owner_next_tick
     app.world_mut()
         .resource_mut::<RunningEvent>()
         .start(7, vec![increment(2)]);
-    for offset in 1..=77 {
+    for offset in 1..=79 {
         tick(&mut app, frame + offset);
         assert_eq!(
             counts(&app),
-            [0, i32::from(offset == 77), 0],
+            [0, i32::from(offset == 79), 0],
             "tick={offset}"
         );
     }
-    tick(&mut app, frame + 78);
+    tick(&mut app, frame + 80);
     assert_eq!(counts(&app), [1, 1, 0]);
     assert_eq!(app.world().resource::<Inventory>().gold(), 70);
 }

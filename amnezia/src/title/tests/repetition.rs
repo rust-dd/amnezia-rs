@@ -16,7 +16,7 @@ fn app() -> App {
     sounds.buzzer.name = "BUZZER".into();
     app.insert_resource(sounds);
     frame(&mut app, 0);
-    frame(&mut app, 35);
+    frame(&mut app, 36);
     app.world_mut().resource_mut::<TitleState>().cursor = NEW_GAME;
     app.world_mut()
         .resource_mut::<Messages<AudioRequest>>()
@@ -67,7 +67,7 @@ fn held_title_arrows_repeat_at_the_original_phase_at_every_frame_rate() {
             .press(KeyCode::ArrowDown);
         for render in 0..fps {
             expected.advance(1.0 / fps as f64);
-            frame(&mut app, 35 + expected.frame);
+            frame(&mut app, 36 + expected.frame);
             app.world_mut()
                 .resource_mut::<ButtonInput<KeyCode>>()
                 .clear();
@@ -91,7 +91,7 @@ fn title_preserves_global_hold_phase_during_an_asynchronous_fade() {
     app.world_mut().resource_mut::<Transition>().start_for(
         crate::transitions::Kind::Fade,
         false,
-        35,
+        36,
         IVec2::ZERO,
         1000,
     );

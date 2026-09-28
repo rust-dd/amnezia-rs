@@ -52,8 +52,8 @@ fn same_visit_music_commands_are_flushed_before_inn_memory_without_replaying_req
             .unwrap(),
         entity
     );
-    tick(&mut app, 35);
-    tick(&mut app, 70);
+    tick(&mut app, 36);
+    tick(&mut app, 72);
     let music = app.world_mut().run_system_once(saved).unwrap();
     assert_eq!(music.current, Some(current));
     assert_eq!(music.memorized, Some(previous));

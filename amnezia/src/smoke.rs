@@ -34,6 +34,9 @@ impl Plugin for SmokePlugin {
         offscreen::configure(app);
         native::configure(app);
         let scenario = scenarios::selected();
+        if scenario == "gameover" {
+            crate::title::smoke::configure(app);
+        }
         if scenario == "save-slots" {
             crate::menu::save_files::smoke::configure(app);
         } else if scenario == "inn" {
@@ -433,6 +436,8 @@ fn drive(world: &mut World) {
             "escape" | "battle-menus" | "battle-events" | "battle-rewards"
         ) {
             2400
+        } else if scenario == "transitions" {
+            crate::transitions::smoke::finish_frame()
         } else if scenario == "items" {
             1480
         } else if scenario == "menu" {

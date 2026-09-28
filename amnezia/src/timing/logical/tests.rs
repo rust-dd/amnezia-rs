@@ -168,12 +168,12 @@ fn transitions_release_the_scene_on_the_next_tick_within_the_same_render() {
             IVec2::new(160, 120),
             3,
         );
-    duration(&mut app, 1.0 / 15.0);
+    duration(&mut app, 1.0 / 10.0);
     app.update();
     for sample in &app.world().resource::<Trace>().samples {
-        assert_eq!(sample.scene, u32::from(sample.frame == 4));
+        assert_eq!(sample.scene, sample.frame.saturating_sub(4));
     }
-    assert_eq!(app.world().resource::<GameFrames>().frame, 4);
+    assert_eq!(app.world().resource::<GameFrames>().frame, 6);
     assert!(!app.world().resource::<SceneWait>().0);
 }
 
