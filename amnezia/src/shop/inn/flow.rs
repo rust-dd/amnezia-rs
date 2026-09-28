@@ -1,4 +1,4 @@
-use super::{Phase, State};
+use super::{Completion, Phase, State};
 use crate::audio::{AudioRequest, CurrentBgm, SystemMusic};
 use crate::choice::Choice;
 use crate::dialogue::{Dialogue, MessagePrompt};
@@ -123,9 +123,9 @@ pub(super) fn advance(
                     playback.audio.write(request);
                     state.phase = Phase::Resting { started };
                 }
-                silent
+                silent.then_some(Completion::Silent)
             }
-            Phase::Resting { started } => rest_finished(
+            Phase::Resting { started } => rest_completion(
                 playback.current.playing_or_pending(&playback.sinks),
                 time.elapsed().saturating_sub(started),
             ),
@@ -134,11 +134,12 @@ pub(super) fn advance(
                     state.phase = Phase::Idle;
                     open.0 = false;
                 }
-                false
+                None
             }
         };
     };
-    if finished {
+    if let Some(completion) = finished {
+        state.completed = Some(completion);
         playback.audio.write(AudioRequest::StopBgm);
         playback.audio.write(
             state
@@ -195,6 +196,12 @@ fn accept_result(
     result == 0
 }
 
-pub(super) fn rest_finished(playing: bool, elapsed: Duration) -> bool {
-    !playing || elapsed >= Duration::from_secs(10)
+pub(super) fn rest_completion(playing: bool, elapsed: Duration) -> Option<Completion> {
+    if !playing {
+        Some(Completion::PlaybackStopped)
+    } else if elapsed >= Duration::from_secs(10) {
+        Some(Completion::Deadline)
+    } else {
+        None
+    }
 }

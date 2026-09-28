@@ -25,11 +25,19 @@ enum Phase {
     FadeIn,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Completion {
+    Silent,
+    PlaybackStopped,
+    Deadline,
+}
+
 #[derive(Resource, Default)]
 pub(crate) struct State {
     phase: Phase,
     before: Option<BgmTrack>,
     gold: i32,
+    completed: Option<Completion>,
 }
 
 impl State {

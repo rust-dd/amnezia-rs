@@ -63,11 +63,57 @@ fn absent_playback_finishes_without_an_extra_key_and_restores_silence() {
 #[test]
 fn playing_music_waits_up_to_the_original_ten_second_deadline() {
     for elapsed in [Duration::ZERO, Duration::from_millis(9999)] {
-        assert!(!flow::rest_finished(true, elapsed));
-        assert!(flow::rest_finished(false, elapsed));
+        assert_eq!(flow::rest_completion(true, elapsed), None);
+        assert_eq!(
+            flow::rest_completion(false, elapsed),
+            Some(Completion::PlaybackStopped)
+        );
     }
-    assert!(flow::rest_finished(true, Duration::from_secs(10)));
-    assert!(flow::rest_finished(true, Duration::from_secs(11)));
+    for elapsed in [Duration::from_secs(10), Duration::from_secs(11)] {
+        assert_eq!(
+            flow::rest_completion(true, elapsed),
+            Some(Completion::Deadline)
+        );
+    }
+}
+
+#[test]
+fn playback_completion_survives_audio_cleanup_and_the_return_transition() {
+    let mut app = app();
+    app.world_mut().resource_mut::<State>().phase = Phase::Resting {
+        started: Duration::ZERO,
+    };
+    app.insert_resource(CurrentBgm::default());
+    app.world_mut().run_system_once(flow::advance).unwrap();
+    assert_eq!(
+        app.world().resource::<State>().completed,
+        Some(Completion::PlaybackStopped)
+    );
+    assert_eq!(
+        heard(&mut app),
+        [AudioRequest::StopBgm, AudioRequest::StopBgm]
+    );
+    app.world_mut().resource_mut::<Transition>().clear();
+    app.world_mut().run_system_once(flow::advance).unwrap();
+    assert!(matches!(app.world().resource::<State>().phase, Phase::Idle));
+    assert_eq!(
+        app.world().resource::<State>().completed,
+        Some(Completion::PlaybackStopped)
+    );
+    open(&mut app, 30);
+    assert_eq!(app.world().resource::<State>().completed, None);
+}
+
+#[test]
+fn intentionally_silent_stays_do_not_report_finished_playback() {
+    let mut app = app();
+    open(&mut app, 0);
+    app.world_mut().resource_mut::<Transition>().hold_black();
+    app.world_mut().run_system_once(flow::advance).unwrap();
+    assert_eq!(
+        app.world().resource::<State>().completed,
+        Some(Completion::Silent)
+    );
 }
 
 #[test]

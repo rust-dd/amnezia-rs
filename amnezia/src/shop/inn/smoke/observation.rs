@@ -1,4 +1,5 @@
 use super::*;
+use crate::shop::inn::Completion;
 
 pub(super) fn release_finished_input(
     probe: Option<Res<Probe>>,
@@ -32,11 +33,11 @@ pub(super) fn update(world: &mut World) {
         "inn must not advance scene time during rest"
     );
     assert!(!world.resource::<crate::menu::MenuOpen>().0);
-    let (mut playing, mut ended) = (false, false);
+    let mut playing = false;
+    let ended = world.resource::<State>().completed == Some(Completion::PlaybackStopped);
     for (settings, sink) in world.query::<(&PlaybackSettings, &AudioSink)>().iter(world) {
         if matches!(settings.mode, PlaybackMode::Once) {
             playing |= !sink.empty() && !sink.position().is_zero();
-            ended |= sink.empty();
         }
     }
     let mut probe = world.resource_mut::<Probe>();
