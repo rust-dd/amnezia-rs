@@ -3,6 +3,8 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{TextureFormat, TextureUsages};
 use bevy::window::PrimaryWindow;
 
+mod audio;
+
 #[derive(Resource)]
 pub(super) struct Target(pub Handle<Image>);
 
@@ -13,6 +15,7 @@ pub(crate) fn enabled() -> bool {
 }
 
 pub(super) fn configure(app: &mut App) {
+    audio::configure(app, enabled());
     if !enabled() {
         return;
     }
