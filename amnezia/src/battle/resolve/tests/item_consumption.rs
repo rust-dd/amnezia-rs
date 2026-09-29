@@ -2,11 +2,13 @@ use super::*;
 use crate::state::Inventory;
 
 fn use_item(battle: &mut Battle, inventory: &mut Inventory) -> bool {
-    battle.resolve_next_with_items(|id| {
+    battle.resolve_next_with_items(|id, consume| {
         if !inventory.has(id) {
             return false;
         }
-        inventory.remove_item(id, 1);
+        if consume {
+            inventory.remove_item(id, 1);
+        }
         true
     })
 }

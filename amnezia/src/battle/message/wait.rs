@@ -28,13 +28,13 @@ pub(in crate::battle) struct Wait {
 }
 
 impl Wait {
-    pub(super) fn set(&mut self, min: u32, max: u32) {
+    pub(in crate::battle) fn set(&mut self, min: u32, max: u32) {
         assert!(min <= max);
         self.remaining = max;
         self.threshold = max - min;
     }
 
-    pub(super) fn ready(&mut self, controls: Controls) -> bool {
+    pub(in crate::battle) fn ready(&mut self, controls: Controls) -> bool {
         if self.remaining == 0 {
             return true;
         }

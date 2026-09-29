@@ -3,15 +3,10 @@
 //! lives in [`super::build`]; the resolution mathematics in [`crate::battle::resolve`].
 
 use super::{
-    Action, BattleOutcome, BattleSe, Command, Fighter, Foe, HitReport, PendingAnim, Source, Step,
-    logic,
+    Action, BattleOutcome, BattleSe, Command, Fighter, Foe, HitReport, PendingAnim, Source, logic,
 };
 use amnezia_data::{AttributeDef, ItemDef, SkillDef, StateDef};
 use bevy::prelude::*;
-
-/// Seconds between two resolved actions, so the log and damage read at a human
-/// pace rather than flashing past in one frame.
-pub const RESOLVE_STEP_SECS: f32 = 0.7;
 
 /// Frames [`Battle::tick_anim_hold`] waits for a just-queued battle animation to
 /// appear before giving up and applying its impact anyway. Comfortably longer
@@ -20,7 +15,7 @@ pub const RESOLVE_STEP_SECS: f32 = 0.7;
 /// than wedging resolution forever).
 const ANIM_HOLD_GRACE_TICKS: u32 = 12;
 
-/// How many trailing log lines the battle keeps for display.
+#[cfg(test)]
 pub const LOG_TAIL: usize = 5;
 
 /// The battle's coarse phase, which gates the input/resolve/outcome systems.
@@ -54,10 +49,10 @@ pub enum MenuLevel {
 /// `Inactive` phase) between fights.
 #[derive(Resource, Default)]
 pub struct Battle {
+    pub(in crate::battle) timeline: crate::battle::resolve::timeline::Timeline,
     pub(in crate::battle) events: crate::battle::events::BattleEvents,
     pub(in crate::battle) ai_switches: std::collections::BTreeSet<u32>,
     pub(in crate::battle) pending_switches: Vec<(u32, bool)>,
-    pub(in crate::battle) action_source: Option<Source>,
     pub phase: Phase,
     pub(in crate::battle) messages: crate::battle::message::Messages,
     pub background: String,
@@ -95,7 +90,6 @@ pub struct Battle {
     pub pending_item: Option<u32>,
     pub queue: Vec<Action>,
     pub queue_at: usize,
-    pub timer: Timer,
     pub log: Vec<String>,
     pub outcome: Option<BattleOutcome>,
     pub reward_exp: u32,
@@ -122,16 +116,7 @@ pub struct Battle {
     /// into `AudioRequest`s named from the loaded `SystemDef` and cleared by
     /// [`Battle::new_round`] (a fresh [`Battle::build`] starts empty).
     pub(in crate::battle) pending_se: Vec<BattleSe>,
-    /// Sub-steps the action currently resolving still owes, drained one per
-    /// resolve tick (see [`Step`]) so a multi-target cast staggers its messages
-    /// and a critical announces on its own beat. Cleared by [`Battle::new_round`]
-    /// and [`Battle::begin_resolve`].
-    pub(in crate::battle) steps: std::collections::VecDeque<Step>,
-    /// While a queued battle animation plays, resolution pauses and the pending
-    /// strike/cast impact is held so its damage number lands only once the
-    /// animation has finished (RM2000 sequences the animation, its `SetWait`,
-    /// then the damage). Set when the animation is queued; `battle::resolve_tick`
-    /// drives it down through [`Battle::tick_anim_hold`].
+    /// Troop-event animation wait; action animations use the frame timeline.
     pub(in crate::battle) anim_hold: bool,
     /// The renderer acknowledged the request or reported a live animation.
     /// Acknowledgement also covers effects that finish within one low-FPS update.
@@ -140,9 +125,6 @@ pub struct Battle {
     /// bounding the wait for an unknown/absent animation id (see
     /// [`ANIM_HOLD_GRACE_TICKS`]) so resolution can never wedge.
     pub(in crate::battle) anim_hold_ticks: u32,
-    /// Set while a deferred skill/enemy cast re-runs after its animation, so the
-    /// shared cast helper skips re-queuing the already-played animation.
-    pub(in crate::battle) suppress_anim: bool,
     /// Set once the victory reward (gold, experience, and any level-ups) has been
     /// paid on entering the outcome, so `battle::apply_victory_rewards` pays out
     /// exactly once while the outcome screen waits for the player.
@@ -197,7 +179,7 @@ impl Battle {
     pub fn commit(&mut self, command: Command) {
         if let Some(f) = self.members.get_mut(self.turn) {
             f.command = Some(command);
-            f.defending = false;
+            f.defending = matches!(command, Command::Defend);
         }
         self.menu = MenuLevel::Command;
         self.cursor = 0;
@@ -260,7 +242,7 @@ impl Battle {
     /// plus each living enemy's AI-chosen action (`resolve::enemy_action`), and
     /// start resolving.
     pub(in crate::battle) fn begin_resolve(&mut self) {
-        self.action_source = None;
+        self.timeline = default();
         self.events.next_turn();
         let alive: Vec<bool> = self.members.iter().map(|f| f.alive()).collect();
         let mut actions: Vec<Action> = Vec::new();
@@ -301,32 +283,26 @@ impl Battle {
             .map(|i| actions[i])
             .collect();
         self.queue_at = 0;
-        self.steps.clear();
         self.clear_anim_hold();
-        self.timer.reset();
         self.phase = Phase::Resolve;
     }
 
-    /// Begin holding resolution until the just-queued battle animation has played
-    /// out, so the deferred strike/cast impact lands only once the swing/cast is
-    /// seen (see [`Battle::anim_hold`]).
+    /// Wait for a troop-event animation, including renderer acknowledgement.
     pub(in crate::battle) fn begin_anim_hold(&mut self) {
         self.anim_hold = true;
         self.anim_seen = false;
         self.anim_hold_ticks = 0;
     }
 
-    /// Whether resolution is currently paused waiting on a battle animation.
+    #[cfg(test)]
     pub(in crate::battle) fn anim_hold_active(&self) -> bool {
         self.anim_hold
     }
 
-    /// Clear any in-progress animation hold and the cast-suppression flag.
     fn clear_anim_hold(&mut self) {
         self.anim_hold = false;
         self.anim_seen = false;
         self.anim_hold_ticks = 0;
-        self.suppress_anim = false;
     }
 
     /// Advance the animation hold given whether any battle animation is live this
@@ -356,14 +332,14 @@ impl Battle {
 
     /// Reopen party commands; state recovery waits for each battler's action.
     pub fn new_round(&mut self) {
-        self.action_source = None;
+        self.timeline = default();
+        self.first_strike = false;
         self.round += 1;
         for f in &mut self.members {
             f.command = None;
         }
         self.queue.clear();
         self.queue_at = 0;
-        self.steps.clear();
         self.clear_anim_hold();
         self.pending_anims.clear();
         self.hit_reports.clear();
@@ -380,7 +356,7 @@ impl Battle {
         self.phase = Phase::PartyCommand;
     }
 
-    /// The last [`LOG_TAIL`] log lines, for the log window.
+    #[cfg(test)]
     pub fn log_tail(&self) -> String {
         let start = self.log.len().saturating_sub(LOG_TAIL);
         self.log[start..].join("\n")

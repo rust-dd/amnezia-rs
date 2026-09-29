@@ -1,6 +1,13 @@
 use super::*;
 
 impl Battle {
+    pub(in crate::battle::resolve) fn source_alive(&self, source: Source) -> bool {
+        match source {
+            Source::Party(i) => self.members.get(i).is_some_and(|f| f.alive()),
+            Source::Enemy(i) => self.enemies.get(i).is_some_and(|e| e.alive()),
+        }
+    }
+
     pub(in crate::battle::resolve) fn battler_attribute_damage(
         &self,
         base: i32,

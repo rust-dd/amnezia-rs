@@ -111,4 +111,17 @@ impl Battle {
             _ => {}
         }
     }
+    pub(in crate::battle) fn clear_battler_bonuses(&mut self, target: Source) {
+        match target {
+            Source::Party(i) => {
+                self.members[i].stat_modifiers = [0; 4];
+                self.members[i].defending = false;
+            }
+            Source::Enemy(i) => {
+                self.enemies[i].stat_modifiers = [0; 4];
+                self.enemies[i].defending = false;
+                self.enemies[i].charging = false;
+            }
+        }
+    }
 }

@@ -39,7 +39,7 @@ fn original_sword_skills_need_a_weapon_even_when_sp_is_sufficient() {
     assert_eq!(battle.members[0].sp, sp);
     assert_eq!(battle.enemies[0].hp, hp);
     assert!(battle.pending_anims.is_empty());
-    assert!(battle.steps.is_empty());
+    assert!(!battle.action_in_progress());
 }
 
 #[test]

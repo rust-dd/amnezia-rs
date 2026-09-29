@@ -105,6 +105,8 @@ fn turn(app: &mut App, turn: u32) {
 fn original_cyclone_tutorial_waits_animates_teaches_and_aborts() {
     let mut app = app(15, &[1]);
     app.update();
+    assert!(!app.world().resource::<Dialogue>().active);
+    app.update();
     assert!(app.world().resource::<Dialogue>().active);
     assert!(
         !app.world().resource::<Battle>().members[0]

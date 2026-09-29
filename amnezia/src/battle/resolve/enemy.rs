@@ -62,49 +62,4 @@ impl Battle {
             None => Command::Nothing,
         }
     }
-
-    /// Keep `target` if that enemy still lives, else pick another living enemy.
-    pub(in crate::battle::resolve) fn retarget_enemy(&mut self, target: usize) -> Option<usize> {
-        if self.enemies.get(target).is_some_and(|e| e.alive()) {
-            return Some(target);
-        }
-        let alive: Vec<bool> = self.enemies.iter().map(|e| e.alive()).collect();
-        let roll = rng_next(&mut self.rng) as usize;
-        logic::select_target(&alive, roll)
-    }
-
-    pub(in crate::battle::resolve) fn retarget_member(&mut self, target: usize) -> Option<usize> {
-        if self.members.get(target).is_some_and(|m| m.alive()) {
-            return Some(target);
-        }
-        let alive = self.members.iter().map(|m| m.alive()).collect::<Vec<_>>();
-        let roll = rng_next(&mut self.rng) as usize;
-        logic::select_target(&alive, roll)
-    }
-
-    /// Confusion may target any living ally, including the attacker.
-    pub(in crate::battle::resolve) fn retarget_ally(
-        &mut self,
-        _pi: usize,
-        target: usize,
-    ) -> Option<usize> {
-        if self.members.get(target).is_some_and(|m| m.alive()) {
-            return Some(target);
-        }
-        let alive = self.members.iter().map(|m| m.alive()).collect::<Vec<_>>();
-        logic::select_target(&alive, rng_next(&mut self.rng) as usize)
-    }
-
-    /// Enemy confusion follows the same self-inclusive target rule.
-    pub(in crate::battle::resolve) fn retarget_other_enemy(
-        &mut self,
-        _ei: usize,
-        target: usize,
-    ) -> Option<usize> {
-        if self.enemies.get(target).is_some_and(|e| e.alive()) {
-            return Some(target);
-        }
-        let alive = self.enemies.iter().map(|e| e.alive()).collect::<Vec<_>>();
-        logic::select_target(&alive, rng_next(&mut self.rng) as usize)
-    }
 }

@@ -218,7 +218,7 @@ pub(crate) fn show(world: &mut World, frame: u32) -> Option<&'static str> {
         let battle = world.resource::<Battle>();
         assert_eq!(battle.members[0].sp, 17);
         assert_eq!(battle.log, ["Ron X-csapást alkalmaz"]);
-        assert!(battle.anim_hold_active());
+        assert!(battle.action_in_progress());
         assert!(
             world
                 .query::<(&crate::font::bitmap::PixelText, &InheritedVisibility)>()

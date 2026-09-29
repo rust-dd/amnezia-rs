@@ -10,14 +10,15 @@ mod navigation;
 #[derive(Resource, Default)]
 struct Checks(Arc<AtomicUsize>);
 
-pub(crate) fn input(frame: u32) -> Option<KeyCode> {
+pub(crate) fn input(world: &World, frame: u32) -> Option<KeyCode> {
     match frame {
         435 | 480 | 510 | 540 | 1010 | 1030 => Some(KeyCode::ArrowDown),
         450 | 995 | 1020 | 1040 => Some(KeyCode::Enter),
         620 | 760 | 780 => Some(KeyCode::Escape),
         640 => Some(KeyCode::ArrowUp),
         1050 => Some(KeyCode::ArrowRight),
-        _ => equip_selection::input(frame).or_else(|| crate::menu::navigation_smoke::input(frame)),
+        _ => equip_selection::input(frame)
+            .or_else(|| crate::menu::navigation_smoke::input(world, frame)),
     }
 }
 

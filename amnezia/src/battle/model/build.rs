@@ -1,6 +1,5 @@
 //! Assembling a fresh encounter: [`Battle::build`] instantiates both sides.
 
-use super::battle::RESOLVE_STEP_SECS;
 use super::{Battle, Fighter, Foe, Phase, Progression, Stats, Vitals, logic};
 use amnezia_data::{ActorDef, AttributeDef, ItemDef, MonsterDef, SkillDef, StateDef, TroopDef};
 use bevy::prelude::*;
@@ -90,7 +89,6 @@ impl Battle {
             states: states.to_vec(),
             skills: skills.to_vec(),
             items: items.to_vec(),
-            timer: Timer::from_seconds(RESOLVE_STEP_SECS, TimerMode::Repeating),
             log: vec![format!("{} rátok támad!", troop.name)],
             rng: seed | 1,
             generation: seed | 1,

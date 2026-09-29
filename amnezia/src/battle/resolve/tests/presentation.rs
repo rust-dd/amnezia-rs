@@ -273,7 +273,14 @@ fn felling_a_foe_starts_a_death_that_holds_resolve_then_clears() {
     let mut battle = build_1v2();
     battle.members[0].weapon_hit = 100;
     battle.enemies[0].hp = 1;
-    battle.strike_enemy(0, 0);
+    battle.start_test_action(Action {
+        source: Source::Party(0),
+        kind: Command::Attack { target: 0 },
+        agility: 1,
+    });
+    while battle.enemies[0].hp > 0 {
+        battle.tick_action();
+    }
     assert!(!battle.enemies[0].alive());
     assert!(battle.enemies[0].dying.is_some());
     assert!(battle.death_in_progress());
@@ -285,11 +292,14 @@ fn felling_a_foe_starts_a_death_that_holds_resolve_then_clears() {
 #[test]
 fn self_destruct_starts_an_explosion_death_out() {
     let mut battle = build_party2();
-    battle.apply(Action {
+    battle.start_test_action(Action {
         source: Source::Enemy(0),
         kind: Command::SelfDestruct,
         agility: 0,
     });
+    while battle.enemies[0].dying.is_none() {
+        battle.tick_action();
+    }
     let dying = battle.enemies[0]
         .dying
         .as_ref()
@@ -308,6 +318,7 @@ fn a_multi_target_cast_staggers_its_hits_across_ticks() {
     // hit reports each tick come from the staggered cast, not enemy attacks.
     for e in &mut battle.enemies {
         e.hp = 500;
+        e.max_hp = 500;
         e.actions = vec![enemy_action_def(2)];
     }
     battle.commit(Command::Skill {
@@ -316,7 +327,7 @@ fn a_multi_target_cast_staggers_its_hits_across_ticks() {
     });
     let mut per_tick: Vec<usize> = Vec::new();
     let mut prev = battle.hit_reports.len();
-    while battle.resolve_next() {
+    while battle.tick_action() != timeline::Progress::Done {
         let now = battle.hit_reports.len();
         per_tick.push(now - prev);
         prev = now;
@@ -422,7 +433,7 @@ fn an_animated_strike_defers_its_hit_report_until_after_the_animation() {
     // A member wielding a weapon whose attack animation is 7: RM2000 plays the
     // swing, waits for it, and only then shows the damage.
     let mut battle = build_weapon_anim(7);
-    battle.apply(Action {
+    battle.start_test_action(Action {
         source: Source::Party(0),
         kind: Command::Attack { target: 0 },
         agility: 0,
@@ -436,14 +447,10 @@ fn an_animated_strike_defers_its_hit_report_until_after_the_animation() {
         "no hit is reported on the same tick as the animation"
     );
     assert!(
-        battle.anim_hold_active(),
+        battle.action_in_progress(),
         "resolution holds while the swing plays"
     );
-    assert!(
-        matches!(battle.steps.front(), Some(Step::StrikeImpact { .. })),
-        "the impact is queued as a deferred step: {:?}",
-        battle.steps.front().is_some()
-    );
+    assert!(battle.action_in_progress());
     battle.resolve_next();
     assert!(
         !battle.hit_reports.is_empty(),
@@ -452,47 +459,39 @@ fn an_animated_strike_defers_its_hit_report_until_after_the_animation() {
 }
 
 #[test]
-fn a_zero_animation_strike_applies_immediately_without_holding() {
-    // build_1v2's hero is bare-handed (unarmed_animation 0), so there is no swing
-    // to wait for: the impact must land at once with no hold (never wedging).
+fn an_animationless_strike_still_waits_for_its_message_timeline() {
     let mut battle = build_1v2();
     battle.members[0].weapon_hit = 100;
     let before = battle.enemies[0].hp;
-    battle.apply(Action {
+    battle.start_test_action(Action {
         source: Source::Party(0),
         kind: Command::Attack { target: 0 },
         agility: 0,
     });
-    assert!(
-        !battle.anim_hold_active(),
-        "a 0-animation strike never holds"
-    );
-    assert!(battle.enemies[0].hp < before, "the blow lands on this tick");
-    assert!(
-        !battle.hit_reports.is_empty(),
-        "its hit is reported immediately"
-    );
+    assert_eq!(battle.enemies[0].hp, before);
+    assert!(battle.pending_anims.is_empty());
+    assert!(battle.action_in_progress());
+    battle.resolve_next();
+    assert!(battle.enemies[0].hp < before);
+    assert!(!battle.hit_reports.is_empty());
 }
 
 #[test]
-fn an_enemy_normal_attack_applies_and_reports_damage_without_holding() {
-    // An rpg2k enemy normal attack plays no animation, so it applies immediately
-    // (paced only by the step timer), queues no animation, and never holds.
+fn an_enemy_normal_attack_waits_without_queuing_an_animation() {
     let mut battle = build_1v2();
     wind_enemy_hits(&mut battle, &[0]);
     let before = battle.members[0].hp;
-    battle.apply(Action {
+    battle.start_test_action(Action {
         source: Source::Enemy(0),
         kind: Command::Attack { target: 0 },
         agility: 0,
     });
-    assert!(
-        !battle.anim_hold_active(),
-        "an enemy normal attack plays no animation, so no hold"
-    );
+    assert_eq!(battle.members[0].hp, before);
+    assert!(battle.action_in_progress());
+    battle.resolve_next();
     assert!(
         battle.members[0].hp < before,
-        "the member takes the hit at once"
+        "the member takes the hit after its damage message"
     );
     assert!(
         battle.pending_anims.is_empty(),
@@ -500,7 +499,7 @@ fn an_enemy_normal_attack_applies_and_reports_damage_without_holding() {
     );
     assert!(
         !battle.hit_reports.is_empty(),
-        "the hit is reported on this tick"
+        "the hit is reported by the action timeline"
     );
 }
 

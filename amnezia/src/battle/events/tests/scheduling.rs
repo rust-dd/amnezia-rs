@@ -1,6 +1,66 @@
 use super::*;
 use crate::battle::model::{Action, Command, Source};
 
+fn boundary_app(schedule: bool) -> App {
+    let mut app = app(2, &[1]);
+    app.init_resource::<crate::state::Inventory>()
+        .add_systems(Update, crate::battle::systems::resolve_tick.after(drive));
+    let mut battle = app.world_mut().resource_mut::<Battle>();
+    battle.phase = Phase::Resolve;
+    battle.events = BattleEvents::new(&[TroopPageDef {
+        condition: TroopPageConditionDef {
+            flags: 1,
+            switch_a_id: 900,
+            ..default()
+        },
+        commands: vec![command(10210, vec![0, 901, 901, 0])],
+    }]);
+    battle.enemies[0].switch_on_after_action = schedule.then_some(900);
+    battle.queue = vec![
+        Action {
+            source: Source::Enemy(0),
+            kind: Command::DoNothing,
+            agility: 1,
+        },
+        Action {
+            source: Source::Party(0),
+            kind: Command::DoNothing,
+            agility: 1,
+        },
+    ];
+    app
+}
+
+#[test]
+fn action_boundary_schedules_a_page_without_executing_it_until_the_next_update() {
+    let mut app = boundary_app(true);
+    for _ in 0..4 {
+        app.update();
+    }
+    assert!(app.world().resource::<Switches>().get(900));
+    assert!(!app.world().resource::<Switches>().get(901));
+    assert_eq!(app.world().resource::<Battle>().queue_at, 1);
+    app.update();
+    assert!(app.world().resource::<Switches>().get(901));
+    assert_eq!(app.world().resource::<Battle>().queue_at, 2);
+    assert!(app.world().resource::<Battle>().events.presenting());
+    assert!(!app.world().resource::<Battle>().events.holds_resolution());
+}
+
+#[test]
+fn an_unmatched_page_does_not_insert_a_frame_between_actions() {
+    let mut app = boundary_app(false);
+    for _ in 0..4 {
+        app.update();
+    }
+    assert_eq!(app.world().resource::<Battle>().queue_at, 2);
+    assert!(!app.world().resource::<Switches>().get(901));
+    for _ in 0..3 {
+        app.update();
+    }
+    assert_eq!(app.world().resource::<Battle>().phase, Phase::PartyCommand);
+}
+
 #[test]
 fn the_live_action_driver_runs_join_events_before_the_third_rounds_first_action() {
     let mut app = app(16, &[1]);
@@ -45,6 +105,8 @@ fn closing_a_troop_dialogue_does_not_also_confirm_a_battle_command() {
     app.init_resource::<crate::state::Inventory>()
         .init_resource::<ButtonInput<KeyCode>>()
         .add_systems(Update, crate::battle::input::command_input.after(drive));
+    app.update();
+    assert!(!app.world().resource::<Dialogue>().active);
     app.update();
     assert!(app.world().resource::<Dialogue>().active);
     app.world_mut().resource_mut::<Dialogue>().active = false;

@@ -78,6 +78,7 @@ fn actor_base_critical_never_multiplies_an_ordinary_skill() {
     skill.magical_rate = 0;
     skill.variance = 0;
     battle.enemies[0].hp = 100;
+    battle.enemies[0].max_hp = 100;
     battle.skill_hit_enemy(0, 0, &skill);
     assert_eq!(battle.enemies[0].hp, 80);
 }

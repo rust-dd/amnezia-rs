@@ -1,6 +1,5 @@
 use super::*;
 use crate::battle::input::{command_labels, item_choices, party_labels, skill_choices};
-use crate::battle::outcome_text::wrap;
 use crate::gamedata::GameData;
 use crate::i18n;
 use crate::state::Inventory;
@@ -40,32 +39,14 @@ pub(super) fn rows(
             commands(panel, battle, data, inventory, terms)
         }
         Panel::Status => Vec::new(),
-        Panel::Message => {
-            if matches!(
-                battle.phase,
-                Phase::Encounter | Phase::Escape | Phase::Outcome
-            ) {
-                return battle
-                    .messages
-                    .console
-                    .visible()
-                    .iter()
-                    .cloned()
-                    .map(Row::plain)
-                    .collect();
-            }
-            let log = battle.log_tail();
-            let mut lines = wrap(&log, 50);
-            lines = lines
-                .into_iter()
-                .rev()
-                .take(4)
-                .collect::<Vec<_>>()
-                .into_iter()
-                .rev()
-                .collect();
-            lines.into_iter().map(Row::plain).collect()
-        }
+        Panel::Message => battle
+            .messages
+            .console
+            .visible()
+            .iter()
+            .cloned()
+            .map(Row::plain)
+            .collect(),
         Panel::Help => vec![Row::plain(description(battle, data, inventory, None))],
     }
 }

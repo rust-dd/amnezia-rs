@@ -134,6 +134,8 @@ pub(super) fn finished(world: &mut World, scenario: &str) {
         );
     } else if scenario == "battle-events" {
         crate::battle::smoke::verify_events(world);
+    } else if scenario == "battle-actions" {
+        crate::battle::action_smoke::verify_finished(world);
     } else if scenario == "battle-rewards" {
         crate::battle::outcome_smoke::verify_finished(world);
     } else if scenario == "battle-menus" {

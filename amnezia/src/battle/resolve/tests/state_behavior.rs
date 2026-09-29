@@ -11,7 +11,7 @@ fn queue(battle: &mut Battle, source: Source, kind: Command) {
         agility: 1,
     }];
     battle.queue_at = 0;
-    battle.steps.clear();
+    battle.timeline = Default::default();
 }
 
 #[test]
@@ -125,7 +125,10 @@ fn a_late_restriction_cancels_an_item_even_if_cured_before_the_action() {
     battle.inflict_battler_state(Source::Party(0), 8);
     battle.cure_battler_state(Source::Party(0), 8);
     let mut consumed = false;
-    battle.resolve_next_with_items(|_| {
+    battle.resolve_next_with_items(|_, consume| {
+        if !consume {
+            return true;
+        }
         consumed = true;
         true
     });
@@ -198,7 +201,7 @@ fn recovering_mindblow_is_removed_before_its_sp_effect() {
 }
 
 #[test]
-fn a_start_of_action_sp_drain_prevents_an_unaffordable_cast() {
+fn preparation_checks_cost_before_start_of_action_sp_drain() {
     let mut battle = build_1v2();
     let mut state = poison_state(2);
     state.sp_change_val = 2;
@@ -217,8 +220,9 @@ fn a_start_of_action_sp_drain_prevents_an_unaffordable_cast() {
         },
     );
     battle.resolve_next();
-    assert_eq!((battle.enemies[0].sp, battle.members[0].hp), (1, hp));
-    assert!(battle.pending_switches.is_empty());
+    assert_eq!(battle.enemies[0].sp, 0);
+    assert!(battle.members[0].hp < hp);
+    assert_eq!(battle.pending_switches, [(545, true)]);
 }
 
 #[test]
@@ -275,7 +279,6 @@ fn a_confused_weapon_strike_uses_accuracy_elements_and_deferred_animation_withou
     battle.members[0].stats.defense = 4;
     let source = Source::Party(0);
     battle.confused_attack(source, source);
-    assert_eq!(battle.members[0].hp, 999);
     assert_eq!(
         battle.pending_anims[0].targets,
         [battle.battler_pos(source)]

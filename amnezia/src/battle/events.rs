@@ -46,6 +46,10 @@ impl BattleEvents {
         self.checkpoint || self.page.is_some() || self.blocked_frame
     }
 
+    pub fn holds_resolution(&self) -> bool {
+        self.checkpoint || self.page.is_some()
+    }
+
     pub fn presenting(&self) -> bool {
         self.page.is_some() || self.blocked_frame
     }
@@ -86,6 +90,27 @@ pub(super) struct EventWorld<'w> {
     switches: ResMut<'w, Switches>,
     variables: Res<'w, Variables>,
     audio: MessageWriter<'w, AudioRequest>,
+}
+
+impl EventWorld<'_> {
+    pub(super) fn action_boundary(&mut self, battle: &mut Battle) -> bool {
+        for (id, enabled) in battle.pending_switches.drain(..) {
+            self.switches.set(id, enabled);
+        }
+        let mut events = std::mem::take(&mut battle.events);
+        let scheduled = events.schedule(battle, self);
+        battle.events = events;
+        scheduled
+    }
+
+    pub(super) fn outcome_music(
+        &mut self,
+        system: &amnezia_data::SystemDef,
+        overrides: Option<&crate::system_bgm::SystemBgm>,
+        outcome: super::BattleOutcome,
+    ) {
+        super::systems::play_outcome_music(&mut self.audio, system, overrides, outcome);
+    }
 }
 
 pub(super) fn drive(
@@ -150,9 +175,10 @@ pub(super) fn drive(
                 );
                 break;
             }
-            if !events.checkpoint || !events.schedule(&battle, &world) {
-                break;
+            if events.checkpoint {
+                events.schedule(&battle, &world);
             }
+            break;
         }
         events.blocked_frame = true;
         if !commands::step(&mut events, &mut battle, &mut world) {

@@ -35,7 +35,7 @@ fn deferred_casts_and_confused_attacks_also_suppress_party_visuals() {
         };
         skill.animation_id = 1;
         battle.skills = vec![skill];
-        battle.apply(Action {
+        battle.start_test_action(Action {
             source,
             kind: Command::Skill {
                 skill_id: 1,
@@ -43,7 +43,7 @@ fn deferred_casts_and_confused_attacks_also_suppress_party_visuals() {
             },
             agility: 1,
         });
-        assert!(battle.anim_hold_active());
+        assert!(battle.action_in_progress());
         assert!(battle.pending_anims[0].sound_only);
     }
     let mut battle = build_party2();

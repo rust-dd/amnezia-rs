@@ -122,6 +122,7 @@ impl MapBgm {
 }
 
 pub struct BattlePlugin;
+pub(crate) mod action_smoke;
 
 impl Plugin for BattlePlugin {
     fn build(&self, app: &mut App) {
@@ -147,8 +148,12 @@ impl Plugin for BattlePlugin {
                     systems::debug_trigger,
                     message::tick
                         .run_if(flow::playing)
-                        .after(events::drive)
+                        .before(events::drive)
                         .before(input::command_input),
+                    systems::advance_deaths
+                        .run_if(flow::playing)
+                        .before(message::tick)
+                        .before(events::drive),
                     input::command_input
                         .run_if(flow::playing)
                         .run_if(hud::commands_ready),

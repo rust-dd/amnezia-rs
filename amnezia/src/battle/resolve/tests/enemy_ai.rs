@@ -26,10 +26,10 @@ fn original_reapers_wait_for_switch_545_and_only_clear_it_after_the_rocket() {
         assert!(matches!(action.kind, Command::Skill { skill_id: 58, .. }));
         assert!(battle.ai_switches.contains(&545));
         battle.queue = vec![action];
-        battle.resolve_next();
+        battle.tick_action();
         assert!(battle.ai_switches.contains(&545));
         assert!(battle.pending_switches.is_empty());
-        assert!(!battle.steps.is_empty());
+        assert!(!!battle.action_in_progress());
         while battle.resolve_next() {}
         assert!(!battle.ai_switches.contains(&545));
         assert_eq!(battle.pending_switches, [(545, false)]);

@@ -29,25 +29,6 @@ impl Battle {
         }
     }
 
-    pub(in crate::battle::resolve) fn push_skill_anim(
-        &mut self,
-        source: Source,
-        skill: &SkillDef,
-        target: usize,
-    ) {
-        let (anchors, sound_only) = match source {
-            Source::Party(i) => (
-                self.skill_anim_anchors(i, skill, target),
-                matches!(skill.scope, 2..=4),
-            ),
-            Source::Enemy(i) => (
-                self.enemy_skill_anim_anchors(i, skill, target),
-                !matches!(skill.scope, 2..=4),
-            ),
-        };
-        self.push_anim_mode(skill.animation_id, anchors, sound_only);
-    }
-
     /// Stable diagnostic anchor for an undrawn party slot.
     pub(in crate::battle::resolve) fn party_anim_x(&self, ti: usize) -> f32 {
         let count = self.members.len().max(1) as f32;
@@ -72,80 +53,5 @@ impl Battle {
         kind: HitKind,
     ) {
         self.hit_reports.push(HitReport { pos, text, kind });
-    }
-
-    /// Non-absorbing hits sound and blink even at zero damage.
-    pub(in crate::battle::resolve) fn after_foe_hit(&mut self, ti: usize, dmg: i32) {
-        self.after_battler_hit(Source::Enemy(ti), dmg, true);
-    }
-
-    /// Apply KO and damage sound feedback; front view has no party sprites.
-    pub(in crate::battle::resolve) fn after_member_hit(&mut self, ti: usize, dmg: i32) {
-        self.after_battler_hit(Source::Party(ti), dmg, true);
-    }
-
-    fn after_battler_hit(&mut self, target: Source, dmg: i32, normal_impact: bool) {
-        if matches!(target, Source::Party(_)) && self.battler_hp(target) <= 0 {
-            self.mark_knocked_out(target);
-        }
-        let pos = self.battler_pos(target);
-        if normal_impact {
-            self.pending_shake |= dmg > 0 && matches!(target, Source::Party(_));
-            self.pending_se.push(match target {
-                Source::Party(_) => BattleSe::ActorDamaged,
-                Source::Enemy(_) => BattleSe::EnemyDamaged,
-            });
-        }
-        let (text, kind) = damage_report(dmg);
-        self.report_hit(pos, text, kind);
-        if let Source::Enemy(ti) = target {
-            if normal_impact {
-                self.pending_blinks.push(pos);
-            }
-            self.start_foe_death(ti, false);
-        }
-    }
-
-    /// Absorption shares damage rules but omits normal hit sound and blinking.
-    pub(in crate::battle::resolve) fn hit_battler(
-        &mut self,
-        target: Source,
-        base: i32,
-        var: i32,
-        physical_rate: u32,
-        normal_impact: bool,
-    ) -> i32 {
-        let roll = rng_next(&mut self.rng);
-        let mut dmg = logic::variance_adjust(base, var, roll).max(0);
-        let (hp, defending) = match target {
-            Source::Party(i) => {
-                let member = &mut self.members[i];
-                (&mut member.hp, member.defending)
-            }
-            Source::Enemy(i) => {
-                let enemy = &mut self.enemies[i];
-                (&mut enemy.hp, enemy.defending)
-            }
-        };
-        if defending {
-            dmg = logic::defended(dmg);
-        }
-        *hp = (*hp - dmg).max(0);
-        self.release_states_from_damage(target, physical_rate);
-        self.after_battler_hit(target, dmg, normal_impact);
-        dmg
-    }
-
-    /// Apply `base` damage to member `ti` with `var` variance (4 for a physical
-    /// blow, the skill's variance for a cast), one draw per hit, then the member's
-    /// own defend halving. Returns the damage dealt.
-    pub(in crate::battle::resolve) fn hit_member(
-        &mut self,
-        ti: usize,
-        base: i32,
-        var: i32,
-        physical_rate: u32,
-    ) -> i32 {
-        self.hit_battler(Source::Party(ti), base, var, physical_rate, true)
     }
 }

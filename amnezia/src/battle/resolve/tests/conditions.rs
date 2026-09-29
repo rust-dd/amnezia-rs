@@ -105,13 +105,10 @@ fn a_confused_member_turns_on_a_living_ally() {
         battle.members[0].command,
         Some(Command::Attack { .. })
     ));
-    let Some(Command::Attack { target }) = battle.members[0].command else {
-        unreachable!()
-    };
-    let ally_hp = battle.members[target].hp;
+    let hp = battle.members.iter().map(|member| member.hp).sum::<i32>();
     battle.commit(Command::Defend); // member 1 (free) finishes the round
     while battle.resolve_next() {}
-    assert!(battle.members[target].hp < ally_hp);
+    assert!(battle.members.iter().map(|member| member.hp).sum::<i32>() < hp);
 }
 
 #[test]

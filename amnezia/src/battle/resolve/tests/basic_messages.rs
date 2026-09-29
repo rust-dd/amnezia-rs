@@ -42,14 +42,14 @@ fn original_normal_attack_announces_the_source_before_its_animation() {
     battle.members[0].weapon_crit = 0;
     battle.members[0].base_critical_denominator = None;
     let hp = battle.enemies[0].hp;
-    battle.apply(Action {
+    battle.start_test_action(Action {
         source: Source::Party(0),
         kind: Command::Attack { target: 0 },
         agility: 1,
     });
     assert_eq!(battle.log, ["Ron megtámadja az ellenséget"]);
     assert_eq!(battle.enemies[0].hp, hp);
-    assert!(battle.anim_hold_active());
+    assert!(battle.action_in_progress());
     battle.resolve_next();
     assert_eq!(
         battle.log,
@@ -67,7 +67,7 @@ fn original_enemy_attacks_report_target_damage_without_invented_attack_summaries
         Command::DoubleAttack { target: 0 },
     ] {
         let mut battle = original_battle();
-        wind_enemy_hits(&mut battle, &[0, 2]);
+        wind_enemy_hits(&mut battle, &[0, 3]);
         let hp = battle.members[0].hp;
         battle.apply(Action {
             source: Source::Enemy(0),
@@ -140,5 +140,6 @@ fn original_self_destruct_announces_then_reports_each_recipient() {
             format!("{} {} HP-t veszít", member.name, hp[index] - member.hp)
         );
     }
-    assert_eq!(battle.enemies[0].hp, 0);
+    assert_eq!(battle.enemies[0].hp, battle.enemies[0].max_hp);
+    assert!(battle.enemies[0].fled);
 }

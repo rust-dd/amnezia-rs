@@ -17,7 +17,7 @@ fn original_skill_messages_announce_usage_before_the_animation_and_only_once() {
     battle.members[0].sp = 100;
     battle.members[0].max_sp = 100;
     battle.skills = crate::assets::load_ron(&format!("{}/skills.ron", crate::assets::asset_root()));
-    battle.apply(Action {
+    battle.start_test_action(Action {
         source: Source::Party(0),
         kind: Command::Skill {
             skill_id: 2,
@@ -27,7 +27,7 @@ fn original_skill_messages_announce_usage_before_the_animation_and_only_once() {
     });
     assert_eq!(battle.log, ["Ron ciklonként támad"]);
     assert_eq!(battle.members[0].sp, 65);
-    assert!(battle.anim_hold_active());
+    assert!(battle.action_in_progress());
     while battle.resolve_next() {}
     assert_eq!(
         battle
@@ -111,9 +111,31 @@ fn skill_usage_preserves_blank_first_suffixes_and_independent_second_lines() {
     battle.enemies[0].name = "Bandita".into();
     let mut skill = damage_skill(1, 20, vec![], vec![]);
     skill.using_message2 = "Második sor".into();
-    battle.log_skill_use(Source::Party(0), &skill);
+    battle.skills = vec![skill.clone()];
+    battle.start_test_action(Action {
+        source: Source::Party(0),
+        kind: Command::Skill {
+            skill_id: 1,
+            target: 0,
+        },
+        agility: 1,
+    });
+    while battle.log.len() < 2 {
+        battle.tick_action();
+    }
     skill.using_message1 = " támadásba lendül".into();
-    battle.log_skill_use(Source::Enemy(0), &skill);
+    battle.skills = vec![skill];
+    battle.start_test_action(Action {
+        source: Source::Enemy(0),
+        kind: Command::Skill {
+            skill_id: 1,
+            target: 0,
+        },
+        agility: 1,
+    });
+    while battle.log.len() < 4 {
+        battle.tick_action();
+    }
     assert_eq!(
         battle.log,
         [

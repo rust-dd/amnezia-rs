@@ -15,9 +15,7 @@ fn a_lethal_plain_or_critical_weapon_hit_reports_damage_before_collapse() {
         battle.enemies[0].hp = 1;
         battle.resolve_strike_impact(0, 0, Strike::Hit { dmg: 5, crit });
         if crit {
-            assert_eq!(battle.enemies[0].hp, 1);
-            assert_eq!(battle.log, [battle.text.enemy_critical.clone()]);
-            battle.resolve_next();
+            assert_eq!(battle.log[0], battle.text.enemy_critical);
         }
         assert_eq!(battle.enemies[0].hp, 0);
         assert_eq!(
@@ -62,7 +60,7 @@ fn lethal_skill_damage_and_absorption_both_report_one_original_collapse() {
 }
 
 #[test]
-fn a_forced_death_state_skill_does_not_duplicate_its_collapse_message() {
+fn a_forced_death_state_retains_the_original_extra_message_wait() {
     let mut battle = original_battle();
     battle.enemies[0].state_ranks = vec![0];
     battle
@@ -75,13 +73,13 @@ fn a_forced_death_state_skill_does_not_duplicate_its_collapse_message() {
     skill.affect_hp = false;
     assert_eq!(
         battle.skill_hit_battler(Source::Party(0), Source::Enemy(0), &skill),
-        ["Bandita összeesik!"]
+        ["Bandita összeesik!", "Bandita összeesik!"]
     );
     assert_eq!(battle.enemies[0].hp, 0);
 }
 
 #[test]
-fn a_weapon_death_state_reports_one_collapse_after_the_weapons_damage() {
+fn a_weapon_death_state_retains_the_original_extra_collapse_after_damage() {
     let mut battle = original_battle();
     battle.members[0].weapon_states = vec![(1, 100)];
     battle.enemies[0].state_ranks = vec![0];
@@ -101,7 +99,11 @@ fn a_weapon_death_state_reports_one_collapse_after_the_weapons_damage() {
     );
     assert_eq!(
         battle.log,
-        ["Bandita 1 HP-t sebződik", "Bandita összeesik!"]
+        [
+            "Bandita 1 HP-t sebződik",
+            "Bandita összeesik!",
+            "Bandita összeesik!"
+        ]
     );
     assert_eq!(battle.enemies[0].hp, 0);
 }

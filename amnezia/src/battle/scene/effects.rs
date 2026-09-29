@@ -109,9 +109,6 @@ fn step(
     if paused {
         return;
     }
-    if battle.death_in_progress() {
-        battle.advance_deaths(delta as f32 / 60.0);
-    }
     for (_, mut effects) in &mut battlers {
         effects.advance(delta);
     }

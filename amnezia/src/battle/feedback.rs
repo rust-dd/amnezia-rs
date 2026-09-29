@@ -56,7 +56,7 @@ mod tests {
             kind: Command::Attack { target: 0 },
             agility: 1,
         }];
-        assert!(battle.resolve_next_with_items(|_| true));
+        assert!(battle.resolve_next_with_items(|_, _| true));
         assert!(battle.members[0].hp < hp);
         let mut app = App::new();
         app.add_plugins(MinimalPlugins)

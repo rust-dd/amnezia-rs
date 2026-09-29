@@ -14,13 +14,25 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
         let mut battle = world.resource_mut::<Battle>();
         battle.phase = Phase::Resolve;
         battle.log.clear();
-        battle.queue = vec![Action {
-            source: Source::Enemy(0),
-            kind: Command::DoNothing,
-            agility: 1,
-        }];
+        battle.queue = vec![
+            Action {
+                source: Source::Enemy(0),
+                kind: Command::DoNothing,
+                agility: 1,
+            },
+            Action {
+                source: Source::Party(0),
+                kind: Command::DoNothing,
+                agility: 1,
+            },
+        ];
         battle.queue_at = 0;
-        assert!(battle.resolve_next_with_items(|_| true));
+        battle.timeline = default();
+        battle.advance_action(
+            super::super::message::Controls::default(),
+            |_| 0,
+            |_, _| true,
+        );
     }
     if frame == 1232 {
         return Some("battle-action-flash");
@@ -47,7 +59,7 @@ pub(super) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
             agility: 1,
         }];
         battle.queue_at = 0;
-        assert!(battle.resolve_next_with_items(|_| true));
+        battle.timeline = default();
         world.insert_resource(check);
     }
     if frame <= 1250 || world.resource::<SkillImpact>().captured {

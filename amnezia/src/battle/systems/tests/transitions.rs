@@ -160,6 +160,8 @@ fn troop_pages_do_not_start_during_the_battle_show_transition() {
         }
     }
     frame(&mut app, 105);
+    assert!(!app.world().resource::<Switches>().get(9001));
+    frame(&mut app, 106);
     assert!(app.world().resource::<Switches>().get(9001));
 }
 

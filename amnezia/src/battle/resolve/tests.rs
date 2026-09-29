@@ -32,7 +32,12 @@ fn fire_attr() -> amnezia_data::AttributeDef {
 
 /// A single-enemy (scope 0) damage skill carrying `attributes` (elements) and
 /// `states` (statuses it may inflict). Its `hit` is 100 for deterministic damage.
-fn damage_skill(id: u32, power: u32, attributes: Vec<u32>, states: Vec<u32>) -> SkillDef {
+pub(super) fn damage_skill(
+    id: u32,
+    power: u32,
+    attributes: Vec<u32>,
+    states: Vec<u32>,
+) -> SkillDef {
     SkillDef {
         using_message1: String::new(),
         using_message2: String::new(),
@@ -60,13 +65,13 @@ fn damage_skill(id: u32, power: u32, attributes: Vec<u32>, states: Vec<u32>) -> 
 }
 
 /// A single-ally (scope 3) HP heal.
-fn heal_skill(id: u32, power: u32) -> SkillDef {
+pub(super) fn heal_skill(id: u32, power: u32) -> SkillDef {
     let mut s = damage_skill(id, power, vec![], vec![]);
     s.scope = 3;
     s
 }
 
-fn poison_state(id: u32) -> amnezia_data::StateDef {
+pub(super) fn poison_state(id: u32) -> amnezia_data::StateDef {
     amnezia_data::StateDef {
         color: 6,
         message_actor: String::new(),
@@ -241,7 +246,7 @@ fn confusion_state(id: u32) -> amnezia_data::StateDef {
     }
 }
 
-fn medicine(
+pub(super) fn medicine(
     id: u32,
     recover_hp: u32,
     recover_sp: u32,

@@ -138,6 +138,7 @@ fn an_already_present_state_succeeds_without_restarting_its_duration() {
 #[test]
 fn healing_states_rolls_success_but_does_not_roll_resistance_on_either_side() {
     let mut battle = build_1v2();
+    battle.states = vec![poison_state(2)];
     let mut skill = heal_skill(1, 0);
     skill.affect_hp = false;
     skill.affected_states = vec![2];

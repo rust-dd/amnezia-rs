@@ -1,6 +1,4 @@
-//! The turn-queue vocabulary — chosen commands, their source and agility-ordered
-//! entries, the deferred resolution sub-steps — and the per-tick pending effects
-//! (animations, hit reports, and sound effects) the resolution enqueues.
+//! Turn commands and the feedback queues consumed by the battle scene.
 
 /// A chosen action, from either side, awaiting resolution. Party members choose
 /// `Attack`, `Skill`, `Item`, `Defend`, or `Nothing`; the enemy AI reuses `Attack`,
@@ -28,7 +26,7 @@ pub enum Command {
     DoubleAttack {
         target: usize,
     },
-    /// Enemy-only: damage every living party member, then the foe dies.
+    /// Enemy-only: damage every living party member and hide without a reward.
     SelfDestruct,
     /// Enemy-only: flee the fight — the foe leaves without granting a reward.
     Escape,
@@ -49,60 +47,6 @@ pub struct Action {
     pub source: Source,
     pub kind: Command,
     pub agility: u32,
-}
-
-/// A deferred sub-step of the action currently resolving, drained one per
-/// resolve tick so a multi-target cast staggers its per-target beats and a
-/// critical shows its announcement on its own beat before the damage lands.
-/// Mirrors RM2000's `ProcessBattleAction` walking its substates each behind its
-/// own `SetWait`, without the full substate machine.
-#[derive(Clone, Copy)]
-pub(in crate::battle) enum Step {
-    AllyStrikeImpact {
-        source: Source,
-        target: Source,
-        damage: Option<i32>,
-    },
-    /// Land caster `pi`'s multi-target skill on one more enemy `ti`.
-    HitEnemy { pi: usize, ti: usize, skill_id: u32 },
-    /// Apply caster `pi`'s multi-target heal to one more ally `ti`.
-    HealAlly { pi: usize, ti: usize, skill_id: u32 },
-    EnemySkillTarget {
-        ei: usize,
-        target: usize,
-        skill_id: u32,
-    },
-    /// The damage beat after a "Kritikus!" announcement: land the precomputed
-    /// `dmg` of member `pi`'s critical strike on enemy `ti`.
-    CritDamage { pi: usize, ti: usize, dmg: i32 },
-    /// Apply member `pi`'s planned normal-strike outcome on foe `ti` once its
-    /// attack animation has played out: pop the dodge when `miss`, else land
-    /// `dmg` — taking the critical announcement beat first when `crit`. RM2000
-    /// sequences the swing animation, its wait, then the damage; this is the
-    /// deferred damage half (see `resolve::resolve_strike_impact`).
-    StrikeImpact {
-        pi: usize,
-        ti: usize,
-        dmg: i32,
-        crit: bool,
-        miss: bool,
-    },
-    /// Apply member `pi`'s skill `skill_id` at `target` once its cast animation
-    /// has played. The animation was queued up front; this re-runs the cast with
-    /// [`crate::battle::model::Battle::suppress_anim`] set so its effect (and RNG
-    /// draws) resolve now without queuing the animation a second time.
-    CastSkill {
-        pi: usize,
-        skill_id: u32,
-        target: usize,
-    },
-    /// Apply enemy `ei`'s skill `skill_id` at member `target` once its cast
-    /// animation has played — the enemy-side counterpart of [`Step::CastSkill`].
-    EnemyCast {
-        ei: usize,
-        skill_id: u32,
-        target: usize,
-    },
 }
 
 /// One queued battle animation, produced as an action resolves and drained by
@@ -142,6 +86,7 @@ pub(in crate::battle) struct HitReport {
 /// sound. Mirrors the EasyRPG `SePlay(GetSystemSE(...))` sites.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(in crate::battle) enum BattleSe {
+    UseItem,
     /// A blow landed on a foe (RM2000 `SFX_EnemyDamage`).
     EnemyDamaged,
     /// A blow landed on a party member (RM2000 `SFX_AllyDamage`).

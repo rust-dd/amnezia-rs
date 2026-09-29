@@ -67,7 +67,7 @@ fn run_script(world: &mut World) {
     } else if scenario == "battle-menus" {
         crate::battle::smoke::input(frame)
     } else if scenario == "menu" {
-        crate::menu::layout_smoke::input(frame)
+        crate::menu::layout_smoke::input(world, frame)
     } else if scenario == "save-screen" {
         crate::save::screen_smoke::input(frame)
     } else if scenario == "weather" {
@@ -106,6 +106,7 @@ fn run_script(world: &mut World) {
                 | "panorama"
                 | "timer"
                 | "battle-menus"
+                | "battle-actions"
                 | "battle-transitions"
                 | "message-options"
                 | "dialogue-timing"

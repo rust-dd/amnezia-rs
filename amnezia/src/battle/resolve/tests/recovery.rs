@@ -3,6 +3,7 @@ use super::*;
 #[test]
 fn the_original_life_potion_revives_its_recipient_with_half_hp() {
     let mut battle = build_party2();
+    battle.states = vec![poison_state(1), poison_state(3)];
     battle.items = crate::assets::load_ron(&format!("{}/items.ron", crate::assets::asset_root()));
     battle.members[0].hp = 7;
     battle.members[1].hp = 0;
@@ -16,6 +17,7 @@ fn the_original_life_potion_revives_its_recipient_with_half_hp() {
 #[test]
 fn the_original_life_potion_has_no_effect_on_a_living_recipient() {
     let mut battle = build_party2();
+    battle.states = vec![poison_state(1), poison_state(3)];
     battle.items = crate::assets::load_ron(&format!("{}/items.ron", crate::assets::asset_root()));
     battle.members[1].hp = 7;
     battle.apply_item(0, 112, 1);
@@ -26,6 +28,7 @@ fn the_original_life_potion_has_no_effect_on_a_living_recipient() {
 #[test]
 fn ordinary_medicine_does_not_revive_or_redirect_to_the_user() {
     let mut battle = build_party2();
+    battle.states = vec![poison_state(1), poison_state(3)];
     battle.items = vec![medicine(1, 50, 0, vec![])];
     battle.members[0].hp = 7;
     battle.members[1].hp = 0;
@@ -37,6 +40,7 @@ fn ordinary_medicine_does_not_revive_or_redirect_to_the_user() {
 #[test]
 fn party_medicine_restores_every_member_including_revivable_allies() {
     let mut battle = build_party2();
+    battle.states = vec![poison_state(1), poison_state(3)];
     let mut item = medicine(1, 20, 0, vec![1]);
     item.scope = 1;
     battle.items = vec![item];
@@ -50,6 +54,7 @@ fn party_medicine_restores_every_member_including_revivable_allies() {
 #[test]
 fn revival_without_hp_effect_uses_percentage_power_and_animates_the_fallen_ally() {
     let mut battle = build_party2();
+    battle.states = vec![poison_state(1), poison_state(3)];
     let mut skill = heal_skill(1, 50);
     skill.affect_hp = false;
     skill.magical_rate = 0;
@@ -65,8 +70,9 @@ fn revival_without_hp_effect_uses_percentage_power_and_animates_the_fallen_ally(
 }
 
 #[test]
-fn original_party_revival_includes_fallen_targets_in_deferred_steps() {
+fn original_party_revival_includes_fallen_targets_in_the_action_timeline() {
     let mut battle = build_party2();
+    battle.states = vec![poison_state(1), poison_state(3)];
     battle.skills = crate::assets::load_ron(&format!("{}/skills.ron", crate::assets::asset_root()));
     let cost = battle.skills.iter().find(|s| s.id == 35).unwrap().sp_cost as i32;
     battle.members[0].sp = cost;
@@ -74,7 +80,14 @@ fn original_party_revival_includes_fallen_targets_in_deferred_steps() {
     battle.members[0].hp = 7;
     battle.members[1].hp = 0;
     battle.members[1].states = vec![(1, 0)];
-    battle.cast_skill(0, 35, 0);
+    battle.start_test_action(Action {
+        source: Source::Party(0),
+        kind: Command::Skill {
+            skill_id: 35,
+            target: 0,
+        },
+        agility: 1,
+    });
     assert_eq!(battle.members[0].hp, 7);
     assert_eq!(battle.members[1].hp, 0);
     assert!(battle.resolve_next());
@@ -85,6 +98,7 @@ fn original_party_revival_includes_fallen_targets_in_deferred_steps() {
 #[test]
 fn a_cure_only_skill_does_not_restore_hp_to_a_living_ally() {
     let mut battle = build_party2();
+    battle.states = vec![poison_state(1), poison_state(3)];
     let mut skill = heal_skill(1, 50);
     skill.affect_hp = false;
     skill.affected_states = vec![3];

@@ -7,6 +7,7 @@ mod request;
 pub(super) fn capture(world: &mut World, label: &str) {
     super::native::describe(world, label);
     let world_snapshot = super::world_image::snapshot(world, label);
+    let action_snapshot = crate::battle::action_smoke::snapshot(world, label);
     let quick_snapshot = crate::teleport::smoke::snapshot(world, label);
     let normal_snapshot = crate::teleport::normal_smoke::snapshot(world, label);
     let rotation_snapshot = crate::picture::smoke::rotation::snapshot(world, label);
@@ -84,6 +85,9 @@ pub(super) fn capture(world: &mut World, label: &str) {
                     snapshot.verify(&capture.image);
                 }
                 verify_content(&capture.image, &label);
+                if let Some(snapshot) = &action_snapshot {
+                    snapshot.verify(&capture.image);
+                }
                 if let Some(snapshot) = &inn_snapshot {
                     snapshot.verify(&capture.image);
                 }

@@ -27,6 +27,7 @@ impl Battle {
             }
             _ => self.choose_enemy_command(i, alive),
         };
+        self.enemies[i].defending = matches!(kind, Command::Defend);
         Some(Action {
             source: Source::Enemy(i),
             kind,

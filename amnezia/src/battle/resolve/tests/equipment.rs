@@ -94,7 +94,7 @@ fn original_moonstone_changes_battle_cost_display_affordability_and_single_payme
     assert_eq!(battle.skill_cost(Source::Enemy(0), &skill), 9);
     battle.cast_skill(0, 1, 0);
     assert_eq!(battle.members[0].sp, 0);
-    while !battle.steps.is_empty() {
+    while !!battle.action_in_progress() {
         battle.resolve_next();
     }
     assert_eq!(battle.members[0].sp, 0);
@@ -182,10 +182,8 @@ fn ice_claw_respects_ranks_and_applies_after_critical_or_confused_impact() {
     battle.weapon_states(Source::Party(0), Source::Enemy(0));
     assert!(battle.enemies[0].states.is_empty());
     battle.enemies[0].state_ranks = vec![0; 8];
-    battle.resolve_strike_impact(0, 0, Strike::Hit { dmg: 0, crit: true });
-    assert!(battle.enemies[0].states.is_empty());
     battle.rng = 0;
-    battle.resolve_next();
+    battle.resolve_strike_impact(0, 0, Strike::Hit { dmg: 0, crit: true });
     assert!(logic::has_state(&battle.enemies[0].states, 8));
     battle.members[1].state_ranks = vec![0; 8];
     battle.rng = 0;

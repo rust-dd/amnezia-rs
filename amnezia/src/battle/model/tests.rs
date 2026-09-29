@@ -73,6 +73,10 @@ fn defence_lasts_until_the_next_command_is_selected() {
     assert!(battle.phase == Phase::PartyCommand);
     battle.begin_actor_commands();
     battle.commit(Command::Defend);
+    assert!(battle.members[0].defending);
+    battle.new_round();
+    battle.begin_actor_commands();
+    battle.commit(Command::Attack { target: 0 });
     assert!(!battle.members[0].defending);
 }
 

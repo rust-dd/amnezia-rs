@@ -5,7 +5,7 @@ fn a_charged_double_attack_uses_the_same_bonus_for_both_hits() {
     let mut battle = build_1v2();
     battle.members[0].hp = 1000;
     battle.members[0].max_hp = 1000;
-    wind_enemy_hits(&mut battle, &[0, 2]);
+    wind_enemy_hits(&mut battle, &[0, 3]);
     let rng = battle.rng;
     let mut expected = 0;
     for _ in 0..2 {

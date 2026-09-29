@@ -34,24 +34,6 @@ impl Script {
     }
 }
 
-pub(super) fn wrap(text: &str, cells: usize) -> Vec<String> {
-    let mut lines = Vec::new();
-    for line in text.lines() {
-        let mut current = String::new();
-        for word in line.split_whitespace() {
-            if !current.is_empty() && current.chars().count() + 1 + word.chars().count() > cells {
-                lines.push(std::mem::take(&mut current));
-            }
-            if !current.is_empty() {
-                current.push(' ');
-            }
-            current.push_str(word);
-        }
-        lines.push(current);
-    }
-    lines
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -3,7 +3,7 @@
 use super::model::{Battle, BattleSe, Phase};
 use super::scene;
 use super::{BattleActive, BattleData, BattleOutcome, BattleRequest, BattleResult, MapBgm};
-use crate::animation::{ActiveAnimations, AnimAnchor, PlayAnimation};
+use crate::animation::{AnimAnchor, PlayAnimation};
 use crate::audio::{AudioRequest, CurrentBgm};
 use crate::equipment::Equipment;
 use crate::gamedata::GameData;
@@ -147,63 +147,63 @@ pub(super) fn debug_trigger(
     }
 }
 
-/// Step the resolution phase: apply one queued action per timer tick, then end
-/// the fight or open a fresh command round once the queue is spent. On the end,
-/// the victory/game-over fanfare interrupts the battle BGM (the map BGM restores
-/// on teardown).
 pub(super) fn resolve_tick(
-    time: Res<Time>,
     battle_data: Res<BattleData>,
-    active_anims: Res<ActiveAnimations>,
+    animations: Option<Res<crate::animation::AnimationLibrary>>,
+    keys: Option<Res<ButtonInput<KeyCode>>>,
     system_bgm: Option<Res<crate::system_bgm::SystemBgm>>,
-    mut audio: MessageWriter<AudioRequest>,
+    mut world: super::events::EventWorld,
     mut battle: ResMut<Battle>,
     mut inventory: ResMut<Inventory>,
 ) {
-    if battle.phase != Phase::Resolve || battle.events.blocks_action() {
+    use super::resolve::timeline::Progress;
+    if battle.phase != Phase::Resolve || battle.events.holds_resolution() {
         return;
     }
-    // Hold the step while a slain foe plays out its death or explosion, so the
-    // beat is seen before the next action lands (RM2000 `SetWait(36, 60)`).
-    if battle.death_in_progress() {
-        return;
-    }
-    // RPG_RT applies the impact only after its animation completes.
-    let advance = if battle.anim_hold_active() {
-        if battle.tick_anim_hold(active_anims.battle > 0) {
+    let controls = keys
+        .as_deref()
+        .map(super::message::Controls::from_keys)
+        .unwrap_or_default();
+    loop {
+        let progress = battle.advance_action(
+            controls,
+            |id| {
+                animations
+                    .as_ref()
+                    .and_then(|library| library.0.iter().find(|a| a.id == id))
+                    .map_or(0, |animation| animation.frames.len() as u32 * 2)
+            },
+            |id, consume| {
+                if !inventory.has(id) {
+                    return false;
+                }
+                if consume {
+                    inventory.remove_item(id, 1);
+                }
+                true
+            },
+        );
+        if progress == Progress::Waiting {
             return;
         }
-        battle.timer.reset();
-        true
-    } else {
-        battle.timer.tick(time.delta()).just_finished()
-    };
-    if !advance {
-        return;
-    }
-    let more = battle.resolve_next_with_items(|item_id| {
-        if !inventory.has(item_id) {
-            return false;
+        if let Some(outcome) = battle.end_state() {
+            battle.finish(outcome);
+            world.outcome_music(&battle_data.system, system_bgm.as_deref(), outcome);
+            return;
         }
-        inventory.remove_item(item_id, 1);
-        true
-    });
-    if battle.steps.is_empty() && !battle.anim_hold_active() {
-        battle.events.check_pages();
+        if progress == Progress::Boundary && world.action_boundary(&mut battle) {
+            return;
+        }
+        if progress == Progress::Done {
+            battle.new_round();
+            return;
+        }
     }
-    if let Some(outcome) = battle.end_state()
-        && battle.steps.is_empty()
-        && !battle.anim_hold_active()
-    {
-        battle.finish(outcome);
-        play_outcome_music(
-            &mut audio,
-            &battle_data.system,
-            system_bgm.as_deref(),
-            outcome,
-        );
-    } else if !more {
-        battle.new_round();
+}
+
+pub(super) fn advance_deaths(mut battle: ResMut<Battle>) {
+    if battle.death_in_progress() {
+        battle.advance_deaths(1.0 / 60.0);
     }
 }
 
@@ -243,6 +243,7 @@ pub(super) fn drain_pending_se(
     let system = &battle_data.system;
     for kind in battle.pending_se.drain(..) {
         let sound = match kind {
+            BattleSe::UseItem => &system.item_se,
             BattleSe::EnemyDamaged => &system.enemy_damaged_se,
             BattleSe::ActorDamaged => &system.actor_damaged_se,
             BattleSe::Dodge => &system.dodge_se,

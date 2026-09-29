@@ -34,6 +34,9 @@ impl Plugin for SmokePlugin {
         offscreen::configure(app);
         native::configure(app);
         let scenario = scenarios::selected();
+        if scenario == "battle-actions" {
+            crate::battle::action_smoke::configure(app);
+        }
         if scenario == "gameover" {
             crate::title::smoke::configure(app);
         }
@@ -176,6 +179,16 @@ fn drive(world: &mut World) {
         && let Some(label) = crate::menu::save_files::smoke::drive(world, frame)
     {
         capture(world, label);
+    }
+    if scenario == "battle-actions" {
+        if let Some(label) = crate::battle::action_smoke::drive(world, frame) {
+            capture(world, label);
+        }
+        if crate::battle::action_smoke::ready(world)
+            && world.resource::<SmokeRun>().finish_at.is_none()
+        {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
+        }
     }
     if scenario == "battle-menus"
         && let Some(label) = crate::battle::smoke::show(world, frame)
@@ -433,7 +446,7 @@ fn drive(world: &mut World) {
     let finish = world.resource::<SmokeRun>().finish_at.unwrap_or(
         if matches!(
             scenario,
-            "escape" | "battle-menus" | "battle-events" | "battle-rewards"
+            "escape" | "battle-menus" | "battle-events" | "battle-rewards" | "battle-actions"
         ) {
             2400
         } else if scenario == "transitions" {
@@ -441,7 +454,7 @@ fn drive(world: &mut World) {
         } else if scenario == "items" {
             1480
         } else if scenario == "menu" {
-            1520
+            crate::menu::navigation_smoke::finish_frame(world)
         } else if scenario == "equipment" {
             1290
         } else if scenario == "animation-colors" {

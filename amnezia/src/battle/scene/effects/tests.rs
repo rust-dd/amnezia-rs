@@ -238,7 +238,7 @@ fn silent_cancelled_actions_do_not_flash_but_deliberate_ai_noops_do() {
             kind,
             agility: 1,
         }];
-        battle.resolve_next_with_items(|_| false);
+        battle.resolve_next_with_items(|_, _| false);
         frame(&mut app, 1);
         assert_eq!(alpha(&app, enemies[0]), expected);
         assert_eq!(alpha(&app, enemies[1]), 0);

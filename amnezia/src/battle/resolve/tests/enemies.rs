@@ -170,7 +170,7 @@ fn a_double_attack_strikes_the_target_twice() {
 }
 
 #[test]
-fn self_destruct_hits_every_member_then_kills_the_foe() {
+fn self_destruct_hits_every_member_and_hides_the_foe_without_killing_it() {
     let mut battle = build_party2();
     let hp = [battle.members[0].hp, battle.members[1].hp];
     battle.apply(Action {
@@ -180,7 +180,8 @@ fn self_destruct_hits_every_member_then_kills_the_foe() {
     });
     assert!(battle.members[0].hp < hp[0]);
     assert!(battle.members[1].hp < hp[1]);
-    assert_eq!(battle.enemies[0].hp, 0);
+    assert_eq!(battle.enemies[0].hp, battle.enemies[0].max_hp);
+    assert!(battle.enemies[0].fled);
     assert!(!battle.enemies[0].alive());
     assert!(battle.log.iter().any(|l| l.contains("előretör")));
 }

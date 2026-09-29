@@ -61,7 +61,7 @@ fn both_sides_skip_unaffordable_skills_before_playing_the_animation() {
             agility: 1,
         });
         assert!(battle.pending_anims.is_empty());
-        assert!(battle.steps.is_empty());
+        assert!(!battle.action_in_progress());
         assert_eq!((battle.members[0].hp, battle.enemies[0].hp), hp);
         assert_eq!((battle.members[0].sp, battle.enemies[0].sp), (2, 2));
     }

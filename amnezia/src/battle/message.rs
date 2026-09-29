@@ -30,6 +30,19 @@ impl Console {
         self.lines.len() >= 4
     }
 
+    pub(in crate::battle) fn len(&self) -> usize {
+        self.lines.len()
+    }
+
+    pub(in crate::battle) fn pop_until(&mut self, lines: usize) {
+        self.lines.truncate(lines);
+        self.scroll_to_end();
+    }
+
+    pub(in crate::battle) fn scroll_to_end(&mut self) {
+        self.first = self.lines.len().saturating_sub(4);
+    }
+
     pub(in crate::battle) fn visible(&self) -> &[String] {
         &self.painted
     }
@@ -38,7 +51,7 @@ impl Console {
         &self.lines[self.first..self.lines.len().min(self.first + 4)]
     }
 
-    fn update(&mut self) {
+    pub(in crate::battle) fn update(&mut self) {
         self.painted = self.contents().to_vec();
     }
 }
@@ -67,7 +80,7 @@ pub(super) fn tick(
         .last_frame
         .replace(frames.frame)
         .map_or(1, |last| frames.frame.wrapping_sub(last));
-    if pause.0 || battle.events.presenting() {
+    if pause.0 {
         return;
     }
     let controls = Controls::from_keys(&keys);

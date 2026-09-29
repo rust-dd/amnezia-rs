@@ -14,14 +14,30 @@ struct Checks {
     frames: u32,
     sounds: u32,
     pixels: Arc<AtomicUsize>,
+    delay: u32,
+    waiting: bool,
 }
 
 pub(crate) fn pictures(world: &World) -> Arc<AtomicUsize> {
     world.resource::<Checks>().pixels.clone()
 }
 
-pub(crate) fn input(frame: u32) -> Option<KeyCode> {
-    let frame = frame.saturating_sub(20);
+fn scripted_frame(world: &World, frame: u32) -> u32 {
+    frame.saturating_sub(
+        20 + world
+            .get_resource::<Checks>()
+            .map_or(0, |checks| checks.delay),
+    )
+}
+
+pub(crate) fn finish_frame(world: &World) -> u32 {
+    1520 + world
+        .get_resource::<Checks>()
+        .map_or(0, |checks| checks.delay)
+}
+
+pub(crate) fn input(world: &World, frame: u32) -> Option<KeyCode> {
+    let frame = scripted_frame(world, frame);
     match frame {
         1220 | 1290 | 1320 | 1400 => Some(KeyCode::PageUp),
         1230 | 1440 => Some(KeyCode::ArrowUp),
@@ -34,7 +50,22 @@ pub(crate) fn input(frame: u32) -> Option<KeyCode> {
 }
 
 pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
-    let frame = frame.saturating_sub(20);
+    let frame = scripted_frame(world, frame);
+    let waiting = frame == 1320
+        && (world.resource::<crate::menu::SceneFlow>().active()
+            || world.resource::<crate::transitions::Transition>().busy()
+            || world.resource::<crate::timing::SceneWait>().0);
+    if let Some(mut checks) = world.get_resource_mut::<Checks>() {
+        checks.waiting = waiting;
+        if waiting {
+            checks.delay += 1;
+            assert!(checks.delay < 60, "End Game return did not become ready");
+        }
+    }
+    if waiting {
+        world.resource_mut::<ButtonInput<KeyCode>>().reset_all();
+        return true;
+    }
     let (start, key) = if (1180..1212).contains(&frame) {
         (1180, KeyCode::ArrowDown)
     } else if (1350..1382).contains(&frame) {
@@ -51,7 +82,15 @@ pub(crate) fn held_input(world: &mut World, frame: u32) -> bool {
 }
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
-    let frame = frame.saturating_sub(20);
+    let frame = scripted_frame(world, frame);
+    if world
+        .get_resource::<Checks>()
+        .is_some_and(|checks| checks.waiting)
+    {
+        assert_eq!(frame, 1320);
+        assert_eq!(world.resource::<MenuState>().cursor, 4);
+        return None;
+    }
     if frame == 1170 {
         assert!(!world.resource::<crate::menu::SceneFlow>().active());
         assert!(!world.resource::<MenuOpen>().0);
@@ -159,4 +198,37 @@ pub(crate) fn verify_finished(world: &World) {
     assert_eq!(checks.pixels.load(Ordering::Relaxed), 4);
     assert!(!world.resource::<MenuOpen>().0);
     info!("main menu navigation: 328 states, 29 exact sounds and four cursor images verified");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn end_game_return_waits_through_the_terminal_pause_without_losing_the_page_key() {
+        let mut world = World::new();
+        world.init_resource::<Checks>();
+        world.init_resource::<crate::menu::SceneFlow>();
+        world.init_resource::<crate::transitions::Transition>();
+        world.insert_resource(crate::timing::SceneWait(true));
+        world.init_resource::<ButtonInput<KeyCode>>();
+        for frame in 1340..1344 {
+            assert!(held_input(&mut world, frame));
+            assert!(world.resource::<Checks>().waiting);
+            assert_eq!(scripted_frame(&world, frame + 1), 1320);
+            assert!(
+                !world
+                    .resource::<ButtonInput<KeyCode>>()
+                    .get_pressed()
+                    .any(|_| true)
+            );
+        }
+        world.resource_mut::<crate::timing::SceneWait>().0 = false;
+        assert!(!held_input(&mut world, 1344));
+        assert!(!world.resource::<Checks>().waiting);
+        assert_eq!(input(&world, 1344), Some(KeyCode::PageUp));
+        assert_eq!(scripted_frame(&world, 1345), 1321);
+        assert_eq!(input(&world, 1345), None);
+        assert_eq!(finish_frame(&world), 1524);
+    }
 }

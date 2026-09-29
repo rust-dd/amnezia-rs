@@ -26,19 +26,7 @@ impl Battle {
             }
     }
 
-    pub(in crate::battle::resolve) fn pay_skill(
-        &mut self,
-        source: Source,
-        skill: &SkillDef,
-    ) -> bool {
-        if !self.skill_usable_by(source, skill) {
-            return false;
-        }
-        self.change_sp(source, -(self.skill_cost(source, skill) as i32));
-        true
-    }
-
-    fn change_sp(&mut self, target: Source, amount: i32) -> i32 {
+    pub(in crate::battle::resolve) fn change_sp(&mut self, target: Source, amount: i32) -> i32 {
         let (sp, max) = match target {
             Source::Party(i) => {
                 let fighter = &mut self.members[i];
@@ -52,24 +40,5 @@ impl Battle {
         let before = *sp;
         *sp = sp.saturating_add(amount).clamp(0, max);
         *sp - before
-    }
-
-    pub(in crate::battle::resolve) fn skill_sp_damage(
-        &mut self,
-        source: Source,
-        target: Source,
-        amount: i32,
-        absorb: bool,
-    ) -> i32 {
-        let lost = -self.change_sp(target, -amount.max(0));
-        if absorb && lost > 0 {
-            self.change_sp(source, lost);
-        }
-        let pos = match target {
-            Source::Party(i) => (self.party_anim_x(i), PARTY_ANIM_Y),
-            Source::Enemy(i) => self.foe_anim_pos(i),
-        };
-        self.report_hit(pos, lost.to_string(), HitKind::Damage);
-        lost
     }
 }

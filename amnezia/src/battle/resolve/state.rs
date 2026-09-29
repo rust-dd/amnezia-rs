@@ -77,36 +77,4 @@ impl Battle {
             false
         }
     }
-
-    pub(in crate::battle::resolve) fn release_states_from_damage(
-        &mut self,
-        target: Source,
-        physical_rate: u32,
-    ) {
-        if self.battler_hp(target) <= 0 || physical_rate == 0 {
-            return;
-        }
-        let before = self.state_restriction(target);
-        let active = match target {
-            Source::Party(i) => &mut self.members[i].states,
-            Source::Enemy(i) => &mut self.enemies[i].states,
-        };
-        let lifted = logic::release_on_damage(active, &self.states, physical_rate, || {
-            (rng_next(&mut self.rng) % 100) as u32
-        });
-        self.log_state_recovery(target, &lifted);
-        self.states_changed(target, before, false);
-    }
-
-    fn log_state_recovery(&mut self, target: Source, lifted: &[u32]) {
-        for id in lifted {
-            if let Some(state) = self.states.iter().find(|state| state.id == *id) {
-                self.log.push(format!(
-                    "{}{}",
-                    self.battler_name(target),
-                    state.message_recovery
-                ));
-            }
-        }
-    }
 }
