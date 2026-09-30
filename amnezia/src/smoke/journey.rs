@@ -11,11 +11,15 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+#[cfg(test)]
+mod history_tests;
 mod murder;
 
 #[derive(Resource, Default)]
 struct Probe {
     flown: BTreeSet<(i32, i32)>,
+    interior_required: bool,
+    interior_checked: bool,
     staged: bool,
     walking: bool,
     done: bool,
@@ -23,6 +27,16 @@ struct Probe {
 }
 
 pub(super) const CAST: [u32; 7] = [22, 26, 32, 33, 34, 35, 36];
+
+fn entry_tile(map: i32) -> (i32, i32) {
+    match map {
+        125 => (9, 12),
+        126 => (9, 20),
+        127 => (11, 8),
+        129 => (10, 5),
+        _ => panic!("fortress arrival starts on maps 125, 126, 127 or 129"),
+    }
+}
 
 pub(super) fn entry(world: &mut World) -> Vec<EventCommand> {
     world.insert_resource(Probe::default());
@@ -32,16 +46,12 @@ pub(super) fn entry(world: &mut World) -> Vec<EventCommand> {
     let map = std::env::args()
         .find_map(|arg| arg.strip_prefix("--smoke-map=").map(str::to_owned))
         .map_or(125, |id| id.parse::<i32>().unwrap());
-    let (x, y) = match map {
-        125 => (9, 12),
-        126 => (9, 20),
-        127 => (9, 8),
-        129 => (10, 5),
-        _ => panic!("fortress arrival starts on maps 125, 126, 127 or 129"),
-    };
+    let (x, y) = entry_tile(map);
+    world.resource_mut::<Probe>().interior_required = map == 127;
     world
         .resource_mut::<Switches>()
-        .load(vec![(324, true), (329, true)]);
+        .load(super::airship_history::switches(&[329]));
+    world.resource_mut::<Party>().restore(vec![1, 2]);
     world.resource_mut::<crate::state::Variables>().set(1, 9);
     vec![EventCommand {
         code: 10810,
@@ -80,6 +90,31 @@ pub(super) fn drive(world: &mut World) -> Option<&'static str> {
         return None;
     }
     let map = world.resource::<MapData>().map_id;
+    if map == 127 && !world.resource::<crate::teleport::Fade>().busy() {
+        let alens = world
+            .query::<(&EventSprite, &InheritedVisibility)>()
+            .iter(world)
+            .filter(|(actor, visible)| {
+                visible.get() && actor.charset == "Chara4" && actor.index == 0
+            })
+            .map(|(actor, _)| (actor.id, actor.tile()))
+            .collect::<Vec<_>>();
+        assert_eq!(alens, [(36, (11, 5))], "only the current Alen may remain");
+        let hero = world.query::<&Player>().single(world).unwrap();
+        assert_eq!(hero.tile(), entry_tile(127));
+        assert!(
+            world
+                .resource::<MapData>()
+                .passable(hero.tile_x, hero.tile_y)
+        );
+        if !world.resource::<Probe>().interior_checked
+            && world.resource::<Dialogue>().ready_to_advance()
+        {
+            assert_eq!(world.resource::<RunningEvent>().debug_id(), Some(37));
+            world.resource_mut::<Probe>().interior_checked = true;
+            return Some("airship-interior-arrival");
+        }
+    }
     if map == 13 {
         let vehicles = world.resource::<crate::vehicles::Vehicles>();
         let tile = vehicles.save.vehicles[2].tile();
@@ -192,6 +227,10 @@ pub(super) fn verify_finished(world: &mut World) {
     murder::verify_finished(world);
     let probe = world.resource::<Probe>();
     assert!(probe.done && probe.staged);
+    if probe.interior_required {
+        assert!(probe.interior_checked);
+        super::cast_pixels::verify_finished(world, &["airship-interior-arrival"]);
+    }
     assert_eq!(probe.pixels.load(Ordering::Relaxed), 1);
     for x in 28..=55 {
         assert!(

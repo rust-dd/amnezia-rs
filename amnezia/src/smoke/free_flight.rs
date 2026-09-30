@@ -73,12 +73,11 @@ pub(super) fn entry(world: &mut World) -> Vec<EventCommand> {
         captures: 0,
         settled: 0,
     });
-    world.resource_mut::<Switches>().load(
-        [300, 301, 327, 371, 402, 404, 405, 627]
-            .into_iter()
-            .map(|id| (id, true))
-            .collect(),
-    );
+    world
+        .resource_mut::<Switches>()
+        .load(super::airship_history::switches(&[
+            301, 327, 371, 402, 404, 405, 627,
+        ]));
     world.resource_mut::<Party>().restore(if pirate() {
         vec![1, 2, 3, 8]
     } else {

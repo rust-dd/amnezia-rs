@@ -2,6 +2,7 @@ type Actor = (u32, &'static str, u32, (i32, i32));
 
 pub(super) fn cast(label: &str) -> Option<(u32, Vec<Actor>)> {
     Some(match label {
+        "airship-interior-arrival" => (127, vec![(36, "Chara4", 0, (11, 5))]),
         "airship-murder-witnesses" => (
             129,
             vec![

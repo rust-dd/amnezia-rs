@@ -30,12 +30,9 @@ fn pirate() -> bool {
 
 pub(super) fn entry(world: &mut World) -> Vec<EventCommand> {
     world.insert_resource(Probe::default());
-    world.resource_mut::<Switches>().load(
-        [300, 327, 371, 402, 627]
-            .into_iter()
-            .map(|id| (id, true))
-            .collect(),
-    );
+    world
+        .resource_mut::<Switches>()
+        .load(super::airship_history::switches(&[327, 371, 402, 627]));
     world.resource_mut::<Switches>().set(323, pirate());
     world.resource_mut::<Switches>().set(301, !pirate());
     world.resource_mut::<Party>().restore(if pirate() {

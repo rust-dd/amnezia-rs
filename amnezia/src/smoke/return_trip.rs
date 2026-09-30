@@ -19,12 +19,9 @@ struct Probe {
 
 pub(super) fn entry(world: &mut World) -> Vec<EventCommand> {
     world.insert_resource(Probe::default());
-    world.resource_mut::<Switches>().load(
-        [300, 323, 324, 327, 334, 627]
-            .into_iter()
-            .map(|id| (id, true))
-            .collect(),
-    );
+    world
+        .resource_mut::<Switches>()
+        .load(super::airship_history::switches(&[323, 327, 334, 627]));
     world.resource_mut::<Party>().restore(vec![1, 2]);
     vec![EventCommand {
         code: 10810,

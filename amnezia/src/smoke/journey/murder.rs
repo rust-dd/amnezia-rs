@@ -24,7 +24,7 @@ pub(super) fn entry(world: &mut World) -> Vec<EventCommand> {
     world.insert_resource(Probe::default());
     world
         .resource_mut::<Switches>()
-        .load(vec![(323, true), (324, true)]);
+        .load(super::super::airship_history::switches(&[323]));
     world.resource_mut::<Variables>().set(1, 9);
     world.resource_mut::<Party>().restore(vec![1, 2]);
     let mut timer = world.resource_mut::<crate::timer::GameClock>();

@@ -3,6 +3,7 @@ use capture::capture;
 use input::input;
 
 mod airship;
+mod airship_history;
 mod camera;
 mod capture;
 mod cast_pixels;
