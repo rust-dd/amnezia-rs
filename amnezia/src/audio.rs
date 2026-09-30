@@ -17,6 +17,8 @@ use bevy::audio::{AudioSink, AudioSinkPlayback, Volume};
 use bevy::prelude::*;
 
 #[cfg(test)]
+mod asset_tests;
+#[cfg(test)]
 mod inn_tests;
 mod playback;
 mod request;

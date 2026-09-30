@@ -1,5 +1,8 @@
 use super::*;
 
+#[cfg(test)]
+mod tests;
+
 /// Drain queued [`AudioRequest`]s: spawn a self-despawning player per sound
 /// effect, and start / fade / stop / memorize the BGM.
 pub(super) fn play_requests(
@@ -87,7 +90,7 @@ pub(super) fn play_requests(
 pub(super) enum BgmAction {
     /// Same track, same params: a seamless replay — leave it (and any fade) alone.
     Ignore,
-    /// Same track, changed volume/tempo: adjust the live sink without restarting.
+    /// Same track, changed volume/tempo: update pending or live playback without restarting.
     UpdateParams,
     /// A new track (or one that is fading out): stop the old and start fresh.
     Restart,
@@ -119,11 +122,18 @@ fn start_bgm(
             current.volume = volume;
             current.speed = speed;
             current.fade = None;
-            if let Some(entity) = current.entity
-                && let Ok(mut sink) = sinks.get_mut(entity)
-            {
-                sink.set_volume(Volume::Linear(volume));
-                sink.set_speed(speed);
+            if let Some(entity) = current.entity {
+                commands
+                    .entity(entity)
+                    .entry::<PlaybackSettings>()
+                    .and_modify(move |mut settings| {
+                        settings.volume = Volume::Linear(volume);
+                        settings.speed = speed;
+                    });
+                if let Ok(mut sink) = sinks.get_mut(entity) {
+                    sink.set_volume(Volume::Linear(volume));
+                    sink.set_speed(speed);
+                }
             }
         }
         BgmAction::Restart => {
@@ -182,10 +192,16 @@ pub(super) fn drive_bgm_fade(
     }) else {
         return;
     };
-    if let Some(entity) = current.entity
-        && let Ok(mut sink) = sinks.get_mut(entity)
-    {
-        sink.set_volume(Volume::Linear(volume));
+    if let Some(entity) = current.entity {
+        commands
+            .entity(entity)
+            .entry::<PlaybackSettings>()
+            .and_modify(move |mut settings| {
+                settings.volume = Volume::Linear(volume);
+            });
+        if let Ok(mut sink) = sinks.get_mut(entity) {
+            sink.set_volume(Volume::Linear(volume));
+        }
     }
     if finished {
         current.fade = None;
