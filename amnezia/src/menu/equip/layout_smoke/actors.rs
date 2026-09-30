@@ -130,7 +130,8 @@ fn verify_frame(world: &mut World, frame: u32) -> Option<&'static str> {
     if !fading {
         assert_eq!(
             world.resource::<MenuOpen>().0,
-            frame <= 1094 || (1111..=1140).contains(&frame)
+            frame <= 1094 || (1111..=1140).contains(&frame),
+            "actor switching menu visibility at {frame}"
         );
     }
     let data = world.resource::<GameData>();

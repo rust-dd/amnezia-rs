@@ -26,10 +26,11 @@ pub(super) fn hold(world: &mut World, scenario: &str, frame: u32) -> bool {
         clock.waiting = false;
     }
     let open = match (scenario, frame) {
-        ("items" | "skills", 319) | ("items", 961 | 1181 | 1197) | ("skills", 397 | 513 | 999) => {
-            true
-        }
-        ("items", 979) => false,
+        ("items" | "skills", 319)
+        | ("items", 961 | 1181 | 1197)
+        | ("skills", 397 | 513 | 999)
+        | ("equipment", 1094 | 1140 | 1250) => true,
+        ("items", 979) | ("equipment", 719 | 1109 | 1169) => false,
         _ => {
             if let Some(mut clock) = world.get_resource_mut::<MenuClock>() {
                 clock.consecutive = 0;
@@ -114,5 +115,44 @@ mod tests {
         assert!(!hold(&mut world, "items", 979));
         assert_eq!(scripted_frame(&world, 983), 980);
         assert!(!waiting(&world));
+    }
+
+    #[test]
+    fn equipment_script_waits_before_cancel_and_fixture_reentry() {
+        for (frame, open) in [
+            (1094, true),
+            (1140, true),
+            (1250, true),
+            (719, false),
+            (1109, false),
+            (1169, false),
+        ] {
+            let mut world = World::new();
+            world.insert_resource(crate::menu::MenuOpen(!open));
+            world.init_resource::<crate::menu::SceneFlow>();
+            world.init_resource::<crate::transitions::Transition>();
+            world.init_resource::<crate::timing::SceneWait>();
+            world.init_resource::<ButtonInput<KeyCode>>();
+            assert!(hold(&mut world, "equipment", frame));
+            world.resource_mut::<crate::menu::MenuOpen>().0 = open;
+            world.resource_mut::<crate::timing::SceneWait>().0 = true;
+            world
+                .resource_mut::<ButtonInput<KeyCode>>()
+                .press(KeyCode::Escape);
+            assert!(hold(&mut world, "equipment", frame));
+            assert_eq!(scripted_frame(&world, frame + 2), frame);
+            assert!(waiting(&world));
+            assert!(
+                world
+                    .resource::<ButtonInput<KeyCode>>()
+                    .get_pressed()
+                    .next()
+                    .is_none()
+            );
+            world.resource_mut::<crate::timing::SceneWait>().0 = false;
+            assert!(!hold(&mut world, "equipment", frame));
+            assert!(!waiting(&world));
+            assert_eq!(scripted_frame(&world, frame + 3), frame + 1);
+        }
     }
 }
