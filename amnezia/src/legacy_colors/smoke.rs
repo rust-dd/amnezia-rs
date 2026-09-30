@@ -2,6 +2,14 @@ use crate::picture::PictureCommand;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 
+const PICTURE_SAMPLES: [(&str, u32, u32, [u8; 3]); 5] = [
+    ("picture grayscale", 234, 19, [101, 101, 101]),
+    ("picture tone", 274, 19, [16, 78, 0]),
+    ("saturation before color tone", 34, 94, [50, 101, 179]),
+    ("original oversaturation", 74, 94, [0, 211, 0]),
+    ("hard-light brightening", 114, 94, [145, 207, 129]),
+];
+
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     if frame == 260 {
         world.write_message(PictureCommand::show(1, "Staff1", 74.0, 120.0, &[]));
@@ -139,15 +147,13 @@ pub(crate) fn verify(image: &Image, label: &str) {
         ("UI alpha", 110, 15, [102, 102, 102]),
         ("stacked UI alpha", 120, 25, [163, 163, 163]),
         ("colored UI alpha", 200, 25, [115, 102, 166]),
-        ("picture grayscale", 230, 15, [101, 101, 101]),
-        ("picture tone", 270, 15, [16, 78, 0]),
         ("screen tone", 160, 200, [32, 64, 96]),
-        ("saturation before color tone", 30, 90, [50, 101, 179]),
-        ("original oversaturation", 70, 90, [0, 211, 0]),
-        ("hard-light brightening", 110, 90, [145, 207, 129]),
         ("120 degree hue", 200, 100, [0, 30, 155]),
         ("330 degree hue", 240, 100, [108, 155, 0]),
-    ] {
+    ]
+    .into_iter()
+    .chain(PICTURE_SAMPLES)
+    {
         let actual = crate::display::smoke::pixel_at(image, x, y);
         assert!(
             actual[..3]
@@ -158,4 +164,51 @@ pub(crate) fn verify(image: &Image, label: &str) {
         );
     }
     info!("legacy picture, sprite, UI, stacked alpha and tone GPU checks passed");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn color_samples_use_the_original_odd_picture_origin() {
+        let bytes = std::fs::read(format!(
+            "{}/graphics/Picture/Cross.png",
+            crate::assets::asset_root()
+        ))
+        .unwrap();
+        let source = Image::from_buffer(
+            &bytes,
+            bevy::image::ImageType::Extension("png"),
+            bevy::image::CompressedImageFormats::NONE,
+            true,
+            bevy::image::ImageSampler::nearest(),
+            default(),
+        )
+        .unwrap();
+        assert_eq!(source.size(), UVec2::splat(3));
+        let zoom = 8;
+        for ((_, x, y, _), (cx, cy)) in PICTURE_SAMPLES.into_iter().zip([
+            (240, 25),
+            (280, 25),
+            (40, 100),
+            (80, 100),
+            (120, 100),
+        ]) {
+            let left = cx - source.size().x / 2 * zoom;
+            let top = cy - source.size().y / 2 * zoom;
+            assert!(x >= left && y >= top);
+            let texel = ((x - left) / zoom, (y - top) / zoom);
+            assert_eq!(texel, (0, 0));
+            assert_eq!(
+                source
+                    .get_color_at(texel.0, texel.1)
+                    .unwrap()
+                    .to_srgba()
+                    .to_u8_array()[..3],
+                [32, 156, 0]
+            );
+            assert!(x - 4 < left && y - 4 < top);
+        }
+    }
 }
