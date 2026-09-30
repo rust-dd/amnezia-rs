@@ -5,14 +5,21 @@ use input::input;
 mod airship;
 mod camera;
 mod capture;
+mod cast_pixels;
+mod checkpoints;
 pub(crate) mod completion;
+mod free_flight;
 mod input;
 mod journey;
 mod looping;
 mod message_options;
 mod native;
 pub(crate) mod offscreen;
+mod return_trip;
+#[cfg(test)]
+mod route_data_tests;
 mod scenarios;
+mod sky_castle;
 mod ui_layers;
 mod verify;
 mod world_image;
@@ -149,64 +156,7 @@ fn drive(world: &mut World) {
             .requested = true;
     }
     let scenario = world.resource::<SmokeRun>().scenario;
-    if scenario == "overlap" {
-        if let Some(label) = crate::world::overlap_smoke::drive(world, frame) {
-            capture(world, label);
-        }
-        if crate::world::overlap_smoke::ready(world)
-            && world.resource::<SmokeRun>().finish_at.is_none()
-        {
-            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
-        }
-    }
-    if scenario == "terrain" {
-        if let Some(label) = crate::world::terrain_smoke::drive(world, frame) {
-            capture(world, &label);
-        }
-        if crate::world::terrain_smoke::ready(world)
-            && world.resource::<SmokeRun>().finish_at.is_none()
-        {
-            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
-        }
-    }
-    if scenario == "airship-journey" {
-        if let Some(label) = journey::drive(world) {
-            capture(world, label);
-        }
-        if journey::ready(world) && world.resource::<SmokeRun>().finish_at.is_none() {
-            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
-        }
-    }
-    if scenario == "map-passages" {
-        if let Some(label) = crate::world::passage_smoke::drive(world, frame) {
-            capture(world, label);
-        }
-        if crate::world::passage_smoke::ready(world)
-            && world.resource::<SmokeRun>().finish_at.is_none()
-        {
-            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
-        }
-    }
-    if scenario == "map-scenes" {
-        if let Some(label) = crate::world::scene_smoke::drive(world, frame) {
-            capture(world, &label);
-        }
-        if crate::world::scene_smoke::ready(world)
-            && world.resource::<SmokeRun>().finish_at.is_none()
-        {
-            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
-        }
-    }
-    if scenario == "crystals" {
-        if let Some(label) = crate::save::crystal_smoke::drive(world, frame) {
-            capture(world, &label);
-        }
-        if crate::save::crystal_smoke::ready(world, frame)
-            && world.resource::<SmokeRun>().finish_at.is_none()
-        {
-            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 1);
-        }
-    }
+    checkpoints::drive(world, frame, scenario);
     if matches!(scenario, "async-transitions" | "async-inns")
         && let Some(label) =
             crate::interpreter::continuation::smoke::drive(world, frame, scenario == "async-inns")
@@ -542,6 +492,10 @@ fn drive(world: &mut World) {
             1340
         } else if scenario == "dialogue-timing" {
             3000
+        } else if scenario == "airship-free" {
+            6500
+        } else if matches!(scenario, "airship-return" | "airship-sky") {
+            11000
         } else if matches!(
             scenario,
             "inn" | "map-scenes" | "airship-journey" | "terrain"

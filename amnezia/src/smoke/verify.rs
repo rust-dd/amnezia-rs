@@ -2,6 +2,15 @@ use super::{SmokeRun, camera, completion, scenarios, ui_layers, world_image};
 use bevy::prelude::*;
 
 pub(super) fn finished(world: &mut World, scenario: &str) {
+    if scenario == "airship-free" {
+        super::free_flight::verify_finished(world);
+    }
+    if scenario == "airship-sky" {
+        super::sky_castle::verify_finished(world);
+    }
+    if scenario == "airship-return" {
+        super::return_trip::verify_finished(world);
+    }
     if scenario == "overlap" {
         crate::world::overlap_smoke::verify_finished(world);
     }

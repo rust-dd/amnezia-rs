@@ -33,6 +33,18 @@ fn run_script(world: &mut World) {
     if readiness::hold(world, scenario, frame) {
         return;
     }
+    if scenario == "airship-free" {
+        super::free_flight::input(world, frame);
+        return;
+    }
+    if scenario == "airship-sky" {
+        super::sky_castle::input(world, frame);
+        return;
+    }
+    if scenario == "airship-return" {
+        super::return_trip::input(world, frame);
+        return;
+    }
     if scenario == "overlap" && crate::world::overlap_smoke::input(world, frame) {
         return;
     }

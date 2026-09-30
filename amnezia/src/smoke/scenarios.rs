@@ -19,7 +19,13 @@ pub(super) fn start(world: &mut World, scenario: &str) {
     if scenario == "battle-rewards" {
         crate::battle::outcome_smoke::prepare(world);
     }
-    let commands = if scenario == "overlap" {
+    let commands = if scenario == "airship-free" {
+        super::free_flight::entry(world)
+    } else if scenario == "airship-sky" {
+        super::sky_castle::entry(world)
+    } else if scenario == "airship-return" {
+        super::return_trip::entry(world)
+    } else if scenario == "overlap" {
         crate::world::overlap_smoke::entry(world)
     } else if scenario == "terrain" {
         crate::world::terrain_smoke::entry(world)
@@ -216,7 +222,21 @@ pub(super) fn start(world: &mut World, scenario: &str) {
 }
 
 pub(super) fn selected() -> &'static str {
-    if std::env::args().any(|arg| arg == "--smoke-airship-journey") {
+    if std::env::args().any(|arg| arg == "--smoke-airship-free") {
+        return "airship-free";
+    }
+    if std::env::args().any(|arg| arg == "--smoke-airship-sky") {
+        return "airship-sky";
+    }
+    if std::env::args().any(|arg| arg == "--smoke-airship-return") {
+        return "airship-return";
+    }
+    if std::env::args().any(|arg| {
+        matches!(
+            arg.as_str(),
+            "--smoke-airship-journey" | "--smoke-airship-murder"
+        )
+    }) {
         "airship-journey"
     } else if std::env::args().any(|arg| arg == "--smoke-overlap") {
         "overlap"

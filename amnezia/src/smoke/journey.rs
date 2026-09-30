@@ -11,6 +11,8 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+mod murder;
+
 #[derive(Resource, Default)]
 struct Probe {
     flown: BTreeSet<(i32, i32)>,
@@ -23,6 +25,10 @@ struct Probe {
 pub(super) const CAST: [u32; 7] = [22, 26, 32, 33, 34, 35, 36];
 
 pub(super) fn entry(world: &mut World) -> Vec<EventCommand> {
+    world.insert_resource(Probe::default());
+    if murder::enabled() {
+        return murder::entry(world);
+    }
     let map = std::env::args()
         .find_map(|arg| arg.strip_prefix("--smoke-map=").map(str::to_owned))
         .map_or(125, |id| id.parse::<i32>().unwrap());
@@ -33,7 +39,6 @@ pub(super) fn entry(world: &mut World) -> Vec<EventCommand> {
         129 => (10, 5),
         _ => panic!("fortress arrival starts on maps 125, 126, 127 or 129"),
     };
-    world.insert_resource(Probe::default());
     world
         .resource_mut::<Switches>()
         .load(vec![(324, true), (329, true)]);
@@ -51,6 +56,9 @@ pub(super) fn pixels(world: &World) -> Arc<AtomicUsize> {
 }
 
 pub(super) fn held_input(world: &mut World) -> bool {
+    if murder::input(world) {
+        return true;
+    }
     if !world
         .get_resource::<Probe>()
         .is_some_and(|probe| probe.walking)
@@ -64,6 +72,9 @@ pub(super) fn held_input(world: &mut World) -> bool {
 }
 
 pub(super) fn drive(world: &mut World) -> Option<&'static str> {
+    if let Some(label) = murder::drive(world) {
+        return Some(label);
+    }
     let probe = world.get_resource::<Probe>()?;
     if probe.done {
         return None;
@@ -178,6 +189,7 @@ pub(super) fn ready(world: &World) -> bool {
 }
 
 pub(super) fn verify_finished(world: &mut World) {
+    murder::verify_finished(world);
     let probe = world.resource::<Probe>();
     assert!(probe.done && probe.staged);
     assert_eq!(probe.pixels.load(Ordering::Relaxed), 1);
