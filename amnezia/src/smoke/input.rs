@@ -1,6 +1,16 @@
 use super::SmokeRun;
 use bevy::prelude::*;
 
+mod readiness;
+
+pub(super) fn scripted_frame(world: &World, frame: u32) -> u32 {
+    readiness::scripted_frame(world, frame)
+}
+
+pub(super) fn waiting(world: &World) -> bool {
+    readiness::waiting(world)
+}
+
 #[cfg(test)]
 mod tests;
 
@@ -18,8 +28,25 @@ pub(super) fn input(world: &mut World) {
 }
 
 fn run_script(world: &mut World) {
-    let frame = world.resource::<SmokeRun>().frame;
+    let frame = scripted_frame(world, world.resource::<SmokeRun>().frame);
     let scenario = world.resource::<SmokeRun>().scenario;
+    if readiness::hold(world, scenario, frame) {
+        return;
+    }
+    if scenario == "overlap" && crate::world::overlap_smoke::input(world, frame) {
+        return;
+    }
+    if scenario == "airship-journey" && super::journey::held_input(world) {
+        return;
+    }
+    if scenario == "map-passages" {
+        crate::world::passage_smoke::input(world);
+        return;
+    }
+    if scenario == "crystals" {
+        crate::save::crystal_smoke::input(world, frame);
+        return;
+    }
     if scenario == "inn" && crate::shop::inn::smoke::input(world, frame) {
         return;
     }

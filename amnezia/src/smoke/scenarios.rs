@@ -7,6 +7,9 @@ pub(super) fn start(world: &mut World, scenario: &str) {
     world.insert_resource(crate::teleport::Fade::default());
     world.insert_resource(crate::teleport::PendingTeleport::default());
     world.insert_resource(crate::player::HeroHidden::default());
+    if scenario == "escape" {
+        super::airship::prepare(world);
+    }
     if scenario == "battle-menus" {
         crate::battle::smoke::prepare(world);
     }
@@ -16,7 +19,19 @@ pub(super) fn start(world: &mut World, scenario: &str) {
     if scenario == "battle-rewards" {
         crate::battle::outcome_smoke::prepare(world);
     }
-    let commands = if matches!(
+    let commands = if scenario == "overlap" {
+        crate::world::overlap_smoke::entry(world)
+    } else if scenario == "terrain" {
+        crate::world::terrain_smoke::entry(world)
+    } else if scenario == "airship-journey" {
+        super::journey::entry(world)
+    } else if scenario == "map-passages" {
+        crate::world::passage_smoke::entry(world)
+    } else if scenario == "map-scenes" {
+        crate::world::scene_smoke::entry(world)
+    } else if scenario == "crystals" {
+        crate::save::crystal_smoke::entry(world)
+    } else if matches!(
         scenario,
         "message-options"
             | "shop"
@@ -201,7 +216,19 @@ pub(super) fn start(world: &mut World, scenario: &str) {
 }
 
 pub(super) fn selected() -> &'static str {
-    if std::env::args().any(|arg| arg == "--smoke-inn") {
+    if std::env::args().any(|arg| arg == "--smoke-airship-journey") {
+        "airship-journey"
+    } else if std::env::args().any(|arg| arg == "--smoke-overlap") {
+        "overlap"
+    } else if std::env::args().any(|arg| arg == "--smoke-terrain") {
+        "terrain"
+    } else if std::env::args().any(|arg| arg == "--smoke-map-passages") {
+        "map-passages"
+    } else if std::env::args().any(|arg| arg == "--smoke-map-scenes") {
+        "map-scenes"
+    } else if std::env::args().any(|arg| arg == "--smoke-crystals") {
+        "crystals"
+    } else if std::env::args().any(|arg| arg == "--smoke-inn") {
         "inn"
     } else if std::env::args().any(|arg| arg == "--smoke-shop") {
         "shop"

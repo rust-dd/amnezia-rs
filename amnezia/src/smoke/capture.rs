@@ -8,6 +8,11 @@ pub(super) fn capture(world: &mut World, label: &str) {
     super::native::describe(world, label);
     let world_snapshot = super::world_image::snapshot(world, label);
     let action_snapshot = crate::battle::action_smoke::snapshot(world, label);
+    let airship_snapshot = super::airship::snapshot(world, label);
+    let crystal_snapshot = crate::save::crystal_smoke::snapshot(world, label);
+    let character_snapshot = crate::world::scene_smoke::snapshot(world, label);
+    let terrain_snapshot = crate::world::terrain_smoke::snapshot(world, label);
+    let overlap_snapshot = crate::world::overlap_smoke::snapshot(world, label);
     let quick_snapshot = crate::teleport::smoke::snapshot(world, label);
     let normal_snapshot = crate::teleport::normal_smoke::snapshot(world, label);
     let rotation_snapshot = crate::picture::smoke::rotation::snapshot(world, label);
@@ -86,6 +91,21 @@ pub(super) fn capture(world: &mut World, label: &str) {
                 }
                 verify_content(&capture.image, &label);
                 if let Some(snapshot) = &action_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &airship_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &crystal_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &character_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &terrain_snapshot {
+                    snapshot.verify(&capture.image);
+                }
+                if let Some(snapshot) = &overlap_snapshot {
                     snapshot.verify(&capture.image);
                 }
                 if let Some(snapshot) = &inn_snapshot {

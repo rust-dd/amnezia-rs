@@ -2,6 +2,7 @@
 
 pub(crate) mod animation_smoke;
 pub(crate) mod camera_smoke;
+pub(crate) mod crystal_smoke;
 pub(crate) mod hero_smoke;
 mod identities;
 pub(crate) mod music_smoke;

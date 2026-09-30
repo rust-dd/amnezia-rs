@@ -2,8 +2,27 @@ use super::{SmokeRun, camera, completion, scenarios, ui_layers, world_image};
 use bevy::prelude::*;
 
 pub(super) fn finished(world: &mut World, scenario: &str) {
+    if scenario == "overlap" {
+        crate::world::overlap_smoke::verify_finished(world);
+    }
+    if scenario == "terrain" {
+        crate::world::terrain_smoke::verify_finished(world);
+    }
+    if scenario == "airship-journey" {
+        super::journey::verify_finished(world);
+    }
+    if scenario == "map-passages" {
+        crate::world::passage_smoke::verify_finished(world);
+    }
+    if scenario == "map-scenes" {
+        crate::world::scene_smoke::verify_finished(world);
+    }
+    if scenario == "crystals" {
+        crate::save::crystal_smoke::verify_finished(world);
+    }
     world_image::verify_finished(world, scenario);
     if scenario == "escape" {
+        super::airship::verify_finished(world);
         assert!(
             world.resource::<SmokeRun>().finish_at.is_some(),
             "airship escape never reached the next dream scene"

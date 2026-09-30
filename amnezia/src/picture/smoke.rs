@@ -1,6 +1,7 @@
 use super::{Effect, Picture, PictureCommand, effects::EffectState, render::PictureMaterial};
 use bevy::prelude::*;
 
+pub(crate) mod checkpoint;
 pub(crate) mod rotation;
 mod transfers;
 

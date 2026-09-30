@@ -167,7 +167,8 @@ fn verify_sounds(world: &mut World, frame: u32) {
         let sounds = world.resource::<SystemSounds>();
         let expected = match frame - 1 {
             350 | 536 | 800 => Some(&sounds.buzzer),
-            305 | 330 | 335 | 398 | 402 | 420 | 460 | 514 | 516 | 690 => Some(&sounds.decision),
+            // Opening from the map consumes Escape on the following stopped player update.
+            306 | 330 | 335 | 398 | 402 | 420 | 460 | 514 | 516 | 690 => Some(&sounds.decision),
             380 | 442 | 482 | 498 | 710 | 980 | 1000 => Some(&sounds.cancel),
             320 | 400 | 540 | 550 | 560 | 570 | 580 | 590 | 600 | 610 | 620 | 630 | 640 | 650
             | 660 | 750 => Some(&sounds.cursor),

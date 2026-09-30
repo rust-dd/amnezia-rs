@@ -7,9 +7,11 @@ use crate::timing::{GameFrames, SceneFrames};
 use bevy::ecs::message::MessageCursor;
 use bevy::prelude::*;
 
+mod clock;
 pub(in crate::shop) mod layout;
 mod source;
 pub(crate) use super::view::pixels::snapshot;
+pub(crate) use clock::finish_frame;
 
 #[derive(Resource, Default)]
 struct Probe {
@@ -26,6 +28,10 @@ pub(crate) fn input(world: &mut World, frame: u32) -> bool {
     if frame < 300 {
         return false;
     }
+    let Some(frame) = clock::input_frame(world, frame) else {
+        world.resource_mut::<ButtonInput<KeyCode>>().reset_all();
+        return true;
+    };
     let mut keys = world.resource_mut::<ButtonInput<KeyCode>>();
     if (360..392).contains(&frame) {
         if frame == 360 {
@@ -53,7 +59,9 @@ pub(crate) fn input(world: &mut World, frame: u32) -> bool {
 
 pub(crate) fn drive(world: &mut World, frame: u32) -> Option<&'static str> {
     let fade = super::fades::smoke::drive(world, frame);
+    let frame = clock::scripted_frame(world, frame);
     if frame == 300 {
+        clock::initialize(world);
         assert!(!world.resource::<RunningEvent>().active());
         let mut inventory = Inventory::default();
         inventory.add_gold(999_999);

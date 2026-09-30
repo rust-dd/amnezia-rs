@@ -2,10 +2,12 @@ use bevy::prelude::*;
 use capture::capture;
 use input::input;
 
+mod airship;
 mod camera;
 mod capture;
 pub(crate) mod completion;
 mod input;
+mod journey;
 mod looping;
 mod message_options;
 mod native;
@@ -34,6 +36,9 @@ impl Plugin for SmokePlugin {
         offscreen::configure(app);
         native::configure(app);
         let scenario = scenarios::selected();
+        if scenario == "crystals" {
+            crate::save::crystal_smoke::configure(app);
+        }
         if scenario == "battle-actions" {
             crate::battle::action_smoke::configure(app);
         }
@@ -101,8 +106,10 @@ impl Plugin for SmokePlugin {
 }
 
 fn drive(world: &mut World) {
-    if world.resource::<SmokeRun>().scenario != "save-slots"
-        && crate::menu::save_files::smoke::event_active(world)
+    if !matches!(
+        world.resource::<SmokeRun>().scenario,
+        "save-slots" | "crystals"
+    ) && crate::menu::save_files::smoke::event_active(world)
     {
         if completion::close_early(world, world.resource::<SmokeRun>().frame) {
             return;
@@ -121,19 +128,85 @@ fn drive(world: &mut World) {
         smoke.frame += 1;
         smoke.frame
     };
+    let frame = input::scripted_frame(world, frame);
     if completion::close_early(world, frame) {
+        return;
+    }
+    if input::waiting(world) {
         return;
     }
     if frame == 60 {
         capture(world, "title");
     }
-    if frame == 90 && world.resource::<SmokeRun>().scenario != "load-slots" {
+    if frame == 90
+        && world.resource::<SmokeRun>().scenario != "load-slots"
+        && !(world.resource::<SmokeRun>().scenario == "crystals"
+            && crate::save::crystal_smoke::resuming())
+    {
         world.resource_mut::<crate::title::TitleActive>().0 = false;
         world
             .resource_mut::<crate::session::NewGameRequest>()
             .requested = true;
     }
     let scenario = world.resource::<SmokeRun>().scenario;
+    if scenario == "overlap" {
+        if let Some(label) = crate::world::overlap_smoke::drive(world, frame) {
+            capture(world, label);
+        }
+        if crate::world::overlap_smoke::ready(world)
+            && world.resource::<SmokeRun>().finish_at.is_none()
+        {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
+        }
+    }
+    if scenario == "terrain" {
+        if let Some(label) = crate::world::terrain_smoke::drive(world, frame) {
+            capture(world, &label);
+        }
+        if crate::world::terrain_smoke::ready(world)
+            && world.resource::<SmokeRun>().finish_at.is_none()
+        {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
+        }
+    }
+    if scenario == "airship-journey" {
+        if let Some(label) = journey::drive(world) {
+            capture(world, label);
+        }
+        if journey::ready(world) && world.resource::<SmokeRun>().finish_at.is_none() {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
+        }
+    }
+    if scenario == "map-passages" {
+        if let Some(label) = crate::world::passage_smoke::drive(world, frame) {
+            capture(world, label);
+        }
+        if crate::world::passage_smoke::ready(world)
+            && world.resource::<SmokeRun>().finish_at.is_none()
+        {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
+        }
+    }
+    if scenario == "map-scenes" {
+        if let Some(label) = crate::world::scene_smoke::drive(world, frame) {
+            capture(world, &label);
+        }
+        if crate::world::scene_smoke::ready(world)
+            && world.resource::<SmokeRun>().finish_at.is_none()
+        {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 30);
+        }
+    }
+    if scenario == "crystals" {
+        if let Some(label) = crate::save::crystal_smoke::drive(world, frame) {
+            capture(world, &label);
+        }
+        if crate::save::crystal_smoke::ready(world, frame)
+            && world.resource::<SmokeRun>().finish_at.is_none()
+        {
+            world.resource_mut::<SmokeRun>().finish_at = Some(frame + 1);
+        }
+    }
     if matches!(scenario, "async-transitions" | "async-inns")
         && let Some(label) =
             crate::interpreter::continuation::smoke::drive(world, frame, scenario == "async-inns")
@@ -208,7 +281,10 @@ fn drive(world: &mut World) {
             world.resource_mut::<SmokeRun>().finish_at = Some(frame + 45);
         }
     }
-    if frame == 150 && !matches!(scenario, "intro" | "load-slots") {
+    if frame == 150
+        && !matches!(scenario, "intro" | "load-slots")
+        && !(scenario == "crystals" && crate::save::crystal_smoke::resuming())
+    {
         scenarios::start(world, scenario);
     }
     if scenario == "looping" {
@@ -400,6 +476,9 @@ fn drive(world: &mut World) {
         world.resource_mut::<crate::timer::GameClock>().remaining = 1.0;
     }
     if scenario == "escape" {
+        if let Some(label) = airship::drive(world) {
+            capture(world, label);
+        }
         let escaped = scenarios::escaped_airship_cast(world);
         world.resource_mut::<SmokeRun>().escaped_cast |= escaped;
         if world.resource::<crate::world::MapData>().map_id == 86
@@ -455,13 +534,18 @@ fn drive(world: &mut World) {
             1480
         } else if scenario == "menu" {
             crate::menu::navigation_smoke::finish_frame(world)
+        } else if scenario == "shop" {
+            crate::shop::smoke::finish_frame(world)
         } else if scenario == "equipment" {
             1290
         } else if scenario == "animation-colors" {
             1340
         } else if scenario == "dialogue-timing" {
             3000
-        } else if scenario == "inn" {
+        } else if matches!(
+            scenario,
+            "inn" | "map-scenes" | "airship-journey" | "terrain"
+        ) {
             6000
         } else {
             1260
