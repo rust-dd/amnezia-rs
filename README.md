@@ -90,13 +90,24 @@ Run `cargo run -p amnezia --locked -- --debug-tools` to enable development short
 
 ### macOS packaging
 
-`bash scripts/bundle-mac.sh` builds the release binary and replaces `target/Amnézia.app`, bundling converted assets in `Contents/Resources/assets`. Dev-only MIDI intermediates are excluded. Packaging and a clean-machine release run still need validation after the current restoration changes.
+`bash scripts/bundle-mac.sh` builds the locked release and produces `target/Amnézia.app`, bundling converted assets in `Contents/Resources/assets`. Dev-only MIDI intermediates are excluded. The script verifies the copied assets and installation data, records an asset checksum manifest, and ad-hoc signs the app. Any previous bundle is retained in the printed staging directory.
+
+You can copy the app outside the checkout. Installation diagnostics run without opening a window or audio device:
+
+```sh
+'target/Amnézia.app/Contents/MacOS/amnezia' --check-installation
+'target/Amnézia.app/Contents/MacOS/amnezia' --check-save-permissions
+```
+
+The second command also checks the release save directory with a temporary write/rename/read operation and removes its own probe; existing save slots are untouched. A copied Apple Silicon bundle has passed these checks with filesystem access to the checkout denied. Its title screen, new-game introduction, movement and main menu have also been checked in a native window. This is same-machine validation, not a clean-machine test. The app is not notarized; Intel macOS, Windows and Linux release runs remain unverified.
 
 ## Project status
 
 Implemented systems include event interpretation, map rendering and movement, dialogue, music, menus, shops/inns, turn-based battles, progression, and save/load. Gameplay advances in complete 60 Hz logical updates, independently of rendering. The native canvas is 320×240 with whole-pixel scaling and letterboxing.
 
-Choice and number input share the original bitmap message window, including prompts embedded below preceding dialogue. Choices type before accepting input. Message and inn gold windows open and close over seven logical frames; adjacent foreground messages retain the window with one blank text frame. Field menus, submenus and shops use the original six-frame scene fades, with input and events held through the final frame. Shops use the original window layout; inns use a typed question, a separate gold window, affordability restrictions and automatic overnight healing with music and screen fades. Event and animation screen flashes share the original replacement channel and rendering layer. Window backgrounds use native fixed-point sampling, including battle and save/load panels. Battle lists scroll over four logical updates with original cursor/help timing, and battle, save/load and title selectors share the global key-repeat phase. Remaining work includes battle action timing, full scene-update ordering, full English localization, and end-to-end campaign and release verification. Original-data regression tests and focused native checks are not a substitute for those checks.
+Choice and number input share the original bitmap message window, including prompts embedded below preceding dialogue. Choices type before accepting input. Message and inn gold windows open and close over seven logical frames; adjacent foreground messages retain the window with one blank text frame. Field menus, submenus and shops use the original six-frame scene fades, with input and events held through the final frame. Shops use the original window layout; inns use a typed question, a separate gold window, affordability restrictions and automatic overnight healing with music and screen fades. Event and animation screen flashes share the original replacement channel and rendering layer. Window backgrounds use native fixed-point sampling, including battle and save/load panels. Battle lists scroll over four logical updates with original cursor/help timing, and battle, save/load and title selectors share the global key-repeat phase.
+
+Battle action sequencing and map/transfer update ordering have source-derived timing regressions and native acceptance checks. All sixteen original save crystals have passed save, process restart, load and continued-movement checks in both native and muted offscreen runs. Remaining work includes broader original-scene coverage, full English localization, a complete campaign playthrough, comparison with the original Windows executable, and clean-machine/platform release verification. Original-data regression tests and focused native checks are not substitutes for those checks.
 
 ## Credits and third-party materials
 

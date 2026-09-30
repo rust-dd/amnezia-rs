@@ -4,6 +4,8 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::OnceLock;
 
+pub(crate) mod installation;
+
 /// The converted-assets root, resolved once. Debug builds use the in-tree
 /// `assets/`; release builds use `assets/` inside the app bundle (next to the
 /// executable's `Contents/Resources`), so a distributed `.app` is self-contained.

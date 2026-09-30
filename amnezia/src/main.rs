@@ -55,6 +55,20 @@ use assets::{asset_root, load_ron};
 use bevy::prelude::*;
 
 fn main() -> AppExit {
+    if std::env::args().any(|argument| {
+        matches!(
+            argument.as_str(),
+            "--check-installation" | "--check-save-permissions"
+        )
+    }) {
+        return match assets::installation::check() {
+            Ok(()) => AppExit::Success,
+            Err(error) => {
+                eprintln!("Installation check failed: {error}");
+                AppExit::error()
+            }
+        };
+    }
     let hero: amnezia_data::Hero = load_ron(&format!("{}/hero.ron", asset_root()));
     let offscreen = smoke::offscreen::enabled();
     let mut plugins = DefaultPlugins
