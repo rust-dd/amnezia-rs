@@ -68,6 +68,7 @@ pub struct EventPage {
     pub move_route: MoveRouteDef,
     pub layer: u32,
     pub condition: EventCondition,
+    #[serde(deserialize_with = "deserialize_commands")]
     pub commands: Vec<EventCommand>,
 }
 
@@ -120,6 +121,18 @@ pub struct EventCommand {
     pub params: Vec<i32>,
 }
 
+pub(crate) fn deserialize_commands<'de, D>(deserializer: D) -> Result<Vec<EventCommand>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let mut commands = Vec::<EventCommand>::deserialize(deserializer)?;
+    // Older converted assets included the LCF stream terminator as a command.
+    if let Some(end) = commands.iter().position(|command| command.code == 0) {
+        commands.truncate(end);
+    }
+    Ok(commands)
+}
+
 /// A common event (global event script), read by the interpreter: its 1-based
 /// id, name, `trigger` (3 = autostart, 4 = parallel, 5 = call), an optional
 /// switch condition, and its command list. Unlike a map
@@ -132,6 +145,7 @@ pub struct CommonEvent {
     #[serde(default)]
     pub switch_flag: bool,
     pub switch_id: u32,
+    #[serde(deserialize_with = "deserialize_commands")]
     pub commands: Vec<EventCommand>,
 }
 

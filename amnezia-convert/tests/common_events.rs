@@ -99,20 +99,12 @@ fn converts_ldb_to_common_events_ron() {
             trigger: 3,
             switch_flag: true,
             switch_id: 7,
-            commands: vec![
-                EventCommand {
-                    code: 10110,
-                    indent: 0,
-                    string: "Helló".to_string(),
-                    params: vec![]
-                },
-                EventCommand {
-                    code: 0,
-                    indent: 0,
-                    string: String::new(),
-                    params: vec![]
-                },
-            ],
+            commands: vec![EventCommand {
+                code: 10110,
+                indent: 0,
+                string: "Helló".to_string(),
+                params: vec![]
+            }],
         }
     );
     assert_eq!(events[1].name, "Idle");

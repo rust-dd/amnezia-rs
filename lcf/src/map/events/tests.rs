@@ -1,6 +1,15 @@
 use super::*;
 
 #[test]
+fn command_terminators_are_not_executable_commands() {
+    assert!(parse_commands(&[0, 0, 0, 0]).unwrap().is_empty());
+    let commands = parse_commands(&[10, 0, 0, 0, 0, 0, 0, 0]).unwrap();
+    assert_eq!(commands.len(), 1);
+    assert_eq!(commands[0].code, 10);
+    assert!(parse_commands(&[0]).is_err());
+}
+
+#[test]
 fn overlap_forbidden_defaults_to_false_and_preserves_explicit_values() {
     assert!(!parse_pages(&[1, 1, 0]).unwrap()[0].overlap_forbidden);
     assert!(!parse_pages(&[1, 1, 0x23, 1, 0, 0]).unwrap()[0].overlap_forbidden);

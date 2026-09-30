@@ -12,6 +12,7 @@ mod enemy_actions;
 mod message_options;
 mod scrolling;
 mod state_resistance;
+mod terminators;
 mod terrain;
 mod transitions;
 mod troop_events;

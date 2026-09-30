@@ -113,7 +113,7 @@ mod tests {
         assert_eq!(event.trigger, 3, "autostart");
         assert!(event.switch_flag);
         assert_eq!(event.switch_id, 7);
-        assert_eq!(event.commands.len(), 3);
+        assert_eq!(event.commands.len(), 2);
         assert_eq!(
             event.commands[0],
             EventCommand {
@@ -132,7 +132,6 @@ mod tests {
                 params: vec![1, 2],
             }
         );
-        assert_eq!(event.commands[2].code, 0, "trailing terminator command");
     }
 
     #[test]

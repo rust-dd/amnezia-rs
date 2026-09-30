@@ -7,20 +7,17 @@ fn original_battle_event_pages_are_present_in_the_shipped_data() {
     assert_eq!(troops.iter().map(|t| t.pages.len()).sum::<usize>(), 69);
     let scripted = troops
         .iter()
-        .filter(|t| {
-            t.pages
-                .iter()
-                .any(|p| p.commands.iter().any(|c| c.code != 0))
-        })
+        .filter(|t| t.pages.iter().any(|p| !p.commands.is_empty()))
         .count();
     assert_eq!(scripted, 23);
     let pages = troops
         .iter()
         .flat_map(|t| &t.pages)
-        .filter(|p| p.commands.iter().any(|c| c.code != 0))
+        .filter(|p| !p.commands.is_empty())
         .collect::<Vec<_>>();
     assert_eq!(pages.len(), 40);
-    assert_eq!(pages.iter().map(|p| p.commands.len()).sum::<usize>(), 392);
+    assert_eq!(pages.iter().map(|p| p.commands.len()).sum::<usize>(), 352);
+    assert!(pages.iter().flat_map(|p| &p.commands).all(|c| c.code != 0));
     let troop = |id| troops.iter().find(|t| t.id == id).unwrap();
     let tutorial = &troop(15).pages[0];
     assert_eq!(tutorial.condition.flags, 8);

@@ -192,12 +192,17 @@ fn parse_pages(data: &[u8]) -> Result<Vec<EventPage>, LcfError> {
 
 /// Parse a flat event-command stream: repeated
 /// `[code][indent][strlen][CP1250 string][paramcount][params]` records read
-/// until the buffer is exhausted. Shared by map, common and battle events.
+/// until the four-byte zero terminator or buffer end. Shared by map, common
+/// and battle events.
 pub(crate) fn parse_commands(data: &[u8]) -> Result<Vec<EventCommand>, LcfError> {
     let mut reader = Reader::new(data);
     let mut commands = Vec::new();
     while !reader.is_empty() {
         let code = reader.varint()?;
+        if code == 0 {
+            reader.take(3)?;
+            break;
+        }
         let indent = reader.varint()?;
         let string_len = reader.varint()? as usize;
         let string = decode_cp1250(reader.take(string_len)?);

@@ -22,6 +22,7 @@ pub struct TroopDef {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TroopPageDef {
     pub condition: TroopPageConditionDef,
+    #[serde(deserialize_with = "crate::map::deserialize_commands")]
     pub commands: Vec<EventCommand>,
 }
 
