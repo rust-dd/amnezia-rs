@@ -19,12 +19,13 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo build -p amnezia --release --locked
 ```
 
-The original-vocabulary audit requires the untracked `original/RPG_RT.ldb` and
-is explicitly ignored in the default suite. When the original extraction is
-available, run it separately:
+The original-vocabulary and vehicle audits require the untracked project files
+under `original/` and are explicitly ignored in the default suite. When the
+original extraction is available, run them separately:
 
 ```sh
 cargo test -p amnezia-convert --locked every_original_term_survives_conversion_including_intentional_blanks -- --ignored
+cargo test -p lcf --locked original_airship_graphic_and_position_are_available -- --ignored
 ```
 
 For gameplay changes, add a regression that checks the affected behavior and

@@ -77,7 +77,7 @@ cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-GitHub Actions runs formatting, workspace and documentation tests, Clippy, release compilation, and Python syntax checks on macOS. Workspace tests use nextest with a completed/total counter and each test's name and result. Checks that require the untracked original database or conversion SoundFont are opt-in; the default MIDI test uses an in-memory SoundFont. Native gameplay and graphical smoke scenarios remain separate acceptance checks.
+GitHub Actions runs formatting, workspace and documentation tests, Clippy, release compilation, and Python syntax checks on macOS. Workspace tests use nextest with a completed/total counter and each test's name and result. Checks that require the untracked original project files or conversion SoundFont are opt-in; default vehicle-parser and MIDI tests use in-memory fixtures. Native gameplay and graphical smoke scenarios remain separate acceptance checks.
 
 Run graphical scenarios one at a time; passing them does not establish full campaign compatibility. Detailed testing notes and archived evidence are local-only under the ignored `docs/` directory. When those archives are available, `python3 scripts/verify-playtest-evidence.py` checks their integrity; CI does not require them.
 
