@@ -39,7 +39,5 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Release compilation
         run: cargo build -p amnezia --release --locked
-      - name: Python tools and archived evidence
-        run: |
-          python3 -m py_compile scripts/playtest.py scripts/verify-playtest-evidence.py
-          python3 scripts/verify-playtest-evidence.py
+      - name: Python tools
+        run: python3 -m py_compile scripts/playtest.py scripts/verify-playtest-evidence.py

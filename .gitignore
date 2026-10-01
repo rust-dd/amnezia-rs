@@ -6,5 +6,5 @@
 __pycache__/
 amnezia-convert/assets/soundfont/*.sf2
 reference/
-/docs/superpowers
-/docs/RESTORATION_CHECKLIST.md
+/docs/
+/.history-backups/

@@ -25,7 +25,7 @@ case "$platform" in
         zigbuild="$root/target/cross-tools/bin/cargo-zigbuild"
         if [[ ! -x "$zigbuild" ]]; then
             zigbuild="$(command -v cargo-zigbuild)" || {
-                echo "Install cargo-zigbuild locally as documented in docs/TESTING.md" >&2
+                echo "Install cargo-zigbuild as documented in README.md (Windows and Linux preview packages)" >&2
                 exit 2
             }
         fi

@@ -23,4 +23,4 @@
 
 Natural final-combat balance, other branches, complete English localization and
 native Windows/Linux validation remain separate acceptance work; see
-[Compatibility status](docs/STATUS.md).
+[Project status](README.md#project-status).

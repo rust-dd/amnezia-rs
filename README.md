@@ -1,10 +1,10 @@
 # Amnézia — Rust restoration
 
-[Compatibility status](docs/STATUS.md) · [Campaign playtest](docs/CAMPAIGN-PLAYTEST.md) · [Development checks](docs/TESTING.md) · [Contributing](CONTRIBUTING.md)
+[Project status](#project-status) · [Development checks](#checks) · [Contributing](CONTRIBUTING.md)
 
 A Rust and Bevy restoration of *Amnézia*, MoonDragon Entertainment's Hungarian RPG Maker 2000 game (2001/2004). It runs the original maps and converted assets without the RPG Maker runtime.
 
-Playable on macOS: the bandit story branch has reached the original **VÉGE** screen and happy Ron/Tiffany epilogue. Optional tower puzzles, dragon encounters, strongest weapons for Ron/Tiffany/Stark/Lance, and saving across fifteen slots have also been checked. Final encounters used raised levels; Ron/Tiffany weapon purchases used granted EP. See the [compatibility status](docs/STATUS.md) for the exact coverage and remaining work.
+Playable on macOS: the bandit story branch has reached the original **VÉGE** screen and happy Ron/Tiffany epilogue. Optional tower puzzles, dragon encounters, strongest weapons for Ron/Tiffany/Stark/Lance, and saving across fifteen slots have also been checked. Final encounters used raised levels; Ron/Tiffany weapon purchases used granted EP. See [Project status](#project-status) for remaining acceptance work.
 
 ## Getting started
 
@@ -77,9 +77,9 @@ cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-GitHub Actions runs formatting, workspace and documentation tests, Clippy, release compilation, and evidence integrity checks on macOS. Workspace tests use nextest with a completed/total counter and each test's name and result. Checks that require the untracked original database or conversion SoundFont are opt-in; the default MIDI test uses an in-memory SoundFont. Native gameplay and graphical smoke scenarios remain separate acceptance checks.
+GitHub Actions runs formatting, workspace and documentation tests, Clippy, release compilation, and Python syntax checks on macOS. Workspace tests use nextest with a completed/total counter and each test's name and result. Checks that require the untracked original database or conversion SoundFont are opt-in; the default MIDI test uses an in-memory SoundFont. Native gameplay and graphical smoke scenarios remain separate acceptance checks.
 
-See [Testing](docs/TESTING.md) for native-window and offscreen scenarios, screenshot checks, and their limitations. Run graphical scenarios one at a time; passing them does not establish full campaign compatibility.
+Run graphical scenarios one at a time; passing them does not establish full campaign compatibility. Detailed testing notes and archived evidence are local-only under the ignored `docs/` directory. When those archives are available, `python3 scripts/verify-playtest-evidence.py` checks their integrity; CI does not require them.
 
 ### Debug controls
 
@@ -130,7 +130,19 @@ The second command also checks the release save directory with a temporary write
 
 ### Windows and Linux preview packages
 
-The [cross-build instructions](docs/TESTING.md#cross-platform-preview-builds) produce Windows x86_64 and Linux x86_64 release binaries from the development Mac. `scripts/bundle-portable.sh` packages each executable with its runtime assets, notices and checksums. These are preview builds, not validated platform releases.
+The cross-build scripts produce Windows x86_64 and Linux x86_64 release binaries from the development Mac. Windows needs MinGW-w64 (`x86_64-w64-mingw32-gcc`); Linux needs Zig (tested with 0.14.1), `pkg-config`, `ar`, and the isolated Debian 12 sysroot prepared below. Packaging also needs `curl`, a tar reader with xz support, `rsync` and `zip`.
+
+```sh
+rustup target add x86_64-pc-windows-gnu x86_64-unknown-linux-gnu
+cargo install cargo-zigbuild --version 0.23.4 --locked --root target/cross-tools --target-dir target/cross-tools/build -j 4
+bash scripts/build-cross.sh windows
+bash scripts/cross/linux-sdk.sh
+bash scripts/build-cross.sh linux /absolute/path/printed/by/the/sdk/script/sysroot
+bash scripts/bundle-portable.sh windows
+bash scripts/bundle-portable.sh linux
+```
+
+The SDK script checks pinned package hashes without installing host libraries. `scripts/bundle-portable.sh` packages each executable with its runtime assets, notices and checksums; do not include the build-only SDK. These are preview builds, not validated platform releases.
 
 Extract the entire archive before launching `amnezia.exe` on Windows or `./amnezia` on Linux; keep the adjacent `assets` directory. Linux targets glibc 2.36 and requires ALSA, udev, a supported X11/Wayland desktop and a working graphics driver. Release saves use `%LOCALAPPDATA%/Amnezia/saves` on Windows and `$XDG_DATA_HOME/amnezia/saves` (normally `~/.local/share/amnezia/saves`) on Linux.
 
@@ -140,7 +152,15 @@ The planned `1.0.0` GitHub release will attach Windows, Linux and macOS archives
 
 The runtime implements map movement and rendering, original event scripts, dialogue, music, menus, shops and inns, turn-based combat, progression, and saving/loading. Gameplay uses complete 60 Hz logical updates independently of rendering, with a 320×240 canvas, whole-pixel scaling and letterboxing.
 
-The [status report](docs/STATUS.md) separates verified behavior from outstanding acceptance work. The [campaign report](docs/CAMPAIGN-PLAYTEST.md) records the full route, fixes discovered during play, edited test checkpoints, and native results. Screenshots, archived saves and integrity manifests are kept in [playtest evidence](docs/playtest-evidence/README.md).
+The completed bandit-route playtest does not establish compatibility for every branch or platform. Remaining acceptance work includes:
+
+- Final combat at naturally earned levels and continuous real-time timed puzzles.
+- Other story branches and endings, broader optional-event coverage, and remaining native strongest-weapon/technique checks.
+- Complete English translation, text fitting, and an English campaign run.
+- Comparison against the running original Windows executable.
+- Clean-machine installation, Intel macOS, and native Windows/Linux validation.
+
+Detailed restoration notes, campaign records, screenshots, and archived saves remain local-only; they are not required to build the game or run CI.
 
 ## Credits and third-party materials
 

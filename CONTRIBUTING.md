@@ -17,7 +17,6 @@ cargo fmt --all -- --check
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo build -p amnezia --release --locked
-python3 scripts/verify-playtest-evidence.py
 ```
 
 The original-vocabulary audit requires the untracked `original/RPG_RT.ldb` and
@@ -29,15 +28,19 @@ cargo test -p amnezia-convert --locked every_original_term_survives_conversion_i
 ```
 
 For gameplay changes, add a regression that checks the affected behavior and
-run the relevant native/offscreen scenario from [Testing](docs/TESTING.md).
+run the relevant native/offscreen scenario. See the
+[campaign input driver](README.md#campaign-input-driver) for ordinary-input checks.
 Record what was actually observed and which cases remain unverified. A fixture
 or edited save must be identified as such.
+
+Testing notes and archived evidence under `docs/` are local-only. If those archives
+are available, run `python3 scripts/verify-playtest-evidence.py` separately.
 
 Keep legacy parser, converter, runtime data and execution behavior consistent.
 Use `--data-only` when regenerating structured assets without changing media.
 Do not commit `target/`, the original game extraction, local credentials or
 unrelated personal files. Changes to story routes and release acceptance should
-update [Compatibility status](docs/STATUS.md).
+update the README's [Project status](README.md#project-status).
 
 ## Gameplay bug reports
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check committed campaign save archives against their integrity manifests."""
+"""Check local campaign save archives against their integrity manifests."""
 
 import hashlib
 import json
