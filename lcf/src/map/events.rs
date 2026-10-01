@@ -56,7 +56,7 @@ pub struct EventPage {
 /// A page's activation condition. `flags` bits: 0 switch_a, 1 switch_b,
 /// 2 variable, 3 item, 4 actor, 5 timer. A page is active when every enabled
 /// flag's condition holds; `flags == 0` is always active.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventCondition {
     pub flags: u32,
     pub switch_a: u32,
@@ -65,6 +65,20 @@ pub struct EventCondition {
     pub variable_value: u32,
     pub item_id: u32,
     pub actor_id: u32,
+}
+
+impl Default for EventCondition {
+    fn default() -> Self {
+        Self {
+            flags: 0,
+            switch_a: 1,
+            switch_b: 1,
+            variable_id: 1,
+            variable_value: 0,
+            item_id: 1,
+            actor_id: 1,
+        }
+    }
 }
 
 fn parse_condition(data: &[u8]) -> Result<EventCondition, LcfError> {

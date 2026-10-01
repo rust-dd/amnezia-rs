@@ -43,12 +43,40 @@ fn parses_skill_learning_list() {
 
 #[test]
 fn skill_learning_list_defaults_empty_and_drops_blank_rows() {
-    // An entry with no skill_id chunk (skill 0) is a blank row RM2000 ignores.
     let hero = element(2, &[subchunk(0x3F, &learnings(&[(4, 0)]))]);
     let ldb = make_ldb(&[(0x0B, section(&[hero, element(3, &[])]))]);
     let actors = parse_actors(&ldb).unwrap();
     assert!(actors[0].skills.is_empty(), "blank learning row dropped");
     assert!(actors[1].skills.is_empty(), "omitted list defaults empty");
+}
+
+#[test]
+fn omitted_learning_fields_preserve_the_original_first_skill() {
+    let hero = element(1, &[subchunk(0x3F, &[1, 1, 0])]);
+    let ldb = make_ldb(&[(0x0B, section(&[hero]))]);
+    assert_eq!(
+        parse_actors(&ldb).unwrap()[0].skills,
+        [Learning {
+            level: 1,
+            skill_id: 1
+        }],
+    );
+}
+
+#[test]
+fn an_omitted_skill_id_also_applies_to_later_learning_levels() {
+    let learning = element(1, &[subchunk(0x01, &varint(12))]);
+    let mut skills = varint(1);
+    skills.extend(learning);
+    let hero = element(1, &[subchunk(0x3F, &skills)]);
+    let ldb = make_ldb(&[(0x0B, section(&[hero]))]);
+    assert_eq!(
+        parse_actors(&ldb).unwrap()[0].skills,
+        [Learning {
+            level: 12,
+            skill_id: 1
+        }],
+    );
 }
 
 /// Build a `Parameters` chunk (`0x1F`) by concatenating the six Int16 stat

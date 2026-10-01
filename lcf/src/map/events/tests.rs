@@ -1,6 +1,35 @@
 use super::*;
 
 #[test]
+fn omitted_condition_ids_use_the_original_first_database_entries() {
+    let condition = parse_condition(&[0]).unwrap();
+    assert_eq!(condition.flags, 0);
+    assert_eq!(condition.switch_a, 1);
+    assert_eq!(condition.switch_b, 1);
+    assert_eq!(condition.variable_id, 1);
+    assert_eq!(condition.variable_value, 0);
+    assert_eq!(condition.item_id, 1);
+    assert_eq!(condition.actor_id, 1);
+}
+
+#[test]
+fn an_omitted_variable_id_still_tests_the_first_story_counter() {
+    let condition = parse_condition(&[1, 1, 4, 5, 1, 1, 0]).unwrap();
+    assert_eq!(condition.flags, 4);
+    assert_eq!((condition.variable_id, condition.variable_value), (1, 1));
+}
+
+#[test]
+fn explicit_zero_condition_ids_are_preserved() {
+    let condition = parse_condition(&[2, 1, 0, 3, 1, 0, 4, 1, 0, 6, 1, 0, 7, 1, 0, 0]).unwrap();
+    assert_eq!(condition.switch_a, 0);
+    assert_eq!(condition.switch_b, 0);
+    assert_eq!(condition.variable_id, 0);
+    assert_eq!(condition.item_id, 0);
+    assert_eq!(condition.actor_id, 0);
+}
+
+#[test]
 fn command_terminators_are_not_executable_commands() {
     assert!(parse_commands(&[0, 0, 0, 0]).unwrap().is_empty());
     let commands = parse_commands(&[10, 0, 0, 0, 0, 0, 0, 0]).unwrap();

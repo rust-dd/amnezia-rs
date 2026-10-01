@@ -2,6 +2,14 @@ use super::*;
 use amnezia_data::ActorDef;
 
 #[test]
+fn new_game_ron_knows_his_original_x_strike() {
+    let actors = load_ron::<Vec<ActorDef>>(&format!("{}/actors.ron", asset_root()));
+    let ron = actors.iter().find(|actor| actor.id == 1).unwrap();
+    let progression = crate::progression::Progression::default();
+    assert_eq!(progression.known_skill_ids(ron), [1]);
+}
+
+#[test]
 fn original_actor_graphics_commands_and_unarmed_animations_are_preserved() {
     let actors = load_ron::<Vec<ActorDef>>(&format!("{}/actors.ron", asset_root()));
     let expected = [

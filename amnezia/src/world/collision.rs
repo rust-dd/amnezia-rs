@@ -4,6 +4,8 @@ use crate::tiles::{ABOVE_HERO_BIT, PASS_ALL, passable_mask};
 use amnezia_data::{Event, EventPage};
 use std::collections::HashMap;
 
+#[cfg(test)]
+mod draco_tests;
 mod make_way;
 mod passage;
 pub(crate) use make_way::character as make_way;

@@ -5,6 +5,7 @@ pub mod midi;
 
 mod animations;
 mod audio;
+mod campaign;
 mod database_battle;
 mod database_party;
 mod graphics;

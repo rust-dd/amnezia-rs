@@ -94,7 +94,7 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
                     .collect(),
             })
             .collect();
-        let map = Map {
+        let mut map = Map {
             scroll_type: unit.scroll_type,
             panorama: unit.panorama.map(|p| amnezia_data::PanoramaDef {
                 name: p.name,
@@ -112,6 +112,9 @@ pub fn convert_maps(input: &Path, output: &Path) -> Result<usize> {
             upper: unit.upper_layer,
             events,
         };
+        if let Ok(map_id) = number.parse::<u32>() {
+            crate::campaign::repair_draco_briefing_pages(map_id, &mut map);
+        }
         let serialised = ron::to_string(&map).context("serialising map to RON")?;
         std::fs::create_dir_all(&out_dir)
             .with_context(|| format!("creating {}", out_dir.display()))?;

@@ -8,6 +8,7 @@ mod battle_graphics;
 mod battle_text;
 mod character_animation;
 mod collision;
+mod conditions;
 mod enemy_actions;
 mod message_options;
 mod scrolling;

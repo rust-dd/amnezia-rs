@@ -163,8 +163,8 @@ fn read_equipment(data: &[u8]) -> [u32; EQUIPMENT_SLOTS] {
 /// that says which skill the actor learns at which level. Same nested
 /// struct-list shape as elsewhere in the LCF: a `[count]` header then, per entry,
 /// a 1-based index id and a chunk stream (level `0x01`, skill_id `0x02`). An entry
-/// whose skill id stays 0 (chunk omitted) is dropped, matching RM2000 ignoring a
-/// blank learning row.
+/// with an omitted skill id uses liblcf's default skill 1. An explicit skill 0
+/// is a blank learning row and is dropped.
 fn parse_learnings(data: &[u8]) -> Result<Vec<Learning>, LcfError> {
     let mut reader = Reader::new(data);
     let count = reader.varint()?;
@@ -173,7 +173,7 @@ fn parse_learnings(data: &[u8]) -> Result<Vec<Learning>, LcfError> {
         let _entry_id = reader.varint()?;
         let mut learning = Learning {
             level: 1,
-            skill_id: 0,
+            skill_id: 1,
         };
         loop {
             let sub_id = reader.varint()?;
