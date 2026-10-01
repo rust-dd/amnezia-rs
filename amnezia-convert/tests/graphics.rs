@@ -9,7 +9,8 @@ fn retains_original_png_panoramas_without_reencoding() {
     let input = tmp.join("in");
     let output = tmp.join("out");
     std::fs::create_dir_all(input.join("Panorama")).unwrap();
-    let original = Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/graphics/Panorama/Ground.png");
+    let original =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../assets/graphics/Panorama/Ground.png");
     std::fs::copy(&original, input.join("Panorama/Ground.png")).unwrap();
     assert_eq!(
         amnezia_convert::convert_graphics(&input, &output).unwrap(),
