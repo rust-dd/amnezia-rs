@@ -1,6 +1,7 @@
 use super::*;
 
 #[test]
+#[ignore = "requires the untracked original/RPG_RT.ldb"]
 fn every_original_term_survives_conversion_including_intentional_blanks() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
     let original =

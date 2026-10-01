@@ -1,12 +1,14 @@
-# amnezia-rs
+# Amnézia — Rust restoration
+
+[Compatibility status](docs/STATUS.md) · [Campaign playtest](docs/CAMPAIGN-PLAYTEST.md) · [Development checks](docs/TESTING.md) · [Contributing](CONTRIBUTING.md)
 
 A Rust and Bevy restoration of *Amnézia*, MoonDragon Entertainment's Hungarian RPG Maker 2000 game (2001/2004). It runs the original maps and converted assets without the RPG Maker runtime.
 
-This is a work in progress, not a finished remake. Focused native scenarios have been tested on macOS; a complete campaign playthrough, full English localization, and Linux/Windows validation are still outstanding.
+Playable on macOS: the bandit story branch has reached the original **VÉGE** screen and happy Ron/Tiffany epilogue. Optional tower puzzles, dragon encounters, strongest weapons for Ron/Tiffany/Stark/Lance, and saving across fifteen slots have also been checked. Final encounters used raised levels; Ron/Tiffany weapon purchases used granted EP. See the [compatibility status](docs/STATUS.md) for the exact coverage and remaining work.
 
 ## Getting started
 
-You need Git, a current stable Rust toolchain (tested with Rust 1.98.0), a native build toolchain, and a graphics adapter supported by Bevy. On macOS, install the Xcode Command Line Tools.
+You need Git, Rust 1.98.0 (the tested toolchain) or a compatible newer stable toolchain, a native build toolchain, and a graphics adapter supported by Bevy. On macOS, install the Xcode Command Line Tools.
 
 The converted runtime assets are included in this repository. Access to the private repository is required; you do not need to run the converter just to play.
 
@@ -19,6 +21,8 @@ cargo run -p amnezia --locked
 The game starts at the title screen. Select *Új játék* (New Game) or *Betöltés* (Load) with the arrow keys and confirm.
 
 On macOS, the game opens centered on the active built-in display, regardless of the focused or primary monitor. If the built-in display is unavailable, it uses the primary display. You can move the window afterward.
+
+To build a standalone Mac app, run `bash scripts/bundle-mac.sh` and open `target/Amnézia.app`. It includes graphics, music and runtime data; the RPG Maker runtime and original project files are unnecessary for playing. See [macOS packaging](#macos-packaging) for validation and save locations.
 
 ## Languages
 
@@ -69,10 +73,11 @@ Conversion overwrites generated assets. Add `--data-only` to update structured d
 
 ```sh
 cargo fmt --all -- --check
-cargo test -p amnezia --locked
-cargo test --workspace --exclude amnezia --locked
+cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
+
+GitHub Actions runs formatting, workspace tests, Clippy, release compilation, and evidence integrity checks on macOS. The original-vocabulary audit is an opt-in check requiring the untracked original database. Native gameplay and graphical smoke scenarios remain separate acceptance checks.
 
 See [Testing](docs/TESTING.md) for native-window and offscreen scenarios, screenshot checks, and their limitations. Run graphical scenarios one at a time; passing them does not establish full campaign compatibility.
 
@@ -87,6 +92,28 @@ Run `cargo run -p amnezia --locked -- --debug-tools` to enable development short
 | F5 / F9 | Development save/load, subject to event and transition guards |
 | F6 | Start a test battle |
 | F7 / F8 | Open a test shop / inn |
+
+### Campaign input driver
+
+Debug builds accept `--playtest /absolute/output/directory`. Add
+`--playtest-window` to keep a visible native window with normal audio. Without
+that flag, rendering is offscreen and audio is muted. Saves use the output
+directory's `saves/` folder.
+
+```sh
+cargo run -p amnezia --locked -- --playtest /tmp/amnezia-playtest --playtest-window
+python3 scripts/playtest.py /tmp/amnezia-playtest state
+python3 scripts/playtest.py /tmp/amnezia-playtest tap enter
+```
+
+The driver supplies ordinary key input independently of desktop focus. Visible
+commands use elapsed wall time for 60 logical ticks per second, including catch-up
+when rendering is slower. Offscreen commands advance one logical tick per render.
+Game time pauses between commands; audio continues normally. This permits story
+and state verification, but does not establish real-time completion of timed puzzles. Commands and dialogue
+remain in the output directory; `state.ron` holds the latest observation. Only
+requested screenshots retain a numbered full state snapshot. Diagnostic write
+errors are reported without terminating the game. The driver starts at the title screen and does not insert campaign fixtures.
 
 ### macOS packaging
 
@@ -111,11 +138,9 @@ The planned `1.0.0` GitHub release will attach Windows, Linux and macOS archives
 
 ## Project status
 
-Implemented systems include event interpretation, map rendering and movement, dialogue, music, menus, shops/inns, turn-based battles, progression, and save/load. Gameplay advances in complete 60 Hz logical updates, independently of rendering. The native canvas is 320×240 with whole-pixel scaling and letterboxing.
+The runtime implements map movement and rendering, original event scripts, dialogue, music, menus, shops and inns, turn-based combat, progression, and saving/loading. Gameplay uses complete 60 Hz logical updates independently of rendering, with a 320×240 canvas, whole-pixel scaling and letterboxing.
 
-Choice and number input share the original bitmap message window, including prompts embedded below preceding dialogue. Choices type before accepting input. Message and inn gold windows open and close over seven logical frames; adjacent foreground messages retain the window with one blank text frame. Field menus, submenus and shops use the original six-frame scene fades, with input and events held through the final frame. Shops use the original window layout; inns use a typed question, a separate gold window, affordability restrictions and automatic overnight healing with music and screen fades. Event and animation screen flashes share the original replacement channel and rendering layer. Window backgrounds use native fixed-point sampling, including battle and save/load panels. Battle lists scroll over four logical updates with original cursor/help timing, and battle, save/load and title selectors share the global key-repeat phase.
-
-Battle action sequencing and map/transfer update ordering have source-derived timing regressions and native acceptance checks. All sixteen original save crystals have passed save, process restart, load and continued-movement checks in both native and muted offscreen runs. Remaining work includes broader original-scene coverage, full English localization, a complete campaign playthrough, comparison with the original Windows executable, and clean-machine/platform release verification. Original-data regression tests and focused native checks are not substitutes for those checks.
+The [status report](docs/STATUS.md) separates verified behavior from outstanding acceptance work. The [campaign report](docs/CAMPAIGN-PLAYTEST.md) records the full route, fixes discovered during play, edited test checkpoints, and native results. Screenshots, archived saves and integrity manifests are kept in [playtest evidence](docs/playtest-evidence/README.md).
 
 ## Credits and third-party materials
 
