@@ -27,8 +27,14 @@ jobs:
           rustup default 1.98.0
       - name: Formatting
         run: cargo fmt --all -- --check
+      - name: Install test runner
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest@0.9.114
       - name: Workspace tests
-        run: cargo test --workspace --locked
+        run: cargo nextest run --workspace --locked --show-progress counter --status-level pass --no-fail-fast
+      - name: Documentation tests
+        run: cargo test --workspace --doc --locked
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Release compilation

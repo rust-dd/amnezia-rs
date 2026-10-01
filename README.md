@@ -77,7 +77,7 @@ cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-GitHub Actions runs formatting, workspace tests, Clippy, release compilation, and evidence integrity checks on macOS. The original-vocabulary audit is an opt-in check requiring the untracked original database. Native gameplay and graphical smoke scenarios remain separate acceptance checks.
+GitHub Actions runs formatting, workspace and documentation tests, Clippy, release compilation, and evidence integrity checks on macOS. Workspace tests use nextest with a completed/total counter and each test's name and result. Checks that require the untracked original database or conversion SoundFont are opt-in; the default MIDI test uses an in-memory SoundFont. Native gameplay and graphical smoke scenarios remain separate acceptance checks.
 
 See [Testing](docs/TESTING.md) for native-window and offscreen scenarios, screenshot checks, and their limitations. Run graphical scenarios one at a time; passing them does not establish full campaign compatibility.
 

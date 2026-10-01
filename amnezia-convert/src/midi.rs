@@ -1,7 +1,4 @@
-//! Offline MIDI synthesis for background music. Each RM2000 `.mid` track is
-//! rendered to PCM with the bundled General MIDI soundfont (rustysynth) and
-//! encoded to OGG Vorbis (vorbis_rs). This runs only at conversion time; the
-//! shipped game plays the resulting `.ogg` and never sees a synthesizer.
+//! Offline MIDI-to-Vorbis conversion; the game plays only the rendered OGG files.
 
 use anyhow::{Context, Result};
 use rustysynth::{MidiFile, MidiFileSequencer, SoundFont, Synthesizer, SynthesizerSettings};
@@ -11,8 +8,7 @@ use std::path::Path;
 use std::sync::Arc;
 use vorbis_rs::{VorbisBitrateManagementStrategy, VorbisEncoderBuilder};
 
-/// The bundled GeneralUser GS soundfont, resolved at compile time relative to
-/// this crate so synthesis works regardless of the process working directory.
+/// Untracked conversion SoundFont, resolved independently of the working directory.
 const SOUNDFONT_PATH: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/assets/soundfont/GeneralUser-GS.sf2"
@@ -139,58 +135,4 @@ fn encode_ogg(left: &[f32], right: &[f32], out: &Path) -> Result<()> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Append `value` as a MIDI variable-length quantity.
-    fn push_vlq(buffer: &mut Vec<u8>, value: u32) {
-        let mut bytes = vec![(value & 0x7f) as u8];
-        let mut rest = value >> 7;
-        while rest > 0 {
-            bytes.push(((rest & 0x7f) as u8) | 0x80);
-            rest >>= 7;
-        }
-        bytes.reverse();
-        buffer.extend_from_slice(&bytes);
-    }
-
-    /// Build a minimal format-0 Standard MIDI File: two quarter notes at 480
-    /// ticks per quarter, giving a track roughly one second long.
-    fn tiny_midi() -> Vec<u8> {
-        let mut track = Vec::new();
-        for note in [60_u8, 64] {
-            push_vlq(&mut track, 0);
-            track.extend_from_slice(&[0x90, note, 0x64]);
-            push_vlq(&mut track, 480);
-            track.extend_from_slice(&[0x80, note, 0x00]);
-        }
-        push_vlq(&mut track, 0);
-        track.extend_from_slice(&[0xff, 0x2f, 0x00]);
-
-        let mut midi = Vec::new();
-        midi.extend_from_slice(b"MThd");
-        midi.extend_from_slice(&6_u32.to_be_bytes());
-        midi.extend_from_slice(&0_u16.to_be_bytes());
-        midi.extend_from_slice(&1_u16.to_be_bytes());
-        midi.extend_from_slice(&480_u16.to_be_bytes());
-        midi.extend_from_slice(b"MTrk");
-        midi.extend_from_slice(&(track.len() as u32).to_be_bytes());
-        midi.extend_from_slice(&track);
-        midi
-    }
-
-    #[test]
-    fn synthesizes_a_non_empty_ogg() {
-        let out = std::env::temp_dir().join("amnezia_convert_midi_test.ogg");
-        let _ = std::fs::remove_file(&out);
-
-        let soundfont = load_soundfont().expect("bundled soundfont loads");
-        synthesize_to_ogg(&soundfont, &tiny_midi(), &out).expect("synthesis and encoding succeed");
-
-        let bytes = std::fs::read(&out).expect("output ogg is readable");
-        assert!(!bytes.is_empty(), "encoded ogg must not be empty");
-        assert_eq!(&bytes[..4], b"OggS", "output must be a real Ogg stream");
-
-        let _ = std::fs::remove_file(&out);
-    }
-}
+mod tests;
