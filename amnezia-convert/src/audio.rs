@@ -4,13 +4,8 @@
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Copy the game's audio into `output/audio/` and synthesize its music. Sound
-/// effects (`Sound/*.wav`) and the music source files (`Music/*.mid` plus a
-/// handful of ambient `Music/*.wav` loops) are copied verbatim; then every
-/// copied `.mid` is rendered to a sibling `.ogg` (see [`crate::midi`]) so the
-/// game has a decodable BGM track. Returns `(sound_effects, music_tracks)`
-/// copied — the count is of source files, not of the `.ogg`s synthesized from
-/// them.
+/// Copy WAV/MIDI sources into `output/audio/` and render MIDI to sibling OGG files.
+/// Returns source-file counts `(sound_effects, music_tracks)`, excluding synthesized OGGs.
 pub fn convert_audio(input: &Path, output: &Path) -> Result<(usize, usize)> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());

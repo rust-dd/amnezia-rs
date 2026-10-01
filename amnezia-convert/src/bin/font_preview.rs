@@ -1,7 +1,4 @@
-//! Render the game font to a PNG so its glyphs can be eyeballed without launching
-//! the game. Rasterizes a few Hungarian/chrome test lines with `fontdue` (the same
-//! kind of TrueType parser Bevy's text stack uses) onto a white canvas. A dev aid
-//! for iterating `rmg2000.ttf`; not part of the asset pipeline.
+//! Rasterize Hungarian text and UI symbols to preview `rmg2000.ttf` outside the game.
 //!
 //!     cargo run -p amnezia-convert --bin font_preview
 

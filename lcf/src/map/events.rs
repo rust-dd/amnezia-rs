@@ -1,9 +1,4 @@
-//! The event layer of a map unit: the [`Event`] list (chunk 0x51), each event's
-//! [`EventPage`]s with their trigger, graphic, autonomous-movement fields, custom
-//! [`MoveRoute`](super::MoveRoute), activation [`EventCondition`], and flat
-//! [`EventCommand`] script. The map geometry that wraps these lives in the parent
-//! module; the flat command decoder [`parse_commands`] is shared with common
-//! events in the database.
+//! Map events (chunk 0x51) and the flat command decoder shared with database events.
 
 use super::move_route::{self, MoveRoute};
 use crate::{LcfError, Reader, decode_cp1250};
@@ -11,7 +6,6 @@ use crate::{LcfError, Reader, decode_cp1250};
 #[cfg(test)]
 mod tests;
 
-/// A map event: its id, tile position, name, and pages.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Event {
     pub id: u32,
@@ -21,19 +15,11 @@ pub struct Event {
     pub pages: Vec<EventPage>,
 }
 
-/// One page of an event: its trigger, graphic, layer, condition, and commands.
-/// The layer (0 = below hero, 1 = same as hero, 2 = above hero) decides
-/// collision: a `layer == 1` page blocks the player. `direction` is the CharSet
-/// facing row (Up=0, Right=1, Down=2, Left=3; default 2 = down) and `pattern`
-/// the walk frame column (default 1 = the standing middle frame).
-///
-/// `move_type` is the page's autonomous movement (0 stationary, 1 random,
-/// 2 vertical pace, 3 horizontal pace, 4 toward hero, 5 away from hero, 6 custom
-/// route); RM2000 always writes it, so its default only guards a malformed page
-/// (liblcf's default is 1). `move_frequency` (1–8, default 3) sets how often the
-/// event steps and `move_speed` (1–6, default 3) how fast each step moves; both
-/// are omitted from the file when equal to their default. `move_route` is the
-/// custom route a `move_type == 6` page follows.
+/// Event page. Layer 0/1/2 = below/same/above hero; same-layer events block movement.
+/// CharSet direction rows are up=0, right=1, down=2, left=3; pattern is the column.
+/// `move_type`: 0 stationary, 1 random, 2 vertical, 3 horizontal, 4 toward hero,
+/// 5 away, 6 custom route. The editor always writes it; liblcf's fallback is 1.
+/// Frequency uses 1–8 and speed 1–6, both defaulting to 3 when omitted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EventPage {
     pub trigger: u32,

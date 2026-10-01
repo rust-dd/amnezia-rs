@@ -1,9 +1,7 @@
 use crate::MoveRouteDef;
 use serde::{Deserialize, Serialize};
 
-/// A converted map: the chipset it uses, its dimensions in tiles, and the two
-/// tile layers (each `width * height` tile ids, row-major). `lower` is the
-/// ground layer, `upper` the overlay layer.
+/// Tile layers contain `width * height` row-major IDs: lower ground, upper overlay.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Map {
     #[serde(default, skip_serializing_if = "scrolls_neither_axis")]
@@ -22,7 +20,6 @@ fn scrolls_neither_axis(value: &u32) -> bool {
     *value == 0
 }
 
-/// A map event: its id, tile position, name, and pages.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Event {
     pub id: u32,
@@ -32,15 +29,10 @@ pub struct Event {
     pub pages: Vec<EventPage>,
 }
 
-/// One page of an event: its trigger, graphic, and command list. `direction` is
-/// the CharSet facing row (Up=0, Right=1, Down=2, Left=3) and `pattern` the walk
-/// frame column the NPC stands at. `move_type` selects the page's autonomous
-/// movement (0 stationary, 1 random, 2 vertical pace, 3 horizontal pace, 4 toward
-/// hero, 5 away from hero, 6 custom route), `move_frequency` (1–8) how often it
-/// steps, and `move_speed` (1–6) how fast each step tweens. Every field after the
-/// graphic carries a `serde` default (direction 2 = down, pattern 1 = middle
-/// frame, move_type 0 = stationary, frequency/speed 3) so map RON written before
-/// these fields existed still loads.
+/// Event page with legacy RON defaults for graphic and movement settings.
+/// `direction` is the CharSet row (up=0, right=1, down=2, left=3); `pattern` is its column.
+/// `move_type`: 0 stationary, 1 random, 2 vertical, 3 horizontal, 4 toward hero,
+/// 5 away, 6 custom route. Frequency uses 1–8; speed uses 1–6.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventPage {
     pub trigger: u32,
@@ -62,8 +54,7 @@ pub struct EventPage {
     pub move_frequency: u32,
     #[serde(default = "default_move_speed")]
     pub move_speed: u32,
-    /// The custom route a `move_type == 6` page follows; empty otherwise. Carries
-    /// a `serde` default so map RON written before the field existed still loads.
+    /// Custom route for `move_type == 6`; empty otherwise.
     #[serde(default)]
     pub move_route: MoveRouteDef,
     pub layer: u32,
@@ -133,10 +124,7 @@ where
     Ok(commands)
 }
 
-/// A common event (global event script), read by the interpreter: its 1-based
-/// id, name, `trigger` (3 = autostart, 4 = parallel, 5 = call), an optional
-/// switch condition, and its command list. Unlike a map
-/// event, it belongs to no map and its commands run in the global scope.
+/// Map-independent script; `trigger`: 3 = autostart, 4 = parallel, 5 = call.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommonEvent {
     pub id: u32,

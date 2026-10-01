@@ -1,32 +1,15 @@
-//! State (status condition) definitions from the database
-//! (`ChunkData::states`, `0x12`). A state is a battle status — KO, Poison,
-//! Sleep, Berserk — that changes how a battler may act (`restriction`), how it
-//! wears off (`hold_turn`, `auto_release_prob`, `release_by_damage`), and
-//! whether it drains or regenerates HP each turn (`hp_change_*`). Chunk ids
-//! follow liblcf `ChunkState`.
+//! Status conditions (`ChunkData::states`, `0x12`), following liblcf `ChunkState`.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
 
-/// A state (status condition) definition. `restriction` limits the battler's
-/// actions while the state holds: `0` none (acts normally), `1` do nothing
-/// (can't act), `2` attack an enemy at random (berserk), `3` attack an ally at
-/// random (confusion). `priority` (0–100) picks the displayed state and removes
-/// states at least ten points below the highest active priority.
-///
-/// Recovery is governed by three odds: `hold_turn`, the minimum number of turns
-/// the state is held before it can lift; `auto_release_prob`, the percent chance
-/// per turn to lift once those turns have passed; and `release_by_damage`, the
-/// percent chance to lift when the battler is hit by a physical attack. All
-/// three default to `0` (a state that never lifts on its own, like KO or
-/// Poison).
-///
-/// `hp_change_type` says how an HP-changing state moves HP (liblcf
-/// `ChangeType`: `0` lose, `1` gain, `2` nothing). Each battle turn the battler
-/// loses or gains `hp_change_val` flat points plus `hp_change_max` percent of
-/// its max HP, while `hp_change_map_steps`/`hp_change_map_val` drain it on the
-/// map (`hp_change_map_val` HP per `hp_change_map_steps` steps walked). All five
-/// default to `0` (a zero-amount no-op); Poison sets them to bleed HP each turn.
+/// `restriction`: 0 unrestricted, 1 cannot act, 2 random enemy attack, 3 random ally attack.
+/// Priority (0–100) selects the display and removes states at least ten points below it.
+/// After `hold_turn`, recovery uses `auto_release_prob` percent per turn;
+/// physical hits use `release_by_damage` percent. Zero probabilities never recover.
+/// `hp_change_type`: 0 lose, 1 gain, 2 none; each turn applies `hp_change_val`
+/// plus `hp_change_max` percent of max HP. Map drain applies `hp_change_map_val`
+/// per `hp_change_map_steps` steps.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct State {
     pub color: u32,
@@ -222,7 +205,6 @@ mod tests {
 
     #[test]
     fn parses_state_restriction_and_recovery() {
-        // Sleep: held 1 turn, 25% per-turn wake-up, 50% wake-up when hit.
         let sleep = element(
             1,
             &[
@@ -276,9 +258,7 @@ mod tests {
 
     #[test]
     fn parses_hp_change_block() {
-        // An explicit per-turn HP-change block parses its three scalar fields:
-        // type (0x2D), max-percent (0x3D), flat val (0x3E). The map-step fields
-        // are omitted, so they stay 0.
+        // Omit map drain fields to check defaults alongside explicit battle drain.
         let bleeder = element(
             2,
             &[

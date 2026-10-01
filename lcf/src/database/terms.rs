@@ -1,11 +1,6 @@
-//! The vocabulary definition from the database (`ChunkData::terms`, `0x15`). Like
-//! [`super::system`] this is a single struct, not a `[count]`-prefixed list: its
-//! data is a bare chunk stream of CP1250 strings — the menu command labels, the
-//! status and equipment labels, the battle / shop / inn message terms, and the
-//! currency term. Each field keys off its `ChunkTerms` id (liblcf
-//! `src/generated/lcf/ldb/chunks.h`); omitted fields stay empty. Only the standard
-//! RPG Maker 2000 fields (`0x01..=0x99`) are read — the Maniac-patch (`0xA1+`) and
-//! EasyRPG (`0xC8+`) extension terms never appear in an original 2000 database.
+//! Vocabulary (`ChunkData::terms`, `0x15`): a bare chunk stream of CP1250 strings.
+//! IDs follow liblcf `ChunkTerms`; missing terms stay empty. Only RM2000 fields
+//! (`0x01..=0x99`) are read, excluding Maniac (`0xA1+`) and EasyRPG (`0xC8+`) extensions.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
@@ -309,13 +304,13 @@ mod tests {
         // ASCII values, so the CP1250 decode matches the source bytes byte-for-byte
         // and the test exercises the chunk-id -> field mapping, not the encoding.
         let mut section = Vec::new();
-        section.extend(subchunk(0x05, b"Victory")); // victory
-        section.extend(subchunk(0x5F, b"Gold")); // gold (currency)
-        section.extend(subchunk(0x65, b"Fight")); // battle_fight
-        section.extend(subchunk(0x68, b"Attack")); // command_attack
-        section.extend(subchunk(0x6A, b"Item")); // command_item
-        section.extend(subchunk(0x6C, b"Equip")); // menu_equipment
-        section.extend(subchunk(0x29, b"Welcome")); // shop_greeting1
+        section.extend(subchunk(0x05, b"Victory"));
+        section.extend(subchunk(0x5F, b"Gold"));
+        section.extend(subchunk(0x65, b"Fight"));
+        section.extend(subchunk(0x68, b"Attack"));
+        section.extend(subchunk(0x6A, b"Item"));
+        section.extend(subchunk(0x6C, b"Equip"));
+        section.extend(subchunk(0x29, b"Welcome"));
         // An unknown extension id (EasyRPG status-scene name) is skipped.
         section.extend(subchunk(0xCB, b"ignored"));
 
@@ -329,7 +324,6 @@ mod tests {
         assert_eq!(terms.command_item, "Item");
         assert_eq!(terms.menu_equipment, "Equip");
         assert_eq!(terms.shop_greeting1, "Welcome");
-        // An omitted term stays empty.
         assert!(terms.command_skill.is_empty());
     }
 

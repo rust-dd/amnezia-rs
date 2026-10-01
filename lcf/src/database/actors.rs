@@ -1,16 +1,9 @@
-//! Actor (playable character) definitions from the database
-//! (`ChunkData::actors`, `0x0B`). Beyond the identity fields, each actor carries
-//! six per-level stat curves packed into one `Parameters` blob, an experience
-//! curve stored as three scalar chunks, and its initial equipment — the numbers
-//! a faithful level-up and equip screen need. Chunk ids follow liblcf
-//! `ChunkActor`.
+//! Actor definitions (`ChunkData::actors`, `0x0B`); chunk IDs follow liblcf `ChunkActor`.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
 
-/// One entry in an actor's skill-learning list (liblcf `rpg::Learning`): the
-/// `level` at which the actor learns skill `skill_id`. The actor knows every
-/// skill whose `level` is at or below its current level.
+/// A level-triggered skill acquisition (liblcf `rpg::Learning`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Learning {
     pub level: u32,
@@ -31,22 +24,9 @@ pub struct StatCurves {
     pub agility: Vec<i32>,
 }
 
-/// An actor (playable character) definition: the fields the status, equip, and
-/// message screens plus the level-up system need. `name` expands the `\N[k]`
-/// message control code; `initial_hp`/`initial_sp` are the max-HP/max-SP curve
-/// values at `initial_level`. `stat_curves` holds the full per-level tables and
-/// `exp_base`/`exp_inflation`/`exp_correction` parameterise the RM2000
-/// experience curve.
-///
-/// `weapon`/`shield`/`armor`/`helmet`/`accessory` are the item ids the actor
-/// starts equipped with (0 = that slot is empty). `two_weapons` marks a
-/// dual-wielding actor (the shield slot holds a second weapon), `fix_equipment`
-/// an actor whose gear can't be changed, and `unarmed_animation` the battle
-/// animation id used when the actor attacks with no weapon.
-///
-/// `face_name` names the actor's FaceSet graphic and `face_index` selects its
-/// 48×48 portrait cell within that sheet's 4×4 grid. `skills` is the actor's
-/// `Learning` list: the `(level, skill_id)` pairs it learns as it levels up.
+/// Playable actor defaults. Initial HP/SP come from the curves at `initial_level`.
+/// Equipment IDs use 0 for an empty slot; dual wielding puts a weapon in `shield`.
+/// `face_index` selects a 48×48 cell in the FaceSet's row-major 4×4 grid.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Actor {
     pub character_name: String,
@@ -159,12 +139,8 @@ fn read_equipment(data: &[u8]) -> [u32; EQUIPMENT_SLOTS] {
     slots
 }
 
-/// Parse an actor's `skills` list (`0x3F`), the array of `rpg::Learning` entries
-/// that says which skill the actor learns at which level. Same nested
-/// struct-list shape as elsewhere in the LCF: a `[count]` header then, per entry,
-/// a 1-based index id and a chunk stream (level `0x01`, skill_id `0x02`). An entry
-/// with an omitted skill id uses liblcf's default skill 1. An explicit skill 0
-/// is a blank learning row and is dropped.
+/// Decode the count-prefixed learning list (`0x3F`): level `0x01`, skill `0x02`.
+/// An omitted skill ID defaults to 1; explicit 0 denotes a blank row and is dropped.
 fn parse_learnings(data: &[u8]) -> Result<Vec<Learning>, LcfError> {
     let mut reader = Reader::new(data);
     let count = reader.varint()?;
@@ -266,9 +242,7 @@ pub fn parse_actors(bytes: &[u8]) -> Result<Vec<Actor>, LcfError> {
                 _ => {}
             }
         }
-        // RM2000 omits `final_level` when it equals the editor default (50),
-        // which is exactly the length of the stored parameter curve, so fall
-        // back to that.
+        // The omitted editor-default final level equals the stored curve length.
         let max_level = final_level
             .filter(|&l| l > 0)
             .unwrap_or(curve_len(parameters) as u32);

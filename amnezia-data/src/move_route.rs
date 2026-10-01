@@ -1,8 +1,4 @@
-//! The clean, engine-agnostic form of an RM2000 move route (see `lcf::MoveRoute`):
-//! a `repeat`/`skippable` pair and an ordered list of [`MoveCommandDef`]s. An
-//! event page follows its route when its `move_type` is 6 (custom route), and the
-//! `MoveEvent` command carries an inline route of the same shape; the game's route
-//! stepper interprets the command codes.
+//! Engine-agnostic RM2000 routes, shared by custom-movement pages and `MoveEvent`.
 
 use serde::{Deserialize, Serialize};
 
@@ -26,8 +22,6 @@ pub struct MoveRouteDef {
 }
 
 impl MoveRouteDef {
-    /// Whether the route carries no commands (the default for every page that is
-    /// not a custom route, and for a graphic-less door page).
     pub fn is_empty(&self) -> bool {
         self.commands.is_empty()
     }

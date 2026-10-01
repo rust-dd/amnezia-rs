@@ -17,7 +17,7 @@ pub use move_route::{MoveCommand, MoveRoute};
 const DEFAULT_WIDTH: u32 = 20;
 const DEFAULT_HEIGHT: u32 = 15;
 
-/// A parsed RPG Maker 2000 map unit (only the fields the renderer needs).
+/// Parsed RPG Maker 2000 map geometry and events.
 pub struct MapUnit {
     pub scroll_type: u32,
     pub panorama: Option<Panorama>,
@@ -215,9 +215,7 @@ mod tests {
 
     #[test]
     fn defaults_absent_chipset_to_one() {
-        // RM2000 omits a field equal to its default; the map chipset default is
-        // 1 (chipset ids are 1-based), so an LMU with no `0x01` chunk means
-        // chipset 1 — not 0, which is no chipset at all.
+        // An omitted chipset means the first entry (1), not no chipset (0).
         let file = make_lmu(
             b"LcfMapUnit",
             &[

@@ -1,22 +1,12 @@
-//! Battle-animation definitions from the database (`ChunkData::animations`,
-//! `0x13`). An animation is the sprite-sheet effect RM2000 overlays on a battler
-//! when a skill or attack lands: a `Battle`/`Battle2` graphic, the per-frame
-//! placement of its tiles (cells), and a timeline of flashes and sound effects.
-//! Chunk ids follow liblcf `ChunkAnimation` / `ChunkAnimationTiming` /
-//! `ChunkAnimationFrame` / `ChunkAnimationCellData`.
+//! Battle animations (`ChunkData::animations`, `0x13`), using liblcf's
+//! `ChunkAnimation`, `ChunkAnimationTiming`, `ChunkAnimationFrame` and `ChunkAnimationCellData`.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
 
-/// One placed sprite-sheet tile within an animation frame. `valid` is liblcf's
-/// per-cell flag (default `true`): the RM2000 editor clears it on a *deleted*
-/// cell, keeping the slot so later cells hold their index, and a `valid == false`
-/// cell is not drawn. `cell_id` selects the tile from the animation's graphic (a
-/// 5x5 grid of patterns, so `0..=24`). `x`/`y` offset it from the animation's
-/// anchor in screen pixels (signed, centred on 0). `scale` is a zoom percent
-/// (`100` = full size). The four `tone_*` channels tint the tile on RM2000's
-/// `0..=200` scale (`100` = neutral) and `transparency` is a `0..=100` percent
-/// (`0` = opaque).
+/// Placed sprite-sheet tile; `x`/`y` are signed pixel offsets, `scale` a percent.
+/// Tone channels use 0–200 (100 = neutral); transparency uses 0–100 (0 = opaque).
+/// Deleted cells set `valid = false` but keep their slot to preserve later indices.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnimationCell {
     pub valid: bool,
@@ -38,14 +28,9 @@ pub struct AnimationFrame {
     pub cells: Vec<AnimationCell>,
 }
 
-/// A frame-timed flash and sound effect on an animation's timeline. `frame` is
-/// the 1-based frame the effect fires on and `se_name` the sound-effect file
-/// under `Sound/` (empty = silent), played at `se_volume` (`0..=100`), percent
-/// `se_tempo` (`100` = normal), and stereo `se_balance` (`50` = centred) — the
-/// same nested `Sound` sub-struct as a System SE. `flash_scope` selects what
-/// flashes (`0` nothing, `1` the target, `2` the whole screen);
-/// `flash_red`/`green`/`blue` are the flash colour on RM2000's `0..=31` scale and
-/// `flash_power` its strength.
+/// Flash/sound cue on a 1-based frame. Empty `se_name` is silent; volume and tempo
+/// are percentages, balance 50 is centred. Flash RGB uses 0–31;
+/// `flash_scope`: 0 = none, 1 = target, 2 = screen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AnimationTiming {
     pub frame: u32,
@@ -60,12 +45,8 @@ pub struct AnimationTiming {
     pub flash_power: u32,
 }
 
-/// A battle-animation definition: the sprite-sheet effect played when a skill or
-/// attack resolves. `animation_name` is the `Battle`/`Battle2` graphic base
-/// name, `scope` whether the effect covers a single target (`0`) or the whole
-/// screen (`1`), and `position` its vertical anchor on the target (`0` head, `1`
-/// centre, `2` feet). `frames` are the per-tick cell placements and `timings`
-/// the flash / sound timeline.
+/// `Battle`/`Battle2` sprite-sheet effect. `scope`: 0 = target, 1 = screen;
+/// target `position`: 0 = head, 1 = centre, 2 = feet.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Animation {
     pub id: u32,
@@ -93,13 +74,10 @@ const TIMING_FLASH_GREEN: u32 = 0x05;
 const TIMING_FLASH_BLUE: u32 = 0x06;
 const TIMING_FLASH_POWER: u32 = 0x07;
 
-// RM2000 omits a flash channel that equals the editor default of full-intensity
-// white (31 on the 5-bit flash scale), so absent colours restore 31.
+/// Omitted flash channels default to full-intensity white on the 5-bit scale.
 const TIMING_DEFAULT_FLASH: u32 = 31;
 
-// A timing's SE is a nested `Sound` sub-struct sharing the `Music`/`Sound` chunk
-// ids: name `0x01`, volume `0x03`, tempo `0x04`, balance `0x05` (`0x02` is the
-// `Music`-only fade-in, absent on a `Sound`).
+// Sound shares Music's chunk IDs but has no fade-in chunk (0x02).
 const SOUND_NAME: u32 = 0x01;
 const SOUND_VOLUME: u32 = 0x03;
 const SOUND_TEMPO: u32 = 0x04;
@@ -112,9 +90,6 @@ const SOUND_DEFAULT_BALANCE: u32 = 50;
 
 const FRAME_CELLS: u32 = 0x01;
 
-// Cell chunk ids (liblcf `ChunkAnimationCellData`): `0x01` is the `valid` flag —
-// the editor clears it on a deleted cell to keep later cells' indices stable —
-// and the nine drawn fields follow from `0x02`.
 const CELL_VALID: u32 = 0x01;
 const CELL_ID: u32 = 0x02;
 const CELL_X: u32 = 0x03;
@@ -126,8 +101,7 @@ const CELL_TONE_BLUE: u32 = 0x08;
 const CELL_TONE_GRAY: u32 = 0x09;
 const CELL_TRANSPARENCY: u32 = 0x0A;
 
-// Zoom and each tone channel are omitted when neutral (100); the rest default to
-// 0.
+// The editor omits neutral zoom and tone channels.
 const CELL_DEFAULT_SCALE: u32 = 100;
 const CELL_DEFAULT_TONE: i32 = 100;
 
@@ -208,8 +182,6 @@ fn parse_frames(data: &[u8]) -> Result<Vec<AnimationFrame>, LcfError> {
     Ok(frames)
 }
 
-/// A timing's parsed sound effect: the file `name`, its `0..=100` `volume`,
-/// percent `tempo`, and stereo `balance`, read from the nested `Sound` struct.
 struct SoundFields {
     name: String,
     volume: u32,
@@ -300,9 +272,7 @@ fn parse_timings(data: &[u8]) -> Result<Vec<AnimationTiming>, LcfError> {
     Ok(timings)
 }
 
-// liblcf defaults an animation's vertical anchor to `2` (down / feet) when the
-// `position` chunk is absent — the same value the RM2000 editor writes for a new
-// animation.
+/// Missing anchors default to feet, matching liblcf and the editor.
 const ANIMATION_DEFAULT_POSITION: u32 = 2;
 
 /// Parse the battle-animation table (`ChunkData::animations` = `0x13`) out of an
@@ -355,8 +325,7 @@ mod tests {
 
     #[test]
     fn parses_animation_frames_cells_and_timings() {
-        // One cell: tile 3, offset x=-24 (a signed field stored as a wrapped
-        // varint) y=48, zoomed to 200%, 40% transparent, neutral tone.
+        // Negative offsets use wrapped unsigned varints.
         let cell = element(
             1,
             &[
@@ -369,9 +338,7 @@ mod tests {
         );
         let frames = section(&[element(1, &[subchunk(0x01, &section(&[cell]))])]);
 
-        // A timing at frame 5: plays "Punch" at 80% volume, 120% tempo (balance
-        // omitted → centred 50) and flashes the whole screen (scope 2) with red
-        // 28, the other channels defaulting.
+        // Omitted balance and flash channels must retain their editor defaults.
         let mut sound = subchunk(0x01, b"Punch");
         sound.extend(subchunk(0x03, &varint(80)));
         sound.extend(subchunk(0x04, &varint(120)));
@@ -444,7 +411,6 @@ mod tests {
 
     #[test]
     fn animation_cell_and_frame_defaults_apply() {
-        // A frame whose single cell stores no fields: every field is a default.
         let cell = element(1, &[]);
         let frames = section(&[element(1, &[subchunk(0x01, &section(&[cell]))])]);
         let anim = element(1, &[subchunk(0x0C, &frames)]);
@@ -452,8 +418,6 @@ mod tests {
         let a = &parse_animations(&ldb).unwrap()[0];
         assert!(a.name.is_empty());
         assert!(a.animation_name.is_empty());
-        // An omitted scope defaults to 0 (single target); an omitted position to
-        // 2 (feet), the liblcf default.
         assert_eq!((a.scope, a.position), (0, 2));
         assert_eq!(a.frames.len(), 1);
         assert_eq!(

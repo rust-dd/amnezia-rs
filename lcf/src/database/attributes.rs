@@ -1,18 +1,10 @@
-//! Attribute (element) definitions from the database
-//! (`ChunkData::attributes`, `0x11`). An attribute is a damage element — a
-//! weapon type like Sword, a spell element like Fire — that every battler
-//! resists by an A–E rank; each rank maps to a damage percentage stored on the
-//! attribute itself. Chunk ids follow liblcf `ChunkAttribute`.
+//! Damage elements (`ChunkData::attributes`, `0x11`), following liblcf `ChunkAttribute`.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
 
-/// An attribute (element) definition: its name, whether damage carrying this
-/// element is physical or magical (`attribute_type`; 0 = physical/weapon,
-/// 1 = magical), and the five damage percentages applied to a target ranked A
-/// (most vulnerable) through E (most resistant). `c_rate` is the neutral 100%
-/// middle rank. A target's per-attribute rank selects which of these five
-/// percentages scales the incoming damage.
+/// Element: `attribute_type` 0 = physical/weapon, 1 = magical. A–E ranks select
+/// damage percentages, from most vulnerable to resistant; C defaults to 100%.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Attribute {
     pub id: u32,
@@ -34,9 +26,7 @@ const ATTRIBUTE_C_RATE: u32 = 0x0D;
 const ATTRIBUTE_D_RATE: u32 = 0x0E;
 const ATTRIBUTE_E_RATE: u32 = 0x0F;
 
-// RM2000 omits any rate equal to its editor default, so the parser supplies the
-// default A–E grid (300/200/100/50/0). The `c_rate` chunk (`0x0D`) is never
-// written by the editor, so C always resolves to the neutral 100%.
+// The editor omits default rates and never writes C, which remains neutral at 100%.
 const ATTRIBUTE_DEFAULT_A_RATE: u32 = 300;
 const ATTRIBUTE_DEFAULT_B_RATE: u32 = 200;
 const ATTRIBUTE_DEFAULT_C_RATE: u32 = 100;

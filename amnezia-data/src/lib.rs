@@ -1,10 +1,5 @@
-//! Clean intermediate data format shared between the asset converter and the
-//! game.
-//!
-//! The converter (writer) and the Bevy game (reader) agree on these
-//! `serde`-serialisable types. This crate deliberately carries no RPG Maker
-//! 2000 or Bevy dependency, so the on-disk format stays engine-agnostic and
-//! the shipped game binary inherits nothing from the legacy runtime.
+//! Engine-agnostic asset format shared by the converter and game, without
+//! dependencies on Bevy or the legacy runtime. Database IDs are 1-based.
 
 use serde::{Deserialize, Serialize};
 
@@ -30,16 +25,13 @@ pub use terrain::TerrainDef;
 pub use troop::{TroopDef, TroopMemberDef, TroopPageConditionDef, TroopPageDef};
 pub use vehicle::VehicleDef;
 
-/// The hero's name (actor 1's default name from the original database). The
-/// game substitutes it into the `\N[k]` message control code at display time.
+/// Actor 1's default name from the original database.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hero {
     pub name: String,
 }
 
-/// One entry in an actor's skill-learning list: the `level` at which the actor
-/// learns skill `skill_id`. A member's known skills are every `Learning` whose
-/// `level` is at or below its current level (RM2000 `Game_Actor::LearnLevelSkills`).
+/// A level-triggered skill acquisition from RM2000 `Game_Actor::LearnLevelSkills`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Learning {
     pub level: u32,
@@ -57,25 +49,9 @@ pub struct ActorCurves {
     pub agility: Vec<u32>,
 }
 
-/// A playable actor's definition, read by the status and equip menus and the
-/// level-up system: its 1-based id, name and class title, its starting and
-/// maximum level, and the HP/SP it begins with (taken from the level-parameter
-/// curve at `level`). `curves` holds the full per-level stat tables and
-/// `exp_base`/`exp_inflation`/`exp_correction` parameterise the experience curve.
-///
-/// `weapon`/`shield`/`armor`/`helmet`/`accessory` are the item ids the actor
-/// starts equipped with (0 = empty slot); `two_weapons` marks a dual-wielding
-/// actor (the shield slot holds a second weapon); `fix_equipment` an actor whose
-/// gear can't be changed; and `unarmed_animation` the attack animation id used
-/// with no weapon equipped.
-///
-/// `face_name` names the actor's FaceSet graphic and `face_index` selects its
-/// 48×48 portrait cell in that sheet's 4×4 grid (`col = index % 4`,
-/// `row = index / 4`); the menu status window draws it beside the member's stats.
-///
-/// `learnings` is the actor's skill-learning list — the `(level, skill_id)` pairs
-/// it learns as it levels up. A member's known skills (shown in the skill menu and
-/// usable in battle) are exactly those learnings at or below its current level.
+/// Playable actor defaults; HP/SP come from the curves at the starting `level`.
+/// Equipment IDs use 0 for an empty slot; dual wielding puts a weapon in `shield`.
+/// `face_index` selects a 48×48 cell in the FaceSet's row-major 4×4 grid.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActorDef {
     #[serde(default)]
@@ -133,22 +109,8 @@ pub struct ActorDef {
     pub face_index: u32,
 }
 
-/// A skill (spell/ability) definition, read by the skill menu and battle
-/// system: its 1-based id, name, description, `sp_cost` (SP spent to cast),
-/// `power` (base effect magnitude), and `hit` (base success rate, percent).
-///
-/// The remaining fields carry the RM2000 battle effect. `scope` picks its
-/// targets (`0` one enemy, `1` all enemies, `2` self, `3` one ally, `4` all
-/// allies) and `skill_type` its family (`0` normal — the only battle-relevant
-/// kind — `1` teleport, `2` escape, `3` switch). `animation_id` is the battle
-/// animation the skill overlays on each target it resolves against (`0` shows
-/// none). `physical_rate`/`magical_rate`
-/// (0–10) weight the caster's attack versus spirit in the damage formula and
-/// `variance` (0–10) sets how widely the final damage is randomised around the
-/// computed amount (RM2000 editor default 4). `affect_hp`/`affect_sp` mark which
-/// pool the effect changes and `absorb` whether the caster drains what it deals.
-/// `attributes` holds the 1-based element ids the damage is checked against and
-/// `affected_states` the 1-based state ids the skill inflicts.
+/// Skill effects use `physical_rate`/`magical_rate` weights and `variance` on
+/// 0–10 scales; `hit` is a percentage. Attribute and state IDs are 1-based.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SkillDef {
     #[serde(default)]
@@ -169,12 +131,13 @@ pub struct SkillDef {
     /// RM2000 miss-message selector; `3` enables physical accuracy modifiers.
     #[serde(default)]
     pub failure_message: u32,
+    /// 0 = normal, 1 = teleport, 2 = escape, 3 = switch.
     #[serde(default)]
     pub skill_type: u32,
+    /// 0 = one enemy, 1 = all enemies, 2 = self, 3 = one ally, 4 = all allies.
     #[serde(default)]
     pub scope: u32,
-    /// The battle-animation id this skill plays on each target it resolves
-    /// against; `0` shows no animation.
+    /// Per-target battle animation; 0 disables it.
     #[serde(default = "default_animation_id")]
     pub animation_id: u32,
     #[serde(default)]
@@ -195,21 +158,11 @@ pub struct SkillDef {
     pub affected_states: Vec<u32>,
 }
 
-/// A state (status condition) definition, read by the battle system: its
-/// 1-based id, name, and how it constrains and wears off a battler.
-/// `restriction` limits actions while it holds (`0` none, `1` can't act,
-/// `2` attack an enemy at random, `3` attack an ally at random) and `priority`
-/// (0–100) chooses the displayed state and suppresses lower-priority states.
-/// Recovery is governed by `hold_turn` (minimum turns held before it can lift),
-/// `auto_release_prob` (percent chance per turn to lift afterwards), and
-/// `release_by_damage` (percent chance to lift when hit by a physical attack).
-///
-/// `hp_change_type` says how an HP-changing state moves HP (`0` lose, `1` gain,
-/// `2` nothing): each battle turn the battler loses or gains `hp_change_val`
-/// flat points plus `hp_change_max` percent of its max HP, while
-/// `hp_change_map_steps`/`hp_change_map_val` drain it on the map
-/// (`hp_change_map_val` HP per `hp_change_map_steps` steps). All five default to
-/// 0 (a zero-amount no-op); Poison sets them to bleed HP each battle turn.
+/// Status condition. `priority` (0–100) controls display and state suppression.
+/// After `hold_turn`, `auto_release_prob` is the per-turn recovery percentage;
+/// `release_by_damage` is the recovery percentage on a physical hit.
+/// Per-turn HP change is `hp_change_val + max_hp * hp_change_max / 100`.
+/// Map drain is `hp_change_map_val` HP per `hp_change_map_steps` steps.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StateDef {
     #[serde(default = "default_state_color")]
@@ -250,11 +203,13 @@ pub struct StateDef {
     pub persistence: u32,
     pub id: u32,
     pub name: String,
+    /// 0 = unrestricted, 1 = cannot act, 2/3 = random enemy/ally attack.
     pub restriction: u32,
     pub priority: u32,
     pub hold_turn: u32,
     pub auto_release_prob: u32,
     pub release_by_damage: u32,
+    /// 0 = lose HP, 1 = gain HP, 2 = no change.
     #[serde(default)]
     pub hp_change_type: u32,
     #[serde(default)]
@@ -279,11 +234,8 @@ fn default_hundred() -> u32 {
     100
 }
 
-/// An attribute (element) definition, read by the battle system: its 1-based
-/// id, name, whether damage carrying it is physical or magical
-/// (`attribute_type`: `0` physical/weapon, `1` magical), and the five damage
-/// percentages applied by a target's A–E resistance rank (`a_rate` most
-/// vulnerable through `e_rate` most resistant; `c_rate` is the neutral 100%).
+/// Element: `attribute_type` 0 = physical/weapon, 1 = magical. A–E ranks map to
+/// damage percentages, from most vulnerable to resistant; C defaults to 100%.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AttributeDef {
     pub id: u32,
@@ -296,9 +248,7 @@ pub struct AttributeDef {
     pub e_rate: u32,
 }
 
-/// A monster's definition, read by the battle system: its 1-based id, name, the
-/// combat stats (`max_hp`, `max_sp`, `attack`, `defense`, `spirit`, `agility`),
-/// and the `exp`/`gold` reward for defeating it.
+/// Enemy defaults and rewards from the database.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MonsterDef {
     #[serde(default)]
@@ -370,12 +320,8 @@ impl Default for EnemyActionDef {
     }
 }
 
-/// A battle-animation definition (see `lcf::Animation`), read by the battle
-/// system to overlay a sprite-sheet effect when a skill or attack resolves: its
-/// 1-based `id`, `name`, the `animation_name` `Battle`/`Battle2` graphic base
-/// name, `scope` (`0` one target, `1` the whole screen), `position` (the
-/// vertical anchor on the target: `0` head, `1` centre, `2` feet), the per-tick
-/// `frames`, and the flash / sound `timings`.
+/// Sprite-sheet effect using a `Battle`/`Battle2` graphic. `scope` is 0 for a
+/// target or 1 for the screen; target `position` is 0 = head, 1 = centre, 2 = feet.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnimationDef {
     pub id: u32,
@@ -387,21 +333,15 @@ pub struct AnimationDef {
     pub timings: Vec<AnimationTimingDef>,
 }
 
-/// One frame of an animation (see `lcf::AnimationFrame`): the sprite-sheet
-/// `cells` drawn together for that tick of the effect.
+/// Cells drawn together on one animation tick.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnimationFrameDef {
     pub cells: Vec<AnimationCellDef>,
 }
 
-/// One placed sprite-sheet tile within an animation frame (see
-/// `lcf::AnimationCell`): `valid` is liblcf's per-cell flag (default `true`) — an
-/// editor-deleted cell clears it, keeping its slot so later cells hold their
-/// index, and the renderer skips a `valid == false` cell. `cell_id` selects the
-/// tile from the animation's graphic, `x`/`y` offset it from the anchor in screen
-/// pixels, `scale` is a zoom percent (`100` = full size), the four `tone_*`
-/// channels tint it on RM2000's `0..=200` scale (`100` = neutral), and
-/// `transparency` is a `0..=100` percent (`0` = opaque).
+/// Placed animation tile: `x`/`y` are screen-pixel offsets and `scale` a percent.
+/// Tone channels use 0–200 (100 = neutral); transparency uses 0–100 (0 = opaque).
+/// Deleted cells set `valid = false` but retain their slot to preserve later indices.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnimationCellDef {
     #[serde(default = "default_true")]
@@ -433,14 +373,9 @@ fn default_audio_level() -> u32 {
     100
 }
 
-/// A frame-timed flash and sound effect on an animation's timeline (see
-/// `lcf::AnimationTiming`): `frame` is the 1-based frame it fires on, `se_name`
-/// the sound-effect file under `audio/Sound/` (empty = silent) played at
-/// `se_volume` (`0..=100`) and percent `se_tempo` (`100` = normal),
-/// `flash_scope` selects what flashes (`0` nothing, `1` the target, `2` the whole
-/// screen), `flash_red`/`flash_green`/`flash_blue` the flash colour on RM2000's
-/// `0..=31` scale, and `flash_power` its strength. `se_volume`/`se_tempo` carry a
-/// `serde` default of `100` so timelines written before they existed still load.
+/// Flash/sound cue on a 1-based frame. Empty `se_name` is silent; volume and
+/// tempo are percentages. `flash_scope`: 0 = none, 1 = target, 2 = screen.
+/// Flash RGB channels use RM2000's 0–31 scale.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AnimationTimingDef {
     pub frame: u32,

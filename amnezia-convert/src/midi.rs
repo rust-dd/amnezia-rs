@@ -14,21 +14,16 @@ const SOUNDFONT_PATH: &str = concat!(
     "/assets/soundfont/GeneralUser-GS.sf2"
 );
 
-/// Render sample rate: 44.1 kHz stereo, the rate the game's audio pipeline uses.
 const SAMPLE_RATE: u32 = 44_100;
 
-/// PCM frames per Vorbis encode block. libvorbis degrades sharply on very large
-/// blocks, so whole-track PCM is fed in windows of roughly a fifth of a second.
+/// Small blocks avoid libvorbis's performance degradation on whole-track buffers.
 const ENCODE_BLOCK_FRAMES: usize = 8_192;
 
-/// VBR quality factor (vorbis_rs accepts `-0.2..=1.0`); `0.4` mirrors the
-/// intended `ffmpeg -q:a 4` balance of size against fidelity.
+/// Equivalent to `ffmpeg -q:a 4` on vorbis_rs's `-0.2..=1.0` scale.
 const VORBIS_QUALITY: f32 = 0.4;
 
-/// Render every `*.mid` directly under `music_dir` to a sibling `<stem>.ogg`,
-/// returning the number encoded. Resilient by design: a missing soundfont or an
-/// unreadable/corrupt track is logged and skipped so one bad file never aborts
-/// the whole conversion. Existing `.ogg` files are overwritten.
+/// Render each `*.mid` to a sibling `.ogg`, overwriting existing files and returning
+/// the encoded count. Missing SoundFonts and invalid tracks are logged and skipped.
 pub fn synthesize_dir(music_dir: &Path) -> usize {
     if !music_dir.is_dir() {
         return 0;
@@ -69,20 +64,16 @@ pub fn synthesize_dir(music_dir: &Path) -> usize {
     count
 }
 
-/// Read one MIDI file and encode it to `out`.
 fn synthesize_file(soundfont: &Arc<SoundFont>, midi: &Path, out: &Path) -> Result<()> {
     let bytes = std::fs::read(midi).with_context(|| format!("reading {}", midi.display()))?;
     synthesize_to_ogg(soundfont, &bytes, out)
 }
 
-/// Synthesize `midi_bytes` with `soundfont` and encode the result to an OGG
-/// Vorbis file at `out`.
 fn synthesize_to_ogg(soundfont: &Arc<SoundFont>, midi_bytes: &[u8], out: &Path) -> Result<()> {
     let (left, right) = render_midi(soundfont, midi_bytes)?;
     encode_ogg(&left, &right, out)
 }
 
-/// Load the bundled General MIDI soundfont, shared across every track.
 fn load_soundfont() -> Result<Arc<SoundFont>> {
     let mut file = std::fs::File::open(SOUNDFONT_PATH)
         .with_context(|| format!("opening soundfont {SOUNDFONT_PATH}"))?;
@@ -109,7 +100,6 @@ fn render_midi(soundfont: &Arc<SoundFont>, midi_bytes: &[u8]) -> Result<(Vec<f32
     Ok((left, right))
 }
 
-/// Encode planar stereo PCM to an OGG Vorbis file at `out`.
 fn encode_ogg(left: &[f32], right: &[f32], out: &Path) -> Result<()> {
     let file = std::fs::File::create(out).with_context(|| format!("creating {}", out.display()))?;
     let sample_rate = NonZeroU32::new(SAMPLE_RATE).expect("sample rate is non-zero");

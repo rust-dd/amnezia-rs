@@ -95,8 +95,7 @@ fn convert_map_info_round_trips_through_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    // Map 1: a type-2 town with its own track "Town" (volume 70). Map 2: a type-0
-    // child inheriting from map 1 (its music_type chunk omitted → default 0).
+    // Omitting the child's music_type must inherit the town's track.
     let town_music = {
         let mut m = sub(0x01, b"Town");
         m.extend(sub(0x03, &varint(70)));
@@ -142,7 +141,6 @@ fn convert_map_info_round_trips_through_ron() {
         }
     );
     assert_eq!((maps[1].id, maps[1].parent, maps[1].music_type), (2, 1, 0));
-    // The resolver both crates share: map 2 inherits the town's BGM up the chain.
     assert_eq!(
         resolve_map_bgm(&maps, 2),
         MapBgm::Play(maps[0].music.clone())
@@ -157,8 +155,6 @@ fn move_fields_round_trip_through_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    // One event whose only page carries explicit move chunks: type 2 (vertical),
-    // frequency 5, speed 6. Convert to RON, read it back, and check they survive.
     let mut page = varint(1);
     page.extend(sub(0x1F, &varint(2)));
     page.extend(sub(0x20, &varint(5)));
@@ -200,8 +196,7 @@ fn move_fields_round_trip_through_ron() {
 
 #[test]
 fn map_ron_missing_move_fields_defaults_them() {
-    // A map RON written before the move fields existed still loads: move_type
-    // falls back to 0 (stationary) and frequency/speed to 3.
+    // Legacy RON can omit movement fields.
     let ron = r#"(chipset_id:1,width:1,height:1,lower:[0],upper:[10000],events:[
         (id:1,x:0,y:0,name:"",pages:[
             (trigger:0,graphic_name:"",graphic_index:0,layer:0,
@@ -221,6 +216,5 @@ fn map_ron_missing_move_fields_defaults_them() {
         (page.move_type, page.move_frequency, page.move_speed),
         (0, 3, 3)
     );
-    // The pre-existing direction/pattern defaults still apply too.
     assert_eq!((page.direction, page.pattern), (2, 1));
 }

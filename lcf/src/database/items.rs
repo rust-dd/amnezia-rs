@@ -1,36 +1,15 @@
-//! Item definitions from the database (`ChunkData::items`, `0x0D`). Beyond the
-//! identity fields, an item carries the RM2000 use-effect a consumable needs
-//! (recovery amounts, cured/affected states, target scope) and the equipment
-//! parameters a piece of gear applies (stat bonuses, weapon hit/crit/animation,
-//! and the attribute/state sets it carries or guards). Chunk ids follow liblcf
-//! `ChunkItem`.
+//! Item definitions (`ChunkData::items`, `0x0D`), following liblcf `ChunkItem`.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
 
-/// An item definition: the fields the shop, the item menu, and the use-and-equip
-/// systems need. `item_type` is the raw RM2000 category index (0 normal,
-/// 1 weapon, 2 shield, 3 armor, 4 helmet, 5 accessory, 6 medicine, 7 book,
-/// 8 material, 9 special, 10 switch).
-///
-/// The use-effect fields apply when an item is consumed (a medicine, or a
-/// normal item with a use-effect): `recover_hp`/`recover_sp` restore a fixed
-/// amount and `recover_hp_rate`/`recover_sp_rate` a percentage of the maximum;
-/// `scope` picks the target (`0` one ally, `1` the whole party); `only_field`
-/// marks an item usable only from the map menu; and `uses` is the number of
-/// uses before it is consumed (`1` by default, `0` = unlimited). `ko_only`
-/// restricts recovery effects to fallen actors.
-///
-/// The equipment fields apply to gear (types 1–5): `atk`/`def`/`spi`/`agi` are
-/// the stat bonuses, `two_handed` marks a two-handed weapon, `hit`/`crit` the
-/// weapon's hit and critical rates (percent), and `weapon_animation` its attack
-/// animation id.
-///
-/// `state_set` and `attribute_set` are the raw RM2000 `vector<bool>` sets whose
-/// meaning depends on `item_type`: for a weapon the states it inflicts and the
-/// elements it carries, for armour the states it guards and the elements it
-/// resists, and for a consumable the states it cures. Both hold ascending
-/// 1-based ids.
+/// Item categories: 0 normal, 1 weapon, 2 shield, 3 armor, 4 helmet, 5 accessory,
+/// 6 medicine, 7 book, 8 material, 9 special, 10 switch. `scope`: 0 ally, 1 party.
+/// Recovery combines fixed amounts with `_rate` percentages of maximum HP/SP;
+/// `ko_only` restricts recovery to fallen actors; `uses = 0` means unlimited.
+/// Equipment stats are bonuses; hit/crit are percentages.
+/// State/attribute sets contain ascending 1-based IDs: weapon effects, armor
+/// protections, or consumable cures, depending on the item type.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Item {
     pub prevent_critical: bool,

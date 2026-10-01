@@ -55,8 +55,6 @@ fn converts_ldb_to_system_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    // battle_music (0x20): "Battle2" volume 90 tempo 100; battle_end_music (0x21):
-    // "Victory"; gameover_music (0x26): "GameOver"; a few battle SE.
     let mut section = Vec::new();
     section.extend(subchunk(0x48, &varint(1)));
     for (slot, value) in [20, 19, 16, 17, 0, 16].into_iter().enumerate() {

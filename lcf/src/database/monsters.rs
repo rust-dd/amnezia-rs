@@ -47,17 +47,9 @@ impl Default for EnemyAction {
     }
 }
 
-/// A monster (enemy) definition: the battle-relevant scalar stats, the
-/// experience and gold it yields when defeated, its element/state resistance
-/// ranks, and its battle-AI action list.
-///
-/// `attribute_ranks` holds the enemy's damage rank per attribute (element) id
-/// and `state_ranks` its affliction-chance rank per state id — one byte each,
-/// `0` = A (weak) through `4` = E (resist), the neutral middle rank C being `2`.
-/// RM2000 writes these as raw byte vectors truncated past the last non-default
-/// entry, so a vector shorter than the database's attribute/state count (and any
-/// absent trailing index) means rank C for the remaining ids; the raw stored
-/// bytes are kept here unpadded.
+/// Enemy stats, rewards and AI. Resistance vectors store one byte per element/state:
+/// 0 = A (weak) through 4 = E (resist). Missing trailing entries mean C (2);
+/// stored vectors remain unpadded.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Monster {
     pub battler_hue: i32,
@@ -94,9 +86,7 @@ const MONSTER_AGILITY: u32 = 0x09;
 const MONSTER_EXP: u32 = 0x0B;
 const MONSTER_GOLD: u32 = 0x0C;
 
-// Each rank vector is a uint8 chunk (states `0x20`, elements `0x22`) preceded by
-// a redundant element-count chunk (`0x1F` / `0x21`) that we skip: the data
-// chunk's own byte length already gives the number of ranks.
+// Rank counts (0x1F/0x21) are redundant: each data byte supplies one rank.
 const MONSTER_STATE_RANKS: u32 = 0x20;
 const MONSTER_ATTRIBUTE_RANKS: u32 = 0x22;
 const MONSTER_ACTIONS: u32 = 0x2A;
@@ -323,10 +313,12 @@ mod tests {
             &[
                 subchunk(0x01, b"Golem"),
                 subchunk(0x04, &varint(400)),
-                subchunk(0x1F, &varint(4)),    // state_ranks_size, skipped
-                subchunk(0x20, &[4, 4, 4, 2]), // state_ranks: immune x3, then C
-                subchunk(0x21, &varint(3)),    // attribute_ranks_size, skipped
-                subchunk(0x22, &[0, 2, 4]),    // attribute_ranks: A(weak), C, E(resist)
+                // Redundant state count, followed by E/E/E/C ranks.
+                subchunk(0x1F, &varint(4)),
+                subchunk(0x20, &[4, 4, 4, 2]),
+                // Redundant attribute count, followed by A/C/E ranks.
+                subchunk(0x21, &varint(3)),
+                subchunk(0x22, &[0, 2, 4]),
                 subchunk(0x2A, &actions),
             ],
         );

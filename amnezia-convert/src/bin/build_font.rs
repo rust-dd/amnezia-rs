@@ -28,20 +28,23 @@ use write_fonts::{
 const REF: &str = "reference/easyrpg-player/src/generated";
 /// Font units per source pixel.
 const PX: i32 = 64;
-/// The em: the 12-row cell fills it.
+/// One em spans the 12-row cell.
 const EM: u16 = 768;
 /// Baseline at the bottom of row 9 — rows 10-11 become descenders.
 const BASE: i32 = 128;
 
-/// Glyphs RM2000 draws graphically (System.png), not as font characters, but our
-/// chrome renders as text: the menu cursor, scroll/continue arrows, and the em
-/// dash. All half-width. `(codepoint, 12 rows)`.
+/// Half-width UI symbols from System.png, encoded as `(codepoint, 12 rows)`.
 const DRAWN: &[(u32, [u16; 12])] = &[
-    (9654, [0, 0, 0, 2, 6, 14, 30, 14, 6, 2, 0, 0]), // ▶
-    (9664, [0, 0, 0, 16, 24, 28, 30, 28, 24, 16, 0, 0]), // ◀
-    (9650, [0, 0, 0, 0, 12, 30, 63, 0, 0, 0, 0, 0]), // ▲
-    (9660, [0, 0, 0, 0, 0, 63, 30, 12, 0, 0, 0, 0]), // ▼
-    (8212, [0, 0, 0, 0, 0, 0, 63, 0, 0, 0, 0, 0]),   // — em dash
+    // ▶
+    (9654, [0, 0, 0, 2, 6, 14, 30, 14, 6, 2, 0, 0]),
+    // ◀
+    (9664, [0, 0, 0, 16, 24, 28, 30, 28, 24, 16, 0, 0]),
+    // ▲
+    (9650, [0, 0, 0, 0, 12, 30, 63, 0, 0, 0, 0, 0]),
+    // ▼
+    (9660, [0, 0, 0, 0, 0, 63, 30, 12, 0, 0, 0, 0]),
+    // —
+    (8212, [0, 0, 0, 0, 0, 0, 63, 0, 0, 0, 0, 0]),
 ];
 /// RMG2000 lacks the Hungarian double-acute letters: Ő ő Ű ű.
 const TTYP0_FILL: &[u32] = &[336, 337, 368, 369];

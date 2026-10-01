@@ -7,24 +7,10 @@
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
 
-/// A skill (spell/ability) definition: the fields a skill menu and the battle
-/// system need. `sp_cost` is the SP spent to cast it, `power` the base effect
-/// magnitude, and `hit` the base success rate (percent).
-///
-/// The battle fields describe how the skill resolves. `scope` picks its targets
-/// (`0` one enemy, `1` all enemies, `2` the caster, `3` one ally, `4` all
-/// allies) and `skill_type` its family (`0` normal — the only battle-relevant
-/// kind — `1` teleport, `2` escape, `3` switch). `animation_id` is the battle
-/// animation the skill overlays on each target it resolves against (`0` shows
-/// none). `physical_rate`/`magical_rate`
-/// (0–10) weight how much the caster's attack versus spirit feeds the damage
-/// formula, and `variance` (0–10) is RM2000's damage-spread factor: the final
-/// effect is randomised around the computed amount by a band that widens with
-/// `variance` (editor default 4). `affect_hp`/`affect_sp` say which pool the
-/// effect changes and
-/// `absorb` whether the caster drains what it deals. `attributes` lists the
-/// 1-based element ids the damage is checked against and `affected_states` the
-/// 1-based state ids it inflicts on opponents or cures from allies.
+/// Skill effect: `hit` is a percentage; physical/magical weights and variance use 0–10.
+/// `scope`: 0 enemy, 1 all enemies, 2 caster, 3 ally, 4 all allies.
+/// `skill_type`: 0 normal, 1 teleport, 2 escape, 3 switch.
+/// Element/state IDs are 1-based; states are inflicted on opponents or cured from allies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Skill {
     pub using_message1: String,
@@ -41,8 +27,7 @@ pub struct Skill {
     pub failure_message: u32,
     pub skill_type: u32,
     pub scope: u32,
-    /// The battle-animation id this skill plays on each target it resolves
-    /// against (`ChunkSkill::animation_id`, `0x0E`); `0` shows no animation.
+    /// Per-target battle animation; 0 disables it.
     pub animation_id: u32,
     pub physical_rate: u32,
     pub magical_rate: u32,

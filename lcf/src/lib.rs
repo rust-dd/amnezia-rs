@@ -7,9 +7,7 @@
 //! defaults. This crate is dev-time tooling for the asset converter and is
 //! never linked into the shipped game binary.
 //!
-//! Parsing is split by file: [`map`] handles map units, [`map_tree`] the map
-//! tree (party start + map-info music), and [`database`] the `RPG_RT.ldb`
-//! chipset, actor, skill, item, monster, troop, attribute, and state tables.
+//! [`parse_map`] reads LMU maps; [`parse_map_infos`] reads the LMT map tree.
 
 mod database;
 mod map;
@@ -30,7 +28,6 @@ pub use map::{
 pub use map_tree::{MapInfo, Start, parse_map_infos, parse_start};
 pub use vehicles::{Vehicle, parse_vehicles};
 
-/// Errors returned while parsing an LCF file.
 #[derive(Debug, thiserror::Error)]
 pub enum LcfError {
     #[error("bad LCF signature: expected {expected:?}")]

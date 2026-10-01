@@ -1,15 +1,10 @@
-//! Conversion of the `RPG_RT.ldb` system definition into its clean RON asset:
-//! the title / battle / victory / game-over / inn / vehicle music tracks and the
-//! UI and battle sound effects the game plays.
+//! Conversion of `RPG_RT.ldb` system settings, music and sound effects.
 
 use amnezia_data::{MusicDef, SoundDef, SystemDef};
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Convert the system section in `input/RPG_RT.ldb` into `output/system.ron` (the
-/// music tracks and sound-effect names, each with its volume, tempo, and
-/// balance). The battle system reads it for the battle BGM, victory/game-over
-/// music, and per-hit sound effects.
+/// Write the `RPG_RT.ldb` system section to `output/system.ron`.
 pub fn convert_system(input: &Path, output: &Path) -> Result<()> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -48,7 +43,6 @@ pub fn convert_system(input: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
-/// Map a parsed `lcf::Music` onto its clean [`MusicDef`].
 fn music(m: lcf::Music) -> MusicDef {
     MusicDef {
         name: m.name,
@@ -59,7 +53,6 @@ fn music(m: lcf::Music) -> MusicDef {
     }
 }
 
-/// Map a parsed `lcf::Sound` onto its clean [`SoundDef`].
 fn sound(s: lcf::Sound) -> SoundDef {
     SoundDef {
         name: s.name,

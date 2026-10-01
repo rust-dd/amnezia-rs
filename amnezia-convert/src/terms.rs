@@ -1,15 +1,10 @@
-//! Conversion of the `RPG_RT.ldb` Terms (vocabulary) section into its clean RON
-//! asset: the real Hungarian menu command labels, status / equipment labels, the
-//! currency term, and the battle / shop / inn message terms the game's chrome
-//! shows in place of the invented Hungarian placeholders.
+//! Import the original Hungarian UI vocabulary from `RPG_RT.ldb`.
 
 use amnezia_data::TermsDef;
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Convert the Terms section in `input/RPG_RT.ldb` into `output/terms.ron` (the
-/// complete imported RM2000 vocabulary). The menu, battle, and shop
-/// screens read it back and route each term through `i18n::tr()`.
+/// Write the complete RM2000 Terms section to `output/terms.ron`.
 pub fn convert_terms(input: &Path, output: &Path) -> Result<()> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());

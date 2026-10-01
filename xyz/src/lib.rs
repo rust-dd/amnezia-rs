@@ -19,7 +19,6 @@ pub struct XyzImage {
     pub rgba: Vec<u8>,
 }
 
-/// Errors returned while decoding an XYZ byte slice.
 #[derive(Debug, thiserror::Error)]
 pub enum XyzError {
     #[error("not an XYZ file: bad magic")]

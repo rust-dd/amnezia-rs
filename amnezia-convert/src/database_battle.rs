@@ -8,11 +8,7 @@ use amnezia_data::{
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Convert the state (status condition) table in `input/RPG_RT.ldb` into
-/// `output/states.ron` (each state's id, name, action restriction, priority,
-/// recovery odds, and per-turn HP-change fields), returning the number of states
-/// written. The battle system reads it to apply and lift status conditions and
-/// to drain or regenerate HP each turn (e.g. Poison).
+/// Write `RPG_RT.ldb` status conditions to `output/states.ron`, returning their count.
 pub fn convert_states(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -63,10 +59,7 @@ pub fn convert_states(input: &Path, output: &Path) -> Result<usize> {
     Ok(count)
 }
 
-/// Convert the attribute (element) table in `input/RPG_RT.ldb` into
-/// `output/attributes.ron` (each element's id, name, physical/magical type, and
-/// A–E resistance-rank damage percentages), returning the number of attributes
-/// written. The battle system reads it to scale elemental damage.
+/// Write `RPG_RT.ldb` elements to `output/attributes.ron`, returning their count.
 pub fn convert_attributes(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -96,9 +89,7 @@ pub fn convert_attributes(input: &Path, output: &Path) -> Result<usize> {
     Ok(count)
 }
 
-/// Convert the enemy table in `input/RPG_RT.ldb` into `output/monsters.ron`
-/// (each monster's id, name, combat stats, and exp/gold reward), returning the
-/// number of monsters written. The battle system reads it.
+/// Write `RPG_RT.ldb` enemies to `output/monsters.ron`, returning their count.
 pub fn convert_monsters(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());

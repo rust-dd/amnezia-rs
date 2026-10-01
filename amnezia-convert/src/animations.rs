@@ -4,12 +4,7 @@ use amnezia_data::{AnimationCellDef, AnimationDef, AnimationFrameDef, AnimationT
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Convert the battle-animation table in `input/RPG_RT.ldb` into
-/// `output/animations.ron` (each animation's id, name, `Battle`/`Battle2`
-/// graphic, scope and target position, and its per-frame sprite-sheet cell
-/// placements plus flash / sound-effect timeline), returning the number of
-/// animations written. The battle system reads it to play a skill or attack's
-/// on-hit effect.
+/// Write `RPG_RT.ldb` animations to `output/animations.ron`, returning their count.
 pub fn convert_animations(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());

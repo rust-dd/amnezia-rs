@@ -87,11 +87,7 @@ pub struct MapInfo {
     pub music: Music,
 }
 
-/// The RM2000 `Music` default the LMT applies to a map with no music chunk: an
-/// empty name (the BGM resolver reads this as "keep the current track"), full
-/// volume, normal tempo, centred balance, and no fade-in — liblcf's `rpg::Music`
-/// defaults. Distinct from the LDB system music's `(OFF)` default, which marks a
-/// deliberately silent scene slot.
+/// LMT's empty-name default keeps the current track, unlike LDB's silent `(OFF)`.
 fn default_music() -> Music {
     Music {
         name: String::new(),
@@ -178,14 +174,17 @@ mod tests {
 
     #[test]
     fn parses_party_start() {
-        let mut body = varint(1); // map-info count
-        body.extend(varint(1)); // map id
-        body.extend(varint(0)); // its chunk-stream terminator
-        body.extend(varint(1)); // tree-order count
-        body.extend(varint(1)); // node id
-        body.extend(varint(0)); // active node
-        body.extend(subchunk(0x01, &varint(5))); // party_map_id = 5
-        body.extend(varint(0)); // Start struct terminator
+        // One map-info entry: count, map ID, empty chunk stream.
+        let mut body = varint(1);
+        body.extend(varint(1));
+        body.extend(varint(0));
+        // Tree order: count, node ID, active node.
+        body.extend(varint(1));
+        body.extend(varint(1));
+        body.extend(varint(0));
+        // Start: party map ID followed by the struct terminator.
+        body.extend(subchunk(0x01, &varint(5)));
+        body.extend(varint(0));
         let signature = b"LcfMapTree";
         let mut file = vec![signature.len() as u8];
         file.extend_from_slice(signature);
@@ -202,9 +201,7 @@ mod tests {
 
     #[test]
     fn parses_map_info_music_tree() {
-        // Two maps: map 1 (a root child) is type-2 with its own track "Town" at
-        // volume 80; map 2 inherits from map 1 (type 0). The unrelated name (0x01)
-        // and save (0x21) chunks are present to prove they are read past.
+        // Include unrelated name/save chunks to verify they do not disturb music parsing.
         let town_music = {
             let mut m = subchunk(0x01, b"Town");
             m.extend(subchunk(0x03, &varint(80)));
@@ -254,7 +251,6 @@ mod tests {
             (infos[1].id, infos[1].parent_map, infos[1].music_type),
             (2, 1, 0)
         );
-        // An inherit map with no music chunk keeps the empty-name default.
         assert_eq!(infos[1].music.name, "");
     }
 }

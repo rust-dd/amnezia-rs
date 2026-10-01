@@ -1,11 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-/// A background-music entry (RM2000 `Music`): the track `name` under
-/// `audio/Music/` (`(OFF)` = silence), its `0..=100` `volume`, percent `tempo`
-/// (`100` = normal), stereo `balance` (`50` = centred), and `fadein` in
-/// milliseconds. The game maps `volume`/`tempo` onto the audio request's linear
-/// volume and playback speed; `balance` and `fadein` are carried for the volume
-/// and fade work that lands separately.
+/// BGM under `audio/Music/`; `(OFF)` means silence. Volume and tempo are
+/// percentages, balance 50 is centred, and `fadein` is in milliseconds.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MusicDef {
     pub name: String,

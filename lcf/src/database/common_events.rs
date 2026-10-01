@@ -1,7 +1,4 @@
-//! Common-event definitions from the database (`ChunkData::common_events`,
-//! `0x19`). A common event is a globally-callable event script: a trigger, an
-//! optional condition switch, and a command list in the same flat format map
-//! event pages use. Chunk ids follow liblcf `ChunkCommonEvent`.
+//! Global event scripts (`ChunkData::common_events`, `0x19`), following liblcf `ChunkCommonEvent`.
 
 use super::find_section;
 use crate::map::parse_commands;
@@ -30,8 +27,8 @@ const COMMON_EVENT_COMMANDS: u32 = 0x16;
 /// Parse the common-event table (`ChunkData::common_events` = `0x19`) out of an
 /// LDB byte slice. Chunk ids (liblcf `ChunkCommonEvent`): name `0x01`, trigger
 /// `0x0B`, switch_flag `0x0C`, switch_id `0x0D`, event_commands `0x16`. Commands
-/// reuse the map event-page format ([`crate::map::parse_commands`]). Omitted
-/// fields default to call trigger 5, no switch condition, and switch id 1.
+/// reuse the map event-page format. Omitted fields default to call trigger 5,
+/// no switch condition, and switch id 1.
 pub fn parse_common_events(bytes: &[u8]) -> Result<Vec<CommonEvent>, LcfError> {
     let section = find_section(bytes, COMMON_EVENT_SECTION, LcfError::MissingCommonEvents)?;
     let mut reader = Reader::new(section);

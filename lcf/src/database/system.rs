@@ -1,9 +1,5 @@
-//! The system definition from the database (`ChunkData::system`, `0x16`). Unlike
-//! the other LDB sections this is a single struct, not a `[count]`-prefixed list:
-//! its data is a bare chunk stream. The audio-relevant fields are the title /
-//! battle / victory / game-over / inn / vehicle music tracks and the UI and
-//! battle sound effects, each a nested `Music` or `Sound` sub-struct. Chunk ids
-//! follow liblcf `ChunkSystem`, `ChunkMusic`, and `ChunkSound`.
+//! System settings (`ChunkData::system`, `0x16`): a bare chunk stream, not a
+//! count-prefixed list. IDs follow liblcf `ChunkSystem`, `ChunkMusic` and `ChunkSound`.
 
 use super::find_section;
 use crate::{LcfError, Reader, decode_cp1250};
@@ -22,8 +18,7 @@ pub struct Music {
 }
 
 impl Music {
-    /// The RM2000 default (silent) music entry every field is initialised to
-    /// before the chunk stream overrides whatever it carries.
+    /// RM2000's silent music default.
     fn off() -> Self {
         Self {
             name: MUSIC_OFF.to_string(),
@@ -286,7 +281,6 @@ mod tests {
 
     #[test]
     fn parses_battle_music_and_sound_effects() {
-        // battle_music (0x20): "Battle1", volume 80, tempo 120, balance 40, fadein 500.
         let battle_music = nested(&[
             subchunk(0x01, b"Battle1"),
             subchunk(0x02, &varint(500)),
@@ -294,11 +288,8 @@ mod tests {
             subchunk(0x04, &varint(120)),
             subchunk(0x05, &varint(40)),
         ]);
-        // battle_end_music (0x21): "Victory1" with defaults elsewhere.
         let victory = nested(&[subchunk(0x01, b"Victory1")]);
-        // enemy_attack_se (0x2F): "Sword", volume 90.
         let enemy_attack = nested(&[subchunk(0x01, b"Sword"), subchunk(0x03, &varint(90))]);
-        // enemy_death_se (0x33) -> enemy_defeated_se: "Monster1".
         let enemy_death = nested(&[subchunk(0x01, b"Monster1")]);
 
         let mut section = Vec::new();
@@ -340,7 +331,6 @@ mod tests {
 
     #[test]
     fn absent_fields_default_to_the_silent_entry() {
-        // An empty system section: every music/sound field is the (OFF) default.
         let ldb = make_ldb(&[(0x16, Vec::new())]);
         let system = parse_system(&ldb).unwrap();
         assert_eq!(system.battle_music, Music::off());

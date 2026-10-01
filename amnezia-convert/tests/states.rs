@@ -84,8 +84,6 @@ fn converts_ldb_to_states_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    // Sleep: can't act (restriction 1), held 1 turn, 25% per-turn wake-up,
-    // 50% wake-up when hit. Name bytes are ASCII "Alvas".
     let sleep = element(
         1,
         &[
@@ -118,9 +116,7 @@ fn converts_ldb_to_states_ron() {
             subchunk(0x42, &varint(1)),
         ],
     );
-    // Poison: acts normally (restriction omitted -> 0), priority omitted -> 50,
-    // and carries an explicit per-turn HP-change block: type 0x2D=1, max-percent
-    // 0x3D=10, flat val 0x3E=5.
+    // Omit restriction and priority to exercise defaults alongside explicit HP drain.
     let poison = element(
         2,
         &[

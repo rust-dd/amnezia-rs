@@ -146,10 +146,7 @@ pub fn convert_start(input: &Path, output: &Path) -> Result<u32> {
     Ok(start.map_id)
 }
 
-/// Convert the map-info tree in `input/RPG_RT.lmt` into `output/map_info.ron`
-/// (each map's id, parent, `music_type`, and `music` track), returning the
-/// number of nodes written. The game resolves each map's effective background
-/// music from it on map load and teleport.
+/// Write the `RPG_RT.lmt` map-info tree to `output/map_info.ron`, returning its node count.
 pub fn convert_map_info(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -211,10 +208,7 @@ pub fn convert_chipsets(input: &Path, output: &Path) -> Result<usize> {
     Ok(count)
 }
 
-/// Convert the common-event table in `input/RPG_RT.ldb` into
-/// `output/common_events.ron` (each event's id, name, trigger, condition
-/// switch, and command list), returning the number written. The interpreter
-/// reads it to run global call/autostart/parallel event scripts.
+/// Write `RPG_RT.ldb` common events to `output/common_events.ron`, returning their count.
 pub fn convert_common_events(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());

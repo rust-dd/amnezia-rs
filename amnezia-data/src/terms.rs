@@ -1,10 +1,4 @@
-//! The game's vocabulary (RM2000 `rpg::Terms`), converted into a clean RON asset
-//! the game's chrome reads. These are the *real* Hungarian UI strings from the
-//! original `RPG_RT.ldb` Terms section — the menu command labels, the status /
-//! equipment labels, the currency term, and the battle / shop / inn message
-//! terms — replacing the invented Hungarian placeholders the chrome shipped with.
-//! The game routes each through `i18n::tr()`, so they localise to English exactly
-//! like the rest of the Hungarian source text.
+//! Original Hungarian UI vocabulary from `RPG_RT.ldb`, localized through `i18n::tr()`.
 //!
 //! Battle and reward terms are RM2000 name-concatenation templates, not
 //! `%S`-placeholder strings: the engine forms a line by prefixing the battler name

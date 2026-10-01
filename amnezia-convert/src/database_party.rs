@@ -5,9 +5,7 @@ use amnezia_data::{ActorCurves, ActorDef, Hero, ItemDef, Learning, SkillDef};
 use anyhow::{Context, Result};
 use std::path::Path;
 
-/// Convert the hero's name (actor 1's default name in `input/RPG_RT.ldb`) into
-/// `output/hero.ron`, returning the name written. The game reads it to expand
-/// the `\N[k]` message control code.
+/// Write actor 1's default name from `RPG_RT.ldb` to `output/hero.ron` and return it.
 pub fn convert_hero(input: &Path, output: &Path) -> Result<String> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -28,12 +26,7 @@ pub fn convert_hero(input: &Path, output: &Path) -> Result<String> {
     Ok(name)
 }
 
-/// Convert the actor table in `input/RPG_RT.ldb` into `output/actors.ron` (each
-/// actor's id, name, class title, FaceSet portrait, levels, starting HP/SP,
-/// per-level stat curves, skill-learning list, experience-curve parameters,
-/// initial equipment ids, and the dual-wield / fixed-equipment / unarmed-animation
-/// flags), returning the number of actors written. The status and equip menus and
-/// the level-up system read it.
+/// Write `RPG_RT.ldb` actors to `output/actors.ron`, returning their count.
 pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -128,12 +121,7 @@ pub fn convert_actors(input: &Path, output: &Path) -> Result<usize> {
     Ok(count)
 }
 
-/// Convert the item table in `input/RPG_RT.ldb` into `output/items.ron` (each
-/// item's id, name, description, category, price, the use-effect a consumable
-/// applies — recovery amounts, cured states, scope, field-only flag, uses — and
-/// the equipment parameters gear applies — stat bonuses, resisted attributes and
-/// guarded states, two-handed flag, hit/crit, and weapon animation), returning
-/// the number of items written. The shop, item, and equip menus read it.
+/// Write `RPG_RT.ldb` items to `output/items.ron`, returning their count.
 pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());
@@ -198,12 +186,7 @@ pub fn convert_items(input: &Path, output: &Path) -> Result<usize> {
     Ok(count)
 }
 
-/// Convert the skill table in `input/RPG_RT.ldb` into `output/skills.ron` (each
-/// skill's id, name, description, SP cost, power, hit rate, and battle effect —
-/// target scope, type, battle animation, physical/magical rates, damage
-/// variance, HP/SP and absorb flags, and the element and inflicted-state id
-/// lists), returning the
-/// number of skills written. The skill menu and battle system read it.
+/// Write `RPG_RT.ldb` skills to `output/skills.ron`, returning their count.
 pub fn convert_skills(input: &Path, output: &Path) -> Result<usize> {
     if !input.is_dir() {
         anyhow::bail!("input directory not found: {}", input.display());

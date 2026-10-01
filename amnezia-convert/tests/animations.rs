@@ -33,8 +33,7 @@ fn element(id: u32, subchunks: &[Vec<u8>]) -> Vec<u8> {
     out
 }
 
-// A count-prefixed struct-list, the shape RM2000 uses for the nested frame,
-// cell, and timing lists inside an animation.
+/// Count-prefixed struct list used for animation frames, cells and timings.
 fn section(elements: &[Vec<u8>]) -> Vec<u8> {
     let mut out = varint(elements.len() as u32);
     for e in elements {
@@ -66,8 +65,7 @@ fn converts_ldb_to_animations_ron() {
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&input).unwrap();
 
-    // One cell: tile 3, offset x=-24 (a signed field stored as a wrapped
-    // varint) y=48, zoomed to 200%, 40% transparent, neutral tone.
+    // Negative offsets use wrapped unsigned varints.
     let cell = element(
         1,
         &[
@@ -80,8 +78,7 @@ fn converts_ldb_to_animations_ron() {
     );
     let frames = section(&[element(1, &[subchunk(0x01, &section(&[cell]))])]);
 
-    // A timing at frame 5: plays "Punch" (name-only Sound struct) and flashes
-    // the whole screen (scope 2) with red 28, the other channels defaulting.
+    // Omitted sound/flash fields must retain their RM2000 defaults.
     let mut sound = subchunk(0x01, b"Punch");
     sound.extend(varint(0));
     let timing = element(
