@@ -70,15 +70,12 @@ fn save_game_ron_round_trip() {
     assert_eq!(game, decoded);
 }
 
-/// A unique temp slot path per test, so file-touching tests never race on a
-/// shared file (cargo runs them in parallel) and never touch the real save.
+/// Unique temporary slots isolate parallel tests from each other and from player saves.
 pub(super) fn temp_slot(tag: &str) -> PathBuf {
     std::env::temp_dir().join(format!("amnezia_{tag}_{}.ron", std::process::id()))
 }
 
-/// A minimal but complete resource set for driving [`save_or_load`] headlessly,
-/// with the save slot pointed at `location` so the real developer save is never
-/// read or written.
+/// Headless save app whose I/O is confined to the supplied test location.
 fn save_app(location: PathBuf) -> App {
     let mut app = save_resources(location);
     app.add_systems(Update, save_or_load);

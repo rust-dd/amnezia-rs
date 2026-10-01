@@ -4,12 +4,7 @@
 use super::*;
 
 impl Battle {
-    /// Queue `anim_id` on `targets` (RM2000 screen offsets from centre, y
-    /// downward) for `battle.rs` to play as this tick resolves — one queued
-    /// animation for the whole cast, so its sound fires once while its cells and
-    /// flashes reach every target. A `0` id (no animation) or an empty target list
-    /// is skipped, so an attacker with neither a weapon nor an unarmed animation
-    /// plays nothing rather than a stray effect.
+    /// Queue one cast across y-down target centres; zero IDs or empty targets play nothing.
     pub(in crate::battle) fn push_anim(&mut self, anim_id: u32, targets: Vec<(f32, f32)>) {
         self.push_anim_mode(anim_id, targets, false);
     }

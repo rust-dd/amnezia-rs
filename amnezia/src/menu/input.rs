@@ -1,7 +1,4 @@
-//! The menu's input systems. Escape toggles the menu and backs out
-//! of a sub-screen; Up/Down move the active cursor; Enter/Space confirm. The pure
-//! navigation math lives in [`super::nav`]; these systems only apply it and touch
-//! the world (inventory, vitals, save request, title).
+//! Menu input and state mutations; pure navigation lives in [`super::nav`].
 
 use super::save_files::SaveFiles;
 use crate::battle::BattleActive;
@@ -31,12 +28,8 @@ pub(super) mod map;
 mod sounds;
 use sounds::MenuSfx;
 
-/// The transient overlays and flows that must not be interrupted by *opening* the
-/// menu: a message box, a running event, a choice or number prompt, a teleport
-/// fade, or the game-over hand-off. Mirrors the open-guard lists in
-/// [`crate::dialogue`]'s `interact` and [`crate::interpreter`]'s autorun reader;
-/// bundled into one `SystemParam` so [`menu_input`] stays within Bevy's
-/// 16-parameter cap. A menu already up ignores these — only opening is gated.
+/// Transient flows gate opening only; an already-open menu stays usable.
+/// Grouped to stay within Bevy's system-parameter limit.
 #[derive(SystemParam)]
 pub(super) struct OpenBlockers<'w> {
     frame: Option<Res<'w, crate::timing::SceneWait>>,
@@ -74,10 +67,7 @@ impl OpenBlockers<'_> {
     }
 }
 
-/// The resources that gate *opening* the menu and its save entry: a live shop or
-/// battle, the title screen, and the cutscene menu/save access flags. Bundled into
-/// one `SystemParam` so [`menu_input`] stays within Bevy's 16-parameter cap.
-/// `title` stays separate because End Game mutates it.
+/// Scene/access gates; title stays separate because End Game mutates it.
 #[derive(SystemParam)]
 pub(super) struct MenuGates<'w> {
     scene: Option<Res<'w, super::SceneFlow>>,

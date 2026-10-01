@@ -5,9 +5,7 @@ use amnezia_data::{ActorDef, AttributeDef, ItemDef, MonsterDef, SkillDef, StateD
 use bevy::prelude::*;
 
 impl Battle {
-    /// Assemble a fresh encounter: instantiate each troop member as a live
-    /// [`Foe`], each party actor as a live [`Fighter`] (HP/SP from `vitals`, or
-    /// full on a first fight), and enter the command phase.
+    /// Build both sides using saved vitals, or full HP/SP on the first fight.
     #[allow(clippy::too_many_arguments)]
     pub fn build(
         troop: &TroopDef,
@@ -71,9 +69,7 @@ impl Battle {
                 Fighter::build(a, slots, items, vitals, progression)
             })
             .collect::<Vec<_>>();
-        // The RM2000 escape chance is fixed at battle start from the two sides'
-        // AVERAGE agilities (EasyRPG `InitEscapeChance`), then only nudged by +10
-        // per failed attempt — never recomputed as combatants fall.
+        // EasyRPG InitEscapeChance is fixed here, not recomputed as combatants fall.
         let party_avg =
             logic::average_agility(&members.iter().map(|f| f.stats.agility).collect::<Vec<_>>());
         let enemy_avg =

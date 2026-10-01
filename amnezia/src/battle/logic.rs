@@ -1,13 +1,4 @@
-//! Pure battle mathematics: the RM2000-flavoured damage, turn-order, flee,
-//! target and reward formulas, plus the derived party stat curve and the skill
-//! filter. Kept free of Bevy and of the live battle state so every rule is
-//! unit-testable in isolation; the battle systems are thin wrappers over these.
-//!
-//! The rules are grouped by responsibility into submodules and re-exported here,
-//! so callers keep using `logic::<name>` unchanged: [`stats`] (the party stat
-//! curve and equipment bonuses), [`damage`] (the damage formulas and skill
-//! filter), [`hit`] (to-hit), [`state`] (status effects), [`enemy`] (the enemy
-//! AI), and [`escape`] (turn order, flee, and rewards).
+//! RM2000 battle formulas, independent of Bevy and live battle state.
 
 mod attribute;
 mod critical;

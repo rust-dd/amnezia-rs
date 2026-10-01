@@ -1,10 +1,4 @@
-//! The real RM2000 vocabulary loaded as a shared resource: the menu command
-//! labels, status / equipment labels, the currency term, and the battle / shop /
-//! inn message terms, read from `terms.ron` (produced by `amnezia-convert` from
-//! the original `RPG_RT.ldb` Terms section). The menu, battle, and shop chrome
-//! read these in place of the invented Hungarian placeholders and route each
-//! through [`crate::i18n::tr`], so they localise to English like the rest of the
-//! Hungarian source text and stay live under the F2 toggle.
+//! Original RM2000 vocabulary from `terms.ron`, localized through [`crate::i18n::tr`].
 
 use crate::assets::asset_root;
 use crate::i18n;
@@ -17,10 +11,7 @@ use bevy::prelude::*;
 pub struct Terms(pub TermsDef);
 
 impl Terms {
-    /// The localised display string for a parsed `term`, falling back to
-    /// `fallback` (the faithful Hungarian placeholder) when the original database
-    /// left the term blank or `terms.ron` failed to load. Both paths go through
-    /// [`i18n::tr`], so English mode localises whichever string is shown.
+    /// Translate the term, or the caller's fallback when it is empty.
     pub fn label(&self, term: &str, fallback: &str) -> String {
         i18n::tr(if term.is_empty() { fallback } else { term })
     }
@@ -34,9 +25,7 @@ impl Plugin for TermsPlugin {
     }
 }
 
-/// Load `terms.ron` into a [`Terms`] resource, falling back to an empty
-/// vocabulary (so the chrome shows its Hungarian placeholders) on any error — a
-/// missing or malformed terms file never blocks startup.
+/// Missing or malformed vocabulary must not block startup.
 fn load_terms() -> Terms {
     let path = format!("{}/terms.ron", asset_root());
     let terms = std::fs::read_to_string(&path)

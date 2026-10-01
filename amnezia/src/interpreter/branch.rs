@@ -1,19 +1,12 @@
-//! `ConditionalBranch` (opcode 12010) evaluation: whether a branch's condition
-//! holds. Mirrors EasyRPG's `CommandConditionalBranch` for the RM2000 condition
-//! kinds, sharing the actor lookups with the `ControlVariables` resolver. Kept
-//! Bevy-free so each condition unit-tests against plain state resources; the timer
-//! condition (kind 2) is evaluated by the caller, which holds the live clock.
+//! ConditionalBranch (12010) predicates, sharing actor lookups with ControlVariables.
+//! The caller handles timer predicates using the live clock.
 
 use super::actor_query::{ActorCtx, actor_param};
 use crate::state::{Inventory, Party, Switches, Variables};
 
-/// Whether a `ConditionalBranch`'s condition holds. Switch (0), variable (1),
-/// gold (3), item (4), actor (5), and character orientation (6) are evaluated
-/// here; the timer condition (2) is handled by the caller and any unsupported
-/// kind returns `true` so its body runs rather than the event stalling. `actors`
-/// backs the actor sub-checks and `facing` is the referenced character's
-/// orientation (both resolved by the caller from the world). `string` is the
-/// command's text, compared by the actor "name is" sub-check.
+/// Evaluate switch (0), variable (1), gold (3), item (4), actor (5) or facing (6).
+/// The caller handles timer (2); unsupported kinds return true. Actor-name checks
+/// compare `string`, and character checks use the caller-resolved live `facing`.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn branch_holds(
     params: &[i32],
@@ -74,8 +67,7 @@ pub(super) fn branch_holds(
         }
         5 => actor_branch(params, string, actors, party),
         6 => match facing {
-            // Character orientation: true only when the resolved facing matches
-            // params[2] (RPG_RT compares the raw facing, up/right/down/left = 0–3).
+            // RPG_RT compares raw CharSet facing rows (up/right/down/left = 0–3).
             Some(dir) => params.get(2).copied() == Some(dir as i32),
             None => false,
         },
@@ -194,7 +186,7 @@ mod tests {
         // Variable comparison: var 1 == 6.
         var.set(1, 6);
         assert!(holds(&[1, 1, 0, 6, 0], &sw, &var, &inv));
-        assert!(!holds(&[1, 1, 0, 10, 1], &sw, &var, &inv)); // >= 10 false
+        assert!(!holds(&[1, 1, 0, 10, 1], &sw, &var, &inv));
         // Gold >= 100.
         assert!(!holds(&[3, 100, 0], &sw, &var, &inv));
         inv.add_gold(120);
@@ -224,13 +216,13 @@ mod tests {
         let mut prog = Progression::default();
         let mut vit = Vitals::default();
         prog.set_level(&data.actors[0], 4);
-        vit.set(1, 25, 5); // current HP 25
+        vit.set(1, 25, 5);
         let (sw, var, inv) = (
             Switches::default(),
             Variables::default(),
             Inventory::default(),
         );
-        let mut party = Party::default(); // starts with actor 1
+        let mut party = Party::default();
         let c = ctx(&data, &prog, &vit, "Ron");
         let holds = |p: &[i32]| branch_holds(p, "", &sw, &var, &party, &inv, &c, None);
         // In party (sub 0).

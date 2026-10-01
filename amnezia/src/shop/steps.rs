@@ -1,8 +1,4 @@
-//! The shop's per-phase input steps: the Buy/Sell/Leave command menu, the buy and
-//! sell lists, and the "how many?" quantity window. Each takes one keypress and
-//! returns a [`Transition`] telling [`super::flow`] to hold the phase, switch to
-//! another, or leave; trades run against the live gold and inventory through
-//! [`super::logic`].
+//! Shop phase handlers return [`Transition`] to [`super::flow`]; trades use [`super::logic`].
 
 use bevy::prelude::*;
 

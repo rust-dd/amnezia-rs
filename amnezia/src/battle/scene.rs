@@ -16,18 +16,14 @@ use bevy::prelude::*;
 /// World z of the full-screen backdrop on the overlay: below the battlers.
 const BACKDROP_Z: f32 = 100.0;
 
-/// World z of the enemy battlers on the overlay: above the backdrop, below the
-/// screen flash (300) and animation cells (510). Later battlers add a sliver so a
-/// fixed placement order is stable.
+/// Battlers sit above the backdrop and below flashes/cells; tiny offsets preserve placement order.
 const BATTLER_Z: f32 = 200.0;
 
 /// How close (squared, in RM2000 px) an animation flash must land to a battler's
 /// base to tint it. Both are integer-derived, so this only guards float noise.
 const FLASH_MATCH_EPS: f32 = 0.5;
 
-/// The battler height an animation's `position` anchor assumes until the battler
-/// image has loaded and its real pixel height is known: EasyRPG falls back to
-/// `GetAnimationCellHeight() / 2` = 48 (`battle_animation.cpp`).
+/// EasyRPG uses half an animation cell (48 px) until the battler bitmap is loaded.
 const FALLBACK_BATTLER_HEIGHT: f32 = 48.0;
 
 /// A backdrop or battler sprite belonging to the live fight;
@@ -40,12 +36,8 @@ struct Canvas;
 
 type MovingScene = (With<SceneEntity>, Without<Canvas>);
 
-/// An enemy battler sprite: its index into [`Battle::enemies`], its RM2000
-/// screen-offset base — the anchor animations play on and the point a target
-/// flash is matched against — and its measured pixel height, from which an
-/// animation's `position` anchor derives its vertical offset (see
-/// [`battler_height_at`]). Height starts at [`FALLBACK_BATTLER_HEIGHT`] and is
-/// updated once the battler image loads.
+/// Enemy sprite with a shared animation/flash anchor and measured pixel height.
+/// Uses [`FALLBACK_BATTLER_HEIGHT`] until the image loads.
 #[derive(Component)]
 #[require(effects::Effects, crate::legacy_colors::flash::SpriteFlash)]
 pub(super) struct Battler {
@@ -54,9 +46,7 @@ pub(super) struct Battler {
     pub(super) height: f32,
 }
 
-/// A foe's placement `(x, y)` on the RM2000 320×240 backdrop re-centred to a
-/// screen offset from centre (y downward) — the same point `resolve::foe_anim_pos`
-/// uses, so an animation and its target flash land on this battler's centre.
+/// Re-centre backdrop coordinates on the animation/flash overlay (y down).
 fn battler_base(x: u32, y: u32) -> Vec2 {
     Vec2::new(x as f32 - 160.0, y as f32 - 120.0)
 }
@@ -136,10 +126,7 @@ fn sync_scene(
     }
 }
 
-/// Update each battler's measured pixel height once its image has loaded, so an
-/// animation's `position` anchor (feet/head) shifts by the real half-height
-/// rather than the fallback. Runs every frame; the height settles as soon as the
-/// asset is ready and is otherwise left at [`FALLBACK_BATTLER_HEIGHT`].
+/// Replace fallback heights after loading so head/feet animations align with the bitmap.
 fn measure_battlers(images: Res<Assets<Image>>, mut battlers: Query<(&mut Battler, &Sprite)>) {
     for (mut battler, sprite) in &mut battlers {
         if let Some(image) = images.get(&sprite.image) {
@@ -151,10 +138,7 @@ fn measure_battlers(images: Res<Assets<Image>>, mut battlers: Query<(&mut Battle
     }
 }
 
-/// The pixel height of the battler whose base matches `pos` (an animation's
-/// target centre), for the animation's `position` anchor offset. `None` when no
-/// battler sits there — a party-area target, which the caller heights with a
-/// sensible default.
+/// Height at the target centre; undrawn party targets return `None`.
 pub(super) fn battler_height_at(battlers: &Query<&Battler>, pos: Vec2) -> Option<f32> {
     battlers
         .iter()

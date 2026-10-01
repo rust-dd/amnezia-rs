@@ -42,10 +42,7 @@ use std::path::PathBuf;
 
 pub(crate) const SAVE_FORMAT_VERSION: u32 = 28;
 
-/// A request to load the save slot, honoured by [`save_or_load`] on the next
-/// frame exactly as if `F9` had been pressed. The title screen's "Betöltés"
-/// (Continue) sets it so a resume reuses the same restore path without duplicating
-/// the load body.
+/// Title Continue and the debug hotkey share this deferred load request.
 #[derive(Resource, Default)]
 pub struct LoadRequest(pub bool);
 
@@ -92,9 +89,7 @@ impl SaveLocation {
     }
 }
 
-/// The RM2000 neutral screen tone (every channel 100), the [`SaveGame::tone`]
-/// default so a slot saved before the tone was persisted loads without tinting
-/// the screen — a plain `(0, 0, 0, 0)` default would black it out.
+/// Legacy saves need neutral 100-valued tone channels; zero would black out the screen.
 fn neutral_tone() -> (i32, i32, i32, i32) {
     (100, 100, 100, 100)
 }
@@ -126,9 +121,7 @@ impl Plugin for SavePlugin {
     }
 }
 
-/// The save/load request flags, the resumed marker, and the resolved slot path,
-/// bundled into one `SystemParam` so [`save_or_load`] stays within Bevy's
-/// 16-parameter cap.
+/// Group save I/O resources to stay within Bevy's system-parameter limit.
 #[derive(SystemParam)]
 struct SaveIo<'w, 's> {
     files: Option<Res<'w, crate::menu::save_files::SaveFiles>>,
@@ -194,13 +187,9 @@ enum Action {
     Load,
 }
 
-/// Decide the frame's action. A dialogue or a still-running event (`gated`) holds
-/// back the hotkey/menu save (`hotkey_save`) and the `F9` dev load (`hotkey_load`),
-/// but an interpreter-originated save (`event_save`, opcode 11910) and the title's
-/// Continue (`menu_load`, [`LoadRequest`]) both bypass that gate: an event save
-/// fires while its own event is deliberately still running, and a resume must never
-/// be refused just because the boot intro could still be `running.active()`. A save
-/// takes precedence over a load requested in the same frame.
+/// Dialogue/events gate ordinary saves and debug loads, but not event saves or
+/// Continue: those must work while the save event or boot intro is still active.
+/// Saving takes precedence over loading in the same frame.
 fn resolve(
     event_save: bool,
     hotkey_save: bool,
@@ -217,11 +206,7 @@ fn resolve(
     }
 }
 
-/// Handle the save (`F5`) and load (`F9`) hotkeys, the menu's Save action, and the
-/// interpreter's `OpenSaveMenu` (opcode 11910). A fade defers everything so a
-/// snapshot is never taken or applied mid-transition. A dialogue or running event
-/// additionally holds back the hotkey/menu save and any load, but not the
-/// interpreter save — the save crystal saves while its own event still runs.
+/// Defer all I/O during transitions; otherwise use [`resolve`]'s origin-specific gates.
 #[allow(clippy::too_many_arguments)]
 fn save_or_load(
     keys: Res<ButtonInput<KeyCode>>,

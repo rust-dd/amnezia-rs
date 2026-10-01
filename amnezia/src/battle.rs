@@ -1,20 +1,6 @@
-//! The turn-based, front-view battle system. The interpreter's
-//! `EnemyEncounter` (opcode 10710, `params[1]` = troop id) drives it through a
-//! clean message/resource contract so the world stays decoupled from the fight:
-//!
-//! - **IN** — [`BattleRequest`] `{ troop_id }`: start a fight with that troop.
-//! - **PAUSE** — [`BattleActive`]`(bool)`: `true` while a fight runs; the world's
-//!   movement/interpreter pause guards read it.
-//! - **OUT** — [`BattleResult`]`(Option<`[`BattleOutcome`]`>)`: set at the end so
-//!   the interpreter can branch to Victory (20710) / Escape (20711) /
-//!   Defeat (20712), then clear it.
-//!
-//! The flow: on a request the encounter is built ([`model::Battle::build`]), the
-//! party picks commands ([`input`]), actions resolve fastest-first, and the fight
-//! ends in victory (exp + gold rewarded), defeat, or a successful flee. Party
-//! HP/SP persists between fights in [`Vitals`]. The Bevy systems that drive this
-//! live in [`systems`]; this module owns the plugin, the message/resource
-//! contract, and the battle-only database.
+//! Front-view battles: [`BattleRequest`] starts an encounter, [`BattleActive`]
+//! pauses the world, and the interpreter consumes [`BattleResult`] to branch
+//! to victory (20710), escape (20711) or defeat (20712). [`Vitals`] persists HP/SP.
 
 mod events;
 mod feedback;
@@ -88,14 +74,10 @@ pub struct BattleResult(pub Option<BattleOutcome>);
 struct BattleData {
     monsters: Vec<MonsterDef>,
     troops: Vec<TroopDef>,
-    /// The attribute (element) and state tables, loaded for the elemental and
-    /// status resolution that lands separately.
     #[allow(dead_code)]
     attributes: Vec<AttributeDef>,
     #[allow(dead_code)]
     states: Vec<StateDef>,
-    /// The system audio definition: the battle / victory / game-over music and the
-    /// per-hit sound effects the battle system plays.
     system: SystemDef,
 }
 
@@ -106,7 +88,6 @@ struct BattleData {
 struct MapBgm(Option<BgmTrack>);
 
 impl MapBgm {
-    /// Remember `track` (the pre-battle map BGM) so it can be restored later.
     fn memorize(&mut self, track: Option<BgmTrack>) {
         self.0 = track;
     }

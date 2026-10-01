@@ -1,8 +1,5 @@
-//! Dialogue: the message-box UI, plus the action-key interaction that starts an
-//! event's interpreter run when the player presses it facing that event. The
-//! interpreter opens boxes via [`Dialogue::open`]; the [`typewriter`] reveals
-//! each page letter by letter and [`view`] draws it. Decision or Cancel advances
-//! a completed page or releases an explicit key-wait.
+//! Message-box interaction, typewriter timing and rendering. Decision or Cancel
+//! advances a completed page or releases an explicit key-wait.
 
 mod action;
 pub(crate) mod async_smoke;

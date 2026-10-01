@@ -1,15 +1,6 @@
-//! Screen-shake motion, a faithful port of EasyRPG's `Shake::NextPosition` /
-//! `Shake::Update` (`reference/easyrpg-player/src/shake.h`). RM2000 drives the
-//! shake in integer screen pixels at a fixed 60 fps: an amplitude of
-//! `1 + 2 * strength`, a phase that advances `4 * (speed + 2)` steps (out of 256
-//! per cycle) every frame, and a per-frame `cutoff` that limits how far the
-//! position may jump so a starting or interrupted shake ramps in smoothly instead
-//! of snapping.
-//!
-//! The remake runs on a real-time clock, so [`ShakeState`] accumulates elapsed
-//! time and steps the integer recurrence one 60 fps frame at a time. One RM2000
-//! pixel is one world unit (as for pictures), so the returned position is added
-//! straight to the camera's x translation.
+//! Integer-pixel 60 Hz shake from EasyRPG `Shake::NextPosition`/`Update`
+//! (`reference/easyrpg-player/src/shake.h`). Per-tick cutoff bounds the displacement
+//! so new or interrupted shakes ramp smoothly; one pixel equals one world unit.
 
 use std::f64::consts::PI;
 
@@ -17,13 +8,8 @@ use std::f64::consts::PI;
 #[cfg(test)]
 const FRAME_SECS: f32 = 1.0 / 60.0;
 
-/// The next integer shake position, a direct port of `Shake::NextPosition`.
-///
-/// `amplitude = 1 + 2 * strength`; the phase is
-/// `(time_left * 4 * (speed + 2)) mod 256`, mapped to `[0, 2π)`; the raw offset
-/// `-amplitude * sin(phase)` is truncated toward zero (C++ `double`→`int`) and
-/// then clamped to within `cutoff = speed * amplitude / 8 + 1` of `position`, so
-/// no single frame moves more than `cutoff` pixels.
+/// EasyRPG `Shake::NextPosition`: truncate the sine offset toward zero like C++,
+/// then limit its displacement from the previous position by the per-tick cutoff.
 pub fn next_position(strength: i32, speed: i32, time_left: i32, position: i32) -> i32 {
     let amplitude = 1 + 2 * strength;
     let phase =
@@ -33,8 +19,6 @@ pub fn next_position(strength: i32, speed: i32, time_left: i32, position: i32) -
     raw.clamp(position - cutoff, position + cutoff)
 }
 
-/// The live shake: the current command's strength/speed, the remaining frame
-/// count, the current integer position, and a sub-frame time accumulator.
 #[derive(Default, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ShakeState {
     strength: i32,
@@ -58,10 +42,8 @@ impl ShakeState {
         self.position as f32
     }
 
-    /// Begin a `ShakeScreen` of `power`/`speed` lasting `secs`. `power <= 0` (or a
-    /// non-positive duration) is treated as no shake, matching the remake's
-    /// "power 0 → none" rule. The position is deliberately not reset, so a shake
-    /// interrupting another flows on smoothly (as in RPG_RT).
+    /// Non-positive power/duration disables shaking. Retain position when interrupted
+    /// so the replacement shake continues smoothly, as in RPG_RT.
     pub fn start(&mut self, power: i32, speed: i32, secs: f32) {
         if power <= 0 || secs <= 0.0 {
             self.time_left = 0;
@@ -183,7 +165,6 @@ mod tests {
 
     #[test]
     fn position_stays_within_amplitude() {
-        // Over a full run the position never exceeds 1 + 2·strength in magnitude.
         let strength = 6;
         let mut pos = 0;
         for time_left in (1..120).rev() {
@@ -208,7 +189,6 @@ mod tests {
         let first = shake.step(FRAME_SECS).abs();
         let cutoff = (5 * (1 + 2 * 7) / 8) + 1;
         assert!(first <= cutoff as f32);
-        // After well past its duration the shake settles back to zero.
         assert_eq!(shake.step(2.0), 0.0);
     }
 

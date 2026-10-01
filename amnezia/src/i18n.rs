@@ -1,13 +1,5 @@
-//! Runtime localization: a Hungarian→English lookup loaded from `i18n/en.ron`,
-//! toggled live with F2. Display sites (dialogue, choices, menu/shop/battle
-//! names) pass their Hungarian text through [`tr`]; in English mode it returns
-//! the translation, or the Hungarian source when a line is untranslated, and in
-//! Hungarian mode it returns the source unchanged.
-//!
-//! The table and current language are process-global — localization is a
-//! cross-cutting concern read from many systems — so callers need not thread a
-//! resource through every UI system (and the interpreter, already at Bevy's
-//! parameter cap, stays untouched).
+//! Hungarian-to-English lookup from `i18n/en.ron`, toggled with F2; missing entries
+//! keep the source text. Process-global state avoids threading a resource through every UI.
 
 use crate::assets::asset_root;
 use bevy::prelude::*;
@@ -34,7 +26,6 @@ pub fn tr(source: &str) -> String {
     }
 }
 
-/// Whether English is currently the display language.
 pub fn is_english() -> bool {
     ENGLISH.load(Ordering::Relaxed)
 }

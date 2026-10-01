@@ -1,11 +1,8 @@
-//! Shared fixtures for the menu module tests: a minimal [`GameData`] with one
-//! actor, one healing item, and one skill, plus builders the sub-screen tests
-//! specialise. Compiled only under `cfg(test)`.
+//! Shared menu fixtures; the default actor has no curves or gear to exercise fallbacks.
 
 use crate::gamedata::GameData;
 use amnezia_data::{ActorDef, ItemDef, SkillDef};
 
-/// The healing item id used across the menu tests.
 pub(super) const ITEM_HERB: u32 = 5;
 
 /// A bare level-2 hero (Ron), empty stat curves so derivations fall back to the
@@ -54,7 +51,6 @@ pub(super) fn herb() -> ItemDef {
     item
 }
 
-/// A weapon (type 1) with an `atk` bonus, for equipment and field-usable tests.
 pub(super) fn weapon(id: u32, name: &str, atk: u32) -> ItemDef {
     let mut item = blank_item(id, 1);
     item.name = name.into();

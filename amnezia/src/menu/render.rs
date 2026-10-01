@@ -10,9 +10,7 @@ use crate::vitals::Vitals;
 
 use super::{MenuScreen, derive, status};
 
-/// One party member's status-window figures: the FaceSet portrait, identity, and
-/// the numbers the status window prints beside the face. HP/SP are kept as raw
-/// current/maximum values so [`super::view`] can tint the low ones the RM2000 way.
+/// Keep current/max HP/SP separate so the view can apply RM2000 low-vitals colours.
 pub(super) struct MemberView {
     pub face_name: String,
     pub face_index: u32,
@@ -28,10 +26,7 @@ pub(super) struct MemberView {
     pub max_sp: i32,
 }
 
-/// The party roster as status-window rows, one per roster slot (unknown ids fall
-/// back to a `#id` placeholder so the slot index still lines up with the
-/// member-select cursor). Every figure is derived exactly as the battle system
-/// derives it (see [`super::derive`]).
+/// One row per roster slot; unknown IDs keep a placeholder so member cursors stay aligned.
 pub(super) fn members(
     hero_name: &crate::text::HeroName,
     data: &GameData,

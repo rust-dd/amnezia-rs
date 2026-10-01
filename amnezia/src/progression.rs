@@ -20,9 +20,7 @@ pub struct Progression {
 }
 
 impl Progression {
-    /// The actor's stored total experience, defaulting to the experience needed
-    /// to reach its starting level when it has earned none yet (so it never has
-    /// to re-earn the levels it began the game with).
+    /// Absent entries start at the starting-level EXP requirement, not zero.
     pub fn total(&self, def: &ActorDef) -> u32 {
         self.experience
             .get(&def.id)
@@ -92,10 +90,7 @@ impl Progression {
         level
     }
 
-    /// Set the actor's stored experience so its level becomes `target`, clamped to
-    /// `[1, def.max_level]`. The
-    /// total is set to exactly the target level's cumulative requirement, so the
-    /// next fight's stats derive from the new level.
+    /// Set EXP to the exact threshold for `target`, clamped to `[1, def.max_level]`.
     pub fn set_level(&mut self, def: &ActorDef, target: u32) {
         let previous_level = self.level(def);
         let known = self.known_skill_ids(def);
@@ -136,14 +131,9 @@ impl Progression {
     }
 }
 
-/// EasyRPG `Game_Actor::CalculateExp(level)` for the RPG2000 curve (`exp_curve
-/// == 1`), reproduced exactly. Over `level` iterations it sums a running
-/// `base + correction` term while `base` is scaled each step by an `inflation`
-/// factor that itself decays toward 1; the decay rate depends on `level`, so it
-/// is a constant for the whole call. The C++ accumulates in `int`, truncating
-/// each `base + correction` toward zero — matched here by the `as i64` cast. The
-/// return is the cumulative experience whose crossing raises the actor to level
-/// `level + 1`, clamped to [`MAX_EXP`].
+/// EasyRPG `Game_Actor::CalculateExp` for the RPG2000 curve (`exp_curve == 1`).
+/// Inflation decay depends on the requested level; each iteration truncates toward
+/// zero like the C++ integer accumulator. Returns the threshold for `level + 1`.
 fn calculate_exp(level: u32, base: u32, inflation: u32, correction: u32) -> u32 {
     let mut result: i64 = 0;
     let mut base = base as f64;

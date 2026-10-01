@@ -1,17 +1,6 @@
-//! Runtime equipment: the five gear slots (weapon / shield / armor / helmet /
-//! accessory) each party actor currently wears. This is the single source of
-//! truth for equipped gear once the game is running — the menu changes it, the
-//! battle reads it, and the save persists it. Each actor's `ActorDef` slots stay
-//! the *starting* defaults: an actor with no stored entry here falls back to
-//! them, so a new game (and any member that joins later) begins with its RM2000
-//! starting loadout without an explicit initialisation pass, exactly as
-//! [`crate::vitals::Vitals`] and [`crate::progression::Progression`] treat their
-//! `ActorDef` values as the default.
-//!
-//! The mutation ([`Equipment::equip`]) mirrors EasyRPG `Game_Actor::ChangeEquipment`:
-//! the newly worn item leaves the inventory, the displaced item returns to it, a
-//! `fix_equipment` actor refuses every change, and a two-handed weapon clears the
-//! other hand (returning that item too).
+//! Runtime loadouts shared by menus, battles and saves; absent actors use their
+//! `ActorDef` starting gear. Swaps follow EasyRPG `Game_Actor::ChangeEquipment`:
+//! return displaced gear, consume replacements, enforce fixed/two-handed rules.
 
 use crate::state::Inventory;
 use amnezia_data::{ActorDef, ItemDef};
@@ -24,11 +13,8 @@ pub(crate) use effects::EquipmentEffects;
 /// The five gear slot indices, in `ActorDef` slot order.
 const SLOTS: usize = 5;
 
-/// The RM2000 item categories the equip slots accept, by 0-based slot index:
-/// weapon slot → type 1, shield → 2, armor → 3, helmet → 4, accessory → 5. A
-/// dual-wielding actor (`two_weapons`) fills the shield slot with a second
-/// weapon, so that slot accepts weapons (type 1) instead (EasyRPG
-/// `Window_EquipItem` maps `shield` to `weapon` when `HasTwoWeapons`).
+/// Map weapon/shield/armor/helmet/accessory slots to item categories 1–5.
+/// Dual wielding makes the shield slot accept weapons (EasyRPG `Window_EquipItem`).
 pub fn slot_item_type(slot: usize, two_weapons: bool) -> u32 {
     match slot {
         0 => 1,
@@ -52,9 +38,7 @@ pub fn can_equip(actor: &ActorDef, slot: usize, item: &ItemDef) -> bool {
 pub struct Equipment(HashMap<u32, [u32; SLOTS]>);
 
 impl Equipment {
-    /// The actor's five equipped item ids (0 = empty slot), reading its stored
-    /// loadout or falling back to the `ActorDef` starting gear when it has none
-    /// changed yet.
+    /// Stored loadout or starting gear; item ID 0 means an empty slot.
     pub fn slots(&self, def: &ActorDef) -> [u32; SLOTS] {
         self.0.get(&def.id).copied().unwrap_or([
             def.weapon,
@@ -65,9 +49,7 @@ impl Equipment {
         ])
     }
 
-    /// The item id in one 0-based slot for the actor (an out-of-range slot reads
-    /// the accessory slot). The get half of the requested per-slot accessors;
-    /// consumers so far read the whole loadout via [`Equipment::slots`].
+    /// Read a zero-based slot; out-of-range indices select the accessory slot.
     #[allow(dead_code)]
     pub fn slot(&self, def: &ActorDef, slot: usize) -> u32 {
         self.slots(def)[slot.min(SLOTS - 1)]
@@ -86,12 +68,8 @@ impl Equipment {
         self.0.insert(def.id, slots);
     }
 
-    /// Equip `new_id` (0 = unequip) into the actor's 0-based `slot`, moving items
-    /// between the slot and the party inventory the RM2000 way (EasyRPG
-    /// `Game_Actor::ChangeEquipment`): the displaced item returns to the
-    /// inventory, the newly worn item leaves it, and equipping a two-handed
-    /// weapon clears the other hand (that item returns too). A `fix_equipment`
-    /// actor refuses every change. Returns whether anything changed.
+    /// Swap gear with inventory, enforcing fixed equipment and two-handed rules.
+    /// `new_id = 0` unequips; returns whether the loadout changed.
     pub fn equip(
         &mut self,
         def: &ActorDef,
@@ -134,9 +112,7 @@ impl Equipment {
         if before == after {
             return false;
         }
-        // Every slot whose occupant changed moves one item: the old one back to
-        // the inventory, the new one out of it. The two-handed clear is folded
-        // into `after`, so the displaced shield is handled by the same diff.
+        // The loadout diff also returns gear displaced by the two-handed rule.
         for i in 0..SLOTS {
             if before[i] != after[i] {
                 if before[i] != 0 {
@@ -151,9 +127,7 @@ impl Equipment {
         true
     }
 
-    /// Snapshot `(actor_id, slots)` pairs for the save file, in id order. Only
-    /// actors whose gear was changed are stored; an untouched actor is absent, so
-    /// a load restores it to its `ActorDef` starting gear.
+    /// Save changed loadouts in actor-ID order; omitted actors retain starting gear.
     pub fn entries(&self) -> Vec<(u32, [u32; SLOTS])> {
         let mut entries: Vec<(u32, [u32; SLOTS])> =
             self.0.iter().map(|(&id, &slots)| (id, slots)).collect();
@@ -167,9 +141,7 @@ impl Equipment {
     }
 }
 
-/// The slots that result from placing `new_id` (0 = unequip) into 0-based `slot`,
-/// applying the two-handed rule but touching no inventory. Shared by the real
-/// swap ([`Equipment::equip`]) and the menu's stat-change preview so both agree.
+/// Preview the same two-handed rules as a real swap, without changing inventory.
 pub fn preview_slots(
     mut slots: [u32; SLOTS],
     slot: usize,
@@ -184,10 +156,8 @@ pub fn preview_slots(
     slots
 }
 
-/// When a two-handed weapon occupies a hand while the other hand is also filled,
-/// clear the other hand (EasyRPG `Game_Actor::ChangeEquipment`). Only a change to
-/// a hand slot (weapon 0 or shield 1) can trigger it; a change to armour/helmet/
-/// accessory leaves the hands alone.
+/// Two-handed swaps clear the other hand (EasyRPG `Game_Actor::ChangeEquipment`).
+/// Changing armor, helmet or accessory must not affect either hand.
 fn clear_other_hand(slots: &mut [u32; SLOTS], changed: usize, items: &[ItemDef]) {
     if changed > 1 {
         return;

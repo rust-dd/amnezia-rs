@@ -1,10 +1,5 @@
-//! Reading an actor's live parameters — the lookup shared by the
-//! `ControlVariables` actor operand (opcode 10220, operand type 5) and the
-//! `ConditionalBranch` actor sub-checks (opcode 12010, condition 5). Mirrors
-//! EasyRPG's `ControlVariables::Actor`: level/exp from the progression store,
-//! current and max HP/SP from the vitals store and stat curve, and the battle
-//! stats folding in equipped gear — the same combination a battle builds a
-//! fighter from. Kept Bevy-free so it unit-tests against plain state resources.
+//! Live actor lookups shared by ControlVariables (10220) and ConditionalBranch
+//! (12010), using the same progression, vitals and equipment as battle construction.
 
 use crate::battle::{Stats, actor_hp_sp_at, actor_stats_at, equipment_bonus_slots};
 use crate::equipment::Equipment;
@@ -13,9 +8,7 @@ use crate::progression::Progression;
 use crate::vitals::Vitals;
 use amnezia_data::ActorDef;
 
-/// The read-only actor state the actor operand and the actor conditional
-/// sub-checks share: the database (defs and equipment), the level/exp store,
-/// current HP/SP, and the hero's live name (which only actor 1 carries).
+/// Read-only runtime actor state shared by variable operands and branch predicates.
 pub(super) struct ActorCtx<'a> {
     pub(super) data: &'a GameData,
     pub(super) progression: &'a Progression,

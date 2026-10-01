@@ -1,7 +1,4 @@
-//! Shared read-only game database: the actor, item, and skill definitions the
-//! in-game menu and the shop screens look up by id. Loaded once from the
-//! converted RON at plugin-build time (like the hero name in `main`), so every
-//! consumer sees a ready [`GameData`] resource without an `Option` guard.
+//! Read-only converted database, loaded at plugin build so consumers need no readiness guard.
 
 use crate::assets::{asset_root, load_ron};
 use amnezia_data::{ActorDef, AttributeDef, ItemDef, SkillDef};
@@ -23,12 +20,10 @@ pub struct GameData {
 }
 
 impl GameData {
-    /// The actor with `id`, if defined.
     pub fn actor(&self, id: u32) -> Option<&ActorDef> {
         self.actors.iter().find(|a| a.id == id)
     }
 
-    /// The item with `id`, if defined.
     pub fn item(&self, id: u32) -> Option<&ItemDef> {
         self.items.iter().find(|i| i.id == id)
     }

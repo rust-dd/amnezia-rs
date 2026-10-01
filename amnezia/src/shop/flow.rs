@@ -258,7 +258,6 @@ fn any_menu_key(keys: &ButtonInput<KeyCode>) -> bool {
     RELEVANT.iter().any(|k| keys.just_pressed(*k))
 }
 
-/// The action key: Space or Enter, as used by the dialogue and choice boxes.
 pub(super) fn confirm(keys: &ButtonInput<KeyCode>) -> bool {
     keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter)
 }

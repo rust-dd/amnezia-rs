@@ -108,7 +108,7 @@ impl Exec<'_, '_> {
     }
 }
 
-/// What [`dispatch`] decided after handling one command.
+/// What [`dispatch()`] decided after handling one command.
 pub(super) enum Flow {
     /// The command is done; step to the next one this frame.
     Advance,
@@ -136,11 +136,8 @@ fn any_route_running(
         || event_movers.iter().any(|(_, _, stepper)| stepper.pending())
 }
 
-/// Resolve an RM2000 character reference — 10001 the hero, 10005 this event, any
-/// other positive value an event id — to its `(tile_x, tile_y, facing)`, read from
-/// the live hero and event sprites. Shared by the `ControlVariables` character
-/// operand and the `ConditionalBranch` orientation check; an unknown reference or
-/// a missing sprite yields `None`.
+/// Resolve live `(tile_x, tile_y, facing)`: 10001 = hero, 10005 = this event,
+/// other positive values = event IDs. Missing references/sprites return `None`.
 pub(super) fn resolve_character(
     char_ref: i32,
     this_event: u32,

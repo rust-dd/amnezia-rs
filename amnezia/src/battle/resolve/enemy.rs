@@ -5,12 +5,8 @@
 use super::*;
 
 impl Battle {
-    /// Advance the command phase past every member the game must act for: a
-    /// can't-act (restriction 1) member is auto-ordered [`Command::Nothing`]; a
-    /// berserk (2) member is forced to strike a random living enemy; a confused (3)
-    /// member a random living ally. Stops on the first member who may freely choose
-    /// (setting [`Battle::turn`]), or enters resolution once every remaining chooser
-    /// has been auto-ordered — so the command UI never halts on a restricted member.
+    /// Auto-order restricted members: cannot-act → Nothing, berserk → random enemy,
+    /// confused → random ally. Stop at the next free chooser or enter resolution.
     pub(in crate::battle) fn skip_restricted_choosers(&mut self) {
         while let Some(i) = self.next_chooser() {
             let restriction = logic::worst_restriction(&self.members[i].states, &self.states);
@@ -25,10 +21,7 @@ impl Battle {
         self.begin_resolve();
     }
 
-    /// Order every living member for RM2000 Auto-battle, then resolve: a freely
-    /// acting member basic-attacks a random living enemy (nothing when no foe is
-    /// left), while a restricted member keeps its forced action. Reuses the same
-    /// target/AI helpers as the per-actor flow, so the enemies still act.
+    /// Auto-battle uses basic attacks for free members and preserves restricted actions.
     pub(in crate::battle) fn auto_battle_commands(&mut self) {
         let enemies_alive: Vec<bool> = self.enemies.iter().map(|e| e.alive()).collect();
         for i in 0..self.members.len() {

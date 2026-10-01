@@ -26,8 +26,7 @@ pub const DIR_LEFT: u32 = 3;
 /// (RM2000 aligns the sprite's bottom with the tile's bottom).
 pub const CHAR_Y_OFFSET: f32 = (CHAR_H - TILE) / 2.0;
 
-/// World draw-Z of the normal ground layer (lower tiles with no star/wall
-/// attribute): the bottom of the stack.
+/// Ground tiles without star/wall priority form the bottom draw band.
 pub const Z_GROUND: f32 = 0.0;
 /// World draw-Z of normal upper-layer tiles — above the ground, below the hero.
 pub const Z_UPPER: f32 = 1.0;
@@ -37,17 +36,13 @@ const Z_EVENTS_BELOW: f32 = 2.0;
 /// Base draw-Z of the hero and same-layer event NPCs (page layer 1): the
 /// y-sorted "Priority_Player" band.
 const Z_SAME: f32 = 4.0;
-/// World draw-Z of "above hero" tiles — lower tiles carrying the star or wall
-/// attribute plus star upper tiles — which occlude the hero (roofs, treetops,
-/// wall tops).
+/// Star/wall-priority tiles occlude characters beneath them.
 pub const Z_TILE_ABOVE: f32 = 6.0;
 /// Base draw-Z of above-hero-layer event NPCs (page layer 2): above even the
 /// "above hero" tiles, matching EasyRPG's `Priority_EventsAbove` > `TilesetAbove`.
 const Z_EVENTS_ABOVE: f32 = 7.0;
 
-/// The per-row y-sort bias added within a dynamic band: one lower on screen
-/// (larger `tile_y`) draws in front. Clamped so any map up to 199 tiles tall
-/// keeps its band's 2.0 width without spilling into the next band.
+/// Lower screen rows draw in front; clamp the bias to keep maps up to 199 rows within their band.
 fn row_bias(tile_y: i32) -> f32 {
     (tile_y.clamp(0, 199) as f32) * 0.01
 }
@@ -58,9 +53,7 @@ pub fn character_z(tile_y: i32) -> f32 {
     Z_SAME + row_bias(tile_y)
 }
 
-/// Draw depth for an event NPC at tile row `tile_y`, placed in the band for its
-/// page `layer` (0 below the hero, 1 same as the hero, 2 above the hero and the
-/// "above hero" tiles) — RM2000 draws events relative to the hero by page layer.
+/// Page layers select below/same/above-hero draw bands, each sorted by tile row.
 pub fn character_z_layer(tile_y: i32, layer: u32) -> f32 {
     let base = match layer {
         0 => Z_EVENTS_BELOW,
@@ -120,11 +113,8 @@ pub const PASS_ALL: u8 = PASS_DOWN | PASS_LEFT | PASS_RIGHT | PASS_UP;
 /// The counter attribute bit of an upper-layer tile's `passages_up` byte.
 const COUNTER_BIT: u8 = 0x40;
 
-/// The passability bit for a step from `(fx, fy)` to the adjacent `(tx, ty)`:
-/// the direction of travel, per EasyRPG's `GetPassableMask`. Passing this bit to
-/// [`passable`] on the tile being left checks it permits exit that way; passing
-/// the reverse (`passable_mask(tx, ty, fx, fy)`) on the tile being entered checks
-/// it permits entry from the opposite side.
+/// EasyRPG GetPassableMask direction bit. Check it on exit and the reverse bit
+/// on entry so both tile edges permit the move.
 pub fn passable_mask(fx: i32, fy: i32, tx: i32, ty: i32) -> u8 {
     let mut bit = 0;
     if tx > fx {
@@ -142,10 +132,7 @@ pub fn passable_mask(fx: i32, fy: i32, tx: i32, ty: i32) -> u8 {
     bit
 }
 
-/// Whether the upper-layer tile `upper_id` is a counter (RM2000 `IsCounter`):
-/// the counter bit of its `passages_up` byte. An action-triggered event one tile
-/// beyond a counter can still be interacted with across it. The empty upper tile
-/// (`id <= 10000`) and ids past the array are never counters.
+/// Counter tiles allow reaching action events beyond them. Empty/out-of-range upper IDs are not counters.
 pub fn is_counter(upper_id: u16, passages_up: &[u8]) -> bool {
     if upper_id <= 10000 {
         return false;
@@ -173,12 +160,7 @@ pub(crate) fn passages_lower_index(id: u16) -> Option<usize> {
 /// upper-layer tile above the hero instead of at or below it.
 pub(crate) const ABOVE_HERO_BIT: u8 = 0x10;
 
-/// Whether an upper-layer tile is flagged "above hero" (roof tops, tree tops,
-/// tall-object tops): bit [`ABOVE_HERO_BIT`] of its `passages_up` byte. Such a
-/// tile renders above the hero so the hero walks behind it; ordinary upper tiles
-/// render at or below the hero. The empty upper tile (`id <= 10000`) and ids
-/// past the array are never above-hero. Indexes `passages_up` the same way
-/// [`passable`] and [`upper_source`] do (`id - 10000`).
+/// Upper-layer star priority; empty/out-of-range IDs never occlude the hero.
 pub fn above_hero(upper_id: u16, passages_up: &[u8]) -> bool {
     if upper_id <= 10000 {
         return false;
@@ -188,13 +170,8 @@ pub fn above_hero(upper_id: u16, passages_up: &[u8]) -> bool {
         .is_some_and(|byte| byte & ABOVE_HERO_BIT != 0)
 }
 
-/// Whether a LOWER-layer tile must draw above the hero — roof surfaces, wall
-/// tops, treetops, and cliff overhangs are painted on the ground layer yet
-/// occlude the hero as it passes behind them. RM2000 (EasyRPG
-/// `TilemapLayer::CreateTileCacheAt`) raises a lower tile to the above-hero
-/// sublayer when its `passages_down` byte carries the star flag OR the wall flag,
-/// so wall faces occlude the hero just as star tiles do. Indexes `passages_down`
-/// the way [`passable`] does.
+/// Lower-layer star or wall flags also occlude the hero, matching
+/// EasyRPG `TilemapLayer::CreateTileCacheAt`.
 pub fn above_hero_lower(lower_id: u16, passages_down: &[u8]) -> bool {
     passages_lower_index(lower_id)
         .and_then(|i| passages_down.get(i))
@@ -205,12 +182,8 @@ pub fn above_hero_lower(lower_id: u16, passages_down: &[u8]) -> bool {
 /// walk-on shapes (edges/thresholds) the hero can still cross.
 const WALL_BIT: u8 = 0x20;
 
-/// Whether a lower-layer tile permits passage in the direction(s) `bit`. Mirrors
-/// EasyRPG's `Game_Map::IsPassableLowerTile`: a BLOCK_D autotile (ids 4000..4600)
-/// with the wall bit set is passable on its walk-on shapes (`(id-4000) % 50` in
-/// the edge/threshold set) in any direction; every other tile is passable when
-/// its byte has the requested direction bit set. Pass [`PASS_ALL`] for a
-/// non-directional "standable at all" test.
+/// EasyRPG `IsPassableLowerTile`: BLOCK_D walls allow their edge/threshold shapes
+/// in all directions; other tiles check direction bits. PASS_ALL tests standability.
 pub(crate) fn lower_passable(lower_id: u16, passages_down: &[u8], bit: u8) -> bool {
     let byte = passages_lower_index(lower_id)
         .and_then(|i| passages_down.get(i))
@@ -225,14 +198,8 @@ pub(crate) fn lower_passable(lower_id: u16, passages_down: &[u8], bit: u8) -> bo
     byte & bit != 0
 }
 
-/// Whether a cell with the given lower/upper tile ids permits passage in the
-/// direction(s) `bit`, per the active chipset's passability arrays
-/// (`passages_down` 162 bytes, `passages_up` 144) — EasyRPG's
-/// `Game_Map::IsPassableTile` map-geometry rule. The upper layer decides first: a
-/// non-empty upper tile blocks when it lacks `bit`; a passable non-"above hero"
-/// upper tile is walkable; an "above hero" upper tile (and the empty upper tile,
-/// id `<= 10000`) defers to the lower tile. `bit` is a direction from
-/// [`passable_mask`], or [`PASS_ALL`] for a non-directional standability test.
+/// EasyRPG `IsPassableTile`: upper tiles decide first; empty/star upper tiles defer
+/// to the lower layer. `bit` is a direction mask or PASS_ALL for standability.
 pub fn passable(
     lower_id: u16,
     upper_id: u16,
@@ -287,20 +254,17 @@ mod tests {
 
     #[test]
     fn character_z_sorts_by_row_and_stays_below_above_hero() {
-        assert!(character_z(5) < character_z(6)); // lower on screen draws in front
-        assert!(character_z(0) >= Z_SAME); // above the below-hero event band
-        assert!(character_z(199) < Z_TILE_ABOVE); // below the "above hero" tiles
+        assert!(character_z(5) < character_z(6));
+        assert!(character_z(0) >= Z_SAME);
+        assert!(character_z(199) < Z_TILE_ABOVE);
     }
 
     #[test]
     fn event_layer_bands_order_below_same_above() {
-        // A below-layer event sinks under the hero band; an above-layer event
-        // rises above both the hero and the "above hero" tiles; same-layer sits
-        // with the hero. Each stays y-sorted within its band.
-        assert!(character_z_layer(199, 0) < character_z(0)); // below < same
-        assert_eq!(character_z_layer(3, 1), character_z(3)); // layer 1 == hero band
-        assert!(character_z_layer(0, 2) > Z_TILE_ABOVE); // above > above-hero tiles
-        assert!(character_z_layer(5, 0) < character_z_layer(6, 0)); // y-sorted
+        assert!(character_z_layer(199, 0) < character_z(0));
+        assert_eq!(character_z_layer(3, 1), character_z(3));
+        assert!(character_z_layer(0, 2) > Z_TILE_ABOVE);
+        assert!(character_z_layer(5, 0) < character_z_layer(6, 0));
     }
 
     #[test]
@@ -311,23 +275,25 @@ mod tests {
     #[test]
     fn above_hero_reads_the_0x10_bit() {
         let mut up = vec![0x0F; 144];
-        up[5] = 0x1F; // 0x0F | 0x10: passable star tile drawn above the hero
-        up[6] = 0x0F; // ordinary passable upper tile, at/below the hero
-        up[7] = 0x10; // above-hero even with no direction bits set
+        // Star priority is independent of directional passability.
+        up[5] = 0x1F;
+        up[6] = 0x0F;
+        up[7] = 0x10;
         assert!(above_hero(10005, &up));
         assert!(!above_hero(10006, &up));
         assert!(above_hero(10007, &up));
-        assert!(!above_hero(10000, &up)); // the empty upper tile is never above
-        assert!(!above_hero(9999, &up)); // below the upper-layer id range
-        assert!(!above_hero(10144, &up)); // index past the array defaults to not-above
+        // Empty and out-of-range IDs never gain star priority.
+        assert!(!above_hero(10000, &up));
+        assert!(!above_hero(9999, &up));
+        assert!(!above_hero(10144, &up));
     }
 
     #[test]
     fn above_hero_lower_reads_the_star_bit_on_ground_tiles() {
         let mut down = vec![0x0F; 162];
         // BLOCK_E index for id 5075 is (5075-5000)+18 = 93 (a roof surface).
-        down[93] = 0x1F; // 0x0F | 0x10: passable ground tile flagged to draw above the hero
-        down[94] = 0x0F; // ordinary passable ground, at/below the hero
+        down[93] = 0x1F;
+        down[94] = 0x0F;
         assert!(above_hero_lower(5075, &down));
         assert!(!above_hero_lower(5076, &down));
         // A plain grass tile (index 0) with no star bit is never above-hero.
@@ -338,9 +304,10 @@ mod tests {
     fn above_hero_lower_also_reads_the_wall_bit() {
         let mut down = vec![0x0F; 162];
         // BLOCK_D index for id 4000 is (4000-4000)/50 + 6 = 6 (a wall autotile).
-        down[6] = 0x20; // wall bit only, no star: a wall face still occludes the hero
+        // A wall face occludes even without a star bit.
+        down[6] = 0x20;
         assert!(above_hero_lower(4000, &down));
-        down[6] = 0x0F; // a passable BLOCK_D shape with neither star nor wall stays below
+        down[6] = 0x0F;
         assert!(!above_hero_lower(4000, &down));
     }
 
@@ -366,7 +333,7 @@ mod tests {
         assert!(!passable(0, 10000, &down, &up, PASS_UP));
         // A non-star upper tile decides on its own bits regardless of the lower.
         let mut up2 = vec![0x0F; 144];
-        up2[5] = PASS_LEFT; // passable only leftward, not "above hero"
+        up2[5] = PASS_LEFT;
         assert!(passable(0, 10005, &down, &up2, PASS_LEFT));
         assert!(!passable(0, 10005, &down, &up2, PASS_RIGHT));
     }
@@ -384,17 +351,19 @@ mod tests {
     #[test]
     fn is_counter_reads_the_0x40_bit() {
         let mut up = vec![0x0F; 144];
-        up[5] = 0x4F; // 0x0F | 0x40: a passable counter tile
-        up[6] = 0x0F; // ordinary passable upper tile
+        // Counter bit 0x40 is independent of ordinary passage bits.
+        up[5] = 0x4F;
+        up[6] = 0x0F;
         assert!(is_counter(10005, &up));
         assert!(!is_counter(10006, &up));
-        assert!(!is_counter(10000, &up)); // the empty upper tile is never a counter
+        assert!(!is_counter(10000, &up));
     }
 
     #[test]
     fn wall_autotile_walk_on_shapes_are_passable() {
         let mut down = vec![0x0F; 162];
-        down[17] = 0x30; // BLOCK_D autotile #11: wall bit set, no direction bits
+        // BLOCK_D autotile 11 has wall/star priority but no passage bits.
+        down[17] = 0x30;
         let up = vec![0x0F; 144];
         // shape 0 (id 4550) is a solid wall corner — impassable
         assert!(!passable(4550, 10000, &down, &up, PASS_ALL));

@@ -51,9 +51,7 @@ fn an_unarmed_party_strike_falls_back_to_the_actor_unarmed_animation() {
 
 #[test]
 fn a_zero_animation_attacker_queues_nothing() {
-    // build_1v2's hero is bare-handed with unarmed_animation 0, so its swing
-    // queues no member animation, and rpg2k enemy normal attacks play none
-    // either — so a full round queues nothing, and id 0 is never pushed.
+    // This fixture's unarmed animation is 0; RPG2000 enemy basic attacks also play no animation.
     let mut battle = build_1v2();
     battle.commit(Command::Attack { target: 0 });
     while battle.resolve_next() {}
@@ -111,8 +109,7 @@ fn an_all_enemy_skill_queues_one_animation_over_every_living_foe() {
     s.animation_id = 8;
     battle.skills = vec![s];
     battle.cast_skill(0, 1, 0);
-    // One queued animation for the whole cast (its SE fires once), carrying
-    // every living foe as a target so its cells and flashes reach each.
+    // One cast shares its sound while reaching every living target.
     let hits: Vec<_> = battle
         .pending_anims
         .iter()
@@ -258,8 +255,7 @@ fn a_missed_strike_reports_a_miss() {
 
 #[test]
 fn a_foe_hit_enqueues_a_guaranteed_blink_without_any_animation_flash() {
-    // build_1v2's hero is bare-handed (unarmed_animation 0), so its swing plays
-    // no animation and carries no flash timing — yet the struck foe blinks.
+    // Damage blinking must work without an attack animation or flash timing.
     let mut battle = build_1v2();
     battle.members[0].weapon_hit = 100;
     assert!(battle.pending_blinks.is_empty());
@@ -424,7 +420,6 @@ fn a_missed_strike_enqueues_the_dodge_se() {
         "an evaded blow queues the dodge SE: {:?}",
         battle.pending_se
     );
-    // A pure miss lands nothing, so no damage SE.
     assert!(!battle.pending_se.contains(&BattleSe::EnemyDamaged));
 }
 
@@ -508,9 +503,7 @@ fn the_animation_hold_waits_for_the_animation_to_appear_then_finish() {
     let mut battle = build_1v2();
     battle.begin_anim_hold();
     assert!(battle.anim_hold_active());
-    // The `LiveAnimation` is spawned by `drain_pending_anims`, which runs after
-    // `resolve_tick`, so it isn't live on the first hold frame — the hold must
-    // persist through that spawn lag rather than clear on the first empty reading.
+    // Animation spawning follows resolve_tick; the hold must survive the first empty reading.
     assert!(
         battle.tick_anim_hold(false),
         "holds through the one-tick spawn lag"

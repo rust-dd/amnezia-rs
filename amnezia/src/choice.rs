@@ -1,9 +1,5 @@
-//! Dialogue choices: the windowskin menu the interpreter opens for a
-//! `ShowChoice` command. It renders at the message box's position with the
-//! options listed under a cursor the player moves with the arrow keys and
-//! confirms with the action key; the cancel key selects the choice's configured
-//! cancel option (or is refused when the choice disallows cancelling). The
-//! interpreter reads the chosen index back and runs the matching branch.
+//! Dialogue choices return an option index to the interpreter. Cancel follows
+//! RM2000's configured cancel branch, or is refused when cancellation is disabled.
 
 use bevy::prelude::*;
 
@@ -11,10 +7,7 @@ mod input;
 pub(crate) mod smoke;
 use input::update as choice_input;
 
-/// The active choice menu: the option labels, the cursor row, which event
-/// `indent` this choice belongs to, its RM2000 cancel type, whether it's showing,
-/// and — once the player confirms or cancels — the chosen option index the
-/// interpreter consumes.
+/// Choice state; `indent` identifies the interpreter branch receiving the result.
 #[derive(Resource, Default)]
 pub struct Choice {
     pub options: Vec<String>,

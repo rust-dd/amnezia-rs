@@ -78,7 +78,6 @@ pub(super) const MEMORIZE_BGM: u32 = 11530;
 pub(super) const PLAY_MEMORIZED_BGM: u32 = 11540;
 pub(super) const PLAY_SOUND: u32 = 11550;
 
-/// The presentation commands: screen effects and on-screen pictures.
 pub(super) const ERASE_SCREEN: u32 = 11010;
 pub(super) const SHOW_SCREEN: u32 = 11020;
 pub(super) const TINT_SCREEN: u32 = 11030;
@@ -91,9 +90,7 @@ pub(super) const ERASE_PICTURE: u32 = 11130;
 /// End the game to the Game Over screen.
 pub(super) const GAME_OVER: u32 = 12420;
 
-/// Open the save menu (RM2000 `SaveMenu`). The remake performs a single-slot save
-/// directly, so this needs no interactive screen; the save crystal's action page
-/// runs it.
+/// Open the save-slot selector from an event, independently of menu-save permission.
 pub(super) const OPEN_SAVE_MENU: u32 = 11910;
 
 /// Change an actor's level: `params = [mode, id, operation, operand_type, operand,

@@ -41,7 +41,8 @@ fn poison_leaves_at_least_one_hp() {
 #[test]
 fn a_type_1_hp_change_state_regenerates_capped_at_max() {
     let mut battle = build_1v2();
-    battle.states = vec![hp_change_state(2, 1, 10, 5)]; // gain 5 + 10% of max
+    // Gain 5 HP plus 10% of maximum.
+    battle.states = vec![hp_change_state(2, 1, 10, 5)];
     let max = battle.members[0].max_hp;
     battle.members[0].hp = 10;
     battle.members[0].states = vec![(2, 0)];
@@ -53,8 +54,9 @@ fn a_type_1_hp_change_state_regenerates_capped_at_max() {
 fn a_damage_skill_inflicts_its_state_on_a_forced_hit_roll() {
     let mut battle = build_1v2();
     battle.states = vec![poison_state(3)];
-    battle.enemies[0].hp = 200; // survive the blow so the status lands on a live foe
-    battle.enemies[0].state_ranks = vec![2, 2, 0]; // state 3 -> rank A (100% infliction)
+    // Keep the target alive for status application; rank A guarantees state 3.
+    battle.enemies[0].hp = 200;
+    battle.enemies[0].state_ranks = vec![2, 2, 0];
     battle.skills = vec![damage_skill(1, 20, vec![], vec![3])];
     battle.cast_skill(0, 1, 0);
     assert!(logic::has_state(&battle.enemies[0].states, 3));
@@ -67,8 +69,8 @@ fn being_hit_wears_off_a_damage_release_state_but_never_death() {
     battle.states = vec![poison_state(1), damage_release_state(2)];
     battle.members[0].states = vec![(1, 0), (2, 0)];
     battle.hit_member(0, 8, 4, 100);
-    assert!(logic::has_state(&battle.members[0].states, 1)); // KO exempt
-    assert!(!logic::has_state(&battle.members[0].states, 2)); // lifted by the blow
+    assert!(logic::has_state(&battle.members[0].states, 1));
+    assert!(!logic::has_state(&battle.members[0].states, 2));
 }
 
 #[test]
@@ -96,7 +98,8 @@ fn a_confused_member_turns_on_a_living_ally() {
         3,
     );
     battle.states = vec![confusion_state(9)];
-    battle.members[0].states = vec![(9, 0)]; // member 0 is confused
+    // State 9 forces the first member's confused action.
+    battle.members[0].states = vec![(9, 0)];
     battle.members[0].weapon_hit = 100;
     battle.enemies[0].actions.clear();
     // The command flow auto-orders the confused member to strike an ally.
@@ -106,7 +109,7 @@ fn a_confused_member_turns_on_a_living_ally() {
         Some(Command::Attack { .. })
     ));
     let hp = battle.members.iter().map(|member| member.hp).sum::<i32>();
-    battle.commit(Command::Defend); // member 1 (free) finishes the round
+    battle.commit(Command::Defend);
     while battle.resolve_next() {}
     assert!(battle.members.iter().map(|member| member.hp).sum::<i32>() < hp);
 }

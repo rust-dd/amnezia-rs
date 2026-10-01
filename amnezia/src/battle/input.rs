@@ -1,7 +1,4 @@
-//! Command-phase input: navigate the command / skill / item / target menus,
-//! commit each member's order, and trigger a flee. A thin keyboard driver over
-//! the [`Battle`] model. The menu-row builders are `pub` so the UI renders the
-//! exact same lists the selection indexes into.
+//! Command input over [`Battle`]; shared row builders keep selection and display aligned.
 
 use super::model::{Battle, BattleSe, Command, MenuLevel, Phase};
 use crate::gamedata::GameData;
@@ -13,10 +10,7 @@ use bevy::prelude::*;
 /// The medicine category in the converted `ItemDef::item_type`.
 const MEDICINE: u32 = 6;
 
-/// The number of per-actor command options (RM2000 Attack / Skill / Defend /
-/// Item, in cursor order) and party-level options (Fight / Auto / Escape). The
-/// labels themselves come from the real terms via [`command_labels`] /
-/// [`party_labels`]; the counts drive the cursor bounds.
+/// Cursor bounds for Attack/Skill/Defend/Item and Fight/Auto/Escape.
 pub const COMMAND_COUNT: usize = 4;
 pub const PARTY_COUNT: usize = 3;
 
@@ -72,9 +66,6 @@ pub fn command_input(
     }
 }
 
-/// The party-option window (RM2000 Fight / Auto / Escape): Fight drops into
-/// per-actor command entry, Auto orders the whole party a basic attack and
-/// resolves, Escape attempts to flee now.
 fn party_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     if !confirm(keys) {
         return;
@@ -249,9 +240,6 @@ fn target_menu(keys: &ButtonInput<KeyCode>, battle: &mut Battle) {
     }
 }
 
-/// The ally target menu: move the cursor over all party members and, on
-/// confirm, commit the pending ally-scope skill or item against the chosen one. A
-/// cancel returns to the Skill or Item menu the selection came from.
 fn ally_target_menu(keys: &ButtonInput<KeyCode>, inventory: &Inventory, battle: &mut Battle) {
     if battle.members.is_empty() {
         enter(battle, MenuLevel::Command);
@@ -333,7 +321,6 @@ fn remember_skill_cursor(battle: &mut Battle) {
     }
 }
 
-/// The action key: Space or Enter, as the dialogue and shop boxes use.
 fn confirm(keys: &ButtonInput<KeyCode>) -> bool {
     keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter)
 }

@@ -1,7 +1,4 @@
-//! The interpreter→player audio channel: the [`AudioRequest`] message the event
-//! interpreter (and the title/inn/game-over scenes) emit, the volume/tempo
-//! mapping onto Bevy's player, and the [`BgmFade`] envelope that ramps a track's
-//! gain for `PlayBGM`'s fade-in and `FadeOutBGM`'s fade-out.
+//! Interpreter-to-player audio requests, RM2000 parameter mapping and fade envelopes.
 
 use amnezia_data::MusicDef;
 use bevy::prelude::*;
@@ -9,10 +6,8 @@ use bevy::prelude::*;
 /// RM2000's sentinel BGM/SE name meaning "silence": stop whatever is playing.
 const BGM_OFF: &str = "(OFF)";
 
-/// A playback request emitted by the interpreter. Volume is a linear gain (0..1)
-/// on RPG_RT's logarithmic scale and speed a rate multiplier (1.0 = normal),
-/// already mapped from the command's 0..100 volume and percent tempo so the
-/// player system stays a thin spawn step.
+/// Playback uses linear gain (0–1), converted from RPG_RT's logarithmic scale,
+/// and a speed multiplier (1 = normal).
 #[derive(Message, Debug, Clone, PartialEq)]
 pub enum AudioRequest {
     /// Play a one-shot sound effect; the entity despawns when it finishes.
@@ -67,7 +62,7 @@ impl AudioRequest {
         }
     }
 
-    /// Map a `FadeOutBGM` (11520): params[0] is the fade-out time in milliseconds.
+    /// Map a `FadeOutBGM` (11520): `params[0]` is the fade-out time in milliseconds.
     /// A zero (or missing) time stops the BGM at once.
     pub fn fade_out(params: &[i32]) -> Self {
         let duration = fade_seconds(params.first().copied().unwrap_or(0));
@@ -78,10 +73,7 @@ impl AudioRequest {
         }
     }
 
-    /// A looping BGM request from a System `Music` entry: its track `name`, its
-    /// `0..=100` `volume`, and its percent `tempo`. An `(OFF)`/empty name stops
-    /// the BGM. Used by the battle system for the battle / victory / game-over
-    /// music.
+    /// Test BGM request without fade-in; `(OFF)`/empty names stop playback.
     #[cfg(test)]
     pub fn bgm(name: &str, volume: u32, tempo: u32) -> Self {
         if name.is_empty() || name == BGM_OFF {
@@ -126,9 +118,7 @@ impl AudioRequest {
         }
     }
 
-    /// A one-shot SE request from a System `Sound` entry, or `None` for an
-    /// `(OFF)`/empty name (a disabled effect plays nothing). Used by the battle
-    /// system for its per-hit sound effects.
+    /// One-shot SE, or `None` for a disabled `(OFF)`/empty name.
     pub fn se(name: &str, volume: u32, tempo: u32) -> Option<Self> {
         if name.is_empty() || name == BGM_OFF {
             return None;
@@ -141,10 +131,7 @@ impl AudioRequest {
     }
 }
 
-/// A snapshot of a looping BGM — its track `name` and already-mapped linear
-/// `volume`, playback `speed` and fade-in duration. The battle system
-/// memorizes the map BGM when a fight starts and restores it when the fight ends;
-/// the inn and `MemorizeBGM` (11530) memorize it the same way.
+/// Replayable BGM snapshot with mapped gain/speed, shared by battles, inns and events.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct BgmTrack {
     pub name: String,
@@ -167,10 +154,7 @@ impl BgmTrack {
     }
 }
 
-/// A linear volume ramp between two gains over a fixed duration: `PlayBGM`'s
-/// fade-in (silence → target) and `FadeOutBGM`'s fade-out (target → silence, then
-/// stop). Bevy has no built-in audio fade, so the audio plugin advances this each
-/// frame and writes the interpolated gain to the sink.
+/// Linear gain envelope; fade-out stops playback at completion.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct BgmFade {
     from: f32,
@@ -220,17 +204,13 @@ impl BgmFade {
         self.volume()
     }
 
-    /// Whether the ramp has run its full duration.
     pub(crate) fn finished(&self) -> bool {
         self.elapsed >= self.duration
     }
 }
 
-/// Convert an RM2000 `0..=100` volume to a linear gain on RPG_RT's logarithmic
-/// (DirectSound) scale, matching EasyRPG's `AudioDecoderBase::AdjustVolume`:
-/// `100` → `1.0` (0 dB), `0` → silence, and the steps between attenuate along a
-/// -35 dB curve. A plain linear mapping made half-volume play far too loud —
-/// DirectSound puts `50` near -17.5 dB (~0.133 gain).
+/// RPG_RT's logarithmic volume curve, matching EasyRPG `AudioDecoderBase::AdjustVolume`:
+/// 100 = 0 dB, 0 = silence, 50 ≈ -17.5 dB (0.133 gain).
 fn log_volume(percent: i32) -> f32 {
     let volume = percent.clamp(0, 100);
     if volume <= 0 {
@@ -331,7 +311,6 @@ mod tests {
             AudioRequest::fade_out(&[2000]),
             AudioRequest::FadeOutBgm { duration: 2.0 }
         );
-        // A zero-length fade is an instant stop.
         assert_eq!(AudioRequest::fade_out(&[0]), AudioRequest::StopBgm);
         assert_eq!(AudioRequest::fade_out(&[]), AudioRequest::StopBgm);
     }
@@ -347,7 +326,6 @@ mod tests {
                 fade_in: 0.0,
             }
         );
-        // An (OFF) or empty track stops the BGM rather than playing silence.
         assert_eq!(AudioRequest::bgm("(OFF)", 100, 100), AudioRequest::StopBgm);
         assert_eq!(AudioRequest::bgm("", 100, 100), AudioRequest::StopBgm);
     }
@@ -387,26 +365,23 @@ mod tests {
                 speed: 1.0
             })
         );
-        // A disabled effect plays nothing.
         assert_eq!(AudioRequest::se("(OFF)", 100, 100), None);
         assert_eq!(AudioRequest::se("", 100, 100), None);
     }
 
     #[test]
     fn log_volume_matches_directsound_curve() {
-        // 100 -> full (0 dB), 0/negative -> silence, above-range clamps to full.
         assert_eq!(log_volume(100), 1.0);
         assert_eq!(log_volume(0), 0.0);
         assert_eq!(log_volume(-10), 0.0);
         assert_eq!(log_volume(150), 1.0);
-        // 50 -> ~-17.5 dB, ~0.1334 gain: far quieter than the old linear 0.5.
+        // DirectSound half-volume is -17.5 dB, not a linear gain of 0.5.
         let half = log_volume(50);
         assert!((half - 0.133_35).abs() < 1e-4, "log_volume(50) = {half}");
         assert!(
             half < 0.5,
             "the log curve must be quieter than linear at 50"
         );
-        // Monotonically increasing across the range.
         assert!(log_volume(25) < log_volume(50));
         assert!(log_volume(50) < log_volume(75));
         assert!(log_volume(75) < log_volume(100));
@@ -423,12 +398,11 @@ mod tests {
     fn fade_out_ramps_to_silence_over_its_duration() {
         let mut fade = BgmFade::fade_out(1.0, 2.0);
         assert_eq!(fade.volume(), 1.0);
-        assert_eq!(fade.advance(1.0), 0.5); // halfway down
+        assert_eq!(fade.advance(1.0), 0.5);
         assert!(!fade.finished());
-        assert_eq!(fade.advance(1.0), 0.0); // reached silence
+        assert_eq!(fade.advance(1.0), 0.0);
         assert!(fade.finished());
         assert!(fade.stop_at_end);
-        // Past the end stays clamped at silence.
         assert_eq!(fade.advance(5.0), 0.0);
     }
 
@@ -436,9 +410,9 @@ mod tests {
     fn fade_in_ramps_from_silence_up_to_target() {
         let mut fade = BgmFade::fade_in(0.8, 4.0);
         assert_eq!(fade.volume(), 0.0);
-        assert_eq!(fade.advance(2.0), 0.4); // halfway up
+        assert_eq!(fade.advance(2.0), 0.4);
         assert!(!fade.stop_at_end);
-        assert_eq!(fade.advance(2.0), 0.8); // reached target
+        assert_eq!(fade.advance(2.0), 0.8);
         assert!(fade.finished());
     }
 

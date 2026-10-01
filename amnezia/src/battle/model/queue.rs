@@ -1,9 +1,6 @@
 //! Turn commands and the feedback queues consumed by the battle scene.
 
-/// A chosen action, from either side, awaiting resolution. Party members choose
-/// `Attack`, `Skill`, `Item`, `Defend`, or `Nothing`; the enemy AI reuses `Attack`,
-/// `Skill`, `Defend`, and `Nothing`, and adds the RM2000 monster-only basics
-/// `DoubleAttack`, `SelfDestruct`, `Escape`, `Charge`, `Observe`, and `DoNothing`.
+/// Pending party command or enemy AI action.
 #[derive(Clone, Copy)]
 pub enum Command {
     Attack {
@@ -49,13 +46,8 @@ pub struct Action {
     pub agility: u32,
 }
 
-/// One queued battle animation, produced as an action resolves and drained by
-/// `battle.rs`'s `drain_pending_anims` into a single `PlayAnimation` overlay
-/// message. `anim_id` is the effect id; `targets` are the RM2000 screen offsets
-/// from the screen centre (y downward) of every battler the cast hits — one entry
-/// for a single-target strike, several for a multi-target skill — so the effect's
-/// sound plays once for the whole cast while its cells and flashes land on each
-/// target.
+/// One cast across all target centres (y-down screen offsets). Sharing the cast
+/// plays its sound once while applying cells/flashes to every target.
 #[derive(Clone)]
 pub(in crate::battle) struct PendingAnim {
     pub anim_id: u32,
@@ -79,11 +71,8 @@ pub(in crate::battle) struct HitReport {
     pub kind: HitKind,
 }
 
-/// A System-defined battle sound effect queued as an action resolves, drained by
-/// `battle.rs`'s `drain_pending_se` into an `AudioRequest` whose asset name comes
-/// from the loaded `SystemDef`. The resolution stays Bevy- and data-free by
-/// naming only the effect's *role* here; the drain maps it to the configured
-/// sound. Mirrors the EasyRPG `SePlay(GetSystemSE(...))` sites.
+/// Sound role resolved through `SystemDef` when drained, keeping resolution independent
+/// of Bevy audio assets (EasyRPG `SePlay(GetSystemSE(...))`).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(in crate::battle) enum BattleSe {
     UseItem,

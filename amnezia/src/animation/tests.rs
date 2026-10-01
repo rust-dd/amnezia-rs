@@ -91,7 +91,6 @@ fn a_target_scope_flash_publishes_a_battler_flash_not_a_box() {
 
 #[test]
 fn a_target_flash_fires_once_per_anchor() {
-    // A multi-target scope-0 cast tints every target battler, one flash each.
     let mut app = App::new();
     app.add_plugins(MinimalPlugins);
     app.add_message::<BattlerFlash>();
@@ -127,18 +126,14 @@ fn flash_channel_normalises_and_clamps_the_0_31_scale() {
 
 #[test]
 fn target_screen_offset_centres_and_negates_y() {
-    // A target on the camera centre maps to the screen centre.
     assert_eq!(
         target_screen_offset(Vec2::new(50.0, -20.0), Vec2::new(50.0, -20.0)),
         Vec2::ZERO
     );
-    // A target +32 right and +16 *up* in world (y-up) reads as RM2000
-    // `(32, -16)` — right, and above centre (RM2000 y grows downward).
     assert_eq!(
         target_screen_offset(Vec2::new(32.0, 16.0), Vec2::ZERO),
         Vec2::new(32.0, -16.0)
     );
-    // A target below the camera has positive RM2000 y.
     assert_eq!(
         target_screen_offset(Vec2::new(0.0, -40.0), Vec2::ZERO),
         Vec2::new(0.0, 40.0)
@@ -243,8 +238,6 @@ fn frame_cadence_shows_each_data_frame_for_two_game_frames() {
 
 #[test]
 fn position_offset_matches_easyrpg_calculate_offset() {
-    // Feet/down (2) drops by h/2, head/up (0) lifts by h/2, centre (1) and any
-    // other value leave the effect on the target centre.
     assert_eq!(position_offset(POSITION_DOWN, 48.0), 24.0);
     assert_eq!(position_offset(POSITION_UP, 48.0), -24.0);
     assert_eq!(position_offset(1, 48.0), 0.0);
@@ -253,8 +246,6 @@ fn position_offset_matches_easyrpg_calculate_offset() {
 
 #[test]
 fn a_screen_scope_animation_draws_its_cells_once_centred() {
-    // A screen-scope (1) animation ignores the per-target anchors for drawing
-    // and paints once at the caller's screen centre.
     let def = anim_def(1, SCOPE_SCREEN, 1, Vec::new());
     let targets = [
         AnimAnchor {
@@ -285,8 +276,6 @@ fn a_global_animation_tiles_its_cells_3x3_across_the_screen() {
 
 #[test]
 fn a_target_scope_animation_draws_at_each_target_with_the_position_offset() {
-    // A target-scope (0), feet-anchored (2) animation draws at every target,
-    // each dropped by half that target's height.
     let def = anim_def(1, 0, POSITION_DOWN, Vec::new());
     let targets = [
         AnimAnchor {
@@ -338,7 +327,6 @@ fn a_multi_target_cast_plays_its_sound_effect_once() {
     let sounds = app.world().resource::<Messages<AudioRequest>>();
     let mut sc = sounds.get_cursor();
     assert_eq!(sc.read(sounds).count(), 1, "SE plays once for the cast");
-    // The target flash, by contrast, still fires once per target.
     let flashes = app.world().resource::<Messages<BattlerFlash>>();
     let mut fc = flashes.get_cursor();
     assert_eq!(fc.read(flashes).count(), 3, "one target flash per anchor");

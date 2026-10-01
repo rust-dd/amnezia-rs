@@ -5,9 +5,7 @@ use super::*;
 const FOG_BACK_OPACITY: [u8; 4] = [32, 64, 96, 0];
 const FOG_FRONT_OPACITY: [u8; 4] = [64, 80, 160, 255];
 
-/// The scrolling fog texture size. It is twice [`SCREEN_W`] wide with its right
-/// half a copy of its left, giving a horizontal period of [`SCREEN_W`] so a layer
-/// can scroll and wrap seamlessly; the extra height covers the front layer's bob.
+/// Duplicate the left half for seamless horizontal wrapping; extra height covers vertical bob.
 const FOG_W: usize = 640;
 const FOG_H: usize = 280;
 const FOG_HALF: usize = 320;
@@ -112,9 +110,7 @@ pub(super) fn scroll_fog(
     }
 }
 
-/// Build the fog texture: near-white noise (EasyRPG's grey fog colours) whose
-/// right half copies its left, so it tiles horizontally with a [`SCREEN_W`]
-/// period for a seamless scroll.
+/// Near-white noise with a duplicated right half for a [`SCREEN_W`]-pixel scroll period.
 fn fog_image() -> Image {
     let mut data = vec![0u8; FOG_W * FOG_H * 4];
     let greys = [230u8, 240, 255];

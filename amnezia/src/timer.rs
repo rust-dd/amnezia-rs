@@ -25,7 +25,6 @@ impl GameClock {
         self.expired = false;
     }
 
-    /// Begin counting down.
     pub fn start(&mut self) {
         self.running = true;
     }
@@ -140,8 +139,6 @@ impl Plugin for GameClockPlugin {
     }
 }
 
-/// Count `remaining` down by real time while `running`, clamping at zero and
-/// stopping once it gets there.
 fn tick_clock(time: Res<Time>, scene: ClockScene, mut clock: ResMut<GameClock>) {
     clock.advance(time.delta_secs(), scene.in_battle(), scene.paused());
 }

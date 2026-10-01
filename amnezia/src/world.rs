@@ -57,10 +57,7 @@ pub(crate) use screen::MapScreen;
 pub(crate) use touch::TouchEvents;
 pub(crate) use triggers::{EventTriggers, finish_foreground};
 
-/// Developer start override. `None` uses the faithful LMT start (`start.ron`,
-/// the intro map_0005), whose autorun cutscene the interpreter now runs; set it
-/// to `Some(Start { .. })` to drop the hero onto a specific map/tile for testing
-/// instead.
+/// Developer override; `None` uses the LMT start from `start.ron`.
 const DEV_START: Option<Start> = None;
 
 /// Tag for entities belonging to the current map (tiles, NPCs); despawned on a
@@ -73,10 +70,7 @@ pub struct MapScene;
 #[derive(Component)]
 pub struct MainCamera;
 
-/// A rendered event NPC: its event id, live tile position, and current
-/// facing/frame/graphic. A running `MoveEvent` enqueues route steps that
-/// [`walk`] tweens across tiles (updating `tile_x`/`tile_y`), while
-/// [`update_event_sprites`] reflects facing/frame/graphic and visibility changes.
+/// Live NPC state; [`walk`] owns movement and [`update_event_sprites`] refreshes appearance.
 #[derive(Component, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct EventSprite {
     pub id: u32,
@@ -199,10 +193,7 @@ pub struct MapEvents {
     pub events: Vec<Event>,
 }
 
-/// A request to teleport an event to a tile (RM2000 opcode 10860). The
-/// interpreter resolves the target id and concrete coordinates and writes one
-/// per `ChangeEventLocation`; `apply_relocate` moves both the logical
-/// [`MapEvents`] entry (collision/touch) and, if present, the [`EventSprite`].
+/// Opcode 10860 relocation, applied to both logical collision state and the rendered sprite.
 #[derive(Message)]
 pub struct RelocateEvent {
     pub event_id: u32,
@@ -279,11 +270,8 @@ fn setup(
     commands.insert_resource(events);
 }
 
-/// Load map `map_id` into the world: spawn its tile layers and event NPCs
-/// (tagged [`MapScene`]) and return fresh [`MapData`]/[`MapEvents`]. Each event's
-/// sprite is its active page's graphic (per the current switches/variables). The
-/// caller installs the resources — as `Commands` on first load, or `ResMut`
-/// overwrite on a teleport so they take effect the same frame the hero moves.
+/// Spawn the active map and return its resources. Transfer callers install them
+/// immediately so collision state changes in the same frame as the hero's position.
 #[allow(clippy::too_many_arguments)]
 pub fn load_map(
     commands: &mut Commands,

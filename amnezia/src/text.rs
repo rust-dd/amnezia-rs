@@ -1,9 +1,5 @@
-//! Expansion of RM2000 message control codes. Message strings embed codes like
-//! `\N[1]` (insert an actor's name), `\V[3]` (insert a variable's value), or the
-//! reveal-timing codes `\s`/`\|`/`\.`/`\!`/`\^` the typewriter honours. This
-//! module parses a raw line into a flat [`Segment`] stream: one entry per printed
-//! character, plus a marker per timing code. [`substitute`] is the plain-text
-//! projection (characters only) used where no typewriter runs, e.g. choice labels.
+//! Control-code expansion into glyphs and reveal markers; [`substitute`] keeps
+//! only plain text for surfaces without typewriter timing.
 
 use crate::state::Variables;
 use bevy::prelude::Resource;
@@ -18,10 +14,8 @@ impl HeroName {
     }
 }
 
-/// One unit of a parsed message: a printable character, or a control marker the
-/// [`Typewriter`](crate::dialogue) acts on while revealing the page. `\N`/`\V`
-/// are already expanded into [`Segment::Char`] runs, and colour (`\C`) plus
-/// unknown codes are dropped during parsing, matching RM2000's message renderer.
+/// Legacy message segment with names/variables expanded. This parser drops colour
+/// and unknown codes; the dialogue typewriter has its own token handling.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Segment {
     /// A glyph to reveal (a literal char, or one expanded from `\N`/`\V`/`\_`).
@@ -83,7 +77,6 @@ pub fn parse_segments(raw: &str, hero: &str, variables: &Variables) -> Vec<Segme
                 out.push(Segment::Speed(n.clamp(1, 20)));
             }
             'C' | 'c' => {
-                // Colour: consume the argument and drop it (single-colour text).
                 let _ = read_bracket(&chars, &mut i);
             }
             '.' => out.push(Segment::QuarterPause),
@@ -94,7 +87,6 @@ pub fn parse_segments(raw: &str, hero: &str, variables: &Variables) -> Vec<Segme
             '<' => out.push(Segment::InstantOff),
             '_' => out.push(Segment::Char(' ')),
             _ => {
-                // Unknown code: drop it, plus a bracket argument if one follows.
                 let _ = read_bracket(&chars, &mut i);
             }
         }
@@ -102,9 +94,7 @@ pub fn parse_segments(raw: &str, hero: &str, variables: &Variables) -> Vec<Segme
     out
 }
 
-/// Expand `raw`'s control codes to plain display text: [`parse_segments`] keeping
-/// only its [`Segment::Char`]s. Used where text is shown without the typewriter
-/// (choice labels), so the timing codes collapse away and `\N`/`\V` still expand.
+/// Plain-text projection with name/variable expansion but no reveal-timing markers.
 pub fn substitute(raw: &str, hero: &str, variables: &Variables) -> String {
     parse_segments(raw, hero, variables)
         .into_iter()

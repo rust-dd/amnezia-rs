@@ -146,10 +146,7 @@ mod tests {
         reposition_hero(&mut players, &data, 4, 6);
     }
 
-    /// A same-map teleport repositions the hero without tearing down the scene:
-    /// `reposition_hero` moves the hero's tile and transform and never despawns
-    /// the `MapScene` entities (it holds no `Commands`), so the map's generation
-    /// is unchanged.
+    /// Same-map transfers preserve scene entities and map generation.
     #[test]
     fn same_map_reposition_moves_hero_and_keeps_scene() {
         let mut app = App::new();

@@ -3,11 +3,7 @@
 use super::Stats;
 use amnezia_data::EnemyActionDef;
 
-/// A death (`SetDeathTimer`) or self-destruct explosion (`SetExplodeTimer`)
-/// playing out on a foe's sprite before it leaves the field: `elapsed` advances in
-/// real time toward `secs`, and `explode` drives the RM2000 zoom-and-fade rather
-/// than the plain fade. While any foe's [`Dying`] runs, `resolve_tick` holds so the
-/// beat is seen; `battle::scene` reads it to drive the sprite's alpha and zoom.
+/// Death/explosion visual hold; `explode` selects zoom-and-fade instead of plain fade.
 pub(in crate::battle) struct Dying {
     pub elapsed: f32,
     pub secs: f32,
@@ -40,13 +36,9 @@ pub struct Foe {
     /// This foe's per-state affliction ranks, copied from its `MonsterDef`, for
     /// the status-infliction chance.
     pub state_ranks: Vec<u8>,
-    /// This foe's active status effects as `(state_id, turns_held)` pairs; the
-    /// turn count drives [`crate::battle::logic::tick_recovery`]'s hold-then-wear-off
-    /// schedule.
+    /// Active `(state_id, turns_held)` pairs for the recovery schedule.
     pub states: Vec<(u32, u32)>,
-    /// Whether this foe took the RM2000 Defend stance on its last turn; it halves
-    /// incoming damage in [`crate::battle::resolve`] until
-    /// [`crate::battle::model::Battle::new_round`] clears it.
+    /// Defend halves damage until the next round clears the stance.
     pub(in crate::battle) defending: bool,
     /// Whether this foe fled the battle (RM2000 monster Escape). It then counts as
     /// gone (see [`Foe::alive`]) but, unlike a defeated foe, grants no reward.
@@ -65,9 +57,7 @@ pub struct Foe {
 }
 
 impl Foe {
-    /// Whether this foe is still in the fight: living HP and not fled. A fled foe
-    /// (RM2000 Escape) counts as gone, so it drops out of targeting and the
-    /// living-enemy list and grants no reward.
+    /// Fled foes count as absent even with positive HP and grant no rewards.
     pub fn alive(&self) -> bool {
         self.hp > 0 && !self.fled
     }

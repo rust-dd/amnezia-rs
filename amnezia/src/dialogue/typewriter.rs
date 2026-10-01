@@ -18,9 +18,7 @@ const QUARTER_PAUSE_FRAMES: u32 = 16;
 /// `\|` reveal pause, in frames (EasyRPG waits 61 despite the "one second").
 const FULL_PAUSE_FRAMES: u32 = 61;
 
-/// The reveal state of one message page: the parsed [`Segment`] stream, how far
-/// into it the reveal has progressed, the glyphs shown so far, and the RM2000
-/// timing state (current speed, remaining wait, instant-speed and pause flags).
+/// One page's glyph stream and logical reveal clock.
 #[derive(Debug, Default)]
 pub(super) struct Typewriter {
     segments: Vec<Segment>,

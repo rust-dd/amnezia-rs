@@ -1,6 +1,4 @@
-//! Integration tests for the foreground/background interpreter split: that a
-//! common autostart gates, parallel loops, scene pauses, prompt ownership and
-//! shared foreground/background state.
+//! Foreground/parallel scheduling, prompt ownership and shared-state regressions.
 
 use super::{CommonEvents, InterpreterPlugin, ParallelPool, RunningEvent};
 use crate::animation::{AnimationLibrary, ShowMapAnimation};
@@ -89,7 +87,6 @@ fn common(id: u32, trigger: u32, switch_id: u32, commands: Vec<EventCommand>) ->
     }
 }
 
-/// A one-page map event at the origin whose page carries `trigger` and `commands`.
 fn map_event(id: u32, trigger: u32, commands: Vec<EventCommand>) -> Event {
     Event {
         id,

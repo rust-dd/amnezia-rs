@@ -1,8 +1,4 @@
-//! The RM2000 opcode dispatch: given one command and the shared [`Exec`] IO, it
-//! mutates the game state and reports (via [`Flow`]) whether to step on, yield the
-//! frame, or end the run. Lifted out of the per-frame driver so foreground and
-//! parallel interpreters run the exact same command semantics against different
-//! [`Frame`]s. The multi-line arms delegate to [`super::handlers`].
+//! Shared RM2000 opcode dispatch for foreground and parallel [`Frame`] execution.
 
 use super::super::commands::{
     apply_change_gold, apply_change_items, apply_change_level, apply_change_party,
@@ -372,8 +368,7 @@ pub(super) fn dispatch(frame: &mut Frame, command: EventCommand, x: &mut Exec) -
             Flow::Advance
         }
         FLASH_SPRITE | COMMENT | COMMENT_2 | END_MARKER => {
-            // Faithfully decoded but deliberately inert in this remake (each
-            // rationale is on its constant in `opcodes`).
+            // Inert opcodes; compatibility limitations are documented in `opcodes`.
             frame.ip += 1;
             Flow::Advance
         }

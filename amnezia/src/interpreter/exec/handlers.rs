@@ -1,8 +1,4 @@
-//! The multi-line opcode handlers lifted out of [`super::dispatch`] so that file
-//! stays legible: the control-variable operand resolution, the conditional-branch
-//! evaluation, the character relocation, the forced move, the map battle
-//! animation, and the screen/picture presentation block. Each takes the same
-//! `(frame, command, exec)` the dispatch arm would and returns its [`Flow`].
+//! State, movement and presentation handlers shared by the opcode dispatcher.
 
 use super::super::actor_query::ActorCtx;
 use super::super::branch::branch_holds;

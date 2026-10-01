@@ -38,11 +38,8 @@ pub(crate) use render::flash_power_level;
 pub(crate) use render::{FlashQuad as ScreenFlash, clear_screen_flash};
 pub use render::{overlay_layer, overlay_translation};
 
-/// Seconds each animation *data* frame is shown. RM2000 (and EasyRPG) advances
-/// the animation once per 60 fps game-frame and shows each data frame for two of
-/// them (`battle_animation.cpp`: `num_frames = GetRealFrames() * 2`,
-/// `GetRealFrame() = frame / 2`), so a data frame lasts `2/60 = 1/30 s`. The
-/// data cadence is independent of the flash envelope.
+/// Each data frame lasts two 60 Hz ticks (`battle_animation.cpp::GetRealFrame`),
+/// independently of the flash envelope.
 pub const FRAME_SECS: f32 = 1.0 / 30.0;
 
 /// The flash channel `flash_scope` value that flashes the whole screen; `1`
@@ -65,28 +62,19 @@ const POSITION_DOWN: u32 = 2;
 /// EasyRPG `BattleAnimationMap::DrawSingle` uses `character_height = 24`.
 const MAP_CHARACTER_HEIGHT: f32 = 24.0;
 
-/// Where a screen-scope animation centres its cells on the map: EasyRPG
-/// `BattleAnimationMap` draws a screen animation at the screen centre, which in
-/// our centre-origin overlay is the origin.
+/// Screen-scoped map effects use the centre-origin overlay's origin.
 const MAP_SCREEN_CENTER: Vec2 = Vec2::ZERO;
 
-/// One target an animation plays on: `pos` its RM2000 screen offset from the
-/// screen centre (y downward) — the point the target flash and the battler match
-/// against — and `height` the target sprite's pixel height, from which the
-/// [`AnimationDef::position`] anchor derives its vertical offset.
+/// Target centre in y-down screen offsets; pixel height determines head/feet anchors.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AnimAnchor {
     pub pos: Vec2,
     pub height: f32,
 }
 
-/// Play animation `anim_id` on `targets`. One cast is a single [`PlayAnimation`]:
-/// its sound-effect timeline fires once, and its cells draw at each target's
-/// [`AnimAnchor`] (a single-target scope-0 animation) — or, for a screen-scope
-/// animation, once at `screen_center` (RM2000 screen offset from centre, y
-/// downward). Target flashes still fire at every target regardless of scope,
-/// matching EasyRPG (`battle_animation.cpp`). `global` (RM2000 map opcode 11210's
-/// global flag) tiles the cells 3×3 across the screen instead, overriding scope.
+/// One cast shares a sound timeline across all targets. Screen scope draws cells
+/// once at `screen_center` but still flashes every target; `global` overrides
+/// scope with 3×3 screen tiling (RM2000 opcode 11210).
 #[derive(Message)]
 pub struct PlayAnimation {
     pub slot: AnimationSlot,
@@ -108,13 +96,8 @@ pub enum AnimationSlot {
     Enemies,
 }
 
-/// A request to flash-tint a target battler sprite as an animation's target
-/// flash fires: `pos` is the battler's RM2000 screen offset from centre (the same
-/// point the animation plays on), `rgb` the flash colour in bytes, and `power` the
-/// RM2000 flash strength (`0..=31`) that drives the stepped [`render::flash_envelope`].
-/// `battle::scene` finds the battler at `pos` and drives its sprite colour over
-/// the ~11-game-frame envelope. RM2000 front view draws no party sprites, so a
-/// party-area target flash matches no battler and shows nothing.
+/// Target tint matched by screen position: byte RGB and 0–31 power drive
+/// [`render::flash_envelope`]. Front-view party targets have no sprite to tint.
 #[derive(Message)]
 pub struct BattlerFlash {
     pub pos: Vec2,
@@ -123,22 +106,15 @@ pub struct BattlerFlash {
     pub age: u32,
 }
 
-/// The character a [`ShowMapAnimation`] plays on, already resolved from the
-/// RM2000 char-ref by the interpreter: the hero, or a map event by id (a
-/// this-event ref is resolved to a concrete id before it reaches here).
+/// Character reference with "this event" already resolved to a concrete event ID.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AnimTarget {
     Hero,
     Event(u32),
 }
 
-/// The interpreter's request to play battle animation `anim_id` on a map
-/// character (RM2000 `ShowBattleAnimation`, opcode 11210). The interpreter only
-/// decodes the id, resolves the char-ref, and reads the `global` flag (params[3]);
-/// [`resolve_map_animation`] looks the target's world position up against the main
-/// camera and emits the screen-space [`PlayAnimation`], so the interpreter itself
-/// needs no camera/transform queries. `global` tiles the animation 3×3 across the
-/// screen (EasyRPG `BattleAnimationMap::DrawGlobal`).
+/// Map opcode 11210 request. [`resolve_map_animation`] projects the character to
+/// screen space, keeping camera queries out of the interpreter. `global` tiles 3×3.
 #[derive(Message)]
 pub struct ShowMapAnimation {
     pub anim_id: u32,
@@ -205,13 +181,7 @@ impl Plugin for AnimationPlugin {
     }
 }
 
-/// Spawn the fixed effect-overlay camera: a 2D camera at the origin with the same
-/// fixed 320×240 scaling as the main camera, render `order` 2, and no clear. It
-/// draws only [`render::OVERLAY_LAYER`], so it paints the effect sprites (and the
-/// battle backdrop/battlers, which share the layer) over everything below it — the
-/// toned world and the front camera's pictures — while the order-3 UI camera
-/// composites every game window above it. It deliberately does not follow
-/// the hero, which is what makes [`PlayAnimation`]'s `(x, y)` pure screen-space.
+/// Fixed screen-space camera above the world/pictures and below UI windows.
 fn spawn_overlay_camera(mut commands: Commands) {
     commands.spawn((
         Camera2d,
@@ -232,13 +202,7 @@ fn spawn_overlay_camera(mut commands: Commands) {
     ));
 }
 
-/// The screen points an animation's cells draw at: a `global` animation tiles its
-/// cells 3×3 across the screen around `screen_center` (EasyRPG
-/// `BattleAnimationMap::DrawGlobal`), overriding scope; otherwise a screen-scope
-/// animation draws its cells once at `screen_center`, and a single-target one once
-/// per target, each shifted vertically by the [`AnimationDef::position`] anchor
-/// over that target's height (see [`position_offset`]). The flash anchors stay at
-/// the un-shifted target centres, so a target flash still lands on the battler.
+/// Cell anchors apply scope and head/feet offsets; flash anchors stay at target centres.
 fn draw_anchors(
     def: &AnimationDef,
     targets: &[AnimAnchor],
@@ -257,11 +221,8 @@ fn draw_anchors(
         .collect()
 }
 
-/// Fire every timing that lands on `frame` (0-based; timings store 1-based frame
-/// numbers): emit its sound effect **once** for the whole cast, then its flash —
-/// a single full-screen quad for a screen flash, or one target tint per anchor.
-/// Firing the SE once (not once per target) matches EasyRPG, where a cast is a
-/// single `BattleAnimation` whose timeline runs once for all its battlers.
+/// Timings use 1-based frames; `frame` is 0-based. Sound fires once per cast,
+/// while target flashes fire per anchor, matching EasyRPG `BattleAnimation`.
 fn fire_timings(
     commands: &mut Commands,
     audio: &mut MessageWriter<AudioRequest>,
@@ -279,11 +240,7 @@ fn fire_timings(
     }
 }
 
-/// Emit the timing's sound effect at its own volume/tempo (RM2000 stores a full
-/// `Sound` per timing, not just a name). An empty or `(OFF)` name is silent
-/// ([`AudioRequest::se`] returns `None`); otherwise the `0..=100` volume and
-/// percent tempo map onto the request's logarithmic gain and playback speed, the
-/// same mapping a System SE uses.
+/// Animation timings carry their own volume/tempo, mapped like System sound effects.
 fn emit_sound(audio: &mut MessageWriter<AudioRequest>, timing: &AnimationTimingDef) {
     if let Some(request) = AudioRequest::se(&timing.se_name, timing.se_volume, timing.se_tempo) {
         audio.write(request);
@@ -325,11 +282,7 @@ fn flash_channel(value: u32) -> u8 {
     (value.min(31) * 8) as u8
 }
 
-/// The RM2000 screen-space y-offset (down positive) the [`AnimationDef::position`]
-/// anchor applies over a target of pixel `height`, matching EasyRPG
-/// `battle_animation.cpp` `CalculateOffset`: feet/down (`2`) drops the effect by
-/// `height / 2`, head/up (`0`) lifts it by `height / 2`, and centre (`1`, or any
-/// other value) leaves it on the target centre.
+/// Y-down head/feet offset, matching EasyRPG `CalculateOffset`.
 fn position_offset(position: u32, height: f32) -> f32 {
     match position {
         POSITION_UP => -height / 2.0,
@@ -367,13 +320,7 @@ fn debug_preview(
     }
 }
 
-/// The RM2000 screen offset (from centre, y-down) at which a character at world
-/// `target` appears when the main camera is centred at `camera`. The world and
-/// overlay cameras share the fixed 320×240 projection (1 unit = 1 px), so the
-/// on-screen offset is `target - camera`; RM2000 measures y downward while the
-/// world is y-up, so the y component is negated. [`PlayAnimation`] flips it back
-/// to world `(x, -y)` on the origin-fixed overlay, landing the animation on the
-/// target.
+/// Convert world y-up positions to centre-relative RM2000 y-down pixels.
 fn target_screen_offset(target: Vec2, camera: Vec2) -> Vec2 {
     Vec2::new(target.x - camera.x, camera.y - target.y)
 }

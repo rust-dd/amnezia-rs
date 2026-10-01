@@ -108,8 +108,7 @@ fn a_defending_foe_takes_half_of_an_identical_strike() {
     let mut battle = build_1v2();
     battle.members[0].weapon_hit = 100;
     battle.members[0].weapon_crit = 0;
-    // Foe 0 (open) and foe 1 (defending) are identical bandits; strike each
-    // from the same RNG state so only the Defend stance differs.
+    // Reuse RNG state so only the Defend stance differs.
     let rng_save = battle.rng;
     let Strike::Hit { dmg: full, .. } = battle.strike_enemy(0, 0) else {
         panic!("a forced-hit strike missed");
@@ -153,8 +152,7 @@ fn a_double_attack_strikes_the_target_twice() {
     });
     let single = hp0 - battle.members[0].hp;
     assert!(single > 0);
-    // Same RNG state, but a double-attack: the first blow matches `single`,
-    // the second adds more, so the total clearly exceeds one strike.
+    // Reuse RNG state so the first strike matches the single-attack case.
     battle.rng = rng_save;
     battle.members[0].hp = hp0;
     battle.apply(Action {
@@ -263,9 +261,7 @@ fn equipped_element_defence_halves_a_matching_enemy_skill_only() {
     );
     assert!(battle.members[0].resist_attributes.contains(&5));
     battle.attributes = vec![fire_attr()];
-    // With the skill's variance set to 0 the halving is exact: the guarded
-    // cast deals base/2 and the unguarded cast deals the full base, so the two
-    // compare cleanly without depending on the variance draw.
+    // Zero variance isolates Defend's exact halving from random damage spread.
     let before = battle.members[0].hp;
     let mut guarded = damage_skill(1, 40, vec![5], vec![]);
     guarded.variance = 0;

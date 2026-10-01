@@ -16,15 +16,8 @@ pub fn critical_damage(base: i32) -> i32 {
     base * 3
 }
 
-/// Skill effect magnitude (RM2000 / EasyRPG `Algo::CalcSkillEffect`, pre-variance):
-/// the skill's `power`, plus its physical/magical rates weighting the caster's
-/// attack and spirit — `physical_rate * atk / 20 + magical_rate * spi / 40` — and,
-/// when the skill targets enemies, less the target's defence and spirit —
-/// `physical_rate * def / 40 + magical_rate * spi / 80`. Floored at 0.
-/// Attribute multipliers and variance are applied by the caller, in that order.
-/// `targets_enemies` is true for the
-/// offensive scopes (one or all enemies) and false for the ally/heal scopes, which
-/// take no defensive subtraction. `ignore_defense` also skips that subtraction.
+/// EasyRPG `Algo::CalcSkillEffect`, before attributes and variance (in that order).
+/// Ally scopes and `ignore_defense` skip defensive subtraction; results floor at zero.
 pub fn skill_effect(
     skill: &SkillDef,
     source: &Stats,
@@ -41,9 +34,7 @@ pub fn skill_effect(
     effect.max(0)
 }
 
-/// The RM2000 damage percent for `rank` (0=A … 4=E) from an attribute's own A–E
-/// rate table. A weak rank yields >100%, a resist rank <100% (E often 0). A rank
-/// past E clamps to the E rate.
+/// Attribute damage percentage for rank 0=A … 4=E; out-of-range ranks clamp to E.
 pub fn attribute_percent(attr: &AttributeDef, rank: u8) -> u32 {
     match rank {
         0 => attr.a_rate,
@@ -54,14 +45,8 @@ pub fn attribute_percent(attr: &AttributeDef, rank: u8) -> u32 {
     }
 }
 
-/// Apply RM2000 / EasyRPG damage variance (`Algo::VarianceAdjustEffect`): with a
-/// non-zero `var` and a positive `base`, the spread window is
-/// `adj = max(1, var * base / 10)` and the result is
-/// `base + rand(0..=adj) - adj / 2`, i.e. up to ±(var·10)% around `base`. The
-/// caller owns the randomness and passes a raw `roll`; we take `roll % (adj + 1)`
-/// for the inclusive `0..=adj` draw, keeping it one draw per hit. A `var` of 0 or
-/// a non-positive `base` returns `base` unchanged (an immune 0-damage hit stays
-/// 0). For a normal attack `var` is 4; for a skill it is [`SkillDef::variance`].
+/// EasyRPG `Algo::VarianceAdjustEffect`, consuming one caller-supplied roll per hit.
+/// Zero variance or non-positive damage stays unchanged; normal attacks use variance 4.
 pub fn variance_adjust(base: i32, var: i32, roll: u64) -> i32 {
     if var > 0 && base > 0 {
         let adj = (var * base / 10).max(1);

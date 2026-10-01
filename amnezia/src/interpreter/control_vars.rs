@@ -1,11 +1,5 @@
-//! The `ControlVariables` (opcode 10220) operand resolver and its assignment.
-//! An operand is first resolved to a value (or a random range) from the game
-//! state, then applied to the target variable(s) under the command's target mode
-//! and arithmetic operation. Mirrors EasyRPG's `CommandControlVariables` and the
-//! `ControlVariables::` helpers, restricted to the RM2000 (non-Maniac) operand
-//! and operation set. Kept Bevy-free so the resolution and the arithmetic
-//! unit-test against plain state resources; the actor operand delegates to
-//! [`super::actor_query`] and randomness to [`super::event_rng`].
+//! RM2000 ControlVariables (10220): operand lookup and assignment, excluding
+//! Maniac extensions. Actor lookups and RNG live in their shared helper modules.
 
 use super::actor_query::{ActorCtx, actor_param};
 use super::event_rng::EventRng;
@@ -121,10 +115,8 @@ fn facing_code(dir: u32) -> i32 {
     }
 }
 
-/// Operand type 7 (Other): gold (sub-op 0), the timer's remaining seconds (1), or
-/// the party size (2). The remaining EasyRPG sub-ops — save count (3), battle
-/// count (4), win/defeat/escape counts (5–7) — have no backing resource in this
-/// remake and read 0.
+/// Other operands: gold (0), timer seconds (1), party size (2).
+/// Unsupported save/battle/win/defeat/escape counters (3–7) return zero.
 fn other_param(sub_op: i32, inventory: &Inventory, party: &Party, timer_secs: u32) -> i32 {
     match sub_op {
         0 => inventory.gold(),
@@ -177,10 +169,8 @@ fn target_range(params: &[i32], variables: &Variables) -> (i32, i32) {
     }
 }
 
-/// Combine the current value with the operand under `op`, in `i64` so an
-/// overshooting add/mul never overflows before the write clamps it. Division and
-/// modulo by zero yield 0 (per the remake's rule; RPG_RT's own `VarDiv` instead
-/// keeps the dividend, but here both zero-divisors resolve to 0).
+/// Use i64 intermediates so writes can clamp without overflowing.
+/// Zero divisors yield 0 here, unlike RPG_RT VarDiv, which keeps the dividend.
 fn combine(current: i32, operand: i32, op: i32) -> i32 {
     let (a, b) = (current as i64, operand as i64);
     let next = match op {
@@ -291,7 +281,7 @@ mod tests {
         let (party, inv) = (Party::default(), Inventory::default());
         let mut var = Variables::default();
         var.set(5, 42);
-        var.set(6, 5); // var 6 points at var 5
+        var.set(6, 5);
         let c = ctx(&data, &prog, &vit);
         let resolve =
             |p: &[i32], var: &Variables| value(resolve_operand(p, var, &inv, &party, &c, 0, None));

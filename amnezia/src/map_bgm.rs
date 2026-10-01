@@ -1,10 +1,5 @@
-//! Map background music: each map's BGM plays when the map becomes active — its
-//! initial load once the title releases the world, and every teleport arrival —
-//! resolving the LMT `music_type` inheritance the converter carried into
-//! `map_info.ron`. Mirrors RM2000 `Game_Map::PlayBgm`: a type-2 map requests its
-//! own track, while a type-1 (event-controlled) map, or one inheriting up to a
-//! silent/rootless owner, leaves the current BGM alone — so the intro's own
-//! `PlayBGM`, and a same-map teleport, are never interrupted.
+//! Map-entry music follows LMT inheritance (`Game_Map::PlayBgm`). Event-controlled
+//! maps keep the current track; save restoration takes precedence over map defaults.
 
 use crate::assets::{asset_root, load_ron};
 use crate::audio::AudioRequest;
@@ -13,8 +8,7 @@ use crate::world::MapData;
 use amnezia_data::{MapBgm, MapInfoDef, resolve_map_bgm};
 use bevy::prelude::*;
 
-/// The LMT map-info tree (each map's parent, `music_type`, and track), loaded
-/// once from `map_info.ron`. The game resolves a map's effective BGM from it.
+/// Music-inheritance tree cached from `map_info.ron`.
 #[derive(Resource)]
 pub struct MapInfoData(pub Vec<MapInfoDef>);
 

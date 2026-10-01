@@ -1,7 +1,4 @@
-//! Mapping the presentation commands (screen effects, pictures, game over) to
-//! the messages the presentation plugins consume. Kept beside the main loop but
-//! separate so the opcode→message translation — including a picture's optional
-//! wait and its direct-or-variable position — unit-tests without Bevy systems.
+//! Presentation opcode decoding, including optional waits and variable-based picture positions.
 
 use super::opcodes::*;
 use crate::picture::PictureCommand;

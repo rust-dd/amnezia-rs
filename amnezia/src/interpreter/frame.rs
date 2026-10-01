@@ -1,9 +1,4 @@
-//! The interpreter execution frame: the per-run state a single event-command
-//! list carries as it steps. One [`Frame`] backs the foreground
-//! [`super::RunningEvent`]; the parallel pool ([`super::parallel`]) owns one more
-//! per concurrently-running common event and parallel-process map page. The
-//! opcode dispatch in [`super::exec`] operates on a `Frame`, so foreground and
-//! background execution share identical command semantics.
+//! Per-run execution state, shared by the foreground event and each parallel script.
 
 use super::commands::KeyAccept;
 use crate::battle::BattleOutcome;
@@ -20,9 +15,7 @@ pub(super) const MAX_STEPS_PER_FRAME: usize = 10_000;
 /// cycle of pages) from growing the call stack without bound.
 pub(super) const MAX_CALL_DEPTH: usize = 64;
 
-/// A caller frame suspended by `CallEvent` (12330): the interrupted command list,
-/// the instruction pointer to resume at, and the event id in scope. The callee
-/// runs in place; reaching its end pops the frame and resumes the caller.
+/// Suspended CallEvent caller; finishing the callee restores its list, IP and event scope.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub(super) struct CallFrame {
     pub(super) commands: Vec<EventCommand>,
@@ -38,9 +31,6 @@ pub(super) struct CallFrame {
     pub(super) shop_transacted: Option<bool>,
 }
 
-/// The per-run interpreter state: the command list, the instruction pointer,
-/// whether a run is live, the pending-wait timers, and every subsystem-block
-/// suspension flag. Shared verbatim by the foreground and parallel interpreters.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub(super) struct Frame {
     /// Runtime-only ownership for cancelling a replaced scene request.
@@ -87,7 +77,6 @@ pub(super) struct Frame {
 }
 
 impl Frame {
-    /// Whether this frame is currently executing.
     pub(super) fn active(&self) -> bool {
         self.active
     }
@@ -195,9 +184,7 @@ impl Frame {
         self.shop_transacted = None;
     }
 
-    /// Self-select an `EnemyEncounter` outcome handler: run its body (advance into
-    /// it) when the finished battle's outcome is `want`, otherwise skip to the next
-    /// handler or the block terminator. Mirrors the `ShowChoice` option arms.
+    /// Enter the matching battle outcome branch; skip other handlers like choice options.
     pub(super) fn select_battle_handler(&mut self, indent: u32, want: BattleOutcome) {
         if self.battle_outcome == Some(want) {
             self.ip += 1;
@@ -206,9 +193,7 @@ impl Frame {
         }
     }
 
-    /// Self-select a shop/inn outcome handler: run its body when the merchant
-    /// result matches `want` (Transaction/Stay = `true`, NoTransaction/Cancel =
-    /// `false`), else skip to the next handler or the block terminator.
+    /// Enter the matching merchant branch: true = transaction/stay, false = no transaction/cancel.
     pub(super) fn select_shop_handler(&mut self, indent: u32, want: bool) {
         if self.shop_transacted == Some(want) {
             self.ip += 1;

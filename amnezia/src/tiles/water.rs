@@ -1,15 +1,6 @@
-//! RM2000 animated water autotile assembly (`BLOCK_A`/`BLOCK_B`/`BLOCK_C`),
-//! mirroring EasyRPG/Player `src/tilemap_layer.cpp`: `GenerateAutotileAB` plus
-//! its `BlockA_Subtiles_IDS` table for the quarter-assembled `BLOCK_A`/`BLOCK_B`
-//! tiles, and the `Draw` block-C branch for the whole-cell `BLOCK_C` tiles.
-//!
-//! The water source occupies the chipset's top-left 6×8 tile region (columns
-//! 0..=5, rows 0..=7): columns 0..=2 hold the A1 (grass) water with its B coast
-//! and deep-ocean rows below (rows 4..=7); columns 3..=5 hold the A2 (snow)
-//! water with the C animated tiles below. Assembly matches `BLOCK_D`: a shape
-//! selects, per 8×8 quarter, which template cell supplies that corner. The
-//! animation `frame` (0..=2) shifts the sampled column, which is a pure
-//! horizontal scroll of the source (columns stay within 0..=5).
+//! Animated water from EasyRPG `GenerateAutotileAB` and the block-C Draw branch.
+//! The chipset's top-left 6×8 region holds grass/coast/deep water in columns 0–2
+//! and snow/C animation in columns 3–5. A/B frames shift source columns; C shifts rows.
 
 use super::{QUARTER, Quarter, TILE};
 
@@ -187,8 +178,7 @@ mod tests {
 
     #[test]
     fn plain_water_id_zero_is_the_deep_water_cell_split_in_four() {
-        // a_subtile 0 is all-B: the four 8×8 corners of the (col 0, row 4) cell,
-        // matching what the old whole-cell fallback drew at (0, 64).
+        // Shape 0 takes all four corners from B at column 0, row 4.
         assert_eq!(
             srcs(0, 0),
             [(0.0, 64.0), (8.0, 64.0), (0.0, 72.0), (8.0, 72.0)]

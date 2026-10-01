@@ -2,9 +2,7 @@
 
 use amnezia_data::{ActorDef, ItemDef};
 
-/// A member's max HP/SP at `level`: the value on their curve (level L at index
-/// L-1), or the actor's starting HP/SP when the curve is empty. Mirrors battle's
-/// `actor_hp_sp_at(&curves, level, def.hp, def.sp)`.
+/// Use the shared battle curve lookup, including its starting-vitals fallback.
 pub(super) fn max_hp_sp(def: &ActorDef, level: u32) -> (i32, i32) {
     let i = (level.max(1) - 1) as usize;
     let hp = def.curves.max_hp.get(i).copied().unwrap_or(def.hp);
@@ -12,11 +10,7 @@ pub(super) fn max_hp_sp(def: &ActorDef, level: u32) -> (i32, i32) {
     (hp as i32, sp as i32)
 }
 
-/// A member's `[atk, def, spi, agi]` at `level` with an explicit five-slot
-/// loadout: the curve value (or battle's linear fallback when the curve is empty)
-/// plus the summed stat bonus of the equipped items. Mirrors battle's
-/// `actor_stats_at` + `equipment_bonus_slots`, so the menu's figures — and its
-/// stat-change preview — match a real fight built from the same loadout.
+/// Derive `[atk, def, spi, agi]` from the same curves and loadout bonuses as battle.
 pub(super) fn stats_with_slots(
     def: &ActorDef,
     level: u32,

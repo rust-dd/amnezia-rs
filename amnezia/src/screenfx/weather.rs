@@ -27,9 +27,7 @@ const WEATHER_Z: f32 = 100.0;
 /// `num_rain_or_snow_particles`. Strength is clamped into this range.
 const PARTICLE_COUNT: [usize; 3] = [20, 60, 100];
 
-/// The active ambient weather (`Weather` 11070, `params[0]`). Persisted by the
-/// save so a load restores it; the interpreter maps a command through
-/// [`Self::from_code`] and the render systems react to changes.
+/// Persisted Weather opcode 11070 type (`params[0]`).
 #[derive(Resource, Default, PartialEq, Eq, Clone, Copy, Debug)]
 pub enum Weather {
     #[default]
@@ -82,9 +80,7 @@ struct AppliedWeather {
 #[derive(Component)]
 struct WeatherEntity;
 
-/// A compatibility snow flake in screen space (`x` right, `y`
-/// down, origin top-left). Carries its own motion so [`Self::advance`] is a pure,
-/// testable step, and a small LCG state for respawning across the top.
+/// Compatibility snow in top-left-origin, y-down screen pixels; RNG state controls respawns.
 #[derive(Component)]
 struct WeatherParticle {
     x: f32,
@@ -103,10 +99,7 @@ impl WeatherParticle {
         self.x + self.wobble_amp * self.phase.sin()
     }
 
-    /// Advance one frame of `dt` seconds: fall, drift, and wobble. When the flake
-    /// passes the bottom edge it recycles to the top with a fresh random x,
-    /// returning `true` (RPG_RT respawns spent particles; here they wrap). Pure and
-    /// deterministic given the particle's state — the unit tests exercise it.
+    /// Advance by seconds, returning true when the flake wraps from bottom to a randomized top position.
     fn advance(&mut self, dt: f32) -> bool {
         self.y += self.fall * dt;
         self.x += self.drift * dt;
@@ -193,9 +186,7 @@ fn weather_running(
     !(transition.paused() || battle.0 || menu.0 || shop.0 || title.0 || gameover.0)
 }
 
-/// Rebuild the weather entities when the type/strength changes or the map swaps:
-/// clear the old sprites and spawn the new set (nothing for `None`). Only fires on
-/// an actual change so a per-frame parallel re-set does not restart the effect.
+/// Rebuild only on type/strength/map changes so repeated parallel commands do not restart weather.
 fn rebuild_weather(
     mut commands: Commands,
     mut input: WeatherInput,
@@ -301,9 +292,7 @@ fn step_particles(
     }
 }
 
-/// The world translation of a particle at RM2000 screen `(sx, sy)` (y down) when
-/// the camera is centred at `base`: screen centre maps to the camera centre and y
-/// flips for world y-up.
+/// Convert top-left y-down weather pixels to camera-relative y-up world space.
 fn world_pos(base: Vec2, sx: f32, sy: f32) -> Vec3 {
     Vec3::new(
         base.x + sx - SCREEN_W / 2.0,

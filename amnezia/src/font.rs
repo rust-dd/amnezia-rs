@@ -26,12 +26,8 @@ impl Plugin for FontPlugin {
     }
 }
 
-/// RM2000's font is a bitmap/pixel face; Bevy antialiases text by default, which
-/// blurs the pixels and makes it read as the wrong font entirely. Force every text
-/// surface to render with no smoothing so the pixels stay sharp — the way RPG_RT
-/// draws them. Runs each frame but only touches text not already set, so it never
-/// needlessly re-rasterizes; this keeps the fix in one place instead of on every
-/// `TextFont` across the UI.
+/// Disable Bevy's default smoothing to preserve the bitmap font's pixel grid.
+/// Only mutate fonts that need correction to avoid repeated rasterization.
 fn keep_text_crisp(mut text_fonts: Query<&mut TextFont>) {
     for mut text_font in &mut text_fonts {
         if text_font.font_smoothing != FontSmoothing::None {

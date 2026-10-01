@@ -8,10 +8,7 @@ use amnezia_data::ItemDef;
 
 use super::derive;
 
-/// Whether `item` can be used on a party member from the field menu: never pure
-/// equipment (types 1–5), and only when it restores HP/SP (flat or percent) or
-/// cures states. `only_field` items — flagged usable only from the map — count as
-/// field-usable by definition.
+/// Field use requires recovery or cured states; equipment types 1–5 are excluded.
 pub(super) fn field_usable(item: &ItemDef) -> bool {
     if (1..=5).contains(&item.item_type) {
         return false;
@@ -33,9 +30,7 @@ pub(super) fn held_item_ids(data: &GameData, inventory: &Inventory) -> Vec<u32> 
         .collect()
 }
 
-/// The `(hp, sp)` a member reaches after `item` is applied: each pool gains the
-/// item's flat amount plus its percent-of-maximum, clamped to the maximum and
-/// only when that pool's gain is positive. Mirrors the battle item formula.
+/// Apply flat-plus-percent recovery, capped at each maximum and only for positive gains.
 pub(super) fn heal(hp: i32, sp: i32, max_hp: i32, max_sp: i32, item: &ItemDef) -> (i32, i32) {
     let hp_gain = item.recover_hp as i32 + max_hp * item.recover_hp_rate as i32 / 100;
     let sp_gain = item.recover_sp as i32 + max_sp * item.recover_sp_rate as i32 / 100;

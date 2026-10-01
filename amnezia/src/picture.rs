@@ -1,14 +1,7 @@
-//! On-screen pictures (RM2000 `ShowPicture`/`MovePicture`/`ErasePicture`): a
-//! numbered picture (1..50) drawn from `graphics/Picture/*.png`, positioned in
-//! the 320×240 screen and optionally tweened. The interpreter emits a
-//! [`PictureCommand`]; this plugin spawns/moves/despawns a textured quad per id.
-//!
-//! Each picture carries a palette-space colour [`Tone`] (saturation + hard light, so a
-//! grayscale or tinted picture renders as one — see [`render`]) and honours the
-//! RM2000 fixed-to-map flag: a screen-pinned picture re-centres on the unshaken
-//! camera every frame, a map-fixed one accumulates actual map scrolling but not
-//! jump-landing corrections. Pictures inherit shake but not screen tint.
-//! Ordinary cross-map transfers clear pictures; quick vehicle transfers preserve them.
+//! Numbered RM2000 pictures driven by [`PictureCommand`]. Map-fixed pictures track
+//! actual scrolling, excluding jump-landing corrections; screen-pinned pictures
+//! follow the unshaken camera. Both inherit shake, not screen tint. Ordinary
+//! cross-map transfers clear pictures; quick vehicle transfers preserve them.
 
 use crate::screenfx::ScreenShakeSet;
 use crate::world::{MapEffectsReset, MapRebuilt};
@@ -37,7 +30,6 @@ pub struct Tone {
 }
 
 impl Tone {
-    /// The no-op tone (every channel neutral). Used as a test reference point.
     #[cfg(test)]
     pub(crate) const NEUTRAL: Tone = Tone {
         r: 100.0,
@@ -76,8 +68,9 @@ pub enum PictureCommand {
         effect: Effect,
         secs: f32,
     },
-    /// Remove picture `id`.
-    Erase { id: u32 },
+    Erase {
+        id: u32,
+    },
 }
 
 impl PictureCommand {
@@ -147,8 +140,6 @@ fn tone_param(params: &[i32]) -> Tone {
     }
 }
 
-/// A live on-screen picture: its id, current visual state, map anchor, texture
-/// size, and any running move.
 #[derive(Component)]
 struct Picture {
     id: u32,
@@ -182,7 +173,6 @@ impl Picture {
         }
     }
 
-    /// Apply one interpolation sample.
     fn apply(&mut self, state: Anim) {
         self.x = state.x;
         self.y = state.y;
@@ -240,7 +230,6 @@ pub(crate) struct Anim {
 }
 
 impl Anim {
-    /// Linear interpolation of every field.
     fn lerp(from: Anim, to: Anim, t: f32) -> Anim {
         Anim {
             x: lerp(from.x, to.x, t),

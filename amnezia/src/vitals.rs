@@ -1,7 +1,5 @@
-//! Persistent party vitals: each actor's current HP/SP carried between battles
-//! and healed at an inn. The battle system reads a stored entry when building a
-//! fighter (an absent entry means the actor starts the fight full at its current
-//! level) and writes it back when the fight ends.
+//! Persistent HP/SP between battles. Missing entries mean full vitals at the actor's
+//! current level; inns restore them by clearing stored damage.
 
 use bevy::prelude::*;
 use std::collections::HashMap;
@@ -14,7 +12,6 @@ pub struct Vitals {
 }
 
 impl Vitals {
-    /// Store an actor's `(hp, sp)` after a battle.
     pub fn set(&mut self, actor_id: u32, hp: i32, sp: i32) {
         self.pools.insert(actor_id, (hp.max(0), sp.max(0)));
         if hp <= 0 {
@@ -22,8 +19,7 @@ impl Vitals {
         }
     }
 
-    /// Restore every party member to full HP/SP by dropping all stored damage,
-    /// so each actor's `get()` returns its full ActorDef values again.
+    /// Clear stored damage so callers use full current-level vitals.
     pub fn heal_all(&mut self) {
         self.pools.clear();
         self.conditions.clear();

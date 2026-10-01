@@ -8,9 +8,7 @@ pub fn currency(terms: &Terms) -> String {
     crate::i18n::tr(&terms.0.gold)
 }
 
-/// The shopkeeper's lines for one shop, chosen by the RM2000 `shop_type` (0/1/2):
-/// each of the three merchant styles keys its own greeting / prompt / confirmation
-/// terms.
+/// Vocabulary for one of RM2000's three merchant styles (shop_type 0/1/2).
 pub struct ShopVocab {
     /// First greeting, shown on the Buy/Sell/Leave menu.
     pub greeting: String,
@@ -46,7 +44,6 @@ pub fn shop_vocab(shop_type: u32, terms: &Terms) -> ShopVocab {
     }
 }
 
-/// The inn keeper's lines.
 pub struct InnVocab {
     pub greetings: [String; 2],
     pub accept: String,

@@ -1,15 +1,5 @@
-//! Game audio: sound effects and background music, driven by the event
-//! interpreter. The interpreter stays decoupled from Bevy's audio types by
-//! emitting an [`AudioRequest`] (defined in [`request`]); this plugin consumes it
-//! and spawns the actual players, ramps BGM fade-in/out, and remembers a
-//! memorized track. A buffered message is chosen over a shared resource queue
-//! because it is the idiomatic Bevy 0.19 producer/consumer channel and needs no
-//! manual draining or clearing.
-//!
-//! Sound effects are WAV and play immediately. Music is mostly MIDI, which Bevy
-//! cannot decode (and no synthesizer is installed), so a track plays only if a
-//! converted `.ogg` or an ambient `.wav` exists under `audio/Music/`; a
-//! MIDI-only track is skipped without an error or per-frame logging.
+//! [`AudioRequest`] messages decouple the interpreter from Bevy audio playback.
+//! BGM uses converted OGG or ambient WAV files; MIDI-only tracks remain silent.
 
 use crate::assets::{asset_root, load_ron};
 use amnezia_data::{MusicDef, SoundDef, SystemDef};
@@ -28,12 +18,8 @@ use playback::{BgmAction, drive_bgm_fade, play_requests};
 use request::BgmFade;
 pub use request::{AudioRequest, BgmTrack};
 
-/// The single active BGM: its playback entity, requested track name,
-/// target volume and speed, and any in-progress
-/// fade. The name keeps a re-requested track — an autorun page replays it every
-/// cycle — from restarting, and a MIDI-only track from being re-logged. The
-/// volume/speed are the *target* (full) values, so a memorize captures the track
-/// as if not mid-fade.
+/// The requested name prevents autorun replays from restarting a track.
+/// Volume/speed retain full target values so memorizing during a fade is stable.
 #[derive(Resource, Default)]
 pub(crate) struct CurrentBgm {
     entity: Option<Entity>,
@@ -51,10 +37,7 @@ impl CurrentBgm {
             .is_some_and(|entity| sinks.get(entity).map_or(true, |sink| !sink.empty()))
     }
 
-    /// The currently-playing track as a replayable [`BgmTrack`], or `None` when
-    /// nothing is playing (the name is cleared on stop). A MIDI-only track still
-    /// reports here — its name is remembered even without a playable file — so a
-    /// memorize/restore round-trip preserves the map's silence too.
+    /// Includes unplayable MIDI-only tracks so memorize/restore preserves their silence.
     pub(crate) fn track(&self) -> Option<BgmTrack> {
         if self.name.is_empty() {
             return None;
@@ -67,17 +50,12 @@ impl CurrentBgm {
         })
     }
 
-    /// Whether the BGM is fading out (about to stop). A same-name replay during a
-    /// fade-out restarts the track rather than adjusting it, mirroring RPG_RT's
-    /// `music_stopping` guard.
+    /// RPG_RT's `music_stopping` guard makes same-name replays restart during fade-out.
     fn stopping(&self) -> bool {
         self.fade.as_ref().is_some_and(|fade| fade.stop_at_end)
     }
 
-    /// What a `PlayBgm` for `name` (at `volume`/`speed`) should do against the
-    /// current state, mirroring `BgmPlay`'s name compare: ignore a seamless replay
-    /// of the same track, adjust volume/tempo in place when only those changed, or
-    /// restart for a new track (or one that is fading out).
+    /// Same-name requests preserve playback unless the current track is stopping.
     fn action_for(&self, name: &str, volume: f32, speed: f32) -> BgmAction {
         if self.name == name && !self.stopping() {
             if self.volume != volume || self.speed != speed {
@@ -90,10 +68,7 @@ impl CurrentBgm {
         }
     }
 
-    /// Begin a fade-out to silence over `duration` seconds. A playable track is
-    /// ramped by [`drive_bgm_fade`] (from its current gain) and stopped at the
-    /// end; a silent or MIDI-only track has nothing to ramp, so it just goes
-    /// silent at once.
+    /// Fade from current gain; unplayable tracks stop immediately.
     fn start_fade_out(&mut self, duration: f32) {
         if self.entity.is_none() {
             self.name.clear();
@@ -104,9 +79,7 @@ impl CurrentBgm {
         self.fade = Some(BgmFade::fade_out(start, duration));
     }
 
-    /// Construct a `CurrentBgm` reporting `name` (with `volume`/`speed`) as the
-    /// playing track, for tests that memorize the map BGM without spinning up the
-    /// audio player.
+    /// Test snapshot without an audio player.
     #[cfg(test)]
     pub(crate) fn with_track(name: &str, volume: f32, speed: f32) -> Self {
         Self {
@@ -120,10 +93,7 @@ impl CurrentBgm {
     }
 }
 
-/// The BGM remembered by `MemorizeBGM` (11530) for `PlayMemorizedBGM` (11540) to
-/// restore. Distinct from the battle's map-BGM memory and the inn's: an event
-/// saves the current track here and replays it later, e.g. across a temporary
-/// music change.
+/// Event BGM memory (opcodes 11530/11540), separate from battle and inn snapshots.
 #[derive(Resource, Default)]
 pub struct MemorizedBgm(Option<BgmTrack>);
 
@@ -137,10 +107,7 @@ pub struct SystemSounds {
     pub item: SoundDef,
 }
 
-/// The RM2000 scene BGM the non-map screens play, read from `system.ron`: the
-/// title theme, the inn's overnight jingle, and the game-over dirge. Loaded once
-/// so [`crate::title`], [`crate::shop`], and [`crate::gameover`] can start them
-/// without re-reading the system definition.
+/// Non-map scene music cached from `system.ron`.
 #[derive(Resource, Default)]
 pub struct SystemMusic {
     pub title: MusicDef,

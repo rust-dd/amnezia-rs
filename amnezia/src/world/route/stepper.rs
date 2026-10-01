@@ -33,9 +33,7 @@ pub(crate) enum StepEffect {
     Transparency(u8),
 }
 
-/// A character's progress through a forced move route. Attached (inactive) to
-/// every hero and event sprite so the `MoveEvent` opcode can load a route onto
-/// any target; a `move_type == 6` NPC spawns with its page route already armed.
+/// Every hero/NPC owns a stepper; custom-movement pages start with their route armed.
 #[derive(Component, Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct RouteStepper {
     pub(crate) animation: crate::world::character_animation::CharacterAnimation,
@@ -64,10 +62,7 @@ pub struct RouteStepper {
     legacy_timer: f32,
     rng: u32,
     active: bool,
-    /// True for a forced route from a `MoveEvent` (11330), false for a page's own
-    /// `move_type == 6` custom route. A forced route keeps advancing while the event
-    /// interpreter runs and while a message is up — RM2000's `IsMoveRouteOverwritten`
-    /// short-circuits both pauses; a page route pauses like autonomous movement.
+    /// MoveEvent routes bypass event/message pauses; page routes follow autonomous-movement gates.
     forced: bool,
     facing_lock: Option<u32>,
     direction: Option<u32>,
@@ -287,8 +282,7 @@ fn away_dir(hero: (i32, i32), me: (i32, i32)) -> u32 {
     (toward_dir(hero, me) + 2) % 4
 }
 
-/// xorshift32 — cheap deterministic randomness for the random move/turn commands,
-/// no `rand` dependency.
+/// Deterministic xorshift32 stream for random move/turn commands.
 fn next_rand(state: &mut u32) -> u32 {
     let mut x = *state;
     x ^= x << 13;

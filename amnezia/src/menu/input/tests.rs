@@ -80,10 +80,8 @@ fn confirm(app: &mut App, key: KeyCode) {
     app.update();
 }
 
-/// Release every held key, press `key` afresh, and run one frame — so a
-/// multi-step interaction sees a genuine just-pressed each step (no input plugin
-/// runs to reset it in these headless apps, and `press` only re-arms
-/// `just_pressed` for a newly held key).
+/// Reset held keys before each press: these headless apps have no input plugin
+/// to re-arm `just_pressed` between updates.
 fn press_frame(app: &mut App, key: KeyCode) {
     {
         let mut input = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();

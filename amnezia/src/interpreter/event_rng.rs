@@ -58,7 +58,8 @@ mod tests {
         let mut rng = EventRng::seeded(0xABCDEF);
         let mut seen = HashSet::new();
         for _ in 0..500 {
-            let v = rng.range(8, 3); // deliberately reversed bounds
+            // Reversed bounds must behave like the ordered range.
+            let v = rng.range(8, 3);
             assert!((3..=8).contains(&v), "draw {v} outside [3, 8]");
             seen.insert(v);
         }

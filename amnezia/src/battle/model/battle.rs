@@ -8,11 +8,7 @@ use super::{
 use amnezia_data::{AttributeDef, ItemDef, SkillDef, StateDef};
 use bevy::prelude::*;
 
-/// Frames [`Battle::tick_anim_hold`] waits for a just-queued battle animation to
-/// appear before giving up and applying its impact anyway. Comfortably longer
-/// than the one or two frames the overlay needs to spawn the `LiveAnimation`, so
-/// it only ever fires for an unknown animation id that spawns nothing (rather
-/// than wedging resolution forever).
+/// Allow renderer spawn latency, but bound waits for missing animation IDs.
 const ANIM_HOLD_GRACE_TICKS: u32 = 12;
 
 #[cfg(test)]
@@ -25,9 +21,7 @@ pub enum Phase {
     Inactive,
     Encounter,
     Escape,
-    /// The RM2000 party-level option window at the top of each round: Fight (drop
-    /// to per-actor [`Command`] entry), Auto (auto-battle the whole party), or
-    /// Escape (attempt to flee). Shown before any member picks an order.
+    /// Fight/Auto/Escape selection before per-actor commands.
     PartyCommand,
     Command,
     Resolve,
@@ -59,22 +53,13 @@ pub struct Battle {
     pub allow_escape: bool,
     pub members: Vec<Fighter>,
     pub enemies: Vec<Foe>,
-    /// The attribute (element) table, consulted by the elemental damage step.
     pub(in crate::battle) attributes: Vec<AttributeDef>,
-    /// The state (status) table, consulted to name an inflicted or cured state.
     pub(in crate::battle) states: Vec<StateDef>,
-    /// The skill table, looked up by id on a cast for its element, inflicted
-    /// states, and heal-vs-damage scope.
     pub(in crate::battle) skills: Vec<SkillDef>,
-    /// The item table, looked up by id when a member uses a medicine so its real
-    /// HP/SP recovery and status cures apply, rather than a flat placeholder heal.
     pub(in crate::battle) items: Vec<ItemDef>,
     /// The current battle round, counting from `1`, gating turn-numbered AI.
     pub round: u32,
-    /// The party's current escape chance in percent (RM2000 / EasyRPG
-    /// `escape_chance`): set once at [`Battle::build`] from the two sides' average
-    /// agilities ([`logic::init_escape_chance`]) and raised by 10 on each failed
-    /// escape (see [`Battle::attempt_escape`]).
+    /// Initialized from average agilities at battle start; failed escapes add 10 points.
     pub(in crate::battle) escape_chance: u32,
     /// Whether the party opened with a first strike (RM2000 preemptive attack): it
     /// grants a guaranteed escape and the `+9999` turn-order bonus.
@@ -100,9 +85,7 @@ pub struct Battle {
     /// A unique-per-fight stamp (the build seed) the UI watches to rebuild the
     /// enemy battler nodes exactly once when a new encounter begins.
     pub generation: u64,
-    /// Attack animations queued as the current tick's actions resolve; drained
-    /// each frame by `battle.rs` into `PlayAnimation` overlays and cleared by
-    /// [`Battle::new_round`] (a fresh [`Battle::build`] starts it empty).
+    /// Queued casts, drained into `PlayAnimation` messages by the battle systems.
     pub(in crate::battle) pending_anims: Vec<PendingAnim>,
     /// Per-tick hit reports drained into diagnostic traces, not drawn on screen.
     pub(in crate::battle) hit_reports: Vec<HitReport>,
@@ -111,28 +94,18 @@ pub struct Battle {
     pub(in crate::battle) pending_blinks: Vec<(f32, f32)>,
     pub(in crate::battle) pending_action_flashes: Vec<Source>,
     pub(in crate::battle) pending_shake: bool,
-    /// Battle sound effects owed as the current tick's actions resolve (a hit
-    /// landed, a foe felled, an attack evaded), drained each frame by `battle.rs`
-    /// into `AudioRequest`s named from the loaded `SystemDef` and cleared by
-    /// [`Battle::new_round`] (a fresh [`Battle::build`] starts empty).
+    /// Queued sound roles, resolved against `SystemDef` by the battle systems.
     pub(in crate::battle) pending_se: Vec<BattleSe>,
     /// Troop-event animation wait; action animations use the frame timeline.
     pub(in crate::battle) anim_hold: bool,
     /// The renderer acknowledged the request or reported a live animation.
     /// Acknowledgement also covers effects that finish within one low-FPS update.
     pub(in crate::battle) anim_seen: bool,
-    /// Frames the current hold has waited without the animation ever appearing,
-    /// bounding the wait for an unknown/absent animation id (see
-    /// [`ANIM_HOLD_GRACE_TICKS`]) so resolution can never wedge.
+    /// Unacknowledged ticks, bounded by [`ANIM_HOLD_GRACE_TICKS`].
     pub(in crate::battle) anim_hold_ticks: u32,
-    /// Set once the victory reward (gold, experience, and any level-ups) has been
-    /// paid on entering the outcome, so `battle::apply_victory_rewards` pays out
-    /// exactly once while the outcome screen waits for the player.
+    /// Prevents paying rewards again while the outcome screen waits for input.
     pub(in crate::battle) rewarded: bool,
-    /// The real RM2000 battle-end message terms (victory / defeat / escape and the
-    /// reward lines), captured from the loaded vocabulary at battle start; the
-    /// invented Hungarian defaults stand in until then (see
-    /// [`crate::battle::log_terms`]).
+    /// Vocabulary snapshot captured at battle start, preserving intentional blanks.
     pub(in crate::battle) text: crate::battle::log_terms::BattleText,
     pub(in crate::battle) rng: u64,
 }
@@ -188,13 +161,8 @@ impl Battle {
         self.skip_restricted_choosers();
     }
 
-    /// Step back to the previous living chooser, clearing its order (RM2000 back).
-    /// Auto-committed restricted members (asleep/berserk/confused) can't be
-    /// re-ordered, so the step skips over them to the last freely-chosen member.
-    /// With nothing earlier to undo — cancel on the first freely-choosing member —
-    /// it backs all the way out to the party-option window (Fight / Auto / Escape),
-    /// matching RM2000 `SelectPreviousActor` returning to `State_SelectOption` when
-    /// the active actor is the first ally.
+    /// Undo the last freely chosen order, skipping forced actions. With no earlier
+    /// chooser, return to party options (RM2000 `SelectPreviousActor`).
     pub fn undo_choice(&mut self) {
         self.menu = MenuLevel::Command;
         self.cursor = 0;
@@ -219,10 +187,7 @@ impl Battle {
         }
     }
 
-    /// Drop from the party-option window into per-actor command entry (RM2000
-    /// Fight): enter the command phase and hand the round to the first member who
-    /// may freely choose, auto-ordering and skipping any restricted members — or
-    /// resolving at once if none can act.
+    /// Enter Fight commands, auto-ordering restricted members before the first free chooser.
     pub fn begin_actor_commands(&mut self) {
         self.phase = Phase::Command;
         self.menu = MenuLevel::Command;
@@ -230,10 +195,7 @@ impl Battle {
         self.skip_restricted_choosers();
     }
 
-    /// Auto-battle the whole party (RM2000 Auto): order every living member a basic
-    /// attack on a random living enemy (a restricted member keeps its forced
-    /// action), then resolve the round. Reuses the same target/AI helpers as the
-    /// per-actor flow, so the enemies still act.
+    /// Auto-order living members while preserving forced actions, then resolve.
     pub fn auto_battle(&mut self) {
         self.auto_battle_commands();
     }
@@ -260,13 +222,7 @@ impl Battle {
                 actions.push(action);
             }
         }
-        // RM2000 `CreateExecutionOrder`: each battler's sort key is its agility
-        // plus a fresh jitter of `Rand::GetRandomNumber(0, agi/4 + 3)`, re-rolled
-        // every round, sorted fastest-first. The stable `turn_order` keeps the
-        // given order on equal keys. On a first strike (RM2000 preemptive) every
-        // party battler's key gains the +9999 bonus, launching the whole party
-        // ahead of the foes; `first_strike` is dormant until an encounter path
-        // raises it.
+        // RM2000 re-rolls agility jitter each round; first strike adds 9999 to party keys.
         let keys: Vec<u32> = actions
             .iter()
             .map(|a| {
@@ -305,11 +261,7 @@ impl Battle {
         self.anim_hold_ticks = 0;
     }
 
-    /// Advance the animation hold given whether any battle animation is live this
-    /// frame, returning `true` while resolution must keep waiting. The hold clears
-    /// once an observed animation has ended; as a safety net for an animation id
-    /// that spawns nothing, it also clears once the grace window
-    /// ([`ANIM_HOLD_GRACE_TICKS`]) elapses without one ever appearing.
+    /// Wait until an observed animation ends, or the unacknowledged-request grace expires.
     pub(in crate::battle) fn tick_anim_hold(&mut self, anim_live: bool) -> bool {
         if !self.anim_hold {
             return false;

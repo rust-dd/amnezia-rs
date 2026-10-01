@@ -1,22 +1,8 @@
-//! RM2000 lower-layer autotile assembly, mirroring EasyRPG/Player's
-//! `TilemapLayer` (`src/tilemap_layer.cpp`) and its `map_data.h` block ranges.
-//!
-//! A lower-layer chip id falls in one of the blocks below (values match
-//! EasyRPG's `BLOCK_*` constants):
-//! - `BLOCK_A`/`BLOCK_B` (`0..3000`): quarter-assembled animated water; see
-//!   [`super::water`].
-//! - `BLOCK_C` (`3000..3150`): whole-cell animated tiles (waterfalls); see
-//!   [`super::water`].
-//! - `BLOCK_D` (`4000..4600`): 12 terrain/wall autotiles, 50 shapes each.
-//! - `BLOCK_E` (`5000..=5143`): 144 static single tiles.
-//!
-//! A `BLOCK_D` tile is not a single chipset cell: its shape `(id-4000) % 50`
-//! selects, per 8×8 quarter, which template cell supplies that corner, so a
-//! 16×16 tile is composed from four quarters. That is why the old
-//! single-representative mapping drew wall autotiles as a black void: it always
-//! sampled the shape-0 fill quarter (a wall's dark interior) and never the edge
-//! cells that carry the visible wall border. `BLOCK_A`/`BLOCK_B` water is
-//! assembled the same way from a water-specific template.
+//! Lower-layer assembly from EasyRPG `tilemap_layer.cpp` and `map_data.h`.
+//! ID ranges: A/B water `0..3000`, C animation `3000..3150`, D terrain/walls
+//! `4000..4600` (12 sets × 50 shapes), E static tiles `5000..=5143`.
+//! A/B/D shapes assemble four 8×8 corners; sampling one whole template cell
+//! loses the edge/corner pattern.
 
 use super::TILE;
 use super::water;
@@ -38,8 +24,7 @@ pub struct Quarter {
     pub src: (f32, f32),
 }
 
-/// How a lower-layer tile is drawn: either one 16×16 sprite (static and
-/// not-yet-assembled tiles) or four assembled 8×8 quarters (`BLOCK_D`).
+/// One 16×16 source cell or four assembled 8×8 quarters.
 #[derive(Clone, PartialEq, Debug)]
 pub enum LowerRender {
     Whole { src: (f32, f32) },
@@ -252,8 +237,7 @@ mod tests {
 
     #[test]
     fn water_block_a_assembles_into_quarters() {
-        // Plain water (id 0) is the four 8×8 corners of the (0, 64) deep-water
-        // cell — what the old whole-cell fallback drew, now shape-assembled.
+        // Plain water assembles all four corners of the deep-water cell at (0, 64).
         assert_eq!(
             srcs(0),
             [(0.0, 64.0), (8.0, 64.0), (0.0, 72.0), (8.0, 72.0)]

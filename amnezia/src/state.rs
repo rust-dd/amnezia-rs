@@ -45,9 +45,7 @@ impl Variables {
     pub fn get(&self, id: u32) -> i32 {
         self.0.get(&id).copied().unwrap_or(0)
     }
-    /// Store `value` in variable `id`, clamped to the RM2000 range
-    /// `[MIN_VAR, MAX_VAR]` — RPG_RT clamps every variable write, so an add/mul
-    /// that overshoots saturates at the six-nines bound rather than wrapping.
+    /// RPG_RT clamps every write to the six-nines range, including arithmetic overflow.
     pub fn set(&mut self, id: u32, value: i32) {
         self.0.insert(id, value.clamp(MIN_VAR, MAX_VAR));
     }

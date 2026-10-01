@@ -93,9 +93,7 @@ pub(super) fn normal(In((target, reload)): In<((u32, u32, u32), bool)>, mut scen
     scene.perform(target, reload, false);
 }
 
-/// Move the persistent hero to tile `(tile_x, tile_y)` on `data`: update its
-/// logical tile and snap its transform to the tile center. Facing is retained —
-/// the teleport target carries no direction, matching RM2000's "retain heading".
+/// Snap logical and visual hero positions together; transfers retain facing.
 pub(super) fn reposition_hero(
     players: &mut Query<(
         &mut Player,

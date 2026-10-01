@@ -1,7 +1,4 @@
-//! Tile and NPC spawning helpers for [`super::load_map`]: a single tile sprite,
-//! the four quarter sprites of an assembled lower-layer autotile, and an event's
-//! active-page NPC sprite. Every spawned entity is tagged [`MapScene`] so a
-//! teleport can despawn the whole scene at once.
+//! Map tile/NPC spawning for [`super::load_map`]; [`MapScene`] tags enable transfer cleanup.
 
 use super::MapScene;
 use super::water::WaterQuarter;
@@ -42,11 +39,7 @@ pub(super) fn spawn_tile(
         .id()
 }
 
-/// Spawn the four 8×8 quarter sprites of an assembled lower-layer autotile at
-/// map cell `index`, each drawing its own chipset sub-rect at its offset within
-/// the tile so the shape's edges and corners compose correctly. Quarters of an
-/// animated `BLOCK_A`/`BLOCK_B` water tile are tagged [`WaterQuarter`] so
-/// [`super::water::animate_water`] can scroll their source column.
+/// Assemble four 8×8 chipset quarters; [`WaterQuarter`] tags enable animated source scrolling.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn spawn_lower_quarters(
     commands: &mut Commands,

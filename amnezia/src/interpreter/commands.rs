@@ -1,16 +1,12 @@
-//! The pure command-application helpers: how a single RM2000 state command
-//! (`ControlSwitches`, `ControlVariables`, the `Change*` family) mutates the
-//! game state, and how a `ConditionalBranch` condition is evaluated. Kept free of
-//! Bevy so they unit-test directly against the plain state resources.
+//! RM2000 state-command helpers, testable without Bevy systems.
 
 use crate::animation::{AnimTarget, AnimationLibrary};
 use crate::gamedata::GameData;
 use crate::progression::Progression;
 use crate::state::{Inventory, Party, Switches, Variables};
 
-/// Apply a `ControlSwitches` command `[mode, start_id, end_id, op]` to the id
-/// range `start..=end`: op 0 turns switches ON, 1 OFF, 2 toggles. `mode` (direct
-/// range vs. variable-referenced id) is treated as a direct range for now.
+/// ControlSwitches `[mode, start, end, op]`: 0 on, 1 off, 2 toggle.
+/// All modes currently use the direct inclusive ID range.
 pub(crate) fn apply_control_switches(switches: &mut Switches, params: &[i32]) {
     let [_, start, end, op, ..] = params else {
         return;
@@ -53,10 +49,8 @@ pub(super) fn apply_change_items(inventory: &mut Inventory, params: &[i32]) {
     }
 }
 
-/// Apply a `ChangePartyMembers` command `[op, operand_type, actor_id]`: op 0
-/// adds the actor to the party, 1 removes. Adding mirrors RM2000
-/// `Game_Party::AddActor`: an id with no actor behind it is ignored, and the
-/// party itself caps the roster at four (see [`Party::add`]).
+/// ChangePartyMembers `[op, operand_type, actor_id]`: 0 add, 1 remove.
+/// Unknown actors are ignored; [`Party::add`] enforces the four-member limit.
 pub(super) fn apply_change_party(party: &mut Party, data: &GameData, params: &[i32]) {
     let [op, _, actor_id, ..] = params else {
         return;
@@ -92,11 +86,8 @@ pub(super) fn anim_frame_count(library: &AnimationLibrary, id: u32) -> usize {
         .map_or(0, |a| a.frames.len())
 }
 
-/// The seconds a `ShowBattleAnimation` (11210) blocks its event when the wait flag
-/// (`params[2]`) is set: the animation's `frames` data frames at the fixed 1/30 s
-/// cadence ([`crate::animation::FRAME_SECS`]), mirroring
-/// `Game_Interpreter_Map::CommandShowBattleAnimation` storing the animation's
-/// frame count as `_state.wait_time`. `None` when the flag is clear (fire-and-forget).
+/// Opcode 11210 waits two 60 Hz ticks per data frame when `params[2]` is set;
+/// otherwise returns `None` for fire-and-forget playback.
 pub(super) fn battle_anim_wait(params: &[i32], frames: usize) -> Option<f32> {
     (params.get(2).copied().unwrap_or(0) > 0)
         .then_some(frames as f32 * crate::animation::FRAME_SECS)
@@ -137,11 +128,8 @@ pub(crate) fn actor_targets(
     }
 }
 
-/// Apply a `ChangeLevel` command `[mode, id, operation, operand_type, operand,
-/// show_msg]` (EasyRPG code 10420): raise or lower each targeted actor's level by
-/// the operate-value delta, via [`Progression::set_level`] so the new level drives
-/// the actor's curve-derived battle stats. The `show_msg` flag (a level-up popup)
-/// has no analogue here and is ignored.
+/// ChangeLevel `[mode, id, operation, operand_type, operand, show_msg]` uses
+/// [`Progression::set_level`]; `show_msg` is unsupported and ignored.
 pub(super) fn apply_change_level(
     progression: &mut Progression,
     data: &GameData,

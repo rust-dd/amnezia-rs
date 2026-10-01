@@ -1,12 +1,6 @@
-//! Concurrently-running background interpreters: RM2000's parallel-process map
-//! event pages (trigger 4) and parallel common events (trigger 4). Each gets its
-//! own [`Frame`] in the [`ParallelPool`], stepped every frame with the same
-//! per-frame command budget the foreground uses, sharing the one game state
-//! through [`Exec`]. A finished background page loops from the top the next
-//! frame, matching RM2000's "runs continuously" semantics.
-//!
-//! Scene changes pause the pool. Messages pause their owner and message-sensitive
-//! commands, while other background scripts keep running.
+//! Trigger-4 map/common events each own a [`Frame`] and per-update command budget.
+//! Finished pages restart on the next frame. Scene changes pause the pool;
+//! messages block only their owner and message-sensitive commands.
 
 use super::exec::{Exec, Operation, RunOutcome, run_operation};
 use super::frame::Frame;
@@ -21,10 +15,7 @@ mod update;
 pub(super) use pages::PageOwner;
 pub(crate) use update::map_event;
 
-/// The database's common events, read once at boot. Autostart (trigger 3) events
-/// run foreground-style from `autorun`; parallel (trigger 4) events run in the
-/// [`ParallelPool`]. This game ships a single empty stub common event, so the
-/// list is effectively dormant, but the machinery drives any that exist.
+/// Common events cached at boot: trigger 3 runs foreground, trigger 4 runs in the pool.
 #[derive(Resource, Default)]
 pub struct CommonEvents(pub Vec<CommonEvent>);
 
@@ -62,9 +53,7 @@ struct ParallelFrame {
     frame: Frame,
 }
 
-/// The set of live background interpreters plus the map id they were built for, so
-/// a teleport to a new map drops the old map's parallel pages before the new
-/// map's are reconciled in.
+/// Background interpreters keyed to their source map and event/page.
 #[derive(Resource, Default)]
 pub struct ParallelPool {
     frames: Vec<ParallelFrame>,

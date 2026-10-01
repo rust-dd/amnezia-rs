@@ -57,9 +57,7 @@ pub(super) fn candidates(
     ids
 }
 
-/// Apply the candidate under `cursor` to the `member`-th actor's 0-based `slot`:
-/// swap the gear through the runtime store, moving items between it and the
-/// inventory (see [`Equipment::equip`]). Returns whether anything changed.
+/// Apply a candidate through [`Equipment::equip`]; return whether anything changed.
 pub(super) fn apply(
     member: usize,
     slot: usize,

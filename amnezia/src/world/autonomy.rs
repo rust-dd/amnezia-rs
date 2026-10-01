@@ -69,13 +69,8 @@ impl MoveGuards<'_> {
             || self.forced_route_paused()
     }
 
-    /// The pauses that freeze even a *forced* move route (a `MoveEvent` on the hero
-    /// or an NPC): a scene that owns the screen (menu, shop, battle, title,
-    /// game-over) or a teleport fade. Unlike [`MoveGuards::paused`], this omits the
-    /// running event and the message — RM2000 advances an overwritten move route
-    /// every frame regardless of both (see `Game_Character::Update`, where
-    /// `IsMoveRouteOverwritten` short-circuits the interpreter/message stop gate), so
-    /// cutscene movement (the intro walking the hero in) plays while the event runs.
+    /// Scene overlays/transitions pause forced routes, but foreground events and messages do not:
+    /// RM2000 `IsMoveRouteOverwritten` bypasses those gates so cutscene movement can continue.
     pub(crate) fn forced_route_paused(&self) -> bool {
         let waiting = self.destination.is_none() && self.frame.as_ref().is_some_and(|wait| wait.0);
         (self.destination.is_none() && self.fade.busy())
@@ -170,7 +165,7 @@ impl AutoMove {
     }
 }
 
-/// xorshift32 — cheap deterministic per-event randomness, no `rand` dependency.
+/// Deterministic per-event xorshift32 stream.
 fn next_rand(state: &mut u32) -> u32 {
     let mut x = *state;
     x ^= x << 13;
@@ -180,7 +175,6 @@ fn next_rand(state: &mut u32) -> u32 {
     x
 }
 
-/// The opposite of a facing (Up↔Down, Left↔Right).
 fn reverse(dir: u32) -> u32 {
     (dir + 2) % 4
 }

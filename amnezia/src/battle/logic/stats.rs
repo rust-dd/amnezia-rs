@@ -5,9 +5,7 @@
 use amnezia_data::ActorDef;
 use amnezia_data::{ActorCurves, ItemDef, MonsterDef};
 
-/// A combatant's four battle stats. Enemies read them straight from their
-/// [`MonsterDef`]; party members, whose `ActorDef` carries only a level, get
-/// them from [`actor_stats`].
+/// Combat stats from actor curves or enemy definitions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Stats {
     pub attack: u32,
@@ -28,10 +26,7 @@ impl Stats {
     }
 }
 
-/// Derive a party member's battle stats from their `level`. The converted
-/// `ActorDef` carries no combat stats (only level and HP/SP), so v1 grows them on
-/// a simple linear curve tuned so an early hero trades a handful of blows with the
-/// early troops. A documented approximation, not RM2000 stat-curve parity.
+/// Approximate fallback for legacy assets without stat curves; not RM2000 curve parity.
 pub fn actor_stats(level: u32) -> Stats {
     Stats {
         attack: 16 + level * 6,
@@ -41,9 +36,7 @@ pub fn actor_stats(level: u32) -> Stats {
     }
 }
 
-/// A party member's battle stats at `level`, read from their stat curve (level L
-/// at index L-1). Falls back to the level formula when the curve is empty (e.g. a
-/// stale `actors.ron` predating the curve fields).
+/// Read level L at curve index L-1; empty legacy curves use [`actor_stats`].
 pub fn actor_stats_at(curves: &ActorCurves, level: u32) -> Stats {
     let i = (level.max(1) - 1) as usize;
     match (
@@ -76,19 +69,13 @@ pub fn actor_hp_sp_at(
     (hp, sp)
 }
 
-/// The stat bonus an actor's five equipment slots (weapon, shield, armor, helmet,
-/// accessory) add on top of the curve-derived base: the summed `atk`/`def`/`spi`/
-/// `agi` of each equipped item. Reads the actor's *starting* gear; the battle
-/// builds from the runtime loadout via [`equipment_bonus_slots`].
+/// Starting-equipment fixture; runtime battles use [`equipment_bonus_slots`].
 #[cfg(test)]
 pub fn equipment_bonus(actor: &ActorDef, items: &[ItemDef]) -> Stats {
     equipment_bonus_slots(actor_slots(actor), items)
 }
 
-/// The stat bonus of an explicit five-slot loadout (weapon, shield, armor,
-/// helmet, accessory): the summed `atk`/`def`/`spi`/`agi` of each equipped item.
-/// Empty slots (id `0`) and ids absent from `items` contribute nothing. This is
-/// the runtime-equipment entry point [`crate::battle::model::Battle::build`] uses.
+/// Sum bonuses in weapon/shield/armor/helmet/accessory order; empty or missing IDs add nothing.
 pub fn equipment_bonus_slots(slots: [u32; 5], items: &[ItemDef]) -> Stats {
     let mut bonus = Stats::default();
     for id in slots {

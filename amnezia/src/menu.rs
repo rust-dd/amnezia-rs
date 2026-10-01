@@ -1,24 +1,6 @@
-//! The in-game menu: the RM2000 default main menu, a windowskin overlay toggled
-//! with Escape. The top level is a command window — Tárgy (Item), Képesség
-//! (Skill), Felszerelés (Equipment), Mentés (Save), Kilépés (End Game) — beside a
-//! party status window listing each member's name, level, and HP/SP. Confirming a
-//! command drills into its flow: the held-item list and field-use for Item; a
-//! party-member prompt then a skill list (and a field heal) for Skill; an
-//! interactive equipment screen for Equipment; a slot selector for Save; and a
-//! return-to-title confirmation for End Game.
-//!
-//! The Skill list shows only the chosen caster's known skills — the actor
-//! `learnings` at or below its current level (their SP is what a cast spends).
-//! Field skill-use shares battle magnitude, attributes and variance, with
-//! field-specific state recovery and percentage revival;
-//! the equipment screen picks a slot then an inventory item for it, swapping gear
-//! through the runtime [`crate::equipment::Equipment`] store — both noted where
-//! they live ([`skills`], [`equip`]).
-//!
-//! State and input live in [`input`]; the movement/interpreter pause guard that
-//! freezes the world while the menu is open (keyed on [`MenuOpen`]) is wired by
-//! the main session. This module owns the resources, the panel plugin, and the
-//! shared screen types.
+//! RM2000 main-menu scenes. [`MenuOpen`] pauses the world; nested screens retain
+//! their own cursors. Skills use runtime progression, and equipment uses the shared
+//! [`crate::equipment::Equipment`] store.
 
 mod command;
 mod command_navigation;
@@ -66,10 +48,8 @@ use bevy::prelude::*;
 #[derive(Resource, Default)]
 pub struct MenuOpen(pub bool);
 
-/// Whether the player may open the main menu (RM2000 `ChangeMainMenuAccess`,
-/// opcode 11960). Defaults enabled; a cutscene disables it to lock the menu shut
-/// and re-enables it afterwards. Only opening is gated — a menu already up stays
-/// usable, matching RPG_RT's `SetAllowMenu`.
+/// Menu-opening permission (opcode 11960); disabling it does not close or lock
+/// an already-open menu, matching RPG_RT `SetAllowMenu`.
 #[derive(Resource)]
 pub struct MenuAccess(pub bool);
 
@@ -131,8 +111,6 @@ enum MenuScreen {
     },
 }
 
-/// The command-list cursor (only meaningful on [`MenuScreen::Command`]) and the
-/// active screen.
 #[derive(Resource, Default)]
 struct MenuState {
     cursor: usize,

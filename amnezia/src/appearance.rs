@@ -16,7 +16,6 @@ pub(crate) mod smoke;
 pub struct Appearance(BTreeMap<u32, (String, u32)>);
 
 impl Appearance {
-    /// Record `actor_id`'s graphic, replacing any previous one.
     pub fn set(&mut self, actor_id: u32, charset: String, index: u32) {
         self.0.insert(actor_id, (charset, index));
     }
@@ -29,9 +28,7 @@ impl Appearance {
     }
 }
 
-/// A request to reskin an actor's CharSet graphic (RM2000 opcode 10630). The
-/// interpreter writes one per `ChangeActorGraphic`: `actor_id` is the database
-/// actor, `charset` the CharSet file name, `index` the 0-based cell within it.
+/// Actor graphic change (opcode 10630); `index` is the zero-based CharSet cell.
 #[derive(Message)]
 pub struct SpriteChange {
     pub actor_id: u32,

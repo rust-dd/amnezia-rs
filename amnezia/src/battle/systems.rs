@@ -20,15 +20,11 @@ const DEBUG_TROOP: u32 = 2;
 /// Fallback backdrop for the developer's test encounter.
 const BACKDROP: &str = "Cave1";
 
-/// The RM2000 screen offset a screen-scope battle animation centres its cells on:
-/// EasyRPG `BattleAnimationBattle::Draw` uses `(screen_w/2, screen_h/3)`, which in
-/// our centre-origin 320×240 overlay (`0,0` = centre) is `(0, 80 - 120)` =
-/// `(0, -40)` (y downward).
+/// EasyRPG `BattleAnimationBattle::Draw` centres at (screen_w/2, screen_h/3),
+/// or (0, -40) in the centre-origin y-down overlay.
 const BATTLE_SCREEN_CENTER: Vec2 = Vec2::new(0.0, -40.0);
 
-/// The target height a party-area animation assumes: RM2000 front view draws no
-/// party sprites, so there is no battler to measure, and this matches the
-/// fallback EasyRPG uses when a battler bitmap is not yet ready.
+/// Front-view party targets have no bitmap, so use EasyRPG's unloaded-battler fallback.
 const PARTY_TARGET_HEIGHT: f32 = 48.0;
 
 /// Prepare the troop and current party roster before the scene controller
@@ -207,10 +203,8 @@ pub(super) fn advance_deaths(mut battle: ResMut<Battle>) {
     }
 }
 
-/// Play the fanfare for a finished fight: the victory ME on a win, the game-over
-/// music on a defeat. Both are sent as the looping BGM so they interrupt the
-/// battle track under the outcome screen; the map BGM restores on teardown. A
-/// successful escape has no fanfare (only its SE, played at the flee attempt).
+/// Outcome music interrupts battle BGM until teardown restores the map track.
+/// Successful escape has only an SE, not a fanfare.
 pub(super) fn play_outcome_music(
     audio: &mut MessageWriter<AudioRequest>,
     system: &SystemDef,
@@ -227,11 +221,8 @@ pub(super) fn play_outcome_music(
     )));
 }
 
-/// Drain the battle's per-hit sound-effect queue into [`AudioRequest`]s, naming
-/// each effect from the loaded [`SystemDef`] (a hit landed, a foe felled, an
-/// attack evaded, an escape attempt). Guarded on non-empty so an idle fight never
-/// marks [`Battle`] changed (which would re-run the UI every frame); an
-/// `(OFF)`/absent effect is skipped.
+/// Map queued roles to system sound effects; disabled entries stay silent.
+/// Check emptiness before mutation to avoid triggering idle UI updates.
 pub(super) fn drain_pending_se(
     battle_data: Res<BattleData>,
     mut audio: MessageWriter<AudioRequest>,
@@ -260,15 +251,8 @@ pub(super) fn drain_pending_se(
     }
 }
 
-/// Drain the battle's per-tick animation queue into overlay [`PlayAnimation`]
-/// messages: each action resolved this tick queued one animation over its
-/// target(s) (see `resolve`). This attaches each target's battler pixel height —
-/// looked up from the live battler sprites (see `scene::battler_height_at`), or a
-/// party-area default — so the animation's `position` anchor can offset from it,
-/// and stamps the battle screen-centre for a screen-scope effect. Emitting here
-/// keeps the queue-push Bevy-free and plays each effect once. Guarded on non-empty
-/// so an idle fight never marks [`Battle`] changed (which would re-run the UI
-/// every frame).
+/// Attach measured target heights and the battle screen centre to queued casts.
+/// Check emptiness before mutation to avoid triggering idle UI updates.
 pub(super) fn drain_pending_anims(
     mut battle: ResMut<Battle>,
     battlers: Query<&scene::Battler>,

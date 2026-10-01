@@ -283,7 +283,6 @@ pub(super) fn render_reveal(
     }
 }
 
-/// Map a shown/hidden flag to a [`Visibility`].
 fn visible_if(shown: bool) -> Visibility {
     if shown {
         Visibility::Visible

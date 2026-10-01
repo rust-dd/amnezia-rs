@@ -30,7 +30,6 @@ pub(crate) struct Driven {
 
 #[cfg(test)]
 impl Driven {
-    /// Nothing happened this tick (inactive, mid-step, or still in its delay).
     fn idle() -> Self {
         Self {
             moved: None,
@@ -39,12 +38,8 @@ impl Driven {
     }
 }
 
-/// Drive one character's stepper for a frame: yield (nothing) while it is
-/// inactive, mid-step (queue busy), or below its stop threshold; otherwise
-/// advance the route, enqueue any resulting step, and return its delta and side
-/// effects for the caller to apply. The effects are returned rather than applied
-/// here so `can_step` — which borrows the switches and events — is dropped before
-/// the caller mutates them.
+/// Test driver returning movement and deferred side effects, allowing `can_step`'s
+/// shared-state borrows to end before those effects mutate switches/events.
 #[cfg(test)]
 pub(crate) fn drive<C: Character>(
     ch: &mut C,

@@ -2,8 +2,6 @@
 
 use super::{Command, Stats};
 
-/// A party member in the fight: live HP/SP, derived stats, and the command it has
-/// chosen this round (if any).
 pub struct Fighter {
     pub actor_id: u32,
     pub level: u32,
@@ -24,20 +22,14 @@ pub struct Fighter {
     pub weapon_attributes: Vec<u32>,
     pub(in crate::battle) weapon_states: Vec<(u32, u32)>,
     pub(in crate::battle) equipment_effects: crate::equipment::EquipmentEffects,
-    /// The animation this member's normal attack plays on its target: the
-    /// equipped weapon's `weapon_animation`, or the actor's `unarmed_animation`
-    /// when it has no weapon. `0` means "no animation" and plays nothing.
+    /// Equipped weapon's animation or the unarmed fallback; 0 disables it.
     pub(in crate::battle) attack_animation: u32,
-    /// This fighter's active status effects as `(state_id, turns_held)` pairs; the
-    /// turn count drives [`crate::battle::logic::tick_recovery`]'s hold-then-wear-off
-    /// schedule.
+    /// Active `(state_id, turns_held)` pairs for the recovery schedule.
     pub states: Vec<(u32, u32)>,
     pub(in crate::battle) state_ranks: Vec<u8>,
     pub(in crate::battle) attribute_ranks: Vec<u8>,
     pub(in crate::battle) state_guards: Vec<(u32, u32)>,
-    /// The skill ids this member knows at its current level (its actor `learnings`
-    /// at or below the level), captured at build time. The battle skill command
-    /// offers only these, not the whole database.
+    /// Known skill IDs captured from runtime progression at battle start.
     pub(in crate::battle) known_skills: Vec<u32>,
     /// Armor attributes improve the wearer's rank once, without stacking.
     pub(in crate::battle) resist_attributes: Vec<u32>,

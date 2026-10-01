@@ -127,7 +127,6 @@ fn register_movement(app: &mut App) {
     arrival::register(app);
 }
 
-/// Spawn the hero at `start` (tile) positioned via the map's geometry.
 pub fn spawn_player(
     commands: &mut Commands,
     asset_server: &AssetServer,

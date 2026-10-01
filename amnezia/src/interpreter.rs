@@ -1,12 +1,6 @@
-//! The event interpreter. A foreground [`RunningEvent`] runs the active event
-//! page's RM2000 command list one step at a time — driving the message box,
-//! teleport fade, and the game's switches and variables — while a background
-//! [`ParallelPool`] runs parallel-process map pages (trigger 4) and parallel
-//! common events (trigger 4) concurrently against the same shared state. Both
-//! execute the identical opcode dispatch ([`exec`]) over their own execution
-//! state ([`frame::Frame`]); the only difference is scheduling. A page's commands
-//! are a flat list with a per-command `indent`; conditional branches use that
-//! indent to delimit their bodies.
+//! Foreground [`RunningEvent`] and background [`ParallelPool`] share opcode dispatch
+//! and [`frame::Frame`] execution state, differing only in scheduling. Commands form
+//! a flat list whose indentation delimits branches.
 
 use crate::teleport::Fade;
 use amnezia_data::EventCommand;
@@ -43,9 +37,7 @@ use params::Blockers;
 pub(crate) use commands::{actor_targets, apply_control_switches, operate_value};
 pub use parallel::{CommonEvents, ParallelPool};
 
-/// The foreground interpreter: one event page executing at a time. Wraps the
-/// shared execution [`Frame`] so movement, autorun, dialogue, and the save system
-/// can ask whether an event is running without seeing the interpreter internals.
+/// Single foreground event, exposing activity without exposing execution internals.
 #[derive(Resource, Default)]
 pub struct RunningEvent {
     frame: Frame,

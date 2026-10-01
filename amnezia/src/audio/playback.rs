@@ -3,8 +3,6 @@ use super::*;
 #[cfg(test)]
 mod tests;
 
-/// Drain queued [`AudioRequest`]s: spawn a self-despawning player per sound
-/// effect, and start / fade / stop / memorize the BGM.
 pub(super) fn play_requests(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -84,8 +82,6 @@ pub(super) fn play_requests(
     }
 }
 
-/// What [`start_bgm`] does with a `PlayBgm` request, decided by
-/// [`CurrentBgm::action_for`].
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum BgmAction {
     /// Same track, same params: a seamless replay — leave it (and any fade) alone.
@@ -96,11 +92,7 @@ pub(super) enum BgmAction {
     Restart,
 }
 
-/// Switch the BGM to `name`. A request for the already-playing track is
-/// not restarted — RM2000's per-cycle replays stay seamless — but its volume and
-/// tempo are adjusted in place when they changed, mirroring `BgmPlay`. Switching
-/// to a new track (or restarting one that is fading out) stops the old first;
-/// `fade_in > 0` ramps the new track up from silence.
+/// Apply [`CurrentBgm::action_for`] without restarting same-track parameter changes.
 #[allow(clippy::too_many_arguments)]
 fn start_bgm(
     commands: &mut Commands,
@@ -173,9 +165,7 @@ fn start_bgm(
     }
 }
 
-/// Advance an in-progress BGM fade each frame: write the interpolated gain to the
-/// sink and, when a fade-out completes, stop the track. A fade-in simply reaches
-/// its target and clears.
+/// Fade-out stops playback; fade-in retains the track at its target gain.
 pub(super) fn drive_bgm_fade(
     time: Res<Time>,
     step: Option<Res<crate::timing::logical::Step>>,
@@ -211,7 +201,6 @@ pub(super) fn drive_bgm_fade(
     }
 }
 
-/// Stop and forget the current BGM at once.
 fn stop_bgm(commands: &mut Commands, current: &mut CurrentBgm) {
     if let Some(entity) = current.entity.take() {
         commands.entity(entity).despawn();

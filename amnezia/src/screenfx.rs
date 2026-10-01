@@ -95,7 +95,6 @@ impl ScreenEffect {
     }
 }
 
-/// The value at `index`, or `fallback` when the list is too short.
 fn param(params: &[i32], index: usize, fallback: i32) -> i32 {
     params.get(index).copied().unwrap_or(fallback)
 }

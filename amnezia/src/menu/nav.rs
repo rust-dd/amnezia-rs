@@ -1,7 +1,4 @@
-//! The menu's pure navigation logic: the Escape back-out map,
-//! the End Game return-to-title decision, and the item/skill confirm targets. All
-//! of it is side-effect-free so the [`super::input`] systems stay thin and these
-//! transitions are unit-tested without an app.
+//! Side-effect-free menu navigation, tested without a Bevy app.
 
 use crate::equipment::Equipment;
 use crate::gamedata::GameData;
@@ -13,7 +10,6 @@ use bevy::prelude::KeyCode;
 
 use super::{MemberAction, MenuScreen, items, skills, use_item};
 
-/// Whether a confirm key (Space or Enter) was pressed this frame.
 pub(super) fn confirm_pressed(keys: &ButtonInput<KeyCode>) -> bool {
     keys.just_pressed(KeyCode::Space) || keys.just_pressed(KeyCode::Enter)
 }
@@ -55,10 +51,7 @@ pub(super) fn escape_transition(open: bool, screen: MenuScreen) -> (bool, MenuSc
     }
 }
 
-/// The `(open, title)` after confirming the End Game prompt at `cursor`. Igen
-/// (cursor 0) closes the menu and raises the title (the RM2000 opcode-12510
-/// return-to-title, mirroring the Game Over hand-back); Nem cancels, leaving the
-/// menu open and the title untouched.
+/// End Game returns `(menu_open, title_visible)`; cursor 0 confirms, all others cancel.
 pub(super) fn end_game_transition(cursor: usize, title: bool) -> (bool, bool) {
     if cursor == 0 {
         (false, true)

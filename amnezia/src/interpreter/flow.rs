@@ -1,17 +1,10 @@
-//! The pure control-flow navigation helpers: given a page's flat command list and
-//! a cursor, they compute where execution jumps for branches, loops, labels,
-//! choices, and the shop/battle subsystem blocks. All are indent-driven and Bevy-
-//! free, so they unit-test directly against hand-built command lists.
+//! Indent-driven jumps through flat event scripts, independent of Bevy.
 
 use super::opcodes::*;
 use amnezia_data::{Event, EventCommand};
 
-/// Resolve a `CallEvent` (12330) into the callee's command list and event id.
-/// Only the map-event mode (`params[0] == 1`) occurs in this game's data, so that
-/// is what is supported: `params[1]` is the target event (10005 = the calling
-/// event), `params[2]` its 1-based page number. Returns `None` for any other mode
-/// or an unknown event/page — the caller then skips the command, as EasyRPG does
-/// on a missing target. Mirrors `Game_Interpreter::CommandCallEvent`.
+/// Resolve map-mode CallEvent `[1, event_ref, page]`; 10005 means the caller,
+/// and page numbers are 1-based. Other modes or missing targets return `None`.
 pub(super) fn call_event_page(
     events: &[Event],
     params: &[i32],
@@ -33,10 +26,7 @@ pub(super) fn call_event_page(
     Some((commands, event_id))
 }
 
-/// The instruction pointer to jump to when a branch at `indent` is NOT taken:
-/// skip the true body (every command deeper than `indent`), then enter the else
-/// body if an `ELSE_BRANCH` marker follows, else land on the block terminator
-/// (which the main loop skips).
+/// A false branch enters its else body, or lands on the block terminator.
 pub(super) fn skip_true_body(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
     let mut j = ip + 1;
     while j < commands.len() && commands[j].indent > indent {
@@ -49,9 +39,7 @@ pub(super) fn skip_true_body(commands: &[EventCommand], ip: usize, indent: u32) 
     }
 }
 
-/// The instruction pointer to jump to when the true body falls through to an
-/// `ELSE_BRANCH` at `indent`: skip the else body, landing on the block
-/// terminator (which the main loop skips).
+/// Skip an else body to its block terminator after the true branch ran.
 pub(super) fn skip_else_body(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
     let mut j = ip + 1;
     while j < commands.len() && commands[j].indent > indent {
@@ -96,10 +84,7 @@ pub(super) fn skip_option_body(commands: &[EventCommand], ip: usize, indent: u32
     j
 }
 
-/// Index of the next `EnemyEncounter` outcome handler or `EndBattle` at `indent` —
-/// where execution resumes after skipping a non-selected handler's body. Mirrors
-/// [`skip_option_body`], tolerating a handler being absent (an escape/defeat
-/// branch the map author omitted) by landing on whichever marker comes next.
+/// Skip to the next same-indent outcome handler or EndBattle, tolerating omitted branches.
 pub(super) fn skip_battle_handler(commands: &[EventCommand], ip: usize, indent: u32) -> usize {
     let mut j = ip + 1;
     while j < commands.len()
@@ -213,7 +198,6 @@ mod tests {
             x: 0,
             y: 0,
             name: String::new(),
-            // Page 1 marker 100, page 2 marker 200, page 3 marker 300.
             pages: vec![page(100), page(200), page(300)],
         }];
         // [mode 1, this-event (10005), page 2] -> page index 1 (marker 200).

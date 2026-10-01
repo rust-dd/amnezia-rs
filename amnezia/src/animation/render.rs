@@ -5,13 +5,9 @@ use bevy::prelude::*;
 
 pub(super) mod saved;
 
-/// The render layer the effect-overlay camera draws. Cells, flash quads, and the
-/// battle scene carry it so only that fixed, higher-`order` camera renders them —
-/// painting over the layer-0 world instead of hiding behind it.
+/// Isolates effects and battlers from the world camera for screen-space compositing.
 pub(super) const OVERLAY_LAYER: usize = 1;
 
-/// A fresh [`RenderLayers`] on [`OVERLAY_LAYER`] (the type isn't `Copy`, so each
-/// spawned sprite and the overlay camera take their own).
 pub fn overlay_layer() -> RenderLayers {
     RenderLayers::layer(OVERLAY_LAYER)
 }
@@ -20,9 +16,7 @@ pub fn overlay_layer() -> RenderLayers {
 const SCREEN_W: f32 = 320.0;
 const SCREEN_H: f32 = 240.0;
 
-/// The world translation of an overlay sprite at RM2000 screen offset `pos` from
-/// centre (y downward) with depth `z`. The overlay camera sits at the origin, so
-/// this is pure screen-space: `x` unchanged, `y` flipped for world y-up.
+/// Convert centre-relative y-down pixels to the fixed overlay's y-up world space.
 pub fn overlay_translation(pos: Vec2, z: f32) -> Vec3 {
     Vec3::new(pos.x, -pos.y, z)
 }
@@ -44,18 +38,11 @@ pub(crate) struct FlashQuad {
     driven: bool,
 }
 
-/// The last 60 fps game-frame a flash is lit: EasyRPG shows it while
-/// `delta_frames <= 10` (`battle_animation.cpp` `UpdateFlashGeneric`), i.e.
-/// game-frames `0..=10`, an 11-frame window.
+/// EasyRPG `UpdateFlashGeneric` keeps a flash lit for ages 0–10 inclusive.
 pub(super) const FLASH_LAST_FRAME: u32 = 10;
 
-/// EasyRPG `CalculateFlashPower` (`battle_animation.cpp`): the flash level
-/// (`0..=31`) on game-frame `frames` after a flash of strength `power` (`0..=31`)
-/// fires — `f = 7 - (frames + 1) / 2`, `level = min(f * power / 6, 31)`. The curve
-/// is a plateau-then-step, not a linear fade: it holds near the peak for the first
-/// ~3 frames (`level` pinned at 31 for a full-strength flash) then steps down
-/// every two frames. Integer arithmetic throughout, matching the measured RM2000
-/// values.
+/// EasyRPG `CalculateFlashPower`: integer 0–31 strength, stepping every two ticks
+/// rather than fading linearly. Full power holds a three-tick plateau.
 pub(crate) fn flash_power_level(frames: u32, power: u32) -> u32 {
     let f = 7 - (frames as i32 + 1) / 2;
     (f * power as i32 / 6).clamp(0, 31) as u32
@@ -66,12 +53,7 @@ pub fn flash_envelope(frame: u32, power: u32) -> Option<f32> {
     (frame <= FLASH_LAST_FRAME).then(|| (flash_power_level(frame, power) * 8) as f32 / 255.0)
 }
 
-/// The nine draw points of a `global` map animation (RM2000 opcode 11210's global
-/// flag): the animation tiled 3×3 around `center`, each copy one screen-width
-/// across and one screen-height down from the last, matching EasyRPG
-/// `BattleAnimationMap::DrawGlobal` (which draws over the screen-effects rect for
-/// `x, y ∈ {-1, 0, 1}`). The tiling is symmetric, so the RM2000 y-down convention
-/// need not be flipped here.
+/// EasyRPG `DrawGlobal` tiles 3×3 at screen-sized intervals; symmetry makes y-flipping unnecessary.
 pub(super) fn global_anchors(center: Vec2) -> Vec<Vec2> {
     let mut anchors = Vec::with_capacity(9);
     for row in -1..=1 {
@@ -217,8 +199,6 @@ mod tests {
 
     #[test]
     fn overlay_translation_flips_y_and_keeps_x_and_z() {
-        // On the origin-fixed overlay camera an RM2000 offset (x, y-down) is
-        // world (x, -y); z passes through unchanged.
         assert_eq!(
             overlay_translation(Vec2::new(0.0, 0.0), 510.0),
             Vec3::new(0.0, 0.0, 510.0)

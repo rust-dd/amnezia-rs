@@ -1,8 +1,5 @@
-//! Rendering for on-screen pictures: the tone [`PictureMaterial`] (quantized
-//! saturation, hard-light color and opacity, per pixel in `picture_tone.wgsl`)
-//! drawn on a per-picture textured quad, plus the systems that spawn, size, and
-//! place those quads. Kept apart from the command/state logic in the parent
-//! module so the tone maths and the screen/map placement unit-test in isolation.
+//! Picture quads with quantized saturation, hard-light colour and opacity.
+//! Command/state logic lives in the parent module; shaders apply the per-pixel tone.
 
 use super::{Anim, Picture, Tone};
 use crate::assets::resolve_png;
@@ -22,14 +19,10 @@ mod geometry;
 const CENTER_X: f32 = 160.0;
 const CENTER_Y: f32 = 120.0;
 
-/// World z of picture 0; each picture adds its id, so higher ids draw on top and
-/// every picture sits above the map and characters (z < 4) yet within the 2D
-/// camera's range.
+/// Higher picture IDs draw on top; all sit above the world.
 const PICTURE_Z_BASE: f32 = 100.0;
 
-/// The tone material for one picture: palette-space saturation, hard-light color,
-/// and opacity, evaluated per pixel by `picture_tone.wgsl`. The
-/// RM2000 screen tint is deliberately absent — pictures are not tinted by it.
+/// Per-picture palette tone and opacity, deliberately excluding screen tint.
 #[derive(Asset, TypePath, AsBindGroup, Clone)]
 pub(super) struct PictureMaterial {
     /// Quantized RGB/saturation tone channels; 128 is neutral.
@@ -64,7 +57,6 @@ pub(super) struct PictureMesh(Handle<Mesh>);
 #[derive(Resource, Default)]
 struct Inbox(bevy::ecs::message::MessageCursor<PictureCommand>);
 
-/// Register the shared unit quad once at startup.
 pub(super) fn setup_picture_mesh(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>) {
     commands.insert_resource(PictureMesh(meshes.add(Rectangle::new(1.0, 1.0))));
 }
@@ -310,7 +302,6 @@ fn opacity(transparency: f32) -> f32 {
     (255.0 * (100.0 - transparency.clamp(0.0, 100.0)) / 100.0).floor() / 255.0
 }
 
-/// The world z of picture `id`.
 fn picture_z(id: u32) -> f32 {
     PICTURE_Z_BASE + id as f32
 }

@@ -1,7 +1,4 @@
-//! Unit tests for the [`super::RouteStepper`] state machine: one command
-//! kind per test — a move steps in the faced direction (skipped when blocked and
-//! skippable, waited on otherwise), a face turns in place, a wait arms the delay,
-//! and a route repeats or stops at its end — plus the `MoveEvent` route decode.
+//! Route stepping, blocking, repetition and MoveEvent decoding regressions.
 
 use super::*;
 

@@ -1,8 +1,4 @@
-//! The top-level RM2000 command window: the five default commands (Item / Skill /
-//! Equipment / Save / End Game), their Hungarian labels, and what confirming each
-//! one opens. The window itself — five bare rows under a windowskin cursor — is
-//! drawn by [`super::view`]; this module owns only the command set and the screen
-//! each confirm drills into.
+//! Top-level command order, labels and destination screens; rendering lives in [`super::view`].
 
 use super::{MemberAction, MenuScreen};
 use crate::state::Party;
@@ -19,7 +15,6 @@ pub(super) enum Command {
     EndGame,
 }
 
-/// The command list in RM2000 order: Item, Skill, Equipment, Save, End Game.
 pub(super) const COMMANDS: [Command; 5] = [
     Command::Item,
     Command::Skill,
@@ -55,11 +50,8 @@ pub(super) fn member_enabled(
         .any(|state| state.restriction == 1 && active.contains(&state.id))
 }
 
-/// The localised label for a command, sourced from the real RM2000 Terms (the
-/// main-menu commands reuse the battle `command_item` / `command_skill` terms and
-/// the `menu_equipment` / `menu_save` / `menu_quit` terms — EasyRPG
-/// `Scene_Menu::CreateCommandWindow`). Each falls back to its faithful Hungarian
-/// placeholder when the term is blank, and routes through `i18n::tr` for English.
+/// Localized RM2000 command/menu terms, matching `Scene_Menu::CreateCommandWindow`;
+/// blank terms use Hungarian fallbacks.
 pub(super) fn label(command: Command, terms: &Terms) -> String {
     let t = &terms.0;
     match command {
@@ -71,16 +63,11 @@ pub(super) fn label(command: Command, terms: &Terms) -> String {
     }
 }
 
-/// What confirming a command does: open a sub-screen, or trigger the single-slot
-/// save (which the caller wires to [`crate::save::SaveRequest`]).
 pub(super) enum CommandAction {
     Open(MenuScreen),
     Save,
 }
 
-/// The action a confirm on `command` performs. Item drills into the held-item
-/// list; Skill and Equipment prompt for a party member first; Save requests a
-/// save; End Game opens the return-to-title confirmation.
 pub(super) fn dispatch(command: Command) -> CommandAction {
     match command {
         Command::Item => CommandAction::Open(MenuScreen::ItemList { cursor: 0 }),
@@ -119,7 +106,6 @@ mod tests {
 
     #[test]
     fn commands_resolve_to_the_parsed_terms_in_rm2000_order() {
-        // The five commands map onto the real RM2000 command / menu terms.
         let mut terms = Terms::default();
         terms.0.command_item = "Item".into();
         terms.0.command_skill = "Skill".into();
@@ -128,13 +114,11 @@ mod tests {
         terms.0.menu_quit = "Quit".into();
         let labels: Vec<String> = COMMANDS.iter().map(|&c| label(c, &terms)).collect();
         assert_eq!(labels, vec!["Item", "Skill", "Equip", "Save", "Quit"]);
-        // The last command is the "End Game" the rework restores.
         assert_eq!(COMMANDS.last(), Some(&Command::EndGame));
     }
 
     #[test]
     fn a_blank_term_falls_back_to_the_hungarian_placeholder() {
-        // With no parsed terms the chrome still reads naturally in Hungarian.
         let terms = Terms::default();
         let labels: Vec<String> = COMMANDS.iter().map(|&c| label(c, &terms)).collect();
         assert_eq!(

@@ -28,12 +28,8 @@ impl Battle {
         logic::total_rewards(&rewards)
     }
 
-    /// Roll a party escape against the persisted RM2000 escape chance (EasyRPG
-    /// `TryEscape`): a first strike escapes outright; otherwise a `PercentChance`
-    /// draw against `escape_chance`. On failure the chance is raised by 10 for the
-    /// next attempt and `false` is returned, so the caller forfeits the party's
-    /// turn. The chance was fixed at [`Battle::build`] from the two sides' average
-    /// agilities and is never recomputed here.
+    /// EasyRPG `TryEscape`: first strike guarantees success. Failure adds 10 percentage
+    /// points and forfeits the party turn; average agility is not recomputed.
     pub fn attempt_escape(&mut self) -> bool {
         if self.first_strike {
             return true;

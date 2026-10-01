@@ -1,7 +1,4 @@
-//! Numeric entry: the windowskin box the interpreter opens for an `InputNumber`
-//! command (RM2000 opcode `10150`). It shows a row of digit slots the player
-//! edits with the arrow keys and confirms with the action key; the interpreter
-//! reads the assembled number back and stores it in the target variable.
+//! Numeric entry for RM2000 opcode 10150; confirmed digits return to the interpreter's variable.
 
 use bevy::prelude::*;
 
@@ -9,10 +6,6 @@ mod input;
 pub(crate) mod smoke;
 use input::update as input_number_input;
 
-/// The active numeric entry box: how many digit slots it has, which variable the
-/// result is destined for, the per-slot digits and the cursor slot, the running
-/// assembled `value`, whether it's showing, and — once the player confirms — the
-/// entered number the interpreter consumes.
 #[derive(Resource, Default)]
 pub struct InputNumber {
     /// Slot count the box opened with; kept for parity with the RM2000 command
@@ -67,7 +60,6 @@ impl InputNumber {
         self.recompute();
     }
 
-    /// Reassemble `value` from the digit slots (most significant slot first).
     fn recompute(&mut self) {
         self.value = self.slots.iter().fold(0i64, |acc, &d| acc * 10 + d as i64);
     }

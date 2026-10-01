@@ -220,9 +220,6 @@ fn text_font(font: &GameFont) -> TextFont {
     }
 }
 
-/// Reflect the menu state into the four windows: show the overlay, pick the main
-/// (command/gold/status) or content window set for the active screen, fill every
-/// text and portrait, and place each windowskin cursor.
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 pub(super) fn update_ui(
     open: Res<MenuOpen>,

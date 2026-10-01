@@ -1,8 +1,4 @@
-//! The Status sub-screen: a read-only detail block for one party member. It
-//! shows the member's level, experience, current/maximum HP and SP, the four
-//! battle stats, and the five equipment slots — every figure derived exactly as
-//! the battle system derives it (see [`super::derive`]), so the numbers match a
-//! real fight.
+//! Read-only member details using the shared battle-stat derivation.
 
 use crate::equipment::Equipment;
 use crate::gamedata::GameData;
@@ -19,10 +15,7 @@ use super::derive;
 /// `accessory` terms are blank.
 const SLOT_FALLBACKS: [&str; 5] = ["Fegyver", "Pajzs", "Vért", "Sisak", "Kiegészítő"];
 
-/// Compose the status block for the `member`-th roster entry. Falls back to a
-/// short placeholder when the member index or actor id is unknown. The field
-/// labels (level, HP/SP, the four battle stats, the five equipment slots) come
-/// from the real RM2000 Terms, each falling back to its Hungarian placeholder.
+/// Status text with database labels; unknown member/actor IDs use a short placeholder.
 #[allow(clippy::too_many_arguments)]
 pub(super) fn compose_status(
     hero_name: &crate::text::HeroName,
@@ -46,8 +39,7 @@ pub(super) fn compose_status(
     let level = progression.level(def);
     let (max_hp, max_sp) = derive::max_hp_sp(def, level);
     let (hp, sp) = vitals.get_stored(id).unwrap_or((max_hp, max_sp));
-    // The runtime loadout is the source of truth, so the stats and slot names
-    // here reflect a gear change made on the equip screen.
+    // Use runtime gear so displayed stats reflect menu equipment changes.
     let slots = equipment.slots(def);
     let stats = derive::stats_with_slots(def, level, &data.items, slots);
     let total = progression.total(def);
@@ -115,7 +107,6 @@ mod tests {
     #[test]
     fn status_block_has_level_hp_sp_stats_and_equipment_names() {
         let mut d = testkit::data();
-        // Equip the hero and register the gear so the slot names resolve.
         d.actors[0].weapon = 10;
         d.actors[0].armor = 11;
         d.items.push(testkit::weapon(10, "Rövidkard", 4));
@@ -167,7 +158,7 @@ mod tests {
     #[test]
     fn status_reflects_a_runtime_equipment_change() {
         let mut d = testkit::data();
-        d.actors[0].weapon = 10; // ActorDef starting weapon
+        d.actors[0].weapon = 10;
         d.items.push(testkit::weapon(10, "Rövidkard", 4));
         d.items.push(testkit::weapon(12, "Hosszúkard", 12));
         // The runtime store swapped in the long-sword; status must show it.

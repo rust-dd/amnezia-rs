@@ -1,15 +1,11 @@
-//! The shop's pure trade core: affordability, the half-price sell rule, the 99
-//! stock cap, and the buy/sell mutations against the live gold and inventory.
-//! Kept free of Bevy input so it can be unit-tested directly, matching EasyRPG's
-//! `Window_ShopBuy::CheckEnable` / `Window_ShopSell::CheckEnable` and
-//! `Scene_Shop::UpdateNumberInput`.
+//! Trade rules and inventory mutations, matching EasyRPG `Window_ShopBuy`/`Window_ShopSell`
+//! `CheckEnable` and `Scene_Shop::UpdateNumberInput`, independent of Bevy input.
 
 use super::Mode;
 use crate::gamedata::GameData;
 use crate::state::Inventory;
 
-/// The RM2000 per-item stock cap: the party can hold at most 99 of any item, so
-/// a purchase can never push the owned count past it (RPG_RT `GetMaxItemCount`).
+/// RPG_RT `GetMaxItemCount` purchase limit.
 const MAX_ITEM_STACK: u32 = 99;
 
 /// The gold left after buying at `price`, or `None` when the party cannot afford
@@ -23,30 +19,21 @@ pub fn sell_price(price: u32) -> i32 {
     (price / 2) as i32
 }
 
-/// Whether item at `price` can be bought at all (RPG_RT `CheckEnable`): the party
-/// affords one and holds fewer than the 99 cap. A shop only opens the quantity
-/// window for an enabled item; a disabled pick buzzes.
+/// RPG_RT CheckEnable requires enough gold for one item and room under the stock cap.
 pub fn can_buy(price: u32, gold: i32, owned: u32) -> bool {
     price as i32 <= gold && owned < MAX_ITEM_STACK
 }
 
-/// The largest quantity of a `price` item the party can buy: bounded by the 99
-/// stock cap (minus what it already holds) and, for a priced item, by the gold on
-/// hand. A free item (price 0) is bounded only by the stock cap.
+/// Maximum affordable quantity within the stock cap; free items are bounded by stock only.
 pub fn buy_max(price: u32, gold: i32, owned: u32) -> u32 {
     let stock = MAX_ITEM_STACK.saturating_sub(owned);
-    // `checked_div` is `None` only for a free item (price 0), bounded by stock
-    // alone; a priced item is bounded by both stock and the gold on hand.
     match (gold.max(0) as u32).checked_div(price) {
         Some(by_gold) => stock.min(by_gold),
         None => stock,
     }
 }
 
-/// Apply a single buy or sell of item `id` against the live gold and inventory,
-/// returning whether it happened (afforded and under the 99 cap when buying, held
-/// when selling). The quantity window drives an N-unit trade by repeating this,
-/// so the caps and affordability re-check on every unit.
+/// Trade one unit, returning success. Quantity trades repeat this check per unit.
 pub fn apply_trade(mode: Mode, id: u32, data: &GameData, inventory: &mut Inventory) -> bool {
     let Some(item) = data.item(id) else {
         return false;

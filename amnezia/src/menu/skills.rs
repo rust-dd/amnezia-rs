@@ -1,11 +1,5 @@
-//! The Skill command: a chosen party member's known skills with their SP costs,
-//! and — for field-usable recovery skills — applying one to a chosen ally. A
-//! member knows the skills its actor `learnings` grant at or below its current
-//! level (see [`Progression::known_skill_ids`]); the list is those, not the whole
-//! database, and the caster member matters because casting spends *their* SP.
-//!
-//! Field recovery supports self, single-ally and whole-party targets. Equipment
-//! modifies the displayed and paid SP cost through the same shared rule.
+//! Runtime known-skill lists and field recovery for self, ally or party targets.
+//! Displayed and paid SP costs share the equipment-adjusted rule.
 
 use crate::equipment::{Equipment, EquipmentEffects};
 use crate::gamedata::GameData;
@@ -36,10 +30,7 @@ pub(super) fn field_usable(skill: &SkillDef) -> bool {
                 .any(|state| state.persistence == 1 && skill.affected_states.contains(&state.id)))
 }
 
-/// The `member`'s known skills in database (id) order: the skill defs whose ids
-/// the member has learned by its current level (see
-/// [`Progression::known_skill_ids`]). Both the list the menu draws and the cursor
-/// it moves index into this, not the whole skill database.
+/// Runtime known skills in database order, shared by rendering and cursor lookup.
 pub(super) fn known_skills<'a>(
     member: usize,
     data: &'a GameData,

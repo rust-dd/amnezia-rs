@@ -1,7 +1,4 @@
-//! The interpreter's Bevy `SystemParam` bundles. `run_interpreter` sits at Bevy's
-//! 16-parameter cap, so its resources, writers, and queries are grouped into a
-//! handful of nested `SystemParam` structs here — keeping the system signature
-//! small and the bundle definitions out of the dispatch loop.
+//! Grouped interpreter I/O keeps system signatures within Bevy's parameter limit.
 
 use super::event_rng::EventRng;
 use crate::animation::{AnimationLibrary, ShowMapAnimation};
@@ -27,10 +24,7 @@ use crate::world::{MapData, MapEvents, RelocateEvent};
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
 
-/// The overlays that pause the running event (menu, shop, battle). Bundled into
-/// one `SystemParam` so `run_interpreter` stays within Bevy's 16-parameter cap.
-/// The title screen is checked separately through [`FlowCtx`], which holds it
-/// mutably for the `ReturnToTitle` opcode.
+/// Pausing overlays; title access is separate in [`FlowCtx`] for ReturnToTitle.
 #[derive(SystemParam)]
 pub(super) struct Blockers<'w> {
     destination: Option<Res<'w, super::destination::Visit>>,
@@ -66,10 +60,6 @@ impl Blockers<'_> {
     }
 }
 
-/// The small map-effect resources the interpreter writes: camera pan, hero
-/// transparency, weather, the message-box position, and the game clock. Bundled
-/// into one nested `SystemParam` so [`SubsystemIo`] keeps within Bevy's
-/// 16-parameter cap once the access/actor/flow bundles below are added.
 #[derive(SystemParam)]
 pub(super) struct MapFx<'w> {
     pub(super) transitions: crate::transitions::TransitionIo<'w>,
@@ -86,9 +76,6 @@ pub(super) struct MapFx<'w> {
     pub(super) panorama: ResMut<'w, crate::panorama::Panorama>,
 }
 
-/// The player-access toggles the interpreter flips: whether the in-menu Save
-/// command works ([`SaveAccess`], opcode 11930) and whether the main menu can be
-/// opened ([`MenuAccess`], opcode 11960). Bundled to stay within the cap.
 #[derive(SystemParam)]
 pub(super) struct AccessFlags<'w> {
     pub(super) menu_calling: Option<ResMut<'w, crate::menu::Calling>>,
@@ -96,10 +83,6 @@ pub(super) struct AccessFlags<'w> {
     pub(super) menu_access: ResMut<'w, MenuAccess>,
 }
 
-/// The interpreter's actor-state edits: the hero's name ([`HeroName`], opcode
-/// 10610 — also read for the `\N[k]` message code) and the experience store that
-/// backs `ChangeLevel` (opcode 10420), with the actor database it needs. Bundled
-/// to stay within the cap.
 #[derive(SystemParam)]
 pub(super) struct ActorEdits<'w> {
     pub(super) hero_name: ResMut<'w, HeroName>,
@@ -108,11 +91,7 @@ pub(super) struct ActorEdits<'w> {
     pub(super) game_data: Res<'w, GameData>,
 }
 
-/// The flow/scene context the interpreter reads for `CallEvent` (the map events,
-/// to resolve a called page), `MemorizeLocation` (the current map and hero tile),
-/// `KeyInputProc` (the keyboard), and `ReturnToTitle` (raising the title). Bundled
-/// into one nested `SystemParam` to stay within the cap. `map_events`/`map_data`
-/// are optional so the system still runs before a map has loaded.
+/// Scene/flow access; map resources are optional because execution can begin before loading.
 #[derive(SystemParam)]
 pub(super) struct FlowCtx<'w, 's> {
     pub(super) screen: crate::world::MapScreen<'w, 's>,
@@ -123,12 +102,6 @@ pub(super) struct FlowCtx<'w, 's> {
     pub(super) title: ResMut<'w, TitleActive>,
 }
 
-/// The interpreter's character-visual output writers: an actor reskin
-/// ([`SpriteChange`], opcode 10630) and a map battle animation
-/// ([`ShowMapAnimation`], opcode 11210), plus the [`AnimationLibrary`] the
-/// waiting form of 11210 reads to size its block by the animation's frame count.
-/// Bundled into one nested `SystemParam` so [`SubsystemIo`] — and thus
-/// `run_interpreter` — keeps within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 pub(super) struct CharacterVisuals<'w> {
     pub(super) sprite_writer: MessageWriter<'w, SpriteChange>,
@@ -136,11 +109,6 @@ pub(super) struct CharacterVisuals<'w> {
     pub(super) library: Res<'w, AnimationLibrary>,
 }
 
-/// The interpreter's merchant channel: the writer that opens the shop/inn screen
-/// (opcodes 10720 / 10730) and the outcome it reads back once the screen closes.
-/// Bundled into one nested `SystemParam` so [`SubsystemIo`] — and thus
-/// `run_interpreter` — keeps within Bevy's 16-parameter cap once the save-request
-/// resource is added.
 #[derive(SystemParam)]
 pub(super) struct Merchant<'w> {
     pub(super) writer: MessageWriter<'w, ShopRequest>,
@@ -150,8 +118,6 @@ pub(super) struct Merchant<'w> {
     pub(super) inn: Option<Res<'w, crate::shop::inn::State>>,
 }
 
-/// Scene requests and results, actor edits and map presentation channels,
-/// bundled to keep interpreter systems within Bevy's 16-parameter cap.
 #[derive(SystemParam)]
 pub struct SubsystemIo<'w, 's> {
     pub(super) battle_result: ResMut<'w, BattleResult>,

@@ -21,9 +21,7 @@ mod relocation_tests;
 #[cfg(test)]
 mod rider_tests;
 
-/// Seconds a character spends tweening across one tile at RM2000 move speed 4
-/// (the hero's pace, and every scripted route's). Autonomous event movement
-/// scales this per the event's move speed via [`step_secs_for_speed`].
+/// Tile duration at RM2000 move speed 4; other speeds use [`step_secs_for_speed`].
 const STEP_DURATION: f32 = 8.0 / 60.0;
 
 /// Tween seconds for one tile at RM2000 move `speed` (1 slowest … 6 fastest).
@@ -47,9 +45,7 @@ impl RouteAction {
     }
 }
 
-/// A movable map character (the hero or an event NPC). Lets the shared movement
-/// code read and write a character's tile, facing, walk frame, and graphic
-/// without knowing its concrete component type.
+/// Shared hero/NPC movement interface, independent of their concrete components.
 pub trait Character {
     fn tile(&self) -> (i32, i32);
     fn set_tile(&mut self, x: i32, y: i32);
@@ -74,7 +70,6 @@ pub trait Character {
     }
 }
 
-/// World-space center of a tile as a [`Vec2`].
 fn center(data: &MapData, x: i32, y: i32) -> Vec2 {
     let (wx, wy) = data.tile_center(x, y);
     Vec2::new(wx, wy)

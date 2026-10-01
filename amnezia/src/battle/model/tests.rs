@@ -16,7 +16,6 @@ fn build_instantiates_both_sides_into_the_command_phase() {
 fn committing_all_orders_enters_resolution_with_a_full_queue() {
     let mut battle = build_1v2();
     battle.commit(Command::Attack { target: 0 });
-    // one party action + two enemy actions, ordered by agility.
     assert!(battle.phase == Phase::Resolve);
     assert_eq!(battle.queue.len(), 3);
 }
@@ -42,7 +41,7 @@ fn undo_choice_steps_back_to_the_previous_committed_member() {
         "Cave1".into(),
         7,
     );
-    battle.commit(Command::Defend); // member 0 acts, turn moves to member 1
+    battle.commit(Command::Defend);
     assert_eq!(battle.turn, 1);
     battle.undo_choice();
     assert_eq!(battle.turn, 0);
@@ -51,9 +50,7 @@ fn undo_choice_steps_back_to_the_previous_committed_member() {
 
 #[test]
 fn undo_choice_on_the_first_chooser_reopens_the_party_option_window() {
-    // Cancel on the first actor's command backs out of per-actor entry to the
-    // Fight/Auto/Escape window — RM2000 SelectPreviousActor on the first ally
-    // returns to State_SelectOption rather than staying stuck on the actor.
+    // RM2000 SelectPreviousActor returns the first free chooser to party options.
     let mut battle = build_1v2();
     battle.begin_actor_commands();
     assert!(battle.phase == Phase::Command);
@@ -115,8 +112,9 @@ fn build_adds_equipment_bonuses_and_captures_the_weapon() {
     ron.armor = 2;
     let actors = vec![&ron];
     let items = vec![
-        testkit::item(1, 10, 0, 85, 5, 4), // weapon: +10 atk, hit 85, crit 5, element 4
-        testkit::item(2, 0, 20, 0, 0, 0),  // armor: +20 def, no weapon fields
+        // Weapon: +10 ATK, 85% hit, 5% crit, element 4. Armor: +20 DEF.
+        testkit::item(1, 10, 0, 85, 5, 4),
+        testkit::item(2, 0, 20, 0, 0, 0),
     ];
     let monsters = vec![testkit::monster(1, 30, 10, 30)];
     let troop = testkit::troop(&[(1, 100, 100)]);
@@ -146,16 +144,16 @@ fn build_adds_equipment_bonuses_and_captures_the_weapon() {
 
 #[test]
 fn build_reads_the_runtime_loadout_not_the_actor_default() {
-    // The actor's ActorDef default weapon is item 1, but the runtime loadout the
-    // equip menu produced has swapped in item 2. The fighter must reflect item 2.
+    // Runtime gear must override ActorDef starting gear.
     let mut ron = testkit::actor(1, 1, 50, 10);
     ron.weapon = 1;
-    let default_weapon = testkit::item(1, 5, 0, 80, 0, 0); // +5 atk, hit 80
-    let mut swapped_weapon = testkit::item(2, 30, 0, 95, 0, 0); // +30 atk, hit 95
+    // Swap +5 ATK/80% hit for +30 ATK/95% hit.
+    let default_weapon = testkit::item(1, 5, 0, 80, 0, 0);
+    let mut swapped_weapon = testkit::item(2, 30, 0, 95, 0, 0);
     swapped_weapon.weapon_animation = 9;
     let items = vec![default_weapon, swapped_weapon];
     let actors = vec![&ron];
-    let equipped = [[2u32, 0, 0, 0, 0]]; // weapon slot holds item 2, not the def's 1
+    let equipped = [[2u32, 0, 0, 0, 0]];
     let monsters = vec![testkit::monster(1, 30, 10, 30)];
     let troop = testkit::troop(&[(1, 100, 100)]);
     let prog = Progression::default();
@@ -187,13 +185,15 @@ fn build_reads_the_runtime_loadout_not_the_actor_default() {
 #[test]
 fn foe_attribute_rank_reads_the_vector_then_defaults_to_neutral_c() {
     let mut battle = build_1v2();
-    battle.enemies[0].attribute_ranks = vec![0, 2, 4]; // attrs 1,2,3 -> A, C, E
+    // Attribute IDs 1/2/3 carry ranks A/C/E.
+    battle.enemies[0].attribute_ranks = vec![0, 2, 4];
     let foe = &battle.enemies[0];
-    assert_eq!(foe.attribute_rank(1), 0); // A
-    assert_eq!(foe.attribute_rank(2), 2); // C
-    assert_eq!(foe.attribute_rank(3), 4); // E
-    assert_eq!(foe.attribute_rank(4), 2); // past the truncated vector -> C
-    assert_eq!(foe.attribute_rank(0), 2); // non-elemental id -> C
+    assert_eq!(foe.attribute_rank(1), 0);
+    assert_eq!(foe.attribute_rank(2), 2);
+    assert_eq!(foe.attribute_rank(3), 4);
+    // Missing and non-elemental IDs stay neutral.
+    assert_eq!(foe.attribute_rank(4), 2);
+    assert_eq!(foe.attribute_rank(0), 2);
 }
 
 fn state_def(id: u32, restriction: u32, auto_release_prob: u32) -> StateDef {
@@ -259,8 +259,7 @@ fn a_cant_act_member_is_auto_skipped_in_the_command_flow() {
     // Afflict member 1 with a can't-act (restriction 1) state.
     battle.states = vec![state_def(7, 1, 0)];
     battle.members[1].states = vec![(7, 0)];
-    // Member 0 chooses; the flow must auto-order the sleeping member 1 and
-    // enter resolution rather than stop for its input.
+    // The sleeping member must be auto-ordered, not offered input.
     battle.commit(Command::Defend);
     assert!(matches!(battle.members[1].command, Some(Command::Nothing)));
     assert!(battle.phase == Phase::Resolve);
@@ -275,9 +274,7 @@ fn new_round_does_not_advance_state_recovery() {
     assert_eq!(battle.members[0].states, [(1, 0), (2, 0)]);
 }
 
-/// The turn order for `seed`: the source of each queued action, in order, for a
-/// two-member party versus two foes whose agilities are all equalised so only
-/// the RM2000 per-round agility jitter can reorder them.
+/// Equal-agility two-versus-two fixture: only per-round jitter can change the order.
 fn turn_order_for(seed: u64) -> Vec<(u8, usize)> {
     let ron = testkit::actor(1, 2, 63, 37);
     let tiff = testkit::actor(2, 3, 38, 75);
@@ -319,7 +316,6 @@ fn turn_order_for(seed: u64) -> Vec<(u8, usize)> {
 
 #[test]
 fn turn_order_varies_with_the_rng_yet_is_deterministic_per_seed() {
-    // Deterministic per seed: the same seed always yields the same order.
     assert_eq!(turn_order_for(123), turn_order_for(123));
     assert_eq!(turn_order_for(999), turn_order_for(999));
     // Yet identical agilities order differently across seeds, because the

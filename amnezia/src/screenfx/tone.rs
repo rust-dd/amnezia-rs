@@ -143,9 +143,7 @@ pub(super) fn step_tint(state: &mut TintState, dt: f32) {
     }
 }
 
-/// Keep the picture camera aligned with the followed, shaken main camera, so
-/// pictures placed relative to it stay in the right screen position. Runs after
-/// the shake offset lands and before transform propagation.
+/// Align the picture camera after shake and before transform propagation.
 fn sync_front_camera(
     main: Query<&Transform, (With<MainCamera>, Without<FrontCamera>)>,
     mut front: Query<&mut Transform, With<FrontCamera>>,
