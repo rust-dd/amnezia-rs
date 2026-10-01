@@ -101,6 +101,14 @@ You can copy the app outside the checkout. Installation diagnostics run without 
 
 The second command also checks the release save directory with a temporary write/rename/read operation and removes its own probe; existing save slots are untouched. A copied Apple Silicon bundle has passed these checks with filesystem access to the checkout denied. Its title screen, new-game introduction, movement and main menu have also been checked in a native window. This is same-machine validation, not a clean-machine test. The app is not notarized; Intel macOS, Windows and Linux release runs remain unverified.
 
+### Windows and Linux preview packages
+
+The [cross-build instructions](docs/TESTING.md#cross-platform-preview-builds) produce Windows x86_64 and Linux x86_64 release binaries from the development Mac. `scripts/bundle-portable.sh` packages each executable with its runtime assets, notices and checksums. These are preview builds, not validated platform releases.
+
+Extract the entire archive before launching `amnezia.exe` on Windows or `./amnezia` on Linux; keep the adjacent `assets` directory. Linux targets glibc 2.36 and requires ALSA, udev, a supported X11/Wayland desktop and a working graphics driver. Release saves use `%LOCALAPPDATA%/Amnezia/saves` on Windows and `$XDG_DATA_HOME/amnezia/saves` (normally `~/.local/share/amnezia/saves`) on Linux.
+
+The planned `1.0.0` GitHub release will attach Windows, Linux and macOS archives only after restoration and full campaign acceptance. Building an archive does not create a tag or publish a release.
+
 ## Project status
 
 Implemented systems include event interpretation, map rendering and movement, dialogue, music, menus, shops/inns, turn-based battles, progression, and save/load. Gameplay advances in complete 60 Hz logical updates, independently of rendering. The native canvas is 320×240 with whole-pixel scaling and letterboxing.
