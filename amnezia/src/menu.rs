@@ -139,6 +139,11 @@ struct MenuState {
     screen: MenuScreen,
 }
 
+pub(crate) fn playtest_state(world: &World) -> String {
+    let state = world.resource::<MenuState>();
+    format!("{} {:?}", state.cursor, state.screen)
+}
+
 pub struct MenuPlugin;
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]

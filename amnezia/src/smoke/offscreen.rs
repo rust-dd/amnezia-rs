@@ -6,15 +6,16 @@ use bevy::window::PrimaryWindow;
 mod audio;
 
 #[derive(Resource)]
-pub(super) struct Target(pub Handle<Image>);
+pub(crate) struct Target(pub Handle<Image>);
 
 pub(crate) fn enabled() -> bool {
-    cfg!(debug_assertions)
-        && std::env::args().any(|arg| arg == "--smoke-test")
-        && std::env::args().any(|arg| arg == "--smoke-offscreen")
+    (crate::playtest::enabled() && !crate::playtest::windowed())
+        || cfg!(debug_assertions)
+            && std::env::args().any(|arg| arg == "--smoke-test")
+            && std::env::args().any(|arg| arg == "--smoke-offscreen")
 }
 
-pub(super) fn configure(app: &mut App) {
+pub(crate) fn configure(app: &mut App) {
     audio::configure(app, enabled());
     if !enabled() {
         return;

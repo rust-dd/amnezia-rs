@@ -1,6 +1,8 @@
 use super::*;
 use std::collections::{BTreeMap, BTreeSet};
 
+pub(super) type InputTicks = [Option<bevy::ecs::change_detection::Tick>; 5];
+
 pub(super) struct Selection {
     index: Option<usize>,
     revision: u64,
@@ -36,13 +38,40 @@ impl ParallelPool {
     }
 
     pub(in crate::interpreter) fn discard_changed_pages(&mut self, exec: &Exec) {
-        self.refresh_pages(
+        let inputs = [
+            exec.subsystems
+                .flow
+                .map_events
+                .as_ref()
+                .map(|events| events.last_changed()),
+            Some(exec.switches.last_changed()),
+            Some(exec.variables.last_changed()),
+            Some(exec.party.last_changed()),
+            Some(exec.inventory.last_changed()),
+        ];
+        self.refresh_tracked(
+            inputs,
             exec.subsystems.flow.map_events.as_deref(),
-            &exec.switches,
-            &exec.variables,
-            &exec.party,
-            &exec.inventory,
+            (
+                &exec.switches,
+                &exec.variables,
+                &exec.party,
+                &exec.inventory,
+            ),
         );
+    }
+
+    pub(super) fn refresh_tracked(
+        &mut self,
+        inputs: InputTicks,
+        events: Option<&MapEvents>,
+        state: (&Switches, &Variables, &Party, &Inventory),
+    ) {
+        if self.page_inputs == Some(inputs) {
+            return;
+        }
+        self.refresh_pages(events, state.0, state.1, state.2, state.3);
+        self.page_inputs = Some(inputs);
     }
 
     pub(super) fn refresh_pages(
@@ -53,6 +82,7 @@ impl ParallelPool {
         party: &Party,
         inventory: &Inventory,
     ) {
+        self.page_inputs = None;
         let ids = events
             .into_iter()
             .flat_map(|events| events.events.iter().map(|event| event.id))

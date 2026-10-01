@@ -30,6 +30,7 @@ mod menu;
 mod panorama;
 mod picture;
 mod player;
+mod playtest;
 mod progression;
 mod save;
 mod screenfx;
@@ -137,6 +138,7 @@ fn main() -> AppExit {
         .add_plugins(conditions::ConditionsPlugin)
         .add_plugins(panorama::PanoramaPlugin)
         .add_plugins(smoke::SmokePlugin)
+        .add_plugins(playtest::PlaytestPlugin)
         .add_plugins(timing::logical::LogicalPlugin);
     smoke::completion::run(&mut app)
 }

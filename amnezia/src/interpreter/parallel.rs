@@ -70,6 +70,7 @@ pub struct ParallelPool {
     frames: Vec<ParallelFrame>,
     last_map: Option<u32>,
     pages: std::collections::BTreeMap<u32, pages::Selection>,
+    page_inputs: Option<pages::InputTicks>,
 }
 
 impl ParallelPool {
@@ -86,6 +87,7 @@ impl ParallelPool {
         self.frames
             .retain(|entry| !matches!(entry.source, ParallelSource::MapPage(..)));
         self.pages.clear();
+        self.page_inputs = None;
         self.last_map = map_id;
     }
 
@@ -113,7 +115,18 @@ pub(super) fn refresh_map_pages(
     party: Res<Party>,
     inventory: Res<Inventory>,
 ) {
-    pool.refresh_pages(Some(&events), &switches, &variables, &party, &inventory);
+    let inputs = [
+        Some(events.last_changed()),
+        Some(switches.last_changed()),
+        Some(variables.last_changed()),
+        Some(party.last_changed()),
+        Some(inventory.last_changed()),
+    ];
+    pool.refresh_tracked(
+        inputs,
+        Some(&events),
+        (&switches, &variables, &party, &inventory),
+    );
 }
 
 fn map_source(id: u32, exec: &Exec) -> Option<ParallelSource> {

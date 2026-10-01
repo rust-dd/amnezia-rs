@@ -143,6 +143,19 @@ fn apply_refresh(
         || variables.is_changed()
         || party.is_changed()
         || inventory.is_changed();
+    if !conditions_changed
+        && !events.is_changed()
+        && !characters
+            .iter_mut()
+            .any(|(_, selected, ..)| selected.is_changed())
+    {
+        return;
+    }
+    let by_id = events
+        .events
+        .iter()
+        .map(|event| (event.id, event))
+        .collect::<std::collections::BTreeMap<_, _>>();
     for (
         mut ch,
         mut selected,
@@ -154,7 +167,7 @@ fn apply_refresh(
         mut transform,
     ) in &mut characters
     {
-        let Some(event) = events.events.iter().find(|event| event.id == ch.id) else {
+        let Some(event) = by_id.get(&ch.id) else {
             continue;
         };
         let index = active_page_index(event, &switches, &variables, &party, &inventory);

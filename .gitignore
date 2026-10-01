@@ -3,6 +3,7 @@
 /saves
 /.superpowers
 .DS_Store
+__pycache__/
 amnezia-convert/assets/soundfont/*.sf2
 reference/
 /docs/superpowers

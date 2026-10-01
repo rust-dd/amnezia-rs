@@ -166,6 +166,49 @@ fn a_promoted_page_resets_the_frame_to_the_new_page() {
 }
 
 #[test]
+fn tracked_refresh_observes_switch_changes_between_calls_without_a_render() {
+    let mut world = World::new();
+    world.init_resource::<ParallelPool>();
+    world.init_resource::<Switches>();
+    world.init_resource::<Variables>();
+    world.init_resource::<Party>();
+    world.init_resource::<Inventory>();
+    world.insert_resource(MapEvents {
+        events: vec![event(
+            7,
+            vec![
+                page(4, EventCondition::default()),
+                page(
+                    4,
+                    EventCondition {
+                        flags: 1,
+                        switch_a: 5,
+                        ..default()
+                    },
+                ),
+            ],
+        )],
+    });
+    world.run_system_cached(refresh_map_pages).unwrap();
+    let original = world
+        .resource::<ParallelPool>()
+        .owner(ParallelSource::MapPage(7, 0))
+        .unwrap();
+    world.run_system_cached(refresh_map_pages).unwrap();
+    assert!(original.current(world.resource::<ParallelPool>()));
+    world.resource_mut::<Switches>().set(5, true);
+    world.run_system_cached(refresh_map_pages).unwrap();
+    assert!(!original.current(world.resource::<ParallelPool>()));
+    let next = world
+        .resource::<ParallelPool>()
+        .owner(ParallelSource::MapPage(7, 1))
+        .unwrap();
+    world.resource_mut::<Switches>().set(5, false);
+    world.run_system_cached(refresh_map_pages).unwrap();
+    assert!(!next.current(world.resource::<ParallelPool>()));
+}
+
+#[test]
 fn reconcile_is_idempotent_and_preserves_running_frames() {
     let map = MapEvents {
         events: vec![event(1, vec![page(4, EventCondition::default())])],

@@ -85,6 +85,7 @@ struct ShopState {
 }
 
 /// The step a shop interaction is on, mirroring EasyRPG's `Scene_Shop` modes.
+#[derive(Debug)]
 enum Phase {
     /// The Buy/Sell/Leave command menu (shown only for a full buy+sell shop).
     /// `regreet` swaps the greeting for the "anything else?" line after a trade.
@@ -110,6 +111,7 @@ enum Phase {
 
 /// The quantity window's state: which item and direction, the running count, the
 /// affordability/stock-bounded maximum, and the per-unit price for the total.
+#[derive(Debug)]
 struct NumberState {
     mode: Mode,
     item_id: u32,
@@ -158,6 +160,13 @@ impl Plugin for ShopPlugin {
 
 #[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ShopUpdate;
+
+pub(crate) fn playtest_state(world: &World) -> String {
+    match world.get_resource::<Screen>() {
+        Some(Screen::Shop(state)) => format!("{:?}", state.phase),
+        _ => String::new(),
+    }
+}
 
 pub(crate) fn reset_session(world: &mut World) {
     world.insert_resource(Screen::default());
