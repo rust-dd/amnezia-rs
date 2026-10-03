@@ -1,3 +1,4 @@
+use super::paths::AudioPaths;
 use super::*;
 
 #[cfg(test)]
@@ -10,6 +11,7 @@ pub(super) fn play_requests(
     mut current: ResMut<CurrentBgm>,
     mut memorized: ResMut<MemorizedBgm>,
     mut sinks: Query<&mut AudioSink>,
+    mut paths: Local<AudioPaths>,
 ) {
     for request in requests.read() {
         match request {
@@ -22,7 +24,7 @@ pub(super) fn play_requests(
                 if *volume <= 0.0 {
                     continue;
                 }
-                if let Some(path) = resolve_audio("Sound", name, &["wav"]) {
+                if let Some(path) = paths.resolve("Sound", name, &["wav"]) {
                     commands.spawn((
                         AudioPlayer::new(asset_server.load(path)),
                         PlaybackSettings::DESPAWN
@@ -41,6 +43,7 @@ pub(super) fn play_requests(
                 &asset_server,
                 &mut current,
                 &mut sinks,
+                &mut paths,
                 name,
                 *volume,
                 *speed,
@@ -54,6 +57,7 @@ pub(super) fn play_requests(
                     &asset_server,
                     &mut current,
                     &mut sinks,
+                    &mut paths,
                     &track.name,
                     track.volume,
                     track.speed,
@@ -70,6 +74,7 @@ pub(super) fn play_requests(
                     &asset_server,
                     &mut current,
                     &mut sinks,
+                    &mut paths,
                     &track.name,
                     track.volume,
                     track.speed,
@@ -99,6 +104,7 @@ fn start_bgm(
     asset_server: &AssetServer,
     current: &mut CurrentBgm,
     sinks: &mut Query<&mut AudioSink>,
+    paths: &mut AudioPaths,
     name: &str,
     volume: f32,
     speed: f32,
@@ -107,7 +113,7 @@ fn start_bgm(
 ) {
     current.fade_in = fade_in;
     let action = current.action_for(name, volume, speed);
-    eprintln!("[BGM] request '{name}' vol={volume:.3} fade_in={fade_in}s -> {action:?}");
+    debug!("bgm '{name}' volume={volume:.3} fade_in={fade_in}s: {action:?}");
     match action {
         BgmAction::Ignore => {}
         BgmAction::UpdateParams => {
@@ -137,7 +143,7 @@ fn start_bgm(
             current.speed = speed;
             current.fade = None;
             let initial = if fade_in > 0.0 { 0.0 } else { volume };
-            match resolve_audio("Music", name, &["ogg", "wav"]) {
+            match paths.resolve("Music", name, &["ogg", "wav"]) {
                 Some(path) => {
                     let entity = commands
                         .spawn((
@@ -157,8 +163,7 @@ fn start_bgm(
                     }
                 }
                 None => {
-                    eprintln!("[BGM] '{name}' has NO playable file (MIDI only) — silent");
-                    debug!("bgm '{name}' has no playable audio (MIDI only); skipping");
+                    debug!("bgm '{name}' has no playable audio; skipping");
                 }
             }
         }

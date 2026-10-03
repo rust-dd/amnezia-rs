@@ -64,8 +64,8 @@ fn play_map_bgm(
     *pending = false;
     let resolved = map_info.resolve(map_data.map_id);
     match &resolved {
-        MapBgm::Play(m) => eprintln!("[MAPBGM] map {} -> play '{}'", map_data.map_id, m.name),
-        _ => eprintln!("[MAPBGM] map {} -> leave current BGM", map_data.map_id),
+        MapBgm::Play(m) => debug!("map {}: play bgm '{}'", map_data.map_id, m.name),
+        _ => debug!("map {}: keep current bgm", map_data.map_id),
     }
     if let MapBgm::Play(music) = resolved {
         audio.write(AudioRequest::from_music(&music));

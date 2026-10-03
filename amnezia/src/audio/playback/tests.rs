@@ -61,6 +61,33 @@ fn updating_an_unloaded_track_does_not_restart_it_or_change_one_shot_playback() 
 }
 
 #[test]
+fn cached_sound_paths_still_spawn_independent_voices_with_requested_settings() {
+    let mut app = app();
+    for (volume, speed) in [(0.25, 0.5), (0.75, 1.4), (0.0, 1.0)] {
+        app.world_mut().write_message(AudioRequest::Sound {
+            name: "Door2".into(),
+            volume,
+            speed,
+        });
+        app.update();
+    }
+    let world = app.world_mut();
+    let voices = world
+        .query::<(&AudioPlayer, &PlaybackSettings)>()
+        .iter(world)
+        .collect::<Vec<_>>();
+    assert_eq!(voices.len(), 2);
+    assert_eq!(voices[0].0.0, voices[1].0.0);
+    for (volume, speed) in [(0.25, 0.5), (0.75, 1.4)] {
+        assert!(voices.iter().any(|(_, settings)| {
+            settings.volume == Volume::Linear(volume)
+                && settings.speed == speed
+                && matches!(settings.mode, bevy::audio::PlaybackMode::Despawn)
+        }));
+    }
+}
+
+#[test]
 fn a_fade_updates_pending_playback_even_when_it_finishes_before_decoding() {
     let mut world = World::new();
     let entity = world

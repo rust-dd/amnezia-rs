@@ -10,6 +10,7 @@ use bevy::prelude::*;
 mod asset_tests;
 #[cfg(test)]
 mod inn_tests;
+mod paths;
 mod playback;
 mod request;
 pub(crate) mod saved;
@@ -164,26 +165,6 @@ pub(crate) fn flush(world: &mut World) {
     {
         world.run_system_cached(play_requests).unwrap();
     }
-}
-
-/// Resolve an audio `name` (no extension) to its asset-relative path under
-/// `audio/<subdir>/`, trying `exts` in order and matching the on-disk filename
-/// case-insensitively (RM2000 names differ in case). `None` if nothing matches.
-fn resolve_audio(subdir: &str, name: &str, exts: &[&str]) -> Option<String> {
-    let dir = format!("{}/audio/{subdir}", asset_root());
-    let files: Vec<String> = std::fs::read_dir(&dir)
-        .ok()?
-        .flatten()
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
-        .collect();
-    let lower = name.to_lowercase();
-    for ext in exts {
-        let target = format!("{lower}.{ext}");
-        if let Some(file) = files.iter().find(|f| f.to_lowercase() == target) {
-            return Some(format!("audio/{subdir}/{file}"));
-        }
-    }
-    None
 }
 
 #[cfg(test)]
