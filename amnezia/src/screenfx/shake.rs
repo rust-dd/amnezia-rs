@@ -156,8 +156,6 @@ mod tests {
 
     #[test]
     fn amplitude_scales_with_power() {
-        // amplitude = 1 + 2·strength: a stronger shake reaches farther. Sampled
-        // across a phase where the raw offset is near the extreme.
         let weak = next_position(1, 8, 8, 0).abs();
         let strong = next_position(9, 8, 8, 0).abs();
         assert!(strong > weak);
@@ -184,8 +182,6 @@ mod tests {
     fn shake_ramps_in_without_snapping_and_ends_at_rest() {
         let mut shake = ShakeState::default();
         shake.start(7, 5, 0.5);
-        // First frame's move is bounded by the cutoff, so it starts near centre
-        // rather than jumping to full amplitude.
         let first = shake.step(FRAME_SECS).abs();
         let cutoff = (5 * (1 + 2 * 7) / 8) + 1;
         assert!(first <= cutoff as f32);
@@ -194,8 +190,6 @@ mod tests {
 
     #[test]
     fn faster_speed_advances_phase_more_per_frame() {
-        // The phase step per frame is 4·(speed + 2); a higher speed reaches a
-        // different phase from the same starting frame, i.e. oscillates faster.
         let slow = next_position(5, 1, 20, 0);
         let fast = next_position(5, 9, 20, 0);
         assert_ne!(slow, fast);

@@ -125,8 +125,6 @@ mod tests {
 
     #[test]
     fn entering_a_type_one_map_leaves_the_bgm_unchanged() {
-        // A type-1 (event-controlled) map emits no request, so whatever the intro
-        // or a prior map set keeps playing.
         let mut app = app_on_map(5, vec![map(5, 1, "Ignored")], false);
         app.update();
         assert!(

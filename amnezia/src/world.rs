@@ -1,7 +1,4 @@
-//! World setup and map loading: renders a map's tile layers and event NPCs,
-//! stores its data + events as resources, and can reload for a teleport. The
-//! player entity persists across map changes; scene entities are tagged
-//! [`MapScene`] so a teleport can despawn them.
+//! Map loading and rendering. Transfers replace [`MapScene`] entities but retain the player.
 
 use crate::assets::{asset_root, load_ron, resolve_png};
 use crate::player::spawn_player;

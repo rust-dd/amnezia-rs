@@ -259,7 +259,6 @@ fn a_cant_act_member_is_auto_skipped_in_the_command_flow() {
     // Afflict member 1 with a can't-act (restriction 1) state.
     battle.states = vec![state_def(7, 1, 0)];
     battle.members[1].states = vec![(7, 0)];
-    // The sleeping member must be auto-ordered, not offered input.
     battle.commit(Command::Defend);
     assert!(matches!(battle.members[1].command, Some(Command::Nothing)));
     assert!(battle.phase == Phase::Resolve);
@@ -318,8 +317,6 @@ fn turn_order_for(seed: u64) -> Vec<(u8, usize)> {
 fn turn_order_varies_with_the_rng_yet_is_deterministic_per_seed() {
     assert_eq!(turn_order_for(123), turn_order_for(123));
     assert_eq!(turn_order_for(999), turn_order_for(999));
-    // Yet identical agilities order differently across seeds, because the
-    // per-round jitter is re-rolled each round from the battle RNG.
     let orders: std::collections::HashSet<Vec<(u8, usize)>> =
         (1..60u64).map(turn_order_for).collect();
     assert!(

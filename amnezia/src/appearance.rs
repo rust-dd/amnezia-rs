@@ -10,8 +10,7 @@ use std::collections::BTreeMap;
 
 pub(crate) mod smoke;
 
-/// Every actor's current CharSet graphic as `(charset, index)`, keyed by actor
-/// id. Actors that were never reskinned simply aren't present.
+/// CharSet overrides keyed by actor ID; unchanged actors use their database graphics.
 #[derive(Resource, Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Appearance(BTreeMap<u32, (String, u32)>);
 

@@ -301,7 +301,6 @@ mod tests {
             cmd(20711, 0),
             cmd(20713, 0),
         ];
-        // From the Victory handler, skip its body → land on the Escape handler.
         assert_eq!(skip_battle_handler(&commands, 1, 0), 3);
     }
 
@@ -314,7 +313,6 @@ mod tests {
 
     #[test]
     fn skip_true_body_with_else() {
-        // 0: branch@0  1: body@1  2: else@0  3: elsebody@1  4: end@0
         let commands = vec![
             cmd(CONDITIONAL_BRANCH, 0),
             cmd(SHOW_MESSAGE, 1),
@@ -322,19 +320,16 @@ mod tests {
             cmd(SHOW_MESSAGE, 1),
             cmd(END_BRANCH, 0),
         ];
-        // Not taken → jump into the else body at index 3.
         assert_eq!(skip_true_body(&commands, 0, 0), 3);
     }
 
     #[test]
     fn skip_true_body_without_else() {
-        // 0: branch@0  1: body@1  2: end@0
         let commands = vec![
             cmd(CONDITIONAL_BRANCH, 0),
             cmd(SHOW_MESSAGE, 1),
             cmd(END_BRANCH, 0),
         ];
-        // Not taken, no else → land on the end marker at index 2.
         assert_eq!(skip_true_body(&commands, 0, 0), 2);
     }
 
@@ -347,7 +342,6 @@ mod tests {
             cmd(SHOW_MESSAGE, 1),
             cmd(END_BRANCH, 0),
         ];
-        // From the else marker at index 2, skip the else body → end at index 4.
         assert_eq!(skip_else_body(&commands, 2, 0), 4);
     }
 }

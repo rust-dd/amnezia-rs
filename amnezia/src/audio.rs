@@ -193,8 +193,6 @@ mod tests {
     #[test]
     fn same_name_request_updates_params_without_restarting() {
         let current = CurrentBgm::with_track("Field", 0.8, 1.0);
-        // An autorun page re-issues the same PlayBgm every cycle: unchanged params
-        // are ignored, so the track is never restarted.
         assert_eq!(current.action_for("Field", 0.8, 1.0), BgmAction::Ignore);
         assert_eq!(
             current.action_for("Field", 0.5, 1.0),

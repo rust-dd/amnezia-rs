@@ -10,9 +10,7 @@ use crate::vitals::Vitals;
 
 use super::derive;
 
-/// The five equipment slot labels, in `ActorDef` slot order — the faithful
-/// Hungarian fallbacks used when the real `weapon`/`shield`/`armor`/`helmet`/
-/// `accessory` terms are blank.
+/// Hungarian fallbacks for blank equipment terms, in `ActorDef` slot order.
 const SLOT_FALLBACKS: [&str; 5] = ["Fegyver", "Pajzs", "Vért", "Sisak", "Kiegészítő"];
 
 /// Status text with database labels; unknown member/actor IDs use a short placeholder.
@@ -161,7 +159,6 @@ mod tests {
         d.actors[0].weapon = 10;
         d.items.push(testkit::weapon(10, "Rövidkard", 4));
         d.items.push(testkit::weapon(12, "Hosszúkard", 12));
-        // The runtime store swapped in the long-sword; status must show it.
         let mut eq = Equipment::default();
         eq.set_slot(d.actor(1).unwrap(), 0, 12);
 
