@@ -10,22 +10,45 @@ mkdir -p "$target"
 target="$(cd "$target" && pwd)"
 cd "$root"
 
+mode="${1:-native}"
+case "$mode" in
+    native|universal) ;;
+    *) echo "Usage: bundle-mac.sh [native|universal]" >&2; exit 2 ;;
+esac
 echo "Building the locked release"
 cargo build -p amnezia --release --locked
+if [[ "$mode" == universal ]]; then
+    case "$(uname -m)" in
+        arm64) other_target=x86_64-apple-darwin ;;
+        x86_64) other_target=aarch64-apple-darwin ;;
+        *) echo "Unsupported macOS build architecture" >&2; exit 2 ;;
+    esac
+    MACOSX_DEPLOYMENT_TARGET=11.0 cargo build -p amnezia --release --locked --target "$other_target" -j 4
+fi
 package="$(cargo pkgid -p amnezia --locked)"
 version="${package##*#}"
 version="${version##*@}"
+bundle_version="${version%%-*}"
+bundle_version="${bundle_version%%+*}"
 stage="$(mktemp -d "$target/amnezia-bundle-XXXXXX")"
 app="$stage/Amnézia.app"
 resources="$app/Contents/Resources"
 mkdir -p "$app/Contents/MacOS" "$resources/assets" "$resources/Notices"
-cp "$target/release/amnezia" "$app/Contents/MacOS/amnezia"
+if [[ "$mode" == universal ]]; then
+    lipo -create "$target/release/amnezia" "$target/$other_target/release/amnezia" \
+        -output "$app/Contents/MacOS/amnezia"
+    lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/amnezia"
+else
+    cp "$target/release/amnezia" "$app/Contents/MacOS/amnezia"
+fi
 chmod +x "$app/Contents/MacOS/amnezia"
 rsync -a --exclude='*.mid' --exclude='.DS_Store' "$root/assets/" "$resources/assets/"
 cp "$root/scripts/mac/Info.plist" "$app/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $version" "$app/Contents/Info.plist"
-/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $bundle_version" "$app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $bundle_version" "$app/Contents/Info.plist"
 cp "$root/README.md" "$resources/README.md"
+printf '%s\n' "$version" > "$resources/Version.txt"
+git rev-parse HEAD > "$resources/Revision.txt"
 cp "$root/amnezia/fonts/LICENSE.txt" "$resources/Notices/Font.txt"
 cp "$root/amnezia-convert/assets/soundfont/LICENSE.txt" "$resources/Notices/GeneralUser-GS.txt"
 

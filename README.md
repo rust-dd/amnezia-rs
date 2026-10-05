@@ -8,6 +8,14 @@ Playable on macOS: the bandit story branch has reached the original **VÉGE** sc
 
 ## Getting started
 
+Download the [1.0.0-rc.0 prerelease](https://github.com/rust-dd/amnezia-rs/releases/tag/v1.0.0-rc.0) to play without installing Rust. Repository access is required. Each archive includes the converted runtime assets:
+
+- **macOS:** extract `amnezia-1.0.0-rc.0-macos-universal.zip` and open `Amnézia.app` on Apple Silicon or Intel. The app is ad-hoc signed and not notarized; macOS may require approval in Privacy & Security after the first launch attempt.
+- **Windows x86_64:** extract the entire ZIP and launch `amnezia.exe`.
+- **Linux x86_64:** extract the entire `.tar.gz` and run `./amnezia` from the extracted directory. Install the runtime libraries listed in [Windows and Linux packages](#windows-and-linux-packages).
+
+Keep the adjacent `assets` directory in the Windows and Linux packages. The release also includes `SHA256SUMS` for checking the downloaded archives.
+
 You need Git, Rust 1.98.0 (the tested toolchain) or a compatible newer stable toolchain, a native build toolchain, and a graphics adapter supported by Bevy. On macOS, install the Xcode Command Line Tools.
 
 The converted runtime assets are included in this repository. Access to the private repository is required; you do not need to run the converter just to play.
@@ -119,6 +127,8 @@ errors are reported without terminating the game. The driver starts at the title
 
 `bash scripts/bundle-mac.sh` builds the locked release and produces `target/Amnézia.app`, bundling converted assets in `Contents/Resources/assets`. Dev-only MIDI intermediates are excluded. The script verifies the copied assets and installation data, records an asset checksum manifest, and ad-hoc signs the app. Any previous bundle is retained in the printed staging directory.
 
+For an Apple Silicon and Intel universal app, install the other architecture's Rust target (`rustup target add x86_64-apple-darwin` on Apple Silicon, or `rustup target add aarch64-apple-darwin` on Intel), then run `bash scripts/bundle-mac.sh universal`. The app records the complete package version in `Contents/Resources/Version.txt`; the macOS bundle version uses the numeric `1.0.0` portion.
+
 You can copy the app outside the checkout. Installation diagnostics run without opening a window or audio device:
 
 ```sh
@@ -126,9 +136,9 @@ You can copy the app outside the checkout. Installation diagnostics run without 
 'target/Amnézia.app/Contents/MacOS/amnezia' --check-save-permissions
 ```
 
-The second command also checks the release save directory with a temporary write/rename/read operation and removes its own probe; existing save slots are untouched. A copied Apple Silicon bundle has passed these checks with filesystem access to the checkout denied. Its title screen, new-game introduction, movement and main menu have also been checked in a native window. This is same-machine validation, not a clean-machine test. The app is not notarized; Intel macOS, Windows and Linux release runs remain unverified.
+The second command also checks the release save directory with a temporary write/rename/read operation and removes its own probe; existing save slots are untouched. A copied Apple Silicon bundle has passed these checks with filesystem access to the checkout denied. Its title screen, new-game introduction, movement and main menu have also been checked in a native window. This is same-machine gameplay validation. The app is not notarized; native graphical gameplay on Intel macOS, Windows and Linux remains unverified. The separate Release installation checks workflow verifies downloaded packages, their checksums and revision, installation data and save permissions on Windows, Linux, Intel macOS and Apple Silicon macOS.
 
-### Windows and Linux preview packages
+### Windows and Linux packages
 
 The cross-build scripts produce Windows x86_64 and Linux x86_64 release binaries from the development Mac. Windows needs MinGW-w64 (`x86_64-w64-mingw32-gcc`); Linux needs Zig (tested with 0.14.1), `pkg-config`, `ar`, and the isolated Debian 12 sysroot prepared below. Packaging also needs `curl`, a tar reader with xz support, `rsync` and `zip`.
 
@@ -142,11 +152,11 @@ bash scripts/bundle-portable.sh windows
 bash scripts/bundle-portable.sh linux
 ```
 
-The SDK script checks pinned package hashes without installing host libraries. `scripts/bundle-portable.sh` packages each executable with its runtime assets, notices and checksums; do not include the build-only SDK. These are preview builds, not validated platform releases.
+The SDK script checks pinned package hashes without installing host libraries. `scripts/bundle-portable.sh` packages each executable with its runtime assets, version, revision, notices and checksums; do not include the build-only SDK. Archive names include the workspace version. Native graphical gameplay on Windows and Linux still needs acceptance testing.
 
 Extract the entire archive before launching `amnezia.exe` on Windows or `./amnezia` on Linux; keep the adjacent `assets` directory. Linux targets glibc 2.36 and requires ALSA, udev, a supported X11/Wayland desktop and a working graphics driver. Release saves use `%LOCALAPPDATA%/Amnezia/saves` on Windows and `$XDG_DATA_HOME/amnezia/saves` (normally `~/.local/share/amnezia/saves`) on Linux.
 
-The planned `1.0.0` GitHub release will attach Windows, Linux and macOS archives only after restoration and full campaign acceptance. Building an archive does not create a tag or publish a release.
+The `1.0.0-rc.0` GitHub prerelease includes Windows, Linux and universal macOS archives. Full campaign and native platform acceptance remain prerequisites for the stable `1.0.0` release. Building an archive locally does not create a tag or publish a release.
 
 ## Project status
 

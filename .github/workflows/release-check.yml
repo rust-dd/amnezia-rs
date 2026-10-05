@@ -1,0 +1,108 @@
+name: Release installation checks
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag whose packaged binaries should be checked
+        required: true
+        default: v1.0.0-rc.0
+        type: string
+
+# Draft releases require push access, even when only downloading assets.
+permissions:
+  contents: write
+
+jobs:
+  installation:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x86_64
+            runner: windows-latest
+            platform: windows
+            archive_suffix: windows-x86_64.zip
+          - name: Linux x86_64
+            runner: ubuntu-24.04
+            platform: linux
+            archive_suffix: linux-x86_64.tar.gz
+          - name: macOS Apple Silicon
+            runner: macos-14
+            platform: macos
+            archive_suffix: macos-universal.zip
+          - name: macOS Intel
+            runner: macos-15-intel
+            platform: macos
+            archive_suffix: macos-universal.zip
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+      PLATFORM: ${{ matrix.platform }}
+      ARCHIVE_SUFFIX: ${{ matrix.archive_suffix }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Download packaged release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive="amnezia-${RELEASE_TAG#v}-$ARCHIVE_SUFFIX"
+          printf 'ARCHIVE_NAME=%s\n' "$archive" >> "$GITHUB_ENV"
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --dir downloads --pattern "$archive" --pattern SHA256SUMS
+          gh api "repos/$GITHUB_REPOSITORY/commits/$RELEASE_TAG" --jq .sha > ExpectedRevision.txt
+      - name: Verify archive checksum
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          archive = os.environ["ARCHIVE_NAME"]
+          root = Path("downloads")
+          checksums = {
+              name.lstrip("*"): digest
+              for digest, name in (
+                  line.split(maxsplit=1)
+                  for line in (root / "SHA256SUMS").read_text().splitlines()
+              )
+          }
+          actual = hashlib.file_digest((root / archive).open("rb"), "sha256").hexdigest()
+          assert actual == checksums[archive], f"Checksum mismatch: {archive}"
+          print(f"{archive}: SHA-256 verified")
+          PY
+      - name: Install Linux runtime libraries
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2t64 libudev1 libwayland-client0
+      - name: Check extracted installation and save permissions
+        run: |
+          mkdir package
+          if [[ "$PLATFORM" == macos ]]; then
+            ditto -x -k "downloads/$ARCHIVE_NAME" package
+            app="package/Amnézia.app"
+            lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/amnezia"
+            codesign --verify --deep --strict "$app"
+            binary="$app/Contents/MacOS/amnezia"
+            revision="$app/Contents/Resources/Revision.txt"
+          elif [[ "$PLATFORM" == windows ]]; then
+            unzip -q "downloads/$ARCHIVE_NAME" -d package
+            binary="package/amnezia-${RELEASE_TAG#v}-windows-x86_64/amnezia.exe"
+            revision="package/amnezia-${RELEASE_TAG#v}-windows-x86_64/Revision.txt"
+          else
+            tar -xzf "downloads/$ARCHIVE_NAME" -C package
+            binary="package/amnezia-${RELEASE_TAG#v}-linux-x86_64/amnezia"
+            revision="package/amnezia-${RELEASE_TAG#v}-linux-x86_64/Revision.txt"
+          fi
+          diff -u ExpectedRevision.txt "$revision"
+          "$binary" --check-installation > installation.txt
+          cat installation.txt
+          grep -F "Amnezia ${RELEASE_TAG#v} " installation.txt
+          "$binary" --check-save-permissions
