@@ -37,7 +37,7 @@ mkdir -p "$app/Contents/MacOS" "$resources/assets" "$resources/Notices"
 if [[ "$mode" == universal ]]; then
     lipo -create "$target/release/amnezia" "$target/$other_target/release/amnezia" \
         -output "$app/Contents/MacOS/amnezia"
-    lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/amnezia"
+    lipo "$app/Contents/MacOS/amnezia" -verify_arch arm64 x86_64
 else
     cp "$target/release/amnezia" "$app/Contents/MacOS/amnezia"
 fi

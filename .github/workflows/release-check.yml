@@ -88,7 +88,7 @@ jobs:
           if [[ "$PLATFORM" == macos ]]; then
             ditto -x -k "downloads/$ARCHIVE_NAME" package
             app="package/Amnézia.app"
-            lipo -verify_arch arm64 x86_64 "$app/Contents/MacOS/amnezia"
+            lipo "$app/Contents/MacOS/amnezia" -verify_arch arm64 x86_64
             codesign --verify --deep --strict "$app"
             binary="$app/Contents/MacOS/amnezia"
             revision="$app/Contents/Resources/Revision.txt"
